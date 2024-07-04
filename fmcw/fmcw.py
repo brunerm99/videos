@@ -1,5 +1,6 @@
 # fmcw.py
 
+from copy import deepcopy
 from manim import *
 import numpy as np
 import math
@@ -147,6 +148,7 @@ class PulsedRadarTransmission(Scene):
 
         def create_propagation(p1, p2):
             line = Line(p1, p2)
+            dist = math.sqrt(np.sum(np.power(p2 - p1, 2)))
 
             sine = (
                 FunctionGraph(
@@ -156,9 +158,18 @@ class PulsedRadarTransmission(Scene):
                 .shift(p1)
                 .rotate(line.get_angle(), about_point=p1)
             )
+            sine_flipped = (
+                FunctionGraph(
+                    lambda t: 0.5 * np.sin(5 * t),
+                    x_range=[0, dist],
+                )
+                .shift(p1)
+                .rotate(line.get_angle(), about_point=p1)
+                .rotate(math.pi)
+            )
 
             tracing_dot = Dot(
-                sine.get_start(), fill_opacity=1, radius=DEFAULT_DOT_RADIUS / 2
+                sine.get_start(), fill_opacity=0, radius=DEFAULT_DOT_RADIUS / 2
             )
             tracer = TracedPath(
                 tracing_dot.get_center,
@@ -166,38 +177,39 @@ class PulsedRadarTransmission(Scene):
                 stroke_opacity=[1, 1],
                 stroke_width=6,
             )
-            return tracer, tracing_dot, sine
+            return tracer, tracing_dot, sine, sine_flipped, dist
 
-        radar_pt = radar.get_corner(UP + RIGHT)
+        radar_pt = radar.get_corner(RIGHT) + UP * 3 / 2 + RIGHT / 3
         cloud_pt = cloud.get_corner(LEFT + DOWN)
-        rc_tracer, rc_tracing_dot, rc_sine = create_propagation(radar_pt, cloud_pt)
+        rc_tracer, rc_tracing_dot, rc_sine, rc_sine_flipped, rc_dist = (
+            create_propagation(radar_pt, cloud_pt)
+        )
 
-        radar_pt2 = radar.get_corner(RIGHT)
+        radar_pt2 = radar.get_corner(RIGHT) + UP * 3 / 2 + RIGHT / 3
         tree_pt = tree.get_corner(LEFT)
-        rt_tracer, rt_tracing_dot, rt_sine = create_propagation(radar_pt2, tree_pt)
+        rt_tracer, rt_tracing_dot, rt_sine, rt_sine_flipped, rt_dist = (
+            create_propagation(radar_pt2, tree_pt)
+        )
 
         self.add(rc_tracer, rt_tracer)
+
+        rc_time = 1.5
+        rt_time = rc_time * (rt_dist / rc_dist)
         self.play(
-            MoveAlongPath(rc_tracing_dot, rc_sine),
-            MoveAlongPath(rt_tracing_dot, rt_sine),
-            rate_func=linear,
-            run_time=2,
+            LaggedStart(
+                Succession(
+                    MoveAlongPath(rt_tracing_dot, rt_sine, rate_func=linear),
+                    MoveAlongPath(rt_tracing_dot, rt_sine_flipped, rate_func=linear),
+                    run_time=rt_time,
+                ),
+                Succession(
+                    MoveAlongPath(rc_tracing_dot, rc_sine, rate_func=linear),
+                    MoveAlongPath(rc_tracing_dot, rc_sine_flipped, rate_func=linear),
+                    run_time=rc_time,
+                ),
+                lag_ratio=0.2,
+            )
         )
-        # rc_sine.reverse_points()
-        # rt_sine.reverse_points()
-        rc_sine_flipped = rc_sine.copy().rotate(
-            math.pi, about_point=rc_sine.get_center()
-        )
-        rt_sine_flipped = rt_sine.copy().rotate(
-            math.pi, about_point=rt_sine.get_center()
-        )
-        self.play(
-            MoveAlongPath(rc_tracing_dot, rc_sine_flipped),
-            MoveAlongPath(rt_tracing_dot, rt_sine_flipped),
-            rate_func=linear,
-            run_time=2,
-        )
-        self.remove(rc_tracing_dot, rt_tracing_dot)
 
         self.wait(10)
 
