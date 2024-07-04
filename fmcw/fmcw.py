@@ -145,31 +145,59 @@ class PulsedRadarTransmission(Scene):
             )
         )
 
+        def create_propagation(p1, p2):
+            line = Line(p1, p2)
+
+            sine = (
+                FunctionGraph(
+                    lambda t: 0.5 * np.sin(5 * t),
+                    x_range=[0, math.sqrt(np.sum(np.power(p2 - p1, 2)))],
+                )
+                .shift(p1)
+                .rotate(line.get_angle(), about_point=p1)
+            )
+
+            tracing_dot = Dot(
+                sine.get_start(), fill_opacity=1, radius=DEFAULT_DOT_RADIUS / 2
+            )
+            tracer = TracedPath(
+                tracing_dot.get_center,
+                dissipating_time=0.5,
+                stroke_opacity=[1, 1],
+                stroke_width=6,
+            )
+            return tracer, tracing_dot, sine
+
         radar_pt = radar.get_corner(UP + RIGHT)
         cloud_pt = cloud.get_corner(LEFT + DOWN)
-        radar_to_cloud = Line(radar_pt, cloud_pt)
+        rc_tracer, rc_tracing_dot, rc_sine = create_propagation(radar_pt, cloud_pt)
 
-        sine = (
-            FunctionGraph(
-                lambda t: np.sin(5 * t),
-                x_range=[0, math.sqrt(np.sum(np.power(cloud_pt - radar_pt, 2)))],
-            )
-            .shift(radar_pt)
-            .rotate(radar_to_cloud.get_angle(), about_point=radar_pt)
+        radar_pt2 = radar.get_corner(RIGHT)
+        tree_pt = tree.get_corner(LEFT)
+        rt_tracer, rt_tracing_dot, rt_sine = create_propagation(radar_pt2, tree_pt)
+
+        self.add(rc_tracer, rt_tracer)
+        self.play(
+            MoveAlongPath(rc_tracing_dot, rc_sine),
+            MoveAlongPath(rt_tracing_dot, rt_sine),
+            rate_func=linear,
+            run_time=2,
         )
-
-        tracing_dot = Dot(sine.get_start())
-        tracer = TracedPath(
-            tracing_dot.get_center,
-            dissipating_time=0.5,
-            stroke_opacity=[1, 1],
-            stroke_width=6,
+        # rc_sine.reverse_points()
+        # rt_sine.reverse_points()
+        rc_sine_flipped = rc_sine.copy().rotate(
+            math.pi, about_point=rc_sine.get_center()
         )
-
-        self.add(tracer)
-        self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
-        sine.reverse_points()
-        self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
+        rt_sine_flipped = rt_sine.copy().rotate(
+            math.pi, about_point=rt_sine.get_center()
+        )
+        self.play(
+            MoveAlongPath(rc_tracing_dot, rc_sine_flipped),
+            MoveAlongPath(rt_tracing_dot, rt_sine_flipped),
+            rate_func=linear,
+            run_time=2,
+        )
+        self.remove(rc_tracing_dot, rt_tracing_dot)
 
         self.wait(10)
 
@@ -200,14 +228,13 @@ class TransmissionTest(Scene):
             stroke_width=6,
         )
 
-        self.add(
-            dot1,
-            dot2,
-            line,
-            tracing_dot,
-            tracer,
-        )
-        self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
-        sine.reverse_points()
-        self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
+        self.add(dot1, dot2, line, tracing_dot, tracer, sine)
+
+        self.wait(0.5)
+
+        self.play(sine.animate.rotate(math.pi / 2, about_point=sine.get_center()))
+
+        # self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
+        # sine.reverse_points()
+        # self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
         self.wait(10)
