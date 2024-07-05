@@ -105,6 +105,7 @@ class Waveform(Scene):
 
 class PulsedRadarTransmission(Scene):
     def construct(self):
+        """Images"""
         radar = SVGMobject(
             "./figures/weather-radar.svg",
             stroke_color=WHITE,
@@ -113,6 +114,18 @@ class PulsedRadarTransmission(Scene):
             opacity=1,
             stroke_width=0.01,
         ).scale(2)
+        radar_zoomed = (
+            SVGMobject(
+                "./figures/weather-radar.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            .shift(DOWN * 40)
+            .scale(100)
+        )
         cloud = SVGMobject(
             "./figures/clouds.svg",
             stroke_color=WHITE,
@@ -133,6 +146,45 @@ class PulsedRadarTransmission(Scene):
             .shift(RIGHT * 4 + DOWN * 1)
             .scale(1.5)
         )
+
+        """Block diagram"""
+        adc, window_function, bp_filter, range_norm, product_calc, computer = [
+            SVGMobject(
+                f"./figures/{name}.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            for name in [
+                "adc",
+                "window_function",
+                "filter",
+                "range_norm",
+                "product_calc",
+                "computer",
+            ]
+        ]
+
+        blocks = [
+            VGroup(adc.rotate(PI), Tex("ADC").shift(LEFT / 3)),
+            window_function,
+            bp_filter,
+            range_norm,
+            product_calc,
+            computer,
+        ][::-1]
+        processing_block_diagram = VGroup(blocks[0])
+
+        for block, block_left in zip(blocks[1:], blocks[:-1]):
+            block.next_to(block_left, buff=1)
+            processing_block_diagram.add(block)
+            processing_block_diagram.add(Line(block_left.get_right(), block.get_left()))
+
+        processing_block_diagram.move_to(ORIGIN).scale(0.5)
+
+        """Animation start"""
 
         self.play(Create(radar))
         self.play(
@@ -211,7 +263,19 @@ class PulsedRadarTransmission(Scene):
             )
         )
 
-        self.wait(10)
+        self.wait(0.5)
+
+        radome_center = radar.get_top() + DOWN * 2 / 3
+
+        self.play(*[mobj.animate.shift(-radome_center) for mobj in self.mobjects])
+        self.play(
+            FadeOut(cloud, tree, run_time=0.1),
+            Transform(radar, radar_zoomed),
+            GrowFromCenter(processing_block_diagram),
+        )
+        self.remove(radar_zoomed)
+
+        self.wait(1)
 
 
 class TransmissionTest(Scene):
@@ -250,3 +314,115 @@ class TransmissionTest(Scene):
         # sine.reverse_points()
         # self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
         self.wait(10)
+
+
+class RadarMoveTest(Scene):
+    def construct(self):
+        radar = (
+            SVGMobject(
+                "./figures/weather-radar.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            .scale(2)
+            .shift(LEFT * 5 + DOWN * 2)
+            .scale(0.75)
+        )
+        radar_zoomed = (
+            SVGMobject(
+                "./figures/weather-radar.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            .shift(DOWN * 40)
+            .scale(100)
+        )
+
+        radar.shift(-(radar.get_top() + DOWN * 2 / 3))
+        self.add(radar)
+        self.play(Transform(radar, radar_zoomed))
+        self.wait(1)
+
+
+class ProcBD(Scene):
+    def construct(self):
+        ant_line = Line(ORIGIN, UP * 2)
+        ant_tri = (
+            Triangle(color=WHITE)
+            .scale(0.75)
+            .rotate(math.pi)
+            .move_to(ant_line.get_top(), aligned_edge=UP)
+        )
+        antenna = VGroup(ant_line, ant_tri).shift(RIGHT * 2)
+
+        amp = Triangle(color=WHITE).rotate(-PI / 6)
+        amp_to_ant = Line(amp.get_right(), antenna.get_bottom())
+
+        amp_ant = VGroup(antenna, amp, amp_to_ant).shift(RIGHT * 4)
+
+        mixer = VGroup(
+            Circle(color=WHITE),
+            Line(LEFT / 2, RIGHT / 2).rotate(-PI / 4),
+            Line(LEFT / 2, RIGHT / 2).rotate(PI / 4),
+        )
+        mixer_to_amp = Line(mixer.get_right(), amp.get_left())
+
+        lo = VGroup(
+            Circle(color=WHITE),
+            FunctionGraph(
+                lambda x: 0.25 * np.sin(-8 * x), x_range=[-0.5, 0.5], color=WHITE
+            ),
+        ).shift(UP * 3)
+        lo_to_mixer = Line(lo.get_bottom(), mixer.get_top())
+
+        lo_mixer_ant = VGroup(lo, lo_to_mixer, amp_ant, mixer, mixer_to_amp)
+
+        # self.add(amp_ant, mixer_to_amp, mixer, lo)
+        self.add(lo_mixer_ant.scale(0.6))
+
+
+class BD(Scene):
+    def construct(self):
+        adc, window_function, bp_filter, range_norm, product_calc, computer = [
+            SVGMobject(
+                f"./figures/{name}.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            for name in [
+                "adc",
+                "window_function",
+                "filter",
+                "range_norm",
+                "product_calc",
+                "computer",
+            ]
+        ]
+
+        blocks = [
+            VGroup(adc.rotate(PI), Tex("ADC").shift(LEFT / 3)),
+            window_function,
+            bp_filter,
+            range_norm,
+            product_calc,
+            computer,
+        ][::-1]
+        bd = VGroup(blocks[0])
+
+        for block, block_left in zip(blocks[1:], blocks[:-1]):
+            block.next_to(block_left, buff=1)
+            bd.add(block)
+            bd.add(Line(block_left.get_right(), block.get_left()))
+
+        bd.move_to(ORIGIN).scale(0.5)
+
+        self.add(bd)
