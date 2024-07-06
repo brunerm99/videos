@@ -442,7 +442,22 @@ class BD(Scene):
             ]
         ]
 
+        # Antenna
+        tri = Triangle(color=WHITE).scale(0.75).rotate(PI)
+        tri_line = Line(tri.get_bottom() + DOWN / 2, tri.get_top())
+        tri_line_h = Line(tri_line.get_bottom(), tri_line.get_bottom() + RIGHT)
+        line_dot = Dot(tri_line.get_bottom(), radius=DEFAULT_DOT_RADIUS / 2)
+        antenna = VGroup(tri, tri_line, tri_line_h)
+        antenna_w_inv = VGroup(
+            antenna,
+            line_dot,
+            antenna.copy().rotate(PI, about_point=antenna.get_bottom()).set_opacity(0),
+        )
+
         blocks = [
+            antenna_w_inv,
+            Triangle().rotate(PI / 6),
+            bp_filter.copy(),
             VGroup(adc, Tex("ADC").shift(RIGHT / 3)),
             window_function,
             bp_filter,
@@ -481,10 +496,15 @@ class BD(Scene):
             return bd
 
         bd = create_block_diagram(
-            blocks, row_len=2, right_to_left=False, connector_size=1.5
+            blocks, row_len=5, right_to_left=False, connector_size=1
         )
+        # bd2 = create_block_diagram(
+        #     blocks, row_len=4, right_to_left=False, connector_size=3
+        # )
 
-        self.play(Succession(*[Create(block) for block in bd]), run_time=4)
+        # self.play(Succession(*[Create(block) for block in bd]), run_time=4)
 
-        # self.add(bd)
-        self.wait()
+        self.add(bd)
+        # self.wait()
+        # self.play(Transform(bd, bd2))
+        # self.wait()
