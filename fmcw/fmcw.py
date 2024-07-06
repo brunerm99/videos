@@ -1,11 +1,47 @@
 # fmcw.py
 
-from copy import deepcopy
+from typing import List
 from manim import *
 import numpy as np
 import math
 
 config.background_color = BLACK
+
+
+"""Helpers"""
+
+
+def create_block_diagram(
+    blocks: List[Mobject],
+    right_to_left: bool = False,
+    row_len: int = 3,
+    connector_size: int = 1,
+):
+    bd = VGroup(blocks[0])
+
+    for idx, (curr, prev) in enumerate(zip(blocks[1:], blocks[:-1]), start=1):
+        if idx % row_len == 0:
+            right_to_left = not right_to_left
+            curr.next_to(prev, buff=connector_size, direction=DOWN)
+            bd.add(curr)
+            bd.add(Line(prev.get_bottom(), curr.get_top()))
+            continue
+
+        if right_to_left:
+            curr.next_to(prev, buff=connector_size, direction=LEFT)
+            bd.add(curr)
+            bd.add(Line(prev.get_left(), curr.get_right()))
+        else:
+            curr.next_to(prev, buff=connector_size, direction=RIGHT)
+            bd.add(curr)
+            bd.add(Line(prev.get_right(), curr.get_left()))
+
+    bd.move_to(ORIGIN).scale(0.5)
+
+    return bd
+
+
+"""Scenes"""
 
 
 class Title(Scene):
@@ -174,15 +210,10 @@ class PulsedRadarTransmission(Scene):
             range_norm,
             product_calc,
             computer,
-        ][::-1]
-        processing_block_diagram = VGroup(blocks[0])
-
-        for block, block_left in zip(blocks[1:], blocks[:-1]):
-            block.next_to(block_left, buff=1)
-            processing_block_diagram.add(block)
-            processing_block_diagram.add(Line(block_left.get_right(), block.get_left()))
-
-        processing_block_diagram.move_to(ORIGIN).scale(0.5)
+        ]
+        processing_block_diagram = create_block_diagram(
+            blocks, right_to_left=False, row_len=3, connector_size=1
+        )
 
         """Animation start"""
 
@@ -276,6 +307,9 @@ class PulsedRadarTransmission(Scene):
         self.remove(radar_zoomed)
 
         self.wait(1)
+
+
+"""Testing Animations"""
 
 
 class TransmissionTest(Scene):
@@ -409,20 +443,48 @@ class BD(Scene):
         ]
 
         blocks = [
-            VGroup(adc.rotate(PI), Tex("ADC").shift(LEFT / 3)),
+            VGroup(adc, Tex("ADC").shift(RIGHT / 3)),
             window_function,
             bp_filter,
             range_norm,
             product_calc,
             computer,
-        ][::-1]
-        bd = VGroup(blocks[0])
+        ][::1]
 
-        for block, block_left in zip(blocks[1:], blocks[:-1]):
-            block.next_to(block_left, buff=1)
-            bd.add(block)
-            bd.add(Line(block_left.get_right(), block.get_left()))
+        def create_block_diagram(
+            blocks: List[Mobject],
+            right_to_left: bool = False,
+            row_len: int = 3,
+            connector_size: int = 1,
+        ):
+            bd = VGroup(blocks[0])
 
-        bd.move_to(ORIGIN).scale(0.5)
+            for idx, (curr, prev) in enumerate(zip(blocks[1:], blocks[:-1]), start=1):
+                if idx % row_len == 0:
+                    right_to_left = not right_to_left
+                    curr.next_to(prev, buff=connector_size, direction=DOWN)
+                    bd.add(curr)
+                    bd.add(Line(prev.get_bottom(), curr.get_top()))
+                    continue
 
-        self.add(bd)
+                if right_to_left:
+                    curr.next_to(prev, buff=connector_size, direction=LEFT)
+                    bd.add(curr)
+                    bd.add(Line(prev.get_left(), curr.get_right()))
+                else:
+                    curr.next_to(prev, buff=connector_size, direction=RIGHT)
+                    bd.add(curr)
+                    bd.add(Line(prev.get_right(), curr.get_left()))
+
+            bd.move_to(ORIGIN).scale(0.5)
+
+            return bd
+
+        bd = create_block_diagram(
+            blocks, row_len=2, right_to_left=False, connector_size=1.5
+        )
+
+        self.play(Succession(*[Create(block) for block in bd]), run_time=4)
+
+        # self.add(bd)
+        self.wait()
