@@ -1,6 +1,6 @@
 # fmcw.py
 
-from typing import List
+from typing import List, Callable
 from manim import *
 import numpy as np
 import math
@@ -23,18 +23,18 @@ def create_block_diagram(
         if idx % row_len == 0:
             right_to_left = not right_to_left
             curr.next_to(prev, buff=connector_size, direction=DOWN)
-            bd.add(curr)
             bd.add(Line(prev.get_bottom(), curr.get_top()))
+            bd.add(curr)
             continue
 
         if right_to_left:
             curr.next_to(prev, buff=connector_size, direction=LEFT)
-            bd.add(curr)
             bd.add(Line(prev.get_left(), curr.get_right()))
+            bd.add(curr)
         else:
             curr.next_to(prev, buff=connector_size, direction=RIGHT)
-            bd.add(curr)
             bd.add(Line(prev.get_right(), curr.get_left()))
+            bd.add(curr)
 
     bd.move_to(ORIGIN).scale(0.5)
 
@@ -202,17 +202,79 @@ class PulsedRadarTransmission(Scene):
                 "computer",
             ]
         ]
+        (
+            adc_2,
+            window_function_2,
+            bp_filter_2,
+            range_norm_2,
+            product_calc_2,
+            computer_2,
+        ) = [
+            SVGMobject(
+                f"./figures/{name}.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            for name in [
+                "adc",
+                "window_function",
+                "filter",
+                "range_norm",
+                "product_calc",
+                "computer",
+            ]
+        ]
+
+        tri = Triangle(color=WHITE).scale(0.75).rotate(PI)
+        tri_line = Line(tri.get_bottom() + DOWN / 2, tri.get_top())
+        tri_line_h = Line(tri_line.get_bottom(), tri_line.get_bottom() + RIGHT)
+        line_dot = Dot(tri_line.get_bottom(), radius=DEFAULT_DOT_RADIUS / 2)
+        antenna = VGroup(tri, tri_line, tri_line_h)
+        antenna_w_inv = VGroup(
+            antenna,
+            line_dot,
+            antenna.copy().rotate(PI, about_point=antenna.get_bottom()).set_opacity(0),
+        )
+
+        tri_2 = Triangle(color=WHITE).scale(0.75).rotate(PI)
+        tri_line_2 = Line(tri_2.get_bottom() + DOWN / 2, tri_2.get_top())
+        tri_line_h_2 = Line(tri_line_2.get_bottom(), tri_line_2.get_bottom() + RIGHT)
+        line_dot_2 = Dot(tri_line_2.get_bottom(), radius=DEFAULT_DOT_RADIUS / 2)
+        antenna_2 = VGroup(tri_2, tri_line_2, tri_line_h_2)
+        antenna_w_inv_2 = VGroup(
+            antenna_2,
+            line_dot_2,
+            antenna_2.copy()
+            .rotate(PI, about_point=antenna_2.get_bottom())
+            .set_opacity(0),
+        )
 
         blocks = [
-            VGroup(adc.rotate(PI), Tex("ADC").shift(LEFT / 3)),
-            window_function,
-            bp_filter,
-            range_norm,
-            product_calc,
+            antenna_w_inv,
+            Triangle(color=WHITE).rotate(PI / 6),
+            bp_filter.copy(),
+            VGroup(adc, Tex("ADC").shift(RIGHT / 3)),
+            # window_function,
+            # bp_filter,
+            # range_norm,
+            # product_calc,
             computer,
         ]
+        blocks_2 = [
+            antenna_w_inv_2,
+            Triangle(color=WHITE).rotate(PI / 6),
+            bp_filter_2,
+            VGroup(adc_2, Tex("ADC").shift(RIGHT / 3)),
+            computer_2,
+        ]
         processing_block_diagram = create_block_diagram(
-            blocks, right_to_left=False, row_len=3, connector_size=1
+            blocks, right_to_left=False, row_len=5, connector_size=1
+        )
+        processing_block_diagram_big = create_block_diagram(
+            blocks_2, right_to_left=False, row_len=5, connector_size=4
         )
 
         """Animation start"""
@@ -229,22 +291,22 @@ class PulsedRadarTransmission(Scene):
             )
         )
 
-        def create_propagation(p1, p2):
+        def create_propagation(
+            p1, p2, waveform: Callable = lambda t: 0.5 * np.sin(5 * t), color=WHITE
+        ):
             line = Line(p1, p2)
             dist = math.sqrt(np.sum(np.power(p2 - p1, 2)))
 
             sine = (
                 FunctionGraph(
-                    lambda t: 0.5 * np.sin(5 * t),
-                    x_range=[0, math.sqrt(np.sum(np.power(p2 - p1, 2)))],
+                    waveform, x_range=[0, math.sqrt(np.sum(np.power(p2 - p1, 2)))]
                 )
                 .shift(p1)
                 .rotate(line.get_angle(), about_point=p1)
             )
             sine_flipped = (
                 FunctionGraph(
-                    lambda t: 0.5 * np.sin(5 * t),
-                    x_range=[0, dist],
+                    lambda t: 0.5 * np.sin(5 * t), x_range=[0, dist], color=color
                 )
                 .shift(p1)
                 .rotate(line.get_angle(), about_point=p1)
@@ -256,7 +318,7 @@ class PulsedRadarTransmission(Scene):
             )
             tracer = TracedPath(
                 tracing_dot.get_center,
-                dissipating_time=0.5,
+                dissipating_time=1,
                 stroke_opacity=[1, 1],
                 stroke_width=6,
             )
@@ -295,7 +357,9 @@ class PulsedRadarTransmission(Scene):
         )
 
         self.wait(0.5)
+        self.remove(rc_tracer, rt_tracer)
 
+        # Move into radome
         radome_center = radar.get_top() + DOWN * 2 / 3
 
         self.play(*[mobj.animate.shift(-radome_center) for mobj in self.mobjects])
@@ -306,7 +370,99 @@ class PulsedRadarTransmission(Scene):
         )
         self.remove(radar_zoomed)
 
-        self.wait(1)
+        self.play(Transform(processing_block_diagram, processing_block_diagram_big))
+
+        waveform_rx_amplitude = 0.2
+        waveform_rx_gain = 2
+        f_mult = 2
+        waveform_rx = lambda t: waveform_rx_amplitude * (
+            np.sin(5 * f_mult * t) + np.sin(2 * f_mult * t) + np.sin(8 * f_mult * t)
+        )
+        waveform_rx_amplified = (
+            lambda t: waveform_rx_gain
+            * waveform_rx_amplitude
+            * (np.sin(5 * f_mult * t) + np.sin(2 * f_mult * t) + np.sin(8 * f_mult * t))
+        )
+        waveform_rx_filtered = (
+            lambda t: waveform_rx_amplitude
+            * waveform_rx_gain
+            * 3
+            * np.sin(5 * f_mult * t)
+        )
+
+        (antenna_tracer, antenna_tracing_dot, antenna_sine, *_) = create_propagation(
+            antenna_2.get_top() + RIGHT * 9 + UP * 5,
+            antenna_2.get_top() + UP / 2,
+            waveform=waveform_rx,
+            color=BLUE,
+        )
+        self.add(antenna_tracer)
+
+        # Wave antenna to amp
+        antenna_to_amp = processing_block_diagram_big[1]
+        (antenna_to_amp_tracer, antenna_to_amp_tracing_dot, antenna_to_amp_sine, *_) = (
+            create_propagation(
+                antenna_to_amp.get_left(),
+                antenna_to_amp.get_right(),
+                waveform=waveform_rx,
+                color=BLUE,
+            )
+        )
+        self.add(antenna_to_amp_tracer)
+
+        # Amp to filter
+        amp_to_filter = processing_block_diagram_big[3]
+        (amp_to_filter_tracer, amp_to_filter_tracing_dot, amp_to_filter_sine, *_) = (
+            create_propagation(
+                amp_to_filter.get_left(),
+                amp_to_filter.get_right(),
+                waveform=waveform_rx_amplified,
+                color=BLUE,
+            )
+        )
+        self.add(amp_to_filter_tracer)
+
+        # Filter to ADC
+        filter_to_adc = processing_block_diagram_big[5]
+        (filter_to_adc_tracer, filter_to_adc_tracing_dot, filter_to_adc_sine, *_) = (
+            create_propagation(
+                filter_to_adc.get_left(),
+                filter_to_adc.get_right(),
+                waveform=waveform_rx_filtered,
+                color=BLUE,
+            )
+        )
+        self.add(filter_to_adc_tracer)
+
+        self.play(
+            LaggedStart(
+                MoveAlongPath(
+                    antenna_tracing_dot, antenna_sine, rate_func=linear, run_time=2
+                ),
+                MoveAlongPath(
+                    antenna_to_amp_tracing_dot,
+                    antenna_to_amp_sine,
+                    rate_func=linear,
+                    run_time=2,
+                ),
+                MoveAlongPath(
+                    amp_to_filter_tracing_dot,
+                    amp_to_filter_sine,
+                    rate_func=linear,
+                    run_time=2,
+                ),
+                MoveAlongPath(
+                    filter_to_adc_tracing_dot,
+                    filter_to_adc_sine,
+                    rate_func=linear,
+                    run_time=2,
+                ),
+                lag_ratio=0.9,
+            )
+        )
+
+        self.wait(3)
+        self.remove(antenna_tracer, antenna_to_amp_tracer)
 
 
 """Testing Animations"""
@@ -456,7 +612,7 @@ class BD(Scene):
 
         blocks = [
             antenna_w_inv,
-            Triangle().rotate(PI / 6),
+            Triangle(color=WHITE).rotate(PI / 6),
             bp_filter.copy(),
             VGroup(adc, Tex("ADC").shift(RIGHT / 3)),
             window_function,
@@ -478,18 +634,18 @@ class BD(Scene):
                 if idx % row_len == 0:
                     right_to_left = not right_to_left
                     curr.next_to(prev, buff=connector_size, direction=DOWN)
-                    bd.add(curr)
                     bd.add(Line(prev.get_bottom(), curr.get_top()))
+                    bd.add(curr)
                     continue
 
                 if right_to_left:
                     curr.next_to(prev, buff=connector_size, direction=LEFT)
-                    bd.add(curr)
                     bd.add(Line(prev.get_left(), curr.get_right()))
+                    bd.add(curr)
                 else:
                     curr.next_to(prev, buff=connector_size, direction=RIGHT)
-                    bd.add(curr)
                     bd.add(Line(prev.get_right(), curr.get_left()))
+                    bd.add(curr)
 
             bd.move_to(ORIGIN).scale(0.5)
 
@@ -502,9 +658,20 @@ class BD(Scene):
         #     blocks, row_len=4, right_to_left=False, connector_size=3
         # )
 
-        # self.play(Succession(*[Create(block) for block in bd]), run_time=4)
+        # TODO: Create BlockDiagram type and override the Create animation
+        # self.play(
+        #     Succession(
+        #         *[
+        #             Create(block) if type(block) == Line else GrowFromCenter(block)
+        #             for block in bd
+        #         ]
+        #     ),
+        #     run_time=4,
+        # )
 
         self.add(bd)
+
+        # self.play(bp_filter.animate.shift(UP))
         # self.wait()
         # self.play(Transform(bd, bd2))
         # self.wait()
