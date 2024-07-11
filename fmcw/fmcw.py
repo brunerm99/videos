@@ -44,8 +44,27 @@ def create_block_diagram(
 """Scenes"""
 
 
+class RadarTypesIntro(Scene):
+    def construct(self):
+        radar_0 = ImageMobject("figures/images/chivo.png")
+        self.play(GrowFromCenter(radar_0))
+        # self.play(
+        #     Wiggle(
+        #         radar_0,
+        #         scale_value=1.005,
+        #         n_wiggles=10,
+        #         rotation_angle=0.001 * TAU,
+        #     ),
+        #     # rate_func=linear,
+        #     # run_time=5,
+        # )
+        self.wait()
+
+
 class Title(Scene):
     def construct(self):
+        but_what = Tex("but", "... ", "what ", "is ", "an")
+
         title = Tex("F", "M", "C", "W", " Radar", font_size=DEFAULT_FONT_SIZE * 2)
         f = Text("Frequency", font_size=DEFAULT_FONT_SIZE * 0.8)
         m = Text("modulated", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
@@ -71,9 +90,29 @@ class Title(Scene):
         c = expanded[3]
         w = expanded[4]
 
+        part_1 = Tex("Part ", "1", ": ", "The ", font_size=DEFAULT_FONT_SIZE * 0.8 * 2)
+
+        but_what.next_to(
+            title, direction=UP, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 2
+        )
+
+        self.add(but_what[0])
+        self.wait(0.3)
+        self.play(AddTextLetterByLetter(but_what[1]), run_time=1)
+        self.wait(0.3)
+        self.add(but_what[2])
+        self.wait(0.3)
+        self.add(but_what[3])
+        self.wait(0.3)
+        self.add(but_what[4])
+
         self.play(Write(title))
         # self.wait(1)
-        self.play(title.animate.scale(0.7).shift(UP))
+        self.play(
+            LaggedStart(
+                FadeOut(but_what), title.animate.scale(0.7).shift(UP), lag_ratio=0.2
+            )
+        )
 
         # self.play(Write(f), Write(m), Write(c), Write(w))
         self.play(Write(f), Write(dash), Write(m), Write(c), Write(w))
@@ -131,7 +170,36 @@ class Title(Scene):
 
         self.wait(2)
 
-        self.play(FadeOut(cw_box, f, dash, m, c, w, title))
+        self.play(Uncreate(cw_box))
+
+        cw_copy = VGroup(c.copy(), w.copy()).scale(2).set_color(WHITE)
+        part_1.next_to(cw_copy, direction=LEFT)
+        part_1_group = VGroup(part_1, cw_copy).move_to(ORIGIN)
+
+        self.play(
+            FadeOut(cw_box, f, dash, m, title),
+            Write(part_1_group[0]),
+            Transform(VGroup(c, w), cw_copy),
+        )
+
+        self.wait()
+
+        tcw = VGroup(part_1[3], cw_copy)
+        cw_strike = Line(tcw.get_left(), tcw.get_right())
+        radar_basics = Tex("Radar Basics").scale(0.8 * 2).next_to(tcw, direction=DOWN)
+        part_1_strike = Line(part_1[1].get_left(), part_1[1].get_right())
+        part_0 = Tex("0").scale(0.8 * 2).next_to(part_1[1], direction=DOWN)
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(part_1_strike), Create(cw_strike)),
+                AnimationGroup(Write(part_0), Write(radar_basics)),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(3)
+
+        # self.play(FadeOut(cw_box, f, dash, m, c, w, title))
 
 
 class Waveform(Scene):
