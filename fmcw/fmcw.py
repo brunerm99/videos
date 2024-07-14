@@ -216,7 +216,7 @@ class Waveform(Scene):
 
         ax_scale = 0.7
         ax = Axes(
-            x_range=[0, x_1],
+            x_range=[0, x_1, 0.2],
             y_range=[
                 f_0_tracker.get_value() - bw_tracker.get_value() / 2.0,
                 f_1 + bw_tracker.get_value(),
@@ -310,6 +310,62 @@ class Waveform(Scene):
         self.play(plot.animate.move_to(ORIGIN))
 
         self.wait(2)
+
+
+# TODO: Combine with Waveform - slo tho
+class TxAndRx(Scene):
+    def construct(self):
+        bw = 1.0
+        f = 2.0
+        f_0 = 6.0
+
+        f_1 = f_0 + bw
+        x_1 = 1
+
+        t_shift = 0.2
+
+        # f_curr = ValueTracker()
+
+        ax_scale = 0.7
+        ax = Axes(
+            x_range=[0, x_1, 0.2],
+            y_range=[
+                f_0 - bw / 2.0,
+                f_1 + bw,
+                0.5,
+            ],
+            tips=False,
+            axis_config={"include_numbers": True},
+        ).scale(ax_scale)
+
+        tx = always_redraw(
+            lambda: ax.plot(
+                lambda t: (signal.sawtooth(2 * PI * f * t) + 1) / 2 * bw + f_0,
+                use_smoothing=False,
+                x_range=[0, x_1, x_1 / 1000],
+                color=YELLOW,
+            )
+        )
+        tx_label = Tex("Tx", color=YELLOW).next_to(tx, direction=UP)
+        rx_label = Tex("Rx", color=BLUE).move_to(tx_label)
+
+        rx = tx.copy().set_color(BLUE)
+
+        self.add(ax, tx, tx_label, rx)
+        self.wait(1)
+        # TODO: Find out how to move by the specified time shift instead of using LEFT,RIGHT
+        self.play(
+            rx.animate.shift(ax.c2p([t_shift, 0, 0]))  # , rx_label.animate.shift(RIGHT)
+        )
+
+        f_rx_pt = [rx.get_x(LEFT), rx.get_y(DOWN), 0]
+        f_rx_dot = Dot(f_rx_pt)
+
+        f_tx_dot = Dot(ax.input_to_graph_point(t_shift, tx))
+
+        self.add(f_rx_dot, f_tx_dot)
+
+        self.wait(1)
 
 
 class PulsedRadarTransmission(Scene):
