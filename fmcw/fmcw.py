@@ -4,6 +4,7 @@ from typing import List, Callable
 from manim import *
 import numpy as np
 import math
+from scipy import signal
 
 config.background_color = BLACK
 
@@ -204,7 +205,106 @@ class Title(Scene):
 
 class Waveform(Scene):
     def construct(self):
-        pass
+        # pass
+
+        bw_tracker = ValueTracker(1.0)
+        f_tracker = ValueTracker(2.0)
+        f_0_tracker = ValueTracker(6.0)
+
+        f_1 = f_0_tracker.get_value() + bw_tracker.get_value()
+        x_1 = 1
+
+        ax = Axes(
+            x_range=[0, x_1],
+            y_range=[
+                f_0_tracker.get_value() - bw_tracker.get_value() / 2.0,
+                f_1 + bw_tracker.get_value(),
+                0.5,
+            ],
+            # y_range=[-1, 1],
+            tips=False,
+            axis_config={"include_numbers": True},
+        ).scale(0.7)
+
+        tx = always_redraw(
+            lambda: ax.plot(
+                lambda t: (signal.sawtooth(2 * PI * f_tracker.get_value() * t) + 1)
+                / 2
+                * bw_tracker.get_value()
+                + f_0_tracker.get_value(),
+                use_smoothing=False,
+                x_range=[0, x_1, x_1 / 1000],
+            )
+        )
+
+        self.play(Succession(Create(ax), Create(tx)))
+        plot = VGroup(ax, tx)
+        self.play(plot.animate.shift(RIGHT))
+
+        """ f0 Variation """
+        f_0_arrow = always_redraw(
+            lambda: Arrow(
+                ax.c2p(0, f_0_tracker.get_value()) + 2 * LEFT,
+                ax.c2p(0, f_0_tracker.get_value()),
+            ).shift(LEFT)
+        )
+        f_0_label = always_redraw(
+            lambda: Tex(f"$f_0$=\\\\{f_0_tracker.get_value():.02f}MHz").next_to(
+                f_0_arrow, direction=LEFT
+            )
+        )  # TODO: Mess with spacing b/c values not showing
+        f_0_variation = VGroup(f_0_arrow, f_0_label)
+        self.play(Create(f_0_variation))
+
+        self.play(f_0_tracker.animate.set_value(f_0_tracker.get_value() + 1))
+        self.play(f_0_tracker.animate.set_value(f_0_tracker.get_value() - 1))
+
+        """ BW Variation """
+        bw_brace = always_redraw(
+            lambda: BraceLabel(
+                Line(
+                    ax.c2p(0, f_0_tracker.get_value()),
+                    ax.c2p(0, f_0_tracker.get_value() + bw_tracker.get_value()),
+                ),
+                f"BW=\\\\{bw_tracker.get_value():.02f}MHz",  # TODO: Mess with spacing b/c values not showing
+                # "BW",
+                brace_direction=LEFT,
+                label_constructor=Tex,
+            ).shift(LEFT)
+        )
+        self.play(
+            Uncreate(f_0_variation),
+            Create(bw_brace),
+        )
+
+        self.play(bw_tracker.animate.set_value(bw_tracker.get_value() + 1))
+        self.play(bw_tracker.animate.set_value(bw_tracker.get_value() - 1))
+
+        """ Period Variation """
+        self.play(
+            Uncreate(bw_brace),
+            plot.animate.shift(LEFT + UP),
+        )
+
+        period_brace = always_redraw(
+            lambda: BraceLabel(
+                Line(
+                    ax.c2p(0, f_0_tracker.get_value()),
+                    ax.c2p(x_1 / f_tracker.get_value(), f_0_tracker.get_value()),
+                ),
+                f"T={x_1/f_tracker.get_value():.02f}s",
+                # f"T=",
+                brace_direction=DOWN,
+                label_constructor=Tex,
+            ).shift(DOWN)
+        )
+
+        self.play(Create(period_brace))
+
+        self.play(f_tracker.animate.set_value(f_tracker.get_value() - 0.5))
+        self.play(f_tracker.animate.set_value(f_tracker.get_value() + 0.5))
+
+        self.wait(2)
 
 
 class PulsedRadarTransmission(Scene):
