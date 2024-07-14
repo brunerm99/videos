@@ -214,6 +214,7 @@ class Waveform(Scene):
         f_1 = f_0_tracker.get_value() + bw_tracker.get_value()
         x_1 = 1
 
+        ax_scale = 0.7
         ax = Axes(
             x_range=[0, x_1],
             y_range=[
@@ -224,7 +225,7 @@ class Waveform(Scene):
             # y_range=[-1, 1],
             tips=False,
             axis_config={"include_numbers": True},
-        ).scale(0.7)
+        ).scale(ax_scale)
 
         tx = always_redraw(
             lambda: ax.plot(
@@ -303,6 +304,10 @@ class Waveform(Scene):
 
         self.play(f_tracker.animate.set_value(f_tracker.get_value() - 0.5))
         self.play(f_tracker.animate.set_value(f_tracker.get_value() + 0.5))
+
+        """ Back to origin """
+        self.play(Uncreate(period_brace))
+        self.play(plot.animate.move_to(ORIGIN))
 
         self.wait(2)
 
