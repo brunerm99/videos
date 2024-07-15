@@ -214,7 +214,7 @@ class Waveform(Scene):
         f_1 = f_0_tracker.get_value() + bw_tracker.get_value()
         x_1 = 1
 
-        ax_scale = 0.7
+        ax_scale = 0.6
         ax = Axes(
             x_range=[0, x_1, 0.2],
             y_range=[
@@ -240,7 +240,7 @@ class Waveform(Scene):
 
         self.play(Succession(Create(ax), Create(tx)))
         plot = VGroup(ax, tx)
-        self.play(plot.animate.shift(RIGHT))
+        self.play(plot.animate.shift(RIGHT * 2))
 
         """ f0 Variation """
         f_0_arrow = always_redraw(
@@ -284,7 +284,7 @@ class Waveform(Scene):
         """ Period Variation """
         self.play(
             Uncreate(bw_brace),
-            plot.animate.shift(LEFT + UP),
+            plot.animate.shift(LEFT * 2 + UP),
         )
 
         period_brace = always_redraw(
