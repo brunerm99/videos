@@ -315,6 +315,16 @@ class Waveform(Scene):
 # TODO: Combine with Waveform - slo tho
 class TxAndRx(Scene):
     def construct(self):
+        def get_t_shift_dist(t0: float, t1: float, graph, axes: Axes) -> np.ndarray:
+            return (
+                axes.input_to_graph_point(t1, graph)
+                - axes.input_to_graph_point(t0, graph)
+            ) * RIGHT
+
+        tx_color = YELLOW
+        rx_color = BLUE
+
+        f_units = "MHz"
         bw = 1.0
         f = 2.0
         f_0 = 6.0
@@ -322,9 +332,15 @@ class TxAndRx(Scene):
         f_1 = f_0 + bw
         x_1 = 1
 
-        t_shift = 0.2
+        t_shift = 0.1
+        f_rx_tracker = ValueTracker(0.0)
+        f_tx_tracker = ValueTracker(f_rx_tracker.get_value() + t_shift)
 
-        # f_curr = ValueTracker()
+        def update_t(t: float):
+            return [
+                f_rx_tracker.animate.set_value(f_rx_tracker.get_value() + t),
+                f_tx_tracker.animate.set_value(f_tx_tracker.get_value() + t),
+            ]
 
         ax_scale = 0.7
         ax = Axes(
@@ -338,34 +354,110 @@ class TxAndRx(Scene):
             axis_config={"include_numbers": True},
         ).scale(ax_scale)
 
+        func = lambda t: (signal.sawtooth(2 * PI * f * t) + 1) / 2 * bw + f_0
         tx = always_redraw(
             lambda: ax.plot(
-                lambda t: (signal.sawtooth(2 * PI * f * t) + 1) / 2 * bw + f_0,
+                func,
                 use_smoothing=False,
                 x_range=[0, x_1, x_1 / 1000],
                 color=YELLOW,
             )
         )
-        tx_label = Tex("Tx", color=YELLOW).next_to(tx, direction=UP)
-        rx_label = Tex("Rx", color=BLUE).move_to(tx_label)
-
-        rx = tx.copy().set_color(BLUE)
+        tx_label = Tex("Tx", color=tx_color).next_to(tx, direction=UP)
+        rx_label = Tex("Rx", color=rx_color).move_to(tx_label)
+        rx = tx.copy().set_color(rx_color)
 
         self.add(ax, tx, tx_label, rx)
         self.wait(1)
-        # TODO: Find out how to move by the specified time shift instead of using LEFT,RIGHT
-        self.play(
-            rx.animate.shift(ax.c2p([t_shift, 0, 0]))  # , rx_label.animate.shift(RIGHT)
+
+        t_shift_dist = get_t_shift_dist(t0=0, t1=t_shift, graph=tx, axes=ax)
+        self.play(rx.animate.shift(t_shift_dist), rx_label.animate.shift(t_shift_dist))
+
+        shift_start = ax.input_to_graph_point(0, tx)
+        t_shift_line = Line(shift_start, shift_start + t_shift_dist)
+        t_shift_brace = BraceLabel(
+            t_shift_line, "t", label_constructor=Tex, buff=LARGE_BUFF
         )
 
-        f_rx_pt = [rx.get_x(LEFT), rx.get_y(DOWN), 0]
-        f_rx_dot = Dot(f_rx_pt)
+        self.play(Create(t_shift_brace))
 
-        f_tx_dot = Dot(ax.input_to_graph_point(t_shift, tx))
+        f_tx_dot = always_redraw(
+            lambda: Dot(ax.input_to_graph_point(f_tx_tracker.get_value(), tx))
+        )
+        f_rx_dot = always_redraw(
+            lambda: Dot(ax.input_to_graph_point(f_rx_tracker.get_value(), rx)).shift(
+                t_shift_dist
+            )
+        )
 
-        self.add(f_rx_dot, f_tx_dot)
+        f_arrow = always_redraw(
+            lambda: Arrow(ORIGIN, DOWN).next_to(
+                ax.input_to_graph_point(f_tx_tracker.get_value(), tx), direction=UP
+            )
+        )
+        f_rx_label = always_redraw(
+            lambda: Tex(
+                r"$f_{rx}$=",
+                f"{func(f_rx_tracker.get_value()):.02f}{f_units}",
+                color=rx_color,
+            ).next_to(tx, direction=UP, buff=MED_LARGE_BUFF)
+        )
+        f_tx_label = always_redraw(
+            lambda: Tex(
+                r"$f_{tx}=$",
+                f"{func(f_tx_tracker.get_value()):.02f}{f_units}",
+                color=tx_color,
+            ).next_to(f_rx_label, direction=UP)
+        )
 
+        self.play(
+            Uncreate(tx_label),
+            Uncreate(rx_label),
+            Create(f_arrow),
+            Create(f_tx_label),
+            Create(f_rx_label),
+            Create(f_rx_dot),
+            Create(f_tx_dot),
+        )
+
+        f_inc = 0.35
+        self.play(
+            f_tx_tracker.animate.increment_value(f_inc),
+            f_rx_tracker.animate.increment_value(f_inc),
+            run_time=2,
+        )
+
+        how_do_we_derive = Tex(
+            r"How do we derive range information from\\these two signals available to us?"
+        ).to_edge(UP, buff=MED_LARGE_BUFF)
+
+        plot_group = VGroup(
+            f_arrow,
+            f_tx_label,
+            f_rx_label,
+            f_rx_dot,
+            f_tx_dot,
+            tx,
+            rx,
+            ax,
+            t_shift_brace,
+        )
+        self.play(
+            LaggedStart(
+                plot_group.animate.to_edge(DOWN, buff=MED_LARGE_BUFF),
+                Write(how_do_we_derive),
+            )
+        )
         self.wait(1)
+
+        self.play(
+            Uncreate(how_do_we_derive),
+            plot_group.animate.scale(0.6).to_edge(
+                LEFT
+            ),  # TODO: Need to remove the always redraw from the labels, I think
+        )
+
+        self.wait(2)
 
 
 class PulsedRadarTransmission(Scene):
