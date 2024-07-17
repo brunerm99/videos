@@ -14,6 +14,168 @@ config.background_color = BLACK
 """Helpers"""
 
 
+class WeatherRadarTower(VGroup):
+    def __init__(self, **kwargs):
+        # super.__init__(**kwargs)
+
+        width_scale = 2
+        LINE_STYLE = dict(
+            color=WHITE, stroke_width=DEFAULT_STROKE_WIDTH * width_scale * 2
+        )
+
+        leg = Line(ORIGIN, UP * 3, **LINE_STYLE)
+        self.left_leg = leg.copy().shift(LEFT)
+        self.right_leg = leg.copy().shift(RIGHT)
+        self.middle_leg = leg.copy().shift(DOWN / 1.5)
+
+        self.left_start_cap = Dot(
+            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        ).move_to(self.left_leg.get_start())
+        self.right_start_cap = Dot(
+            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        ).move_to(self.right_leg.get_start())
+        self.middle_start_cap = Dot(
+            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        ).move_to(self.middle_leg.get_start())
+        self.left_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+            self.left_leg.get_end()
+        )
+        self.right_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+            self.right_leg.get_end()
+        )
+        self.middle_end_cap = Dot(
+            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        ).move_to(self.middle_leg.get_end())
+
+        self.conn1_y_shift = DOWN / 2
+        self.conn1 = Line(
+            self.middle_leg.get_center() + self.conn1_y_shift,
+            self.right_leg.get_center() + self.conn1_y_shift,
+            **LINE_STYLE,
+        )
+        self.conn2 = Line(
+            self.middle_leg.get_center() + self.conn1_y_shift,
+            self.left_leg.get_center() + self.conn1_y_shift,
+            **LINE_STYLE,
+        )
+        self.conn3 = self.conn1.copy().shift(-self.conn1_y_shift * 2)
+        self.conn4 = self.conn2.copy().shift(-self.conn1_y_shift * 2)
+        # conn5 = conn1.copy().shift(-conn1_y_shift * 4)
+        # conn6 = conn2.copy().shift(-conn1_y_shift * 2)
+
+        self.radome = Circle(radius=1.05, **LINE_STYLE).next_to(
+            self.middle_leg,
+            direction=UP,
+            buff=0,
+        )
+
+        self.add(
+            VGroup(
+                self.left_leg,
+                self.right_leg,
+                self.middle_leg,
+                self.left_start_cap,
+                self.middle_start_cap,
+                self.right_start_cap,
+                self.left_end_cap,
+                self.middle_end_cap,
+                self.right_end_cap,
+                self.conn1,
+                self.conn2,
+                self.conn3,
+                self.conn4,
+                self.radome,
+            ).move_to(ORIGIN)
+        )
+
+    def get_animation(self):
+        return LaggedStart(
+            AnimationGroup(
+                Create(self.left_leg),
+                Create(self.middle_leg),
+                Create(self.right_leg),
+            ),
+            AnimationGroup(
+                Create(self.conn1),
+                Create(self.conn2),
+                Create(self.conn3),
+                Create(self.conn4),
+            ),
+            Create(self.radome),
+            lag_ratio=0.75,
+        )
+
+    # @override_animation(Create)
+    # def _create_override(self, **kwargs):
+
+
+def get_weather_radar_tower():
+    width_scale = 2
+    LINE_STYLE = dict(color=WHITE, stroke_width=DEFAULT_STROKE_WIDTH * width_scale * 2)
+    leg = Line(ORIGIN, UP * 3, **LINE_STYLE)
+    left_leg = leg.copy().shift(LEFT)
+    right_leg = leg.copy().shift(RIGHT)
+    middle_leg = leg.copy().shift(DOWN / 1.5)
+
+    left_start_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        left_leg.get_start()
+    )
+    right_start_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        right_leg.get_start()
+    )
+    middle_start_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        middle_leg.get_start()
+    )
+    left_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        left_leg.get_end()
+    )
+    right_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        right_leg.get_end()
+    )
+    middle_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        middle_leg.get_end()
+    )
+
+    conn1_y_shift = DOWN / 2
+    conn1 = Line(
+        middle_leg.get_center() + conn1_y_shift,
+        right_leg.get_center() + conn1_y_shift,
+        **LINE_STYLE,
+    )
+    conn2 = Line(
+        middle_leg.get_center() + conn1_y_shift,
+        left_leg.get_center() + conn1_y_shift,
+        **LINE_STYLE,
+    )
+    conn3 = conn1.copy().shift(-conn1_y_shift * 2)
+    conn4 = conn2.copy().shift(-conn1_y_shift * 2)
+    # conn5 = conn1.copy().shift(-conn1_y_shift * 4)
+    # conn6 = conn2.copy().shift(-conn1_y_shift * 2)
+
+    radome = Circle(radius=1.05, **LINE_STYLE).next_to(
+        middle_leg,
+        direction=UP,
+        buff=0,
+    )
+
+    return VGroup(
+        left_leg,
+        right_leg,
+        middle_leg,
+        left_start_cap,
+        middle_start_cap,
+        right_start_cap,
+        left_end_cap,
+        middle_end_cap,
+        right_end_cap,
+        conn1,
+        conn2,
+        conn3,
+        conn4,
+        radome,
+    ).move_to(ORIGIN)
+
+
 def create_block_diagram(
     blocks: List[Mobject],
     right_to_left: bool = False,
@@ -503,6 +665,16 @@ class TxAndRx(Scene):
         self.wait(2)
 
 
+class PulsedRadarIntro(Scene):
+    def construct(self):
+        # radar = get_weather_radar_tower()
+        # self.add(radar)
+        radar = WeatherRadarTower()
+        self.play(radar.get_animation())
+        self.wait(2)
+
+
+# Possibly move to pulsed / generic radar video
 class PulsedRadarTransmission(Scene):
     def construct(self):
         """Images"""
@@ -1093,6 +1265,7 @@ class WeatherChannel(Scene):
         self.wait(2)
 
 
+# Possibly move to another project about pulsed / generic radar
 class SignalGettingDirty(Scene):
     def construct(self):
         f = 1
