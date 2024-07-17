@@ -1,9 +1,11 @@
 # fmcw.py
 
-from typing import List, Callable
-from manim import *
-import numpy as np
 import math
+from typing import Callable, List
+
+import cv2
+import numpy as np
+from manim import *
 from scipy import signal
 
 config.background_color = BLACK
@@ -381,34 +383,71 @@ class TxAndRx(Scene):
 
         self.play(Create(t_shift_brace))
 
-        f_tx_dot = always_redraw(
-            lambda: Dot(ax.input_to_graph_point(f_tx_tracker.get_value(), tx))
-        )
-        f_rx_dot = always_redraw(
-            lambda: Dot(ax.input_to_graph_point(f_rx_tracker.get_value(), rx)).shift(
-                t_shift_dist
-            )
+        f_tx_dot = Dot(ax.input_to_graph_point(f_tx_tracker.get_value(), tx))
+        f_rx_dot = Dot(ax.input_to_graph_point(f_rx_tracker.get_value(), rx)).shift(
+            t_shift_dist
         )
 
-        f_arrow = always_redraw(
-            lambda: Arrow(ORIGIN, DOWN).next_to(
+        def update_tx_dot(m: Mobject):
+            m.move_to(ax.input_to_graph_point(f_tx_tracker.get_value(), tx))
+
+        def update_rx_dot(m: Mobject):
+            m.move_to(ax.input_to_graph_point(f_rx_tracker.get_value(), rx)).shift(
+                t_shift_dist
+            )
+
+        f_tx_dot.add_updater(update_tx_dot)
+        f_rx_dot.add_updater(update_rx_dot)
+
+        def update_arrow(m: Mobject):
+            m.next_to(
                 ax.input_to_graph_point(f_tx_tracker.get_value(), tx), direction=UP
             )
+
+        f_arrow = Arrow(ORIGIN, DOWN).next_to(
+            ax.input_to_graph_point(f_tx_tracker.get_value(), tx), direction=UP
         )
-        f_rx_label = always_redraw(
-            lambda: Tex(
+        f_arrow.add_updater(update_arrow)
+
+        f_rx_label = (
+            Tex(
                 r"$f_{rx}$=",
                 f"{func(f_rx_tracker.get_value()):.02f}{f_units}",
                 color=rx_color,
-            ).next_to(tx, direction=UP, buff=MED_LARGE_BUFF)
+            )
+            .scale(0.8)
+            .next_to(tx, direction=UP, buff=MED_LARGE_BUFF)
         )
-        f_tx_label = always_redraw(
-            lambda: Tex(
+        f_tx_label = (
+            Tex(
                 r"$f_{tx}=$",
                 f"{func(f_tx_tracker.get_value()):.02f}{f_units}",
                 color=tx_color,
-            ).next_to(f_rx_label, direction=UP)
+            )
+            .scale(0.8)
+            .next_to(f_rx_label, direction=UP)
         )
+
+        def update_tx_freq(m: Mobject):
+            m.become(
+                Tex(
+                    r"$f_{tx}=$",
+                    f"{func(f_tx_tracker.get_value()):.02f}{f_units}",
+                    color=tx_color,
+                ).next_to(f_rx_label, direction=UP)
+            )
+
+        def update_rx_freq(m: Mobject):
+            m.become(
+                Tex(
+                    r"$f_{rx}$=",
+                    f"{func(f_rx_tracker.get_value()):.02f}{f_units}",
+                    color=rx_color,
+                ).next_to(tx, direction=UP, buff=MED_LARGE_BUFF)
+            )
+
+        f_rx_label.add_updater(update_rx_freq)
+        f_tx_label.add_updater(update_tx_freq)
 
         self.play(
             Uncreate(tx_label),
@@ -431,6 +470,12 @@ class TxAndRx(Scene):
             r"How do we derive range information from\\these two signals available to us?"
         ).to_edge(UP, buff=MED_LARGE_BUFF)
 
+        f_tx_label.remove_updater(update_tx_freq)
+        f_rx_label.remove_updater(update_rx_freq)
+        f_tx_dot.remove_updater(update_tx_dot)
+        f_rx_dot.remove_updater(update_rx_dot)
+        f_arrow.remove_updater(update_arrow)
+
         plot_group = VGroup(
             f_arrow,
             f_tx_label,
@@ -452,9 +497,7 @@ class TxAndRx(Scene):
 
         self.play(
             Uncreate(how_do_we_derive),
-            plot_group.animate.scale(0.6).to_edge(
-                LEFT
-            ),  # TODO: Need to remove the always redraw from the labels, I think
+            plot_group.animate.scale(0.6).to_edge(LEFT),
         )
 
         self.wait(2)
@@ -996,3 +1039,113 @@ class BD(Scene):
         # self.wait()
         # self.play(Transform(bd, bd2))
         # self.wait()
+
+
+class WeatherChannel(Scene):
+    def construct(self):
+        radar = SVGMobject(
+            "./figures/weather-radar.svg",
+            stroke_color=WHITE,
+            color=WHITE,
+            fill_color=WHITE,
+            opacity=1,
+            stroke_width=0.01,
+        ).scale(2)
+
+        # weather_channel =
+
+        cap = cv2.VideoCapture("./figures/images/weather_channel_round.gif")
+        flag, frame = cap.read()
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        weather_channel = ImageMobject(frame).scale(2).to_corner(UR, buff=LARGE_BUFF)
+        weather_channel_rect = SurroundingRectangle(
+            weather_channel, corner_radius=0.5, buff=0
+        )
+
+        self.play(Create(radar))
+        self.play(radar.animate.shift(LEFT * 5 + DOWN * 2).scale(0.75))
+
+        pointer = Arrow(
+            radar.get_corner(RIGHT),
+            weather_channel.get_corner(DL),
+        )
+
+        self.play(
+            GrowFromCenter(weather_channel),
+            Create(weather_channel_rect),
+            Create(pointer),
+        )
+
+        self.remove(weather_channel)
+        while flag:
+            flag, frame = cap.read()
+            if flag:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                weather_channel = (
+                    ImageMobject(frame).scale(1.5).to_corner(UR, buff=LARGE_BUFF)
+                )
+                self.add(weather_channel)
+                self.wait(0.12)
+                self.remove(weather_channel)
+
+        self.play(FadeOut(weather_channel, weather_channel_rect, pointer))
+
+        self.wait(2)
+
+
+class SignalGettingDirty(Scene):
+    def construct(self):
+        f = 1
+        A = 1
+        phi = ValueTracker(0.0)
+        x_shift = ValueTracker(0.0)
+
+        def func(t):
+            output = A * np.sin(2 * PI * f * t + phi.get_value())
+            if t > 8.0:
+                output += A / 2 * np.sin(2 * PI * (f * 3) * t + phi.get_value())
+            if t > 12.0:
+                output += A / 2 * np.sin(2 * PI * (f / 3) * t + phi.get_value())
+            return output
+
+        wave = always_redraw(
+            lambda: FunctionGraph(
+                func,
+                x_range=[-4 + x_shift.get_value(), 4 + x_shift.get_value()],
+                use_smoothing=False,
+            ).shift(LEFT * x_shift.get_value())
+        )
+
+        high_noise = (
+            Tex(r"$\sin{(2\pi 3ft)}$").next_to(wave, direction=UP).shift(RIGHT * 4)
+        )
+        low_noise = (
+            Tex(r"$\sin{\left(2\pi \frac{f}{3}t\right)}$")
+            .next_to(wave, direction=UP)
+            .shift(RIGHT * 4)
+        )
+
+        self.add(wave)
+        x_shift_final = 20
+        run_time = 8
+        s_per_x = run_time / x_shift_final
+        self.play(
+            LaggedStartMap(
+                (0.0, x_shift.animate.set_value(x_shift_final)),
+                (4.0 * s_per_x, GrowFromCenter(high_noise)),
+                rate_func=linear,
+                run_time=run_time,
+            )
+        )
+
+        self.wait(2)
+
+
+""" Thumbnail """
+
+
+class Thumbnail(Scene):
+    def construct(self):
+        text = Tex("good", " the best", " video about fmcw radar")
+        line = Line(text[0].get_left(), text[0].get_right())
+        self.add(text, line)
