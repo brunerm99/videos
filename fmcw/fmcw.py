@@ -14,7 +14,7 @@ config.background_color = BLACK
 """Helpers"""
 
 
-class WeatherRadarTower(VGroup):
+class WeatherRadarTower:
     def __init__(self, **kwargs):
         # super.__init__(**kwargs)
 
@@ -69,24 +69,22 @@ class WeatherRadarTower(VGroup):
             buff=0,
         )
 
-        self.add(
-            VGroup(
-                self.left_leg,
-                self.right_leg,
-                self.middle_leg,
-                self.left_start_cap,
-                self.middle_start_cap,
-                self.right_start_cap,
-                self.left_end_cap,
-                self.middle_end_cap,
-                self.right_end_cap,
-                self.conn1,
-                self.conn2,
-                self.conn3,
-                self.conn4,
-                self.radome,
-            ).move_to(ORIGIN)
-        )
+        self.vgroup = VGroup(
+            self.left_leg,
+            self.right_leg,
+            self.middle_leg,
+            self.left_start_cap,
+            self.middle_start_cap,
+            self.right_start_cap,
+            self.left_end_cap,
+            self.middle_end_cap,
+            self.right_end_cap,
+            self.conn1,
+            self.conn2,
+            self.conn3,
+            self.conn4,
+            self.radome,
+        ).move_to(ORIGIN)
 
     def get_animation(self):
         return LaggedStart(
@@ -94,8 +92,14 @@ class WeatherRadarTower(VGroup):
                 Create(self.left_leg),
                 Create(self.middle_leg),
                 Create(self.right_leg),
+                Create(self.left_start_cap),
+                Create(self.middle_start_cap),
+                Create(self.right_start_cap),
             ),
             AnimationGroup(
+                Create(self.left_end_cap),
+                Create(self.middle_end_cap),
+                Create(self.right_end_cap),
                 Create(self.conn1),
                 Create(self.conn2),
                 Create(self.conn3),
@@ -667,10 +671,133 @@ class TxAndRx(Scene):
 
 class PulsedRadarIntro(Scene):
     def construct(self):
-        # radar = get_weather_radar_tower()
-        # self.add(radar)
         radar = WeatherRadarTower()
+
+        cap = cv2.VideoCapture("./figures/images/weather_channel_round.gif")
+        flag, frame = cap.read()
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        weather_channel_scale = 1.5
+        weather_channel = (
+            ImageMobject(frame)
+            .scale(weather_channel_scale)
+            .to_corner(UR, buff=LARGE_BUFF)
+        )
+        weather_channel_rect = SurroundingRectangle(
+            weather_channel,
+            # corner_radius=0.5,
+            buff=0,
+        )
+
+        """ Weather channel animation """
         self.play(radar.get_animation())
+        self.play(radar.vgroup.animate.scale(0.7).to_edge(LEFT, buff=MED_LARGE_BUFF))
+
+        pointer = Arrow(
+            radar.radome.get_corner(RIGHT),
+            weather_channel.get_corner(LEFT),
+        )
+
+        self.play(
+            GrowFromCenter(weather_channel),
+            Create(weather_channel_rect),
+            Create(pointer),
+        )
+
+        self.remove(weather_channel)
+        while flag:
+            flag, frame = cap.read()
+            if flag:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                weather_channel = (
+                    ImageMobject(frame)
+                    .scale(weather_channel_scale)
+                    .to_corner(UR, buff=LARGE_BUFF)
+                )
+                self.add(weather_channel)
+                self.wait(0.12)
+                self.remove(weather_channel)
+
+        self.play(FadeOut(weather_channel, weather_channel_rect, pointer))
+
+        self.wait(1)
+
+        """ Pulsed Transmission """
+
+        t_tracker = ValueTracker(0)
+
+        pw = 1.5
+        f = 2
+
+        wave_buff = 0.3
+        p1 = radar.radome.get_corner(RIGHT) + RIGHT * wave_buff
+        p2 = p1.copy() + 7 * RIGHT
+        p2 = (
+            Dot()
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+            .shift(radar.radome.get_corner(RIGHT) * UP)
+            .get_center()
+        )
+        line = Line(p1, p2)
+
+        x_max = math.sqrt(np.sum(np.power(p2 - p1, 2)))
+        ref_wave = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t), x_range=[0, x_max]
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+
+        x_max_tbuff = x_max * 1.2
+        tx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[
+                    max(
+                        min(
+                            (t_tracker.get_value() % (2 * x_max_tbuff) - pw),
+                            x_max,
+                        ),
+                        0,
+                    ),
+                    min((t_tracker.get_value() % (2 * x_max_tbuff)), x_max),
+                ],
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+        rx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t + PI),
+                x_range=[
+                    min(
+                        max(
+                            ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw),
+                            0,
+                        ),
+                        x_max,
+                    ),
+                    min(
+                        max(((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max), 0),
+                        x_max,
+                    ),
+                ],
+                color=BLUE,
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+            .rotate(math.pi, about_point=ref_wave.get_center())
+        )
+
+        self.add(tx, rx)
+
+        runs = 3
+        self.play(
+            t_tracker.animate.increment_value(x_max_tbuff * runs * 2),
+            run_time=runs * 2,
+            rate_func=linear,
+        )
+
         self.wait(2)
 
 
@@ -1040,6 +1167,311 @@ class TransmissionTest(Scene):
         # sine.reverse_points()
         # self.play(MoveAlongPath(tracing_dot, sine), rate_func=linear, run_time=2)
         self.wait(10)
+
+
+# I am trying to keep the wave and plot signals the same width but I want the signal to be received within the same PRI
+# This means the
+# Could make small wave then just shift it with its phase constantly shifting
+class TransmissionTest2(Scene):
+    def construct(self):
+        radar = WeatherRadarTower()
+        self.add(radar.vgroup.shift(LEFT * 5 + DOWN * 2).scale(0.7))
+
+        t_tracker = ValueTracker(0)
+
+        pw = 1
+        dwell_time = 3
+        extended_dwell = 8
+        n_prts = 2
+        x_max = n_prts * (pw + dwell_time)
+        ax = Axes(
+            x_range=[-0.1, x_max + extended_dwell, 0.5],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": True},
+        ).add_coordinates()
+        labels = ax.get_axis_labels(
+            Tex("Time", font_size=DEFAULT_FONT_SIZE),
+            Tex("Frequency", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        f = 2.5
+        pulsed_func = (
+            lambda t: np.sin(2 * PI * f * t)
+            if int(t) % (pw + dwell_time + extended_dwell) == 0
+            else 0
+        )
+        graph = always_redraw(
+            lambda: ax.plot(
+                pulsed_func,
+                x_range=[0, min(t_tracker.get_value(), x_max + extended_dwell), 0.001],
+                use_smoothing=False,
+            )
+        )
+
+        # Propagation
+        wave_buff = 0.3
+        p1 = radar.radome.get_corner(RIGHT) + RIGHT * wave_buff
+        p2 = p1.copy() + 7 * RIGHT + 2 * UP
+        line = Line(p1, p2)
+
+        x_max_wave = math.sqrt(np.sum(np.power(p2 - p1, 2)))
+        f_wave = f * x_max_wave / x_max
+        # pw_wave = pw * x_max_wave / x_max
+        ref_wave = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f_wave * t), x_range=[0, x_max_wave]
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+        tx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f_wave * t),
+                # x_range=[0, x_max_wave],
+                x_range=[
+                    max(
+                        min(
+                            (t_tracker.get_value() - pw) * x_max_wave / x_max,
+                            x_max_wave,
+                        ),
+                        0,
+                    ),
+                    min(t_tracker.get_value() * x_max_wave / x_max, x_max_wave),
+                ],
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+        rx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f_wave * t),
+                # x_range=[0, x_max_wave],
+                x_range=[
+                    min(
+                        max(
+                            (t_tracker.get_value() - x_max - pw) * x_max_wave / x_max, 0
+                        ),
+                        x_max_wave,
+                    ),
+                    min(
+                        max((t_tracker.get_value() - x_max) * x_max_wave / x_max, 0),
+                        x_max_wave,
+                    ),
+                ],
+                color=BLUE,
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+            .rotate(math.pi, about_point=ref_wave.get_center())
+            # .shift(DOWN)
+        )
+
+        ax_group = VGroup(ax, labels, graph).scale(0.4).to_corner(UL)
+
+        self.add(ax_group, tx, rx)  # , Dot(p2), Dot(ref_wave.get_center()))
+
+        self.play(t_tracker.animate.set_value(x_max * 3), run_time=4, rate_func=linear)
+
+        self.wait(2)
+
+
+# Makes a pulsed transmission
+class TransmissionTest3(Scene):
+    def construct(self):
+        radar = WeatherRadarTower()
+        self.add(radar.vgroup.scale(0.7).to_edge(LEFT, buff=MED_LARGE_BUFF))
+
+        t_tracker = ValueTracker(0)
+
+        pw = 1.5
+        f = 2
+
+        # Propagation
+        wave_buff = 0.3
+        p1 = radar.radome.get_corner(RIGHT) + RIGHT * wave_buff
+        p2 = p1.copy() + 7 * RIGHT
+        p2 = (
+            Dot()
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+            .shift(radar.radome.get_corner(RIGHT) * UP)
+            .get_center()
+        )
+        line = Line(p1, p2)
+
+        x_max = math.sqrt(np.sum(np.power(p2 - p1, 2)))
+        ref_wave = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t), x_range=[0, x_max]
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+
+        dot1 = always_redraw(
+            lambda: Dot(
+                [
+                    # max(
+                    #     min(
+                    #         (t_tracker.get_value() % (2 * x_max) - pw),
+                    #         x_max,
+                    #     ),
+                    #     0,
+                    # ),
+                    min(
+                        max(((t_tracker.get_value() % (2 * x_max)) - x_max - pw), 0),
+                        x_max,
+                    ),
+                    0,
+                    0,
+                ],
+                color=RED,
+            ).shift(radar.radome.get_right())
+        )
+        dot2 = always_redraw(
+            lambda: Dot(
+                [
+                    # min((t_tracker.get_value() % (2 * x_max)), x_max),
+                    min(
+                        max(((t_tracker.get_value() % (2 * x_max)) - x_max), 0),
+                        x_max,
+                    ),
+                    0,
+                    0,
+                ],
+                color=BLUE,
+            ).shift(radar.radome.get_right())
+        )
+        x_max_tbuff = x_max * 1.2
+        tx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[
+                    max(
+                        min(
+                            (t_tracker.get_value() % (2 * x_max_tbuff) - pw),
+                            x_max,
+                        ),
+                        0,
+                    ),
+                    min((t_tracker.get_value() % (2 * x_max_tbuff)), x_max),
+                ],
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+        rx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t + PI),
+                x_range=[
+                    min(
+                        max(
+                            ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw),
+                            0,
+                        ),
+                        x_max,
+                    ),
+                    min(
+                        max(((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max), 0),
+                        x_max,
+                    ),
+                ],
+                color=BLUE,
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+            .rotate(math.pi, about_point=ref_wave.get_center())
+        )
+
+        self.add(
+            tx,
+            rx,
+            # dot1,
+            # dot2,
+            # Dot(p2),
+            # Dot(ref_wave.get_center()),
+        )
+
+        runs = 1
+        self.play(
+            t_tracker.animate.increment_value(x_max_tbuff * runs * 2),
+            run_time=runs * 2,
+            rate_func=linear,
+        )
+        self.wait(1)
+        runs = 3
+        self.play(
+            t_tracker.animate.increment_value(x_max_tbuff * runs * 2),
+            run_time=runs * 2,
+            rate_func=linear,
+        )
+
+        self.wait(2)
+
+
+class TransmissionTest3CW(Scene):
+    def construct(self):
+        radar = WeatherRadarTower()
+        self.add(radar.vgroup.scale(0.7).to_edge(LEFT, buff=MED_LARGE_BUFF))
+
+        t_tracker = ValueTracker(0)
+
+        pw = 1.5
+        f = 2
+
+        # Propagation
+        wave_buff = 0.3
+        p1 = radar.radome.get_corner(RIGHT) + RIGHT * wave_buff
+        p2 = p1.copy() + 7 * RIGHT
+        line = Line(p1, p2)
+
+        x_max = math.sqrt(np.sum(np.power(p2 - p1, 2)))
+        # pw_wave = pw * x_max_wave / x_max
+        ref_wave = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t), x_range=[0, x_max]
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+        )
+        tx_cw = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[-min(t_tracker.get_value() * x_max / x_max, x_max), 0],
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+            .shift(min(t_tracker.get_value() * x_max / x_max, x_max) * RIGHT)
+        )
+        rx = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t + PI),
+                # x_range=[0, x_max_wave],
+                x_range=[
+                    -min(
+                        max((t_tracker.get_value() - x_max) * x_max / x_max, 0),
+                        x_max,
+                    ),
+                    x_max,
+                    # min(
+                    #     -max((t_tracker.get_value() - x_max - pw) * x_max / x_max, 0),
+                    #     x_max,
+                    # ),
+                ],
+                color=BLUE,
+            )
+            .shift(p1)
+            .rotate(line.get_angle(), about_point=p1)
+            .rotate(math.pi, about_point=ref_wave.get_center())
+            .shift(min(t_tracker.get_value() * x_max / x_max, x_max) * RIGHT)
+            # .shift(DOWN)
+        )
+
+        self.add(tx_cw, rx)  # , Dot(p2), Dot(ref_wave.get_center()))
+
+        self.play(t_tracker.animate.set_value(x_max * 3), run_time=4, rate_func=linear)
+
+        self.wait(2)
 
 
 class RadarMoveTest(Scene):
