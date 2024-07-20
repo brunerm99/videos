@@ -977,26 +977,235 @@ class PulsedPowerProblem(Scene):
         self.wait(2)
 
 
-class PulsedPowerProblemUsingUpdaters(Scene):
+class PropagationLoss(Scene):
     def construct(self):
-        duty_cycle_tracker = ValueTracker(1.0)
+        range_tracker = ValueTracker(1.0)
 
         step = 0.001
+        x_min = 1
         x_max = 6
-        ax = Axes(
-            x_range=[-0.1, x_max, 1],
-            y_range=[-2, 2, 1],
+        f = 4
+        range_ax = Axes(
+            x_range=[x_min - 0.1, x_max, 1],
+            y_range=[-0.1, 1.2, 0.5],
             tips=False,
             axis_config={"include_numbers": False},
-            # x_length=x_len,
-            # y_length=y_len,
+        ).scale(0.8)
+
+        range_labels = range_ax.get_axis_labels(
+            Tex("R", font_size=DEFAULT_FONT_SIZE),
+            Tex("", font_size=DEFAULT_FONT_SIZE),
         )
 
+        sine_graph = range_ax.plot(
+            lambda t: np.sin(2 * PI * f * t) * (np.exp(t) ** 4),
+            x_range=[0, range_tracker.get_value(), step],
+            use_smoothing=False,
+        )
+        exp_graph = range_ax.plot(
+            lambda t: (np.exp(t) ** 4),
+            x_range=[0, range_tracker.get_value(), step],
+            use_smoothing=False,
+            color=YELLOW,
+        )
+
+        range_arrow = Arrow(
+            range_ax.c2p(0, 0, 0), range_ax.c2p(range_tracker.get_value(), 0, 0)
+        )
+        range_arrow_label = Tex("Range").next_to(
+            range_arrow, direction=DOWN, buff=SMALL_BUFF
+        )
+
+        range_attenuation_relation = Tex(r"Power $\propto \frac{1}{R^2}$").shift(
+            RIGHT + 2
+        )
+
+        def sine_updater(m: Mobject):
+            m.become(
+                range_ax.plot(
+                    lambda r: (np.sin(2 * PI * f * r) + 1) / 2 / (r**2),
+                    x_range=[x_min, range_tracker.get_value(), step],
+                    use_smoothing=False,
+                )
+            )
+
+        def exp_updater(m: Mobject):
+            m.become(
+                range_ax.plot(
+                    lambda r: 1 / (r**2),
+                    x_range=[x_min, range_tracker.get_value(), step],
+                    use_smoothing=False,
+                    color=YELLOW,
+                )
+            )
+
+        def range_arrow_updater(m: Mobject):
+            m.become(
+                Arrow(
+                    range_ax.c2p(x_min, 0, 0),
+                    range_ax.c2p(range_tracker.get_value(), 0, 0),
+                ).shift(DOWN / 2)
+            )
+
+        def range_arrow_label_updater(m: Mobject):
+            m.become(Tex("Range").next_to(range_arrow, direction=DOWN, buff=SMALL_BUFF))
+
+        sine_graph.add_updater(sine_updater)
+        exp_graph.add_updater(exp_updater)
+        range_arrow.add_updater(range_arrow_updater)
+        range_arrow_label.add_updater(range_arrow_label_updater)
+
+        self.add(
+            range_ax,
+            range_labels,
+            sine_graph,
+            exp_graph,
+            range_arrow,
+            range_arrow_label,
+            range_attenuation_relation,
+        )
+
+        self.play(range_tracker.animate.set_value(6.0), run_time=3)
+
+        self.wait(2)
+
+        ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-0.1, 1.2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            # x_length=,
+            # y_length=y_len,
+        ).scale(0.8)
+
+        labels = range_ax.get_axis_labels(
+            Tex("t", font_size=DEFAULT_FONT_SIZE),
+            Tex("", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        sine_graph.remove_updater(sine_updater)
+        exp_graph.remove_updater(exp_updater)
+        range_arrow.remove_updater(range_arrow_updater)
+        range_arrow_label.remove_updater(range_arrow_label_updater)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    range_attenuation_relation.animate.shift(UP * 5),
+                    range_arrow_label.animate.shift(DOWN * 5),
+                    range_arrow.animate.shift(DOWN * 5),
+                ),
+                AnimationGroup(
+                    Uncreate(sine_graph),
+                    Uncreate(exp_graph),
+                    Transform(range_ax, ax),
+                    Transform(range_labels, labels),
+                ),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(2)
+
+
+# TODO: Needs 1080p render
+class PulsedPowerProblemUsingUpdaters(Scene):
+    def construct(self):
+        duty_cycle_inc = -0.7
+        step = 0.001
+        x_range_min = 1
+        x_max = 6
         f = 4
-        # pulsed_sine = lambda t: np.sin(2 * PI * f * t) * (
-        #     (signal.square(2 * PI * t / 2, duty=1) + 1) / 2
-        # )
-        # sq = lambda t: (signal.square(2 * PI * t / 2, duty=1) + 1) / 2
+
+        duty_cycle_tracker = ValueTracker(1.0)
+        range_tracker = ValueTracker(x_range_min)
+        pulsed_gain_tracker = ValueTracker(1.0)
+
+        range_ax = Axes(
+            x_range=[x_range_min - 0.1, x_max, 1],
+            y_range=[-0.1, 1.2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+        ).scale(0.8)
+
+        range_labels = range_ax.get_axis_labels(
+            Tex("R", font_size=DEFAULT_FONT_SIZE),
+            Tex("", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        sine_graph = range_ax.plot(
+            lambda t: np.sin(2 * PI * f * t) * (np.exp(t) ** 4),
+            x_range=[0, range_tracker.get_value(), step],
+            use_smoothing=False,
+        )
+        exp_graph = range_ax.plot(
+            lambda t: (np.exp(t) ** 4),
+            x_range=[0, range_tracker.get_value(), step],
+            use_smoothing=False,
+            color=YELLOW,
+        )
+
+        range_arrow = Arrow(
+            range_ax.c2p(x_range_min, 0, 0),
+            range_ax.c2p(range_tracker.get_value(), 0, 0),
+        ).shift(DOWN / 2)
+
+        range_arrow_label = Tex("Range").next_to(
+            range_arrow, direction=DOWN, buff=SMALL_BUFF
+        )
+
+        range_attenuation_relation = Tex(r"Power $\propto \frac{1}{R^2}$").shift(
+            RIGHT + 2
+        )
+
+        def sine_updater(m: Mobject):
+            m.become(
+                range_ax.plot(
+                    lambda r: (np.sin(2 * PI * f * r) + 1) / 2 / (r**2),
+                    x_range=[x_range_min, range_tracker.get_value(), step],
+                    use_smoothing=False,
+                )
+            )
+
+        def exp_updater(m: Mobject):
+            m.become(
+                range_ax.plot(
+                    lambda r: 1 / (r**2),
+                    x_range=[x_range_min, range_tracker.get_value(), step],
+                    use_smoothing=False,
+                    color=YELLOW,
+                )
+            )
+
+        def range_arrow_updater(m: Mobject):
+            m.become(
+                Arrow(
+                    range_ax.c2p(x_range_min, 0, 0),
+                    range_ax.c2p(range_tracker.get_value(), 0, 0),
+                ).shift(DOWN / 2)
+            )
+
+        def range_arrow_label_updater(m: Mobject):
+            m.become(Tex("Range").next_to(range_arrow, direction=DOWN, buff=SMALL_BUFF))
+
+        sine_graph.add_updater(sine_updater)
+        exp_graph.add_updater(exp_updater)
+        range_arrow.add_updater(range_arrow_updater)
+        range_arrow_label.add_updater(range_arrow_label_updater)
+
+        ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-0.1, 1.2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            # x_length=,
+            # y_length=y_len,
+        ).scale(0.8)
+
+        labels = range_ax.get_axis_labels(
+            Tex("t", font_size=DEFAULT_FONT_SIZE),
+            Tex("", font_size=DEFAULT_FONT_SIZE),
+        )
 
         pulsed_graph = ax.plot(
             lambda t: np.sin(2 * PI * f * t)
@@ -1004,7 +1213,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                 (
                     signal.square(
                         2 * PI * t / 2,
-                        duty=duty_cycle_tracker.get_value(),
+                        duty=1 + duty_cycle_inc,
                     )
                     + 1
                 )
@@ -1012,9 +1221,28 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             ),
             x_range=[0, x_max, step],
             use_smoothing=False,
-        )
+            color=RED,
+        ).set_z_index(5)
+        pulsed_graph_copy = ax.plot(
+            lambda t: pulsed_gain_tracker.get_value()
+            * (np.sin(2 * PI * f * t) + 1)
+            / 2
+            * (
+                (
+                    signal.square(
+                        2 * PI * t / 2,
+                        duty=1 + duty_cycle_inc,
+                    )
+                    + 1
+                )
+                / 2
+            ),
+            x_range=[0, x_max - step, step],
+            use_smoothing=False,
+        ).set_color(WHITE)
         sq_graph = ax.plot(
-            lambda t: (
+            lambda t: pulsed_gain_tracker.get_value()
+            * (
                 signal.square(
                     2 * PI * t / 2,
                     duty=duty_cycle_tracker.get_value(),
@@ -1027,10 +1255,12 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             color=YELLOW,
         )
 
-        pulsed_graph.add_updater(
-            lambda m: m.become(
+        def pulsed_graph_updater(m: Mobject):
+            m.become(
                 ax.plot(
-                    lambda t: np.sin(2 * PI * f * t)
+                    lambda t: pulsed_gain_tracker.get_value()
+                    * (np.sin(2 * PI * f * t) + 1)
+                    / 2
                     * (
                         (
                             signal.square(
@@ -1041,15 +1271,18 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                         )
                         / 2
                     ),
-                    x_range=[0, x_max, step],
+                    x_range=[0, x_max - step, step],
                     use_smoothing=False,
                 )
+                .set_color(RED)
+                .set_z_index(5)
             )
-        )
-        sq_graph.add_updater(
-            lambda m: m.become(
+
+        def sq_graph_updater(m: Mobject):
+            m.become(
                 ax.plot(
-                    lambda t: (
+                    lambda t: pulsed_gain_tracker.get_value()
+                    * (
                         signal.square(
                             2 * PI * t / 2,
                             duty=duty_cycle_tracker.get_value(),
@@ -1062,24 +1295,189 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                     color=YELLOW,
                 )
             )
+
+        pulsed_graph.add_updater(pulsed_graph_updater)
+        # pulsed_graph_copy.add_updater(pulsed_graph_updater)
+        sq_graph.add_updater(sq_graph_updater)
+
+        pulsed_graph_line_legend = FunctionGraph(
+            lambda x: 0, color=WHITE, x_range=[0, 1]
+        ).to_corner(UR)
+        pulsed_graph_legend = Tex("Pulses", color=WHITE).next_to(
+            pulsed_graph_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        pulsed_graph_avg_line_legend = FunctionGraph(
+            lambda x: 0, color=RED, x_range=[0, 1]
+        ).next_to(pulsed_graph_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
+        pulsed_graph_avg_legend = Tex(r"Average Power", color=RED).next_to(
+            pulsed_graph_avg_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        desired_output_power_line_legend = DashedVMobject(
+            FunctionGraph(lambda x: 0, color=GREEN, x_range=[0, 1]).next_to(
+                pulsed_graph_avg_line_legend, direction=DOWN, buff=MED_LARGE_BUFF
+            )
+        )
+        desired_output_power_legend = Tex(r"Desired Output Power", color=RED).next_to(
+            desired_output_power_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
 
-        duty_cycle = Tex(
-            f"Duty cycle: {int(duty_cycle_tracker.get_value()*100)}%"
-        ).to_edge(DOWN)
-        self.add(duty_cycle)
-        duty_cycle.add_updater(
-            lambda m: m.become(
-                Tex(f"Duty cycle: {int(duty_cycle_tracker.get_value()*100)}%").to_edge(
-                    DOWN
+        brace_buff = 0.3
+
+        def duty_cycle_brace_updater(m: Mobject):
+            m.become(
+                BraceLabel(
+                    Line(
+                        ax.c2p(0, 0, 0),
+                        ax.c2p(duty_cycle_tracker.get_value() * 2, 0, 0),
+                    ),
+                    f"Duty cycle={int(duty_cycle_tracker.get_value()*100)}\\%",
+                    label_constructor=Tex,
+                    buff=brace_buff,
                 )
+            )
+
+        duty_cycle_brace = BraceLabel(
+            Line(
+                ax.c2p(0, 0, 0),
+                ax.c2p(duty_cycle_tracker.get_value() * 2, 0, 0),
+            ),
+            f"Duty cycle={int(duty_cycle_tracker.get_value()*100)}\\%",
+            label_constructor=Tex,
+            buff=brace_buff,
+        )
+        duty_cycle_brace.add_updater(duty_cycle_brace_updater)
+
+        period_brace = BraceLabel(
+            Line(ax.c2p(0, 1, 0), ax.c2p(2, 1, 0)),
+            "Period",
+            brace_direction=UP,
+            label_constructor=Tex,
+            buff=brace_buff,
+        )
+
+        waiting_time_brace = Brace(
+            Line(ax.c2p(-duty_cycle_inc, 0, 0), ax.c2p(2, 0, 0)),
+            buff=brace_buff,
+        )
+        waiting_time_brace_label = (
+            Tex("Waiting time")
+            .next_to(waiting_time_brace, direction=RIGHT, buff=SMALL_BUFF)
+            .shift(RIGHT / 2)
+        )
+
+        desired_output_power = 0.8
+        desired_output_power_graph = DashedVMobject(
+            ax.plot(lambda t: desired_output_power, x_range=[0, x_max], color=GREEN)
+        )
+
+        """ Animations """
+
+        self.add(
+            range_ax,
+            range_labels,
+            sine_graph,
+            exp_graph,
+            range_arrow,
+            range_arrow_label,
+            range_attenuation_relation,
+        )
+
+        self.play(range_tracker.animate.set_value(6.0), run_time=3)
+
+        self.wait(1)
+
+        sine_graph.remove_updater(sine_updater)
+        exp_graph.remove_updater(exp_updater)
+        range_arrow.remove_updater(range_arrow_updater)
+        range_arrow_label.remove_updater(range_arrow_label_updater)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    range_attenuation_relation.animate.shift(UP * 5),
+                    range_arrow_label.animate.shift(DOWN * 5),
+                    range_arrow.animate.shift(DOWN * 5),
+                ),
+                AnimationGroup(
+                    Uncreate(sine_graph),
+                    Uncreate(exp_graph),
+                    Transform(range_ax, ax),
+                    Transform(range_labels, labels),
+                ),
+                lag_ratio=0.6,
             )
         )
 
-        self.play(Create(ax))
-        self.play(Create(pulsed_graph), Create(sq_graph))
+        # self.play(Create(ax))
+        self.remove(range_attenuation_relation, range_arrow, range_arrow_label)
 
-        self.play(duty_cycle_tracker.animate.increment_value(-0.7), run_time=3)
+        self.wait(1)
+
+        self.play(
+            Create(pulsed_graph),
+            Create(sq_graph),
+            run_time=2,
+        )
+
+        self.wait(0.7)
+
+        self.play(Create(duty_cycle_brace), Create(period_brace), run_time=1)
+
+        self.wait(0.7)
+
+        self.play(
+            duty_cycle_tracker.animate.increment_value(duty_cycle_inc), run_time=3
+        )
+
+        self.wait(1)
+
+        self.play(Create(waiting_time_brace), Create(waiting_time_brace_label))
+
+        self.wait(1)
+
+        # pulsed_graph_copy.remove_updater(pulsed_graph_updater)
+        # pulsed_graph_copy.set_z_index(0)
+        # sq_graph.remove_updater(sq_graph_updater)
+        duty_cycle_brace.remove_updater(duty_cycle_brace_updater)
+
+        self.play(
+            Uncreate(waiting_time_brace),
+            Uncreate(waiting_time_brace_label),
+            Uncreate(duty_cycle_brace),
+            Uncreate(period_brace),
+        )
+        self.add(pulsed_graph_copy)
+
+        self.play(
+            LaggedStart(
+                FadeIn(
+                    VGroup(
+                        pulsed_graph_legend,
+                        pulsed_graph_avg_legend,
+                        pulsed_graph_line_legend,
+                        pulsed_graph_avg_line_legend,
+                    )
+                ),
+                AnimationGroup(
+                    pulsed_gain_tracker.animate.set_value(
+                        pulsed_gain_tracker.get_value() * (1 + duty_cycle_inc)
+                    ),
+                    duty_cycle_tracker.animate.increment_value(-duty_cycle_inc),
+                    run_time=3,
+                ),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(1)
+
+        self.play(FadeOut(sq_graph))
+
+        self.play(
+            FadeIn(desired_output_power_graph),
+            FadeIn(desired_output_power_line_legend),
+            FadeIn(desired_output_power_legend),
+        )
 
         self.wait(2)
 
