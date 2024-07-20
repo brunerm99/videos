@@ -935,42 +935,6 @@ class PulsedPowerProblem(Scene):
             )
         )
 
-        # sq_graph.add_updater(
-        #     lambda m: m.become(
-        #         ax.plot(
-        #             lambda t: (
-        #                 signal.square(
-        #                     2 * PI * t / 2, duty=duty_cycle_tracker.get_value()
-        #                 )
-        #                 + 1
-        #             )
-        #             / 2,
-        #             x_range=[0, x_max, step],
-        #             use_smoothing=False,
-        #         )
-        #     )
-        # )
-
-        # pulsed_graph.add_updater(
-        #     lambda m: m.become(
-        #         ax.plot(
-        #             lambda t: np.sin(2 * PI * f * t)
-        #             * (
-        #                 (
-        #                     signal.square(
-        #                         2 * PI * t / 2, duty=duty_cycle_tracker.get_value()
-        #                     )
-        #                     + 1
-        #                 )
-        #                 / 2
-        #             ),
-        #             x_range=[0, x_max, step],
-        #             use_smoothing=False,
-        #             color=YELLOW,
-        #         )
-        #     )
-        # )
-
         duty_cycle = Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(
             DOWN
         )
@@ -994,6 +958,111 @@ class PulsedPowerProblem(Scene):
         #         )
         #     )
         # )
+
+        self.play(duty_cycle_tracker.animate.increment_value(-0.7), run_time=3)
+
+        self.wait(2)
+
+
+class PulsedPowerProblemUsingUpdaters(Scene):
+    def construct(self):
+        duty_cycle_tracker = ValueTracker(1.0)
+
+        step = 0.001
+        x_max = 6
+        ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            # x_length=x_len,
+            # y_length=y_len,
+        )
+
+        f = 4
+        # pulsed_sine = lambda t: np.sin(2 * PI * f * t) * (
+        #     (signal.square(2 * PI * t / 2, duty=1) + 1) / 2
+        # )
+        # sq = lambda t: (signal.square(2 * PI * t / 2, duty=1) + 1) / 2
+
+        pulsed_graph = ax.plot(
+            lambda t: np.sin(2 * PI * f * t)
+            * (
+                (
+                    signal.square(
+                        2 * PI * t / 2,
+                        duty=duty_cycle_tracker.get_value(),
+                    )
+                    + 1
+                )
+                / 2
+            ),
+            x_range=[0, x_max, step],
+            use_smoothing=False,
+        )
+        sq_graph = ax.plot(
+            lambda t: (
+                signal.square(
+                    2 * PI * t / 2,
+                    duty=duty_cycle_tracker.get_value(),
+                )
+                + 1
+            )
+            / 2,
+            x_range=[0, x_max - step, step],
+            use_smoothing=False,
+            color=YELLOW,
+        )
+
+        pulsed_graph.add_updater(
+            lambda m: m.become(
+                ax.plot(
+                    lambda t: np.sin(2 * PI * f * t)
+                    * (
+                        (
+                            signal.square(
+                                2 * PI * t / 2,
+                                duty=duty_cycle_tracker.get_value(),
+                            )
+                            + 1
+                        )
+                        / 2
+                    ),
+                    x_range=[0, x_max, step],
+                    use_smoothing=False,
+                )
+            )
+        )
+        sq_graph.add_updater(
+            lambda m: m.become(
+                ax.plot(
+                    lambda t: (
+                        signal.square(
+                            2 * PI * t / 2,
+                            duty=duty_cycle_tracker.get_value(),
+                        )
+                        + 1
+                    )
+                    / 2,
+                    x_range=[0, x_max - step, step],
+                    use_smoothing=False,
+                    color=YELLOW,
+                )
+            )
+        )
+
+        duty_cycle = Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(
+            DOWN
+        )
+        self.add(duty_cycle)
+        duty_cycle.add_updater(
+            lambda m: m.become(
+                Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(DOWN)
+            )
+        )
+
+        self.play(Create(ax))
+        self.play(Create(pulsed_graph), Create(sq_graph))
 
         self.play(duty_cycle_tracker.animate.increment_value(-0.7), run_time=3)
 
