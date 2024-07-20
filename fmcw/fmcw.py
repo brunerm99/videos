@@ -878,6 +878,19 @@ class PulsedRadarIntro(Scene):
 
         self.play(FadeOut(tx, rx, tx_cw, rx_cw))
 
+        self.play(
+            radar.vgroup.animate.move_to(ORIGIN + 4 * LEFT),
+            cw_radar.vgroup.animate.move_to(ORIGIN + 4 * RIGHT),
+        )
+
+        actually_very_important = Tex(
+            "it's", " actually", " very", " important"
+        ).to_edge(DOWN, buff=LARGE_BUFF)
+        waits = [0.3, 0.5, 0.3, 0]
+        for word, wait in zip(actually_very_important, waits):
+            self.add(word)
+            self.wait(wait)
+
         self.wait(2)
 
 
@@ -1051,13 +1064,15 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             )
         )
 
-        duty_cycle = Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(
-            DOWN
-        )
+        duty_cycle = Tex(
+            f"Duty cycle: {int(duty_cycle_tracker.get_value()*100)}%"
+        ).to_edge(DOWN)
         self.add(duty_cycle)
         duty_cycle.add_updater(
             lambda m: m.become(
-                Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(DOWN)
+                Tex(f"Duty cycle: {int(duty_cycle_tracker.get_value()*100)}%").to_edge(
+                    DOWN
+                )
             )
         )
 
