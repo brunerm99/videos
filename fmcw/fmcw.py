@@ -28,24 +28,24 @@ class WeatherRadarTower:
         self.right_leg = leg.copy().shift(RIGHT)
         self.middle_leg = leg.copy().shift(DOWN / 1.5)
 
-        self.left_start_cap = Dot(
-            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        ).move_to(self.left_leg.get_start())
-        self.right_start_cap = Dot(
-            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        ).move_to(self.right_leg.get_start())
-        self.middle_start_cap = Dot(
-            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        ).move_to(self.middle_leg.get_start())
-        self.left_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
-            self.left_leg.get_end()
-        )
-        self.right_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
-            self.right_leg.get_end()
-        )
-        self.middle_end_cap = Dot(
-            radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        ).move_to(self.middle_leg.get_end())
+        # self.left_start_cap = Dot(
+        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        # ).move_to(self.left_leg.get_start())
+        # self.right_start_cap = Dot(
+        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        # ).move_to(self.right_leg.get_start())
+        # self.middle_start_cap = Dot(
+        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        # ).move_to(self.middle_leg.get_start())
+        # self.left_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        #     self.left_leg.get_end()
+        # )
+        # self.right_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
+        #     self.right_leg.get_end()
+        # )
+        # self.middle_end_cap = Dot(
+        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
+        # ).move_to(self.middle_leg.get_end())
 
         self.conn1_y_shift = DOWN / 2
         self.conn1 = Line(
@@ -63,7 +63,7 @@ class WeatherRadarTower:
         # conn5 = conn1.copy().shift(-conn1_y_shift * 4)
         # conn6 = conn2.copy().shift(-conn1_y_shift * 2)
 
-        self.radome = Circle(radius=1.05, **LINE_STYLE).next_to(
+        self.radome = Circle(radius=1.08, **LINE_STYLE).next_to(
             self.middle_leg,
             direction=UP,
             buff=0,
@@ -73,12 +73,12 @@ class WeatherRadarTower:
             self.left_leg,
             self.right_leg,
             self.middle_leg,
-            self.left_start_cap,
-            self.middle_start_cap,
-            self.right_start_cap,
-            self.left_end_cap,
-            self.middle_end_cap,
-            self.right_end_cap,
+            # self.left_start_cap,
+            # self.middle_start_cap,
+            # self.right_start_cap,
+            # self.left_end_cap,
+            # self.middle_end_cap,
+            # self.right_end_cap,
             self.conn1,
             self.conn2,
             self.conn3,
@@ -92,14 +92,14 @@ class WeatherRadarTower:
                 Create(self.left_leg),
                 Create(self.middle_leg),
                 Create(self.right_leg),
-                Create(self.left_start_cap),
-                Create(self.middle_start_cap),
-                Create(self.right_start_cap),
+                # Create(self.left_start_cap),
+                # Create(self.middle_start_cap),
+                # Create(self.right_start_cap),
             ),
             AnimationGroup(
-                Create(self.left_end_cap),
-                Create(self.middle_end_cap),
-                Create(self.right_end_cap),
+                # Create(self.left_end_cap),
+                # Create(self.middle_end_cap),
+                # Create(self.right_end_cap),
                 Create(self.conn1),
                 Create(self.conn2),
                 Create(self.conn3),
@@ -673,7 +673,7 @@ class PulsedRadarIntro(Scene):
     def construct(self):
         radar = WeatherRadarTower()
 
-        cap = cv2.VideoCapture("./figures/images/weather_channel_round.gif")
+        cap = cv2.VideoCapture("./figures/images/weather_channel.gif")
         flag, frame = cap.read()
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         weather_channel_scale = 1.5
@@ -746,6 +746,7 @@ class PulsedRadarIntro(Scene):
             .shift(p1)
             .rotate(line_pulsed.get_angle(), about_point=p1)
         )
+
         rx_flip_pt_tracker = ValueTracker(ref_wave.get_y())
 
         x_max_tbuff = x_max * 1.2
@@ -876,6 +877,183 @@ class PulsedRadarIntro(Scene):
         )
 
         self.play(FadeOut(tx, rx, tx_cw, rx_cw))
+
+        self.wait(2)
+
+
+class PulsedPowerProblem(Scene):
+    def construct(self):
+        duty_cycle_tracker = ValueTracker(1.0)
+
+        step = 0.001
+        x_max = 6
+        ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            # x_length=x_len,
+            # y_length=y_len,
+        )
+
+        f = 4
+        # pulsed_sine = lambda t: np.sin(2 * PI * f * t) * (
+        #     (signal.square(2 * PI * t / 2, duty=1) + 1) / 2
+        # )
+        # sq = lambda t: (signal.square(2 * PI * t / 2, duty=1) + 1) / 2
+
+        pulsed_graph = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t)
+                * (
+                    (
+                        signal.square(
+                            2 * PI * t / 2,
+                            duty=duty_cycle_tracker.get_value(),
+                        )
+                        + 1
+                    )
+                    / 2
+                ),
+                x_range=[0, x_max, step],
+                use_smoothing=False,
+            )
+        )
+        sq_graph = always_redraw(
+            lambda: ax.plot(
+                lambda t: (
+                    signal.square(
+                        2 * PI * t / 2,
+                        duty=duty_cycle_tracker.get_value(),
+                    )
+                    + 1
+                )
+                / 2,
+                x_range=[0, x_max - step, step],
+                use_smoothing=False,
+                color=YELLOW,
+            )
+        )
+
+        # sq_graph.add_updater(
+        #     lambda m: m.become(
+        #         ax.plot(
+        #             lambda t: (
+        #                 signal.square(
+        #                     2 * PI * t / 2, duty=duty_cycle_tracker.get_value()
+        #                 )
+        #                 + 1
+        #             )
+        #             / 2,
+        #             x_range=[0, x_max, step],
+        #             use_smoothing=False,
+        #         )
+        #     )
+        # )
+
+        # pulsed_graph.add_updater(
+        #     lambda m: m.become(
+        #         ax.plot(
+        #             lambda t: np.sin(2 * PI * f * t)
+        #             * (
+        #                 (
+        #                     signal.square(
+        #                         2 * PI * t / 2, duty=duty_cycle_tracker.get_value()
+        #                     )
+        #                     + 1
+        #                 )
+        #                 / 2
+        #             ),
+        #             x_range=[0, x_max, step],
+        #             use_smoothing=False,
+        #             color=YELLOW,
+        #         )
+        #     )
+        # )
+
+        duty_cycle = Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(
+            DOWN
+        )
+        self.add(duty_cycle)
+        duty_cycle.add_updater(
+            lambda m: m.become(
+                Tex(f"Duty cycle: {duty_cycle_tracker.get_value():.02f}%").to_edge(DOWN)
+            )
+        )
+
+        self.play(Create(ax))
+        self.play(Create(pulsed_graph), Create(sq_graph))
+
+        # self.play(
+        #     sq_graph.animate.become(
+        #         ax.plot(
+        #             lambda t: (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2,
+        #             x_range=[0, x_max, step],
+        #             use_smoothing=False,
+        #             color=YELLOW,
+        #         )
+        #     )
+        # )
+
+        self.play(duty_cycle_tracker.animate.increment_value(-0.7), run_time=3)
+
+        self.wait(2)
+
+
+class CWandPulsedWaveformComparison(Scene):
+    def construct(self):
+        x_max = 4
+        x_len = 6
+        y_len = 3
+        step = 0.001
+        cw_ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_corner(UR)
+
+        pulsed_ax = Axes(
+            x_range=[-0.1, x_max, 0.5],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_corner(UL)
+
+        f = 4
+        cw_sine = lambda t: np.sin(2 * PI * f * t)
+        pulsed_sine = lambda t: np.sin(2 * PI * f * t) * (
+            (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2
+        )
+        sq = lambda t: (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2
+
+        cw_graph = cw_ax.plot(cw_sine, x_range=[0, x_max, step], use_smoothing=False)
+        pulsed_graph = pulsed_ax.plot(
+            pulsed_sine, x_range=[0, x_max, step], use_smoothing=False
+        )
+        sq_graph = pulsed_ax.plot(
+            sq, x_range=[0, x_max - step, step], use_smoothing=False, color=YELLOW
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(pulsed_ax),
+                    Create(cw_ax),
+                ),
+                AnimationGroup(
+                    Create(pulsed_graph),
+                    Create(sq_graph),
+                    Create(cw_graph),
+                ),
+                lag_ratio=0.5,
+            ),
+            run_time=2,
+        )
 
         self.wait(2)
 
@@ -1445,13 +1623,16 @@ class TransmissionTest3(Scene):
                 x_range=[
                     min(
                         max(
-                            ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw),
+                            ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max),
                             0,
                         ),
                         x_max,
                     ),
                     min(
-                        max(((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max), 0),
+                        max(
+                            ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max + pw),
+                            0,
+                        ),
                         x_max,
                     ),
                 ],
@@ -1459,7 +1640,7 @@ class TransmissionTest3(Scene):
             )
             .shift(p1)
             .rotate(line.get_angle(), about_point=p1)
-            .rotate(math.pi, about_point=ref_wave.get_center())
+            # .rotate(math.pi, about_point=ref_wave.get_center())
         )
 
         self.add(
@@ -1570,6 +1751,16 @@ class RadarMoveTest(Scene):
         self.add(radar)
         self.play(Transform(radar, radar_zoomed))
         self.wait(1)
+
+
+class WeatherRadarMoveTest(Scene):
+    def construct(self):
+        radar = WeatherRadarTower()
+        self.add(radar.vgroup)
+        # self.play(radar.get_animation())
+        self.play(radar.vgroup.animate.shift(LEFT * 4))
+        self.play(radar.vgroup.animate.scale(1.5))
+        self.wait(2)
 
 
 class ProcBD(Scene):
