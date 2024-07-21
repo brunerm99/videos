@@ -1681,6 +1681,15 @@ class CWWrapUp(Scene):
         ).shift(ranging_word.get_center())
         ranging_highlight.add_updater(ranging_highlight_width_updater)
 
+        cloud = SVGMobject(
+            "./figures/clouds.svg",
+            stroke_color=WHITE,
+            color=WHITE,
+            fill_color=WHITE,
+            opacity=1,
+            stroke_width=0.01,
+        ).to_corner(UR, buff=LARGE_BUFF)
+
         """ Animations """
 
         self.play(Create(radar.vgroup), Create(cw_radar.vgroup))
@@ -1724,6 +1733,54 @@ class CWWrapUp(Scene):
 
         self.add(ranging_highlight)
         self.play(ranging_highlight_width_tracker.animate.set_value(ranging_word.width))
+
+        self.wait(1)
+
+        ranging_highlight.remove_updater(ranging_highlight_width_updater)
+        self.play(FadeOut(radar_definition, ranging_highlight, wip_group))
+
+        self.play(
+            cw_radar.vgroup.animate.to_corner(DL, buff=MED_LARGE_BUFF), Create(cloud)
+        )
+
+        arrow_to_cloud = Arrow(
+            cw_radar.radome.get_edge_center(RIGHT), cloud.get_corner(DL)
+        )
+        shift_factor = 1
+        shift_angle = arrow_to_cloud.get_angle()
+        cloud_to_arrow = Arrow(
+            cloud.get_corner(DL), cw_radar.radome.get_edge_center(RIGHT)
+        ).shift(
+            [
+                # math.cos(shift_angle) * shift_factor,
+                0,
+                -math.sin(shift_angle) * shift_factor,
+                0,
+            ]
+        )
+        arrow_to_cloud.shift(
+            [
+                # math.cos(shift_angle) * shift_factor,
+                0,
+                math.sin(shift_angle) * shift_factor,
+                0,
+            ]
+        )
+
+        propagation_brace = BraceLabel(
+            Line(
+                cloud_to_arrow.get_end(),
+                cloud_to_arrow.get_end() + arrow_to_cloud.width * RIGHT,
+            ),
+            "Round-trip time",
+            label_constructor=Tex,
+            buff=MED_SMALL_BUFF,
+            # brace_config=dict(sharpness=0.1),
+        )
+
+        self.play(Create(arrow_to_cloud))
+        self.play(Create(cloud_to_arrow))
+        self.play(FadeIn(propagation_brace, shift=UP))
 
         self.wait(2)
 
