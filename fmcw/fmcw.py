@@ -1822,12 +1822,14 @@ class CWNotForRange(Scene):
 
             return updater
 
-        arrow_to_cloud.add_updater(
-            get_prop_arrow_updater(cw_radar.radome, cloud, 1, edges=[RIGHT, LEFT])
+        arrow_to_cloud_updater = get_prop_arrow_updater(
+            cw_radar.radome, cloud, 1, edges=[RIGHT, LEFT]
         )
-        cloud_to_arrow.add_updater(
-            get_prop_arrow_updater(cloud, cw_radar.radome, -1, edges=[LEFT, RIGHT])
+        cloud_to_arrow_updater = get_prop_arrow_updater(
+            cloud, cw_radar.radome, -1, edges=[LEFT, RIGHT]
         )
+        arrow_to_cloud.add_updater(arrow_to_cloud_updater)
+        cloud_to_arrow.add_updater(cloud_to_arrow_updater)
 
         cloud_vel = Arrow(ORIGIN, LEFT * 2).next_to(cloud, direction=DOWN)
         cloud_vel_label = Tex(r"$v_{cloud}=0$").next_to(
@@ -1989,7 +1991,10 @@ class CWNotForRange(Scene):
         self.play(cw_radar.get_animation(), Create(cloud))
         self.play(Create(arrow_to_cloud))
         self.play(Create(cloud_to_arrow))
-        self.play(TransformFromCopy(f_tx_graph, f_rx_graph))
+        self.play(
+            TransformFromCopy(f_tx_graph, f_rx_graph),
+            Create(VGroup(rx_line_legend, rx_legend)),
+        )
 
         self.wait(1)
 
@@ -2020,6 +2025,31 @@ class CWNotForRange(Scene):
             Transform(cloud_vel_label, cloud_vel_label_copy),
             f_rx_graph.animate.shift(UP * f_shift_scale),
             FadeOut(cloud_vel),
+        )
+
+        self.wait(1)
+
+        arrow_to_cloud.remove_updater(arrow_to_cloud_updater)
+        cloud_to_arrow.remove_updater(cloud_to_arrow_updater)
+        cloud_vel.remove_updater(cloud_vel_updater)
+        cloud_vel_label.remove_updater(cloud_vel_label_updater)
+        cloud_vel_label_copy.remove_updater(cloud_vel_label_updater)
+        cloud_vel_label_pos.remove_updater(cloud_vel_label_updater)
+        cloud_vel_label_neg.remove_updater(cloud_vel_label_updater)
+        self.play(
+            FadeOut(
+                cloud,
+                arrow_to_cloud,
+                cloud_to_arrow,
+                cloud_vel_label,
+                cw_radar.vgroup,
+                shift=UP,
+            ),
+            FadeOut(amp_graph_group_copy, shift=LEFT),
+        )
+
+        self.play(
+            VGroup(f_ax, f_labels, f_tx_graph, f_rx_graph).animate.move_to(ORIGIN)
         )
 
         self.wait(2)
