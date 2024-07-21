@@ -1108,7 +1108,6 @@ class PropagationLoss(Scene):
         self.wait(2)
 
 
-# TODO: Needs 1080p render
 class PulsedPowerProblemUsingUpdaters(Scene):
     def construct(self):
         duty_cycle_inc = -0.7
@@ -1120,6 +1119,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         duty_cycle_tracker = ValueTracker(1.0)
         range_tracker = ValueTracker(x_range_min)
         pulsed_gain_tracker = ValueTracker(1.0)
+        pulsed_gain_copy_tracker = ValueTracker(1.0)
 
         range_ax = Axes(
             x_range=[x_range_min - 0.1, x_max, 1],
@@ -1224,7 +1224,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             color=RED,
         ).set_z_index(5)
         pulsed_graph_copy = ax.plot(
-            lambda t: pulsed_gain_tracker.get_value()
+            lambda t: pulsed_gain_copy_tracker.get_value()
             * (np.sin(2 * PI * f * t) + 1)
             / 2
             * (
@@ -1278,6 +1278,27 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                 .set_z_index(5)
             )
 
+        def pulsed_graph_copy_updater(m: Mobject):
+            m.become(
+                ax.plot(
+                    lambda t: pulsed_gain_copy_tracker.get_value()
+                    * (np.sin(2 * PI * f * t) + 1)
+                    / 2
+                    * (
+                        (
+                            signal.square(
+                                2 * PI * t / 2,
+                                duty=1 + duty_cycle_inc,
+                            )
+                            + 1
+                        )
+                        / 2
+                    ),
+                    x_range=[0, x_max - step, step],
+                    use_smoothing=False,
+                ).set_color(WHITE)
+            )
+
         def sq_graph_updater(m: Mobject):
             m.become(
                 ax.plot(
@@ -1297,7 +1318,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             )
 
         pulsed_graph.add_updater(pulsed_graph_updater)
-        # pulsed_graph_copy.add_updater(pulsed_graph_updater)
+        pulsed_graph_copy.add_updater(pulsed_graph_copy_updater)
         sq_graph.add_updater(sq_graph_updater)
 
         pulsed_graph_line_legend = FunctionGraph(
@@ -1309,7 +1330,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         pulsed_graph_avg_line_legend = FunctionGraph(
             lambda x: 0, color=RED, x_range=[0, 1]
         ).next_to(pulsed_graph_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
-        pulsed_graph_avg_legend = Tex(r"Average Power", color=RED).next_to(
+        pulsed_graph_avg_legend = Tex(r"Pulsed Average Power", color=RED).next_to(
             pulsed_graph_avg_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
         desired_output_power_line_legend = DashedVMobject(
@@ -1317,8 +1338,24 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                 pulsed_graph_avg_line_legend, direction=DOWN, buff=MED_LARGE_BUFF
             )
         )
-        desired_output_power_legend = Tex(r"Desired Output Power", color=RED).next_to(
+        desired_output_power_legend = Tex(r"Desired Output Power", color=GREEN).next_to(
             desired_output_power_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+
+        pulsed_graph_avg_legend_background = BackgroundRectangle(
+            pulsed_graph_avg_legend,
+            color=config.background_color,
+            fill_opacity=0.8,
+        )
+        desired_output_power_legend_background = BackgroundRectangle(
+            desired_output_power_legend,
+            color=config.background_color,
+            fill_opacity=0.8,
+        )
+        pulsed_graph_line_legend_background = BackgroundRectangle(
+            pulsed_graph_legend,
+            color=config.background_color,
+            fill_opacity=0.8,
         )
 
         brace_buff = 0.3
@@ -1365,10 +1402,35 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             .shift(RIGHT / 2)
         )
 
-        desired_output_power = 0.8
+        desired_output_power = 0.6
         desired_output_power_graph = DashedVMobject(
             ax.plot(lambda t: desired_output_power, x_range=[0, x_max], color=GREEN)
         )
+
+        def avg_power_eqn_updater(m: Mobject):
+            m.become(
+                Tex(
+                    r"$P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
+                    f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int(duty_cycle_tracker.get_value()*100)} \\%$",
+                )
+                .scale(0.6)
+                .to_edge(DOWN, buff=MED_LARGE_BUFF)
+            )
+
+        avg_power_eqn_pulsed = (
+            Tex(
+                r"For pulsed: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
+                f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int((1+duty_cycle_inc)*100)}\\%$",
+            )
+            .scale(0.6)
+            .to_edge(DOWN, buff=MED_LARGE_BUFF)
+        )
+        avg_power_eqn_pulsed.add_updater(avg_power_eqn_updater)
+
+        avg_power_eqn_cw = Tex(
+            r"For CW: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
+            f"${desired_output_power:.2f} [W] \\cdot 100 \\%$",
+        ).scale(0.6)
 
         """ Animations """
 
@@ -1435,9 +1497,6 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.wait(1)
 
-        # pulsed_graph_copy.remove_updater(pulsed_graph_updater)
-        # pulsed_graph_copy.set_z_index(0)
-        # sq_graph.remove_updater(sq_graph_updater)
         duty_cycle_brace.remove_updater(duty_cycle_brace_updater)
 
         self.play(
@@ -1454,9 +1513,12 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                     VGroup(
                         pulsed_graph_legend,
                         pulsed_graph_avg_legend,
+                        pulsed_graph_avg_legend_background,
                         pulsed_graph_line_legend,
+                        pulsed_graph_line_legend_background,
                         pulsed_graph_avg_line_legend,
-                    )
+                    ),
+                    shift=DOWN,
                 ),
                 AnimationGroup(
                     pulsed_gain_tracker.animate.set_value(
@@ -1475,11 +1537,48 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.play(
             FadeIn(desired_output_power_graph),
-            FadeIn(desired_output_power_line_legend),
-            FadeIn(desired_output_power_legend),
+            FadeIn(
+                VGroup(
+                    desired_output_power_line_legend,
+                    desired_output_power_legend_background,
+                    desired_output_power_legend,
+                    avg_power_eqn_pulsed,
+                ),
+                shift=UP,
+            ),
+        )
+
+        self.play(
+            pulsed_gain_copy_tracker.animate.set_value(
+                desired_output_power / pulsed_gain_tracker.get_value()
+            ),
+            pulsed_gain_tracker.animate.set_value(desired_output_power),
+        )
+
+        self.wait()
+
+        self.play(Circumscribe(pulsed_graph))
+
+        self.play(
+            pulsed_graph.animate.shift(UP),
+            pulsed_graph_copy.animate.shift(UP),
+            ax.animate.shift(UP),
+            avg_power_eqn_pulsed.animate.shift(UP),
+            desired_output_power_graph.animate.shift(UP),
+        )
+
+        self.play(
+            FadeIn(
+                avg_power_eqn_cw.next_to(avg_power_eqn_pulsed, direction=DOWN), shift=UP
+            )
         )
 
         self.wait(2)
+
+
+class CWWrapUp(Scene):
+    def construct(self):
+        pass
 
 
 class CWandPulsedWaveformComparison(Scene):
@@ -2432,6 +2531,18 @@ class WeatherChannel(Scene):
         self.play(FadeOut(weather_channel, weather_channel_rect, pointer))
 
         self.wait(2)
+
+
+class FlashSine(Scene):
+    def construct(self):
+        sine = FunctionGraph(
+            lambda x: np.sin(2 * PI * 4 * x), x_range=[-3, 3, 0.01], use_smoothing=False
+        )
+
+        self.add(sine)
+
+        self.play(Circumscribe(sine))
+        self.wait()
 
 
 # Possibly move to another project about pulsed / generic radar
