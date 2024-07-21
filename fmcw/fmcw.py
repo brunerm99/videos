@@ -1908,7 +1908,7 @@ class CWNotForRange(Scene):
         both_graphs = (
             VGroup(amp_graph_group_copy, f_graph_group)
             .arrange(buff=MED_LARGE_BUFF)
-            .scale_to_fit_width(13)
+            .scale_to_fit_width(12)
         )
 
         tx_line_legend = FunctionGraph(
@@ -2051,6 +2051,80 @@ class CWNotForRange(Scene):
         self.play(
             VGroup(f_ax, f_labels, f_tx_graph, f_rx_graph).animate.move_to(ORIGIN)
         )
+
+        self.wait(0.5)
+
+        round_trip_brace = Brace(
+            Line(f_tx_graph.get_start(), f_rx_graph.get_start()),
+            buff=SMALL_BUFF,
+            direction=UP,
+        )
+        round_trip_brace_label = (
+            Tex(r"Round-trip\\time")
+            .next_to(round_trip_brace, direction=UP + RIGHT, buff=MED_SMALL_BUFF)
+            .shift(UP)
+        )
+        round_trip_brace_arrow = Arrow(
+            round_trip_brace_label.get_edge_center(LEFT),
+            round_trip_brace.get_edge_center(UP),
+        )
+        round_trip_brace_label_qmark = (
+            Tex("?")
+            .scale(2)
+            .next_to(round_trip_brace_label, direction=RIGHT, buff=SMALL_BUFF)
+        )
+
+        self.play(
+            Create(round_trip_brace),
+            Create(round_trip_brace_label),
+            Create(round_trip_brace_arrow),
+        )
+
+        self.wait(1)
+
+        self.play(
+            f_tx_graph.animate.set_color(WHITE),
+            f_rx_graph.animate.set_color(WHITE),
+            tx_legend.animate.set_color(WHITE),
+            rx_legend.animate.set_color(WHITE),
+            tx_line_legend.animate.set_color(WHITE),
+            rx_line_legend.animate.set_color(WHITE),
+        )
+        self.play(Create(round_trip_brace_label_qmark))
+
+        self.wait(1)
+
+        part_2 = Tex(
+            "Part ",
+            "2",
+            ": ",
+            "Frequency Modulation",
+            font_size=DEFAULT_FONT_SIZE * 0.8 * 2,
+        )
+
+        self.play(
+            FadeOut(
+                f_ax,
+                f_labels,
+                round_trip_brace,
+                round_trip_brace_label,
+                round_trip_brace_arrow,
+                f_tx_graph,
+                f_rx_graph,
+                tx_legend,
+                rx_legend,
+                tx_line_legend,
+                rx_line_legend,
+                round_trip_brace_label_qmark,
+                shift=UP * 3,
+            ),
+            FadeIn(part_2, shift=UP * 3),
+            run_time=2,
+        )
+
+        self.wait(2)
+
+        self.play(FadeOut(part_2), run_time=2)
 
         self.wait(2)
 
