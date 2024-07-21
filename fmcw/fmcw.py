@@ -1582,6 +1582,8 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
 class CWWrapUp(Scene):
     def construct(self):
+        ranging_highlight_width_tracker = ValueTracker(0.0)
+
         cw_radar = WeatherRadarTower()
         radar = WeatherRadarTower()
 
@@ -1629,17 +1631,6 @@ class CWWrapUp(Scene):
             sq, x_range=[0, x_max - step, step], use_smoothing=False, color=YELLOW
         )
 
-        # radar_graphs = (
-        #     VGroup(
-        #         radar.vgroup.scale(0.6),
-        #         cw_radar.vgroup.scale(0.6),
-        #         VGroup(pulsed_ax, pulsed_graph, sq_graph),
-        #         VGroup(cw_ax, cw_graph),
-        #     )
-        #     .arrange_in_grid(rows=2, cols=2, buff=LARGE_BUFF * 1.5, flow_order="rd")
-        #     .scale_to_fit_width(13)
-        # )
-
         graphs = (
             VGroup(VGroup(pulsed_ax, pulsed_graph, sq_graph), VGroup(cw_ax, cw_graph))
             .arrange(direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True)
@@ -1653,6 +1644,44 @@ class CWWrapUp(Scene):
         radars = VGroup(radar.vgroup.scale(0.6), cw_radar.vgroup.scale(0.6)).arrange(
             direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True
         )
+
+        wip = Text("Work in progress", color=BLACK)
+        wip_bounding_box = SurroundingRectangle(
+            wip, color=YELLOW, fill_color=YELLOW, fill_opacity=1, buff=SMALL_BUFF
+        )
+
+        radar_definition = (
+            Tex(r"RADAR\\", "Ra", "dio", " D", "etection", " A", "nd", " R", "anging")
+            .to_edge(LEFT, buff=MED_LARGE_BUFF)
+            .set_z_index(1)
+        )
+        radar_definition[1].set_color(RED)
+        radar_definition[3].set_color(RED)
+        radar_definition[5].set_color(RED)
+        radar_definition[7].set_color(RED)
+
+        def ranging_highlight_width_updater(m: Mobject):
+            m.become(
+                Rectangle(
+                    width=ranging_highlight_width_tracker.get_value(),
+                    height=ranging_word.height * 1.2,
+                    color=DARK_BLUE,
+                    fill_color=DARK_BLUE,
+                    fill_opacity=1,
+                ).shift(ranging_word.get_center())
+            )
+
+        ranging_word = VGroup(radar_definition[7], radar_definition[8])
+        ranging_highlight = Rectangle(
+            width=ranging_highlight_width_tracker.get_value(),
+            height=ranging_word.height * 1.2,
+            color=DARK_BLUE,
+            fill_color=DARK_BLUE,
+            fill_opacity=1,
+        ).shift(ranging_word.get_center())
+        ranging_highlight.add_updater(ranging_highlight_width_updater)
+
+        """ Animations """
 
         self.play(Create(radar.vgroup), Create(cw_radar.vgroup))
 
@@ -1670,6 +1699,31 @@ class CWWrapUp(Scene):
                 lag_ratio=0.8,
             ),
         )
+
+        wip_group = (
+            VGroup(wip.set_z_index(1), wip_bounding_box)
+            .scale_to_fit_width(cw_radar.vgroup.width * 3)
+            .rotate(PI / 6)
+            .shift(cw_radar.vgroup.get_center())
+        )
+        self.play(FadeIn(wip_group))
+
+        self.play(
+            LaggedStart(
+                FadeOut(graphs, graph_arrow, radar.vgroup),
+                AnimationGroup(
+                    cw_radar.vgroup.animate.set_y(0),
+                    wip_group.animate.set_y(0),
+                    Create(radar_definition),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(1)
+
+        self.add(ranging_highlight)
+        self.play(ranging_highlight_width_tracker.animate.set_value(ranging_word.width))
 
         self.wait(2)
 
