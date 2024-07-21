@@ -1785,6 +1785,246 @@ class CWWrapUp(Scene):
         self.wait(2)
 
 
+class CWNotForRange(Scene):
+    def construct(self):
+        cloud_vel_tracker = ValueTracker(0.0)
+
+        cw_radar = WeatherRadarTower()
+        cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
+
+        cloud = SVGMobject(
+            "./figures/clouds.svg",
+            stroke_color=WHITE,
+            color=WHITE,
+            fill_color=WHITE,
+            opacity=1,
+            stroke_width=0.01,
+        ).to_corner(UR, buff=MED_SMALL_BUFF)
+
+        arrow_to_cloud = Arrow(
+            cw_radar.radome.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
+        )
+        shift_factor = 3
+        shift_angle = arrow_to_cloud.get_angle()
+        cloud_to_arrow = Arrow(
+            cloud.get_edge_center(LEFT), cw_radar.radome.get_edge_center(RIGHT)
+        ).shift([0, -math.sin(shift_angle) * shift_factor, 0])
+        arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
+
+        def get_prop_arrow_updater(from_mobj, to_mobj, y_shift_pm, edges=[RIGHT, LEFT]):
+            def updater(m: Mobject):
+                m.become(
+                    Arrow(
+                        from_mobj.get_edge_center(edges[0]),
+                        to_mobj.get_edge_center(edges[1]),
+                    ).shift([0, y_shift_pm * math.sin(shift_angle) * shift_factor, 0])
+                )
+
+            return updater
+
+        arrow_to_cloud.add_updater(
+            get_prop_arrow_updater(cw_radar.radome, cloud, 1, edges=[RIGHT, LEFT])
+        )
+        cloud_to_arrow.add_updater(
+            get_prop_arrow_updater(cloud, cw_radar.radome, -1, edges=[LEFT, RIGHT])
+        )
+
+        cloud_vel = Arrow(ORIGIN, LEFT * 2).next_to(cloud, direction=DOWN)
+        cloud_vel_label = Tex(r"$v_{cloud}=0$").next_to(
+            cloud_vel, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        cloud_vel_label_copy = Tex(r"$v_{cloud}=0$").next_to(
+            cloud_vel, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        cloud_vel_label_pos = Tex(r"$v_{cloud}>0$").next_to(
+            cloud_vel, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        cloud_vel_label_neg = Tex(r"$v_{cloud}<0$").next_to(
+            cloud_vel, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+
+        def cloud_vel_label_updater(m: Mobject):
+            m.next_to(cloud, direction=DOWN)
+
+        def cloud_vel_updater(m: Mobject):
+            m.next_to(cloud_vel_label, direction=DOWN, buff=MED_SMALL_BUFF)
+
+        cloud_vel.add_updater(cloud_vel_updater)
+        cloud_vel_label.add_updater(cloud_vel_label_updater)
+        cloud_vel_label_copy.add_updater(cloud_vel_label_updater)
+        cloud_vel_label_pos.add_updater(cloud_vel_label_updater)
+        cloud_vel_label_neg.add_updater(cloud_vel_label_updater)
+
+        x_max = 4
+        x_len = 6
+        y_len = 3
+        step = 0.001
+        amp_ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        f_ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-1, 5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        amp_labels = amp_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+        )
+        f_labels = f_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        f = 2
+        A = 1
+        tx_color = BLUE
+        rx_color = RED
+        cw_sine = lambda t: A * np.sin(2 * PI * f * t)
+        cw_graph = amp_ax.plot(cw_sine, x_range=[0, x_max, step], use_smoothing=False)
+
+        t_shift = 1
+
+        f_tx_graph = f_ax.plot(
+            lambda t: f, x_range=[0, x_max, step], use_smoothing=False
+        )
+
+        amp_graph_group = VGroup(cw_graph, amp_ax, amp_labels)
+        amp_graph_group_copy = VGroup(cw_graph.copy(), amp_ax.copy(), amp_labels.copy())
+        f_graph_group = VGroup(f_tx_graph, f_ax, f_labels)
+
+        both_graphs = (
+            VGroup(amp_graph_group_copy, f_graph_group)
+            .arrange(buff=MED_LARGE_BUFF)
+            .scale_to_fit_width(13)
+        )
+
+        tx_line_legend = FunctionGraph(
+            lambda x: 0, color=tx_color, x_range=[0, 1]
+        ).next_to(f_ax, direction=UP + RIGHT, aligned_edge=RIGHT)
+        tx_legend = Tex("Tx", color=tx_color).next_to(
+            tx_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        rx_line_legend = FunctionGraph(
+            lambda x: 0, color=rx_color, x_range=[0, 1]
+        ).next_to(tx_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
+        rx_legend = Tex(r"Rx", color=rx_color).next_to(
+            rx_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+
+        def get_next_to_updater(
+            m2: Mobject,
+            buff: float = DEFAULT_MOBJECT_TO_MOBJECT_BUFFER,
+            direction=RIGHT,
+            aligned_edge=ORIGIN,
+        ):
+            def updater(m: Mobject):
+                m.next_to(m2, buff=buff, direction=direction, aligned_edge=aligned_edge)
+
+            return updater
+
+        tx_line_legend.add_updater(
+            get_next_to_updater(f_ax, direction=UP + RIGHT, aligned_edge=RIGHT)
+        )
+        tx_legend.add_updater(
+            get_next_to_updater(tx_line_legend, direction=LEFT, buff=SMALL_BUFF)
+        )
+        rx_line_legend.add_updater(
+            get_next_to_updater(tx_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        rx_legend.add_updater(
+            get_next_to_updater(rx_line_legend, direction=LEFT, buff=SMALL_BUFF)
+        )
+
+        """ Animations """
+
+        self.play(
+            LaggedStart(
+                Create(VGroup(amp_ax, amp_labels)), Create(cw_graph), lag_ratio=0.8
+            )
+        )
+
+        self.wait(1)
+
+        self.play(
+            LaggedStart(
+                Transform(amp_graph_group, amp_graph_group_copy),
+                LaggedStart(
+                    Create(VGroup(f_ax, f_labels)), Create(f_tx_graph), lag_ratio=0.8
+                ),
+                lag_ratio=0.9,
+            )
+        )
+        self.add(amp_graph_group_copy)
+        self.remove(amp_graph_group)
+
+        self.wait(1)
+
+        self.play(
+            f_tx_graph.animate.set_color(BLUE),
+            Create(VGroup(tx_line_legend, tx_legend)),
+        )
+
+        self.wait(1)
+
+        self.play(both_graphs.animate.to_edge(DOWN, buff=MED_SMALL_BUFF))
+
+        f_rx_graph = f_ax.plot(
+            lambda t: f,
+            x_range=[t_shift, x_max + t_shift, step],
+            use_smoothing=False,
+            color=rx_color,
+        )
+
+        self.play(cw_radar.get_animation(), Create(cloud))
+        self.play(Create(arrow_to_cloud))
+        self.play(Create(cloud_to_arrow))
+        self.play(TransformFromCopy(f_tx_graph, f_rx_graph))
+
+        self.wait(1)
+
+        self.play(Create(cloud_vel_label))
+
+        f_shift_scale = 0.5
+        self.play(Transform(cloud_vel_label, cloud_vel_label_pos), run_time=0.3)
+        self.play(
+            GrowArrow(cloud_vel),
+            cloud.animate.shift(LEFT * 5),
+            f_rx_graph.animate.shift(UP * f_shift_scale),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(Transform(cloud_vel_label, cloud_vel_label_neg), run_time=0.3)
+        self.play(
+            cloud_vel.animate.flip(axis=[0, 1, 0]),
+            cloud.animate.shift(RIGHT * 5),
+            f_rx_graph.animate.shift(DOWN * f_shift_scale * 2),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(cloud_vel_label, cloud_vel_label_copy),
+            f_rx_graph.animate.shift(UP * f_shift_scale),
+            FadeOut(cloud_vel),
+        )
+
+        self.wait(2)
+
+
 class CWandPulsedWaveformComparison(Scene):
     def construct(self):
         x_max = 4
