@@ -1108,6 +1108,7 @@ class PropagationLoss(Scene):
         self.wait(2)
 
 
+# Pretty much done - just some minor issues at the end with shifting
 class PulsedPowerProblemUsingUpdaters(Scene):
     def construct(self):
         duty_cycle_inc = -0.7
@@ -1511,11 +1512,11 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             LaggedStart(
                 FadeIn(
                     VGroup(
-                        pulsed_graph_legend,
-                        pulsed_graph_avg_legend,
                         pulsed_graph_avg_legend_background,
-                        pulsed_graph_line_legend,
                         pulsed_graph_line_legend_background,
+                        pulsed_graph_legend.set_z_index(1),
+                        pulsed_graph_avg_legend.set_z_index(1),
+                        pulsed_graph_line_legend,
                         pulsed_graph_avg_line_legend,
                     ),
                     shift=DOWN,
@@ -1539,9 +1540,9 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             FadeIn(desired_output_power_graph),
             FadeIn(
                 VGroup(
-                    desired_output_power_line_legend,
                     desired_output_power_legend_background,
-                    desired_output_power_legend,
+                    desired_output_power_line_legend.set_z_index(1),
+                    desired_output_power_legend.set_z_index(1),
                     avg_power_eqn_pulsed,
                 ),
                 shift=UP,
@@ -1559,12 +1560,15 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.play(Circumscribe(pulsed_graph))
 
+        avg_power_eqn_pulsed.remove_updater(avg_power_eqn_updater)
+
         self.play(
             pulsed_graph.animate.shift(UP),
             pulsed_graph_copy.animate.shift(UP),
             ax.animate.shift(UP),
             avg_power_eqn_pulsed.animate.shift(UP),
             desired_output_power_graph.animate.shift(UP),
+            labels.animate.shift(UP),
         )
 
         self.play(
@@ -1578,7 +1582,96 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
 class CWWrapUp(Scene):
     def construct(self):
-        pass
+        cw_radar = WeatherRadarTower()
+        radar = WeatherRadarTower()
+
+        x_max = 4
+        x_len = 6
+        y_len = 3
+        step = 0.001
+        cw_ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        pulsed_ax = Axes(
+            x_range=[-0.1, x_max, 0.5],
+            y_range=[-2, 2, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        f = 4
+        pulsed_amp = 3
+        A = 0.5
+        cw_sine = lambda t: A * np.sin(2 * PI * f * t)
+        pulsed_sine = (
+            lambda t: pulsed_amp
+            * A
+            * np.sin(2 * PI * f * t)
+            * ((signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2)
+        )
+        sq = (
+            lambda t: pulsed_amp * A * (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2
+        )
+
+        cw_graph = cw_ax.plot(cw_sine, x_range=[0, x_max, step], use_smoothing=False)
+        pulsed_graph = pulsed_ax.plot(
+            pulsed_sine, x_range=[0, x_max, step], use_smoothing=False
+        )
+        sq_graph = pulsed_ax.plot(
+            sq, x_range=[0, x_max - step, step], use_smoothing=False, color=YELLOW
+        )
+
+        # radar_graphs = (
+        #     VGroup(
+        #         radar.vgroup.scale(0.6),
+        #         cw_radar.vgroup.scale(0.6),
+        #         VGroup(pulsed_ax, pulsed_graph, sq_graph),
+        #         VGroup(cw_ax, cw_graph),
+        #     )
+        #     .arrange_in_grid(rows=2, cols=2, buff=LARGE_BUFF * 1.5, flow_order="rd")
+        #     .scale_to_fit_width(13)
+        # )
+
+        graphs = (
+            VGroup(VGroup(pulsed_ax, pulsed_graph, sq_graph), VGroup(cw_ax, cw_graph))
+            .arrange(direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True)
+            .scale_to_fit_width(13)
+            .to_edge(DOWN, buff=MED_LARGE_BUFF)
+        )
+        graph_arrow = Arrow(
+            pulsed_graph.get_edge_center(RIGHT), cw_graph.get_edge_center(LEFT)
+        )
+
+        radars = VGroup(radar.vgroup.scale(0.6), cw_radar.vgroup.scale(0.6)).arrange(
+            direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True
+        )
+
+        self.play(Create(radar.vgroup), Create(cw_radar.vgroup))
+
+        self.wait(1)
+
+        self.play(
+            radar.vgroup.animate.next_to(pulsed_ax, buff=MED_LARGE_BUFF, direction=UP),
+            cw_radar.vgroup.animate.next_to(cw_ax, buff=MED_LARGE_BUFF, direction=UP),
+            LaggedStart(
+                AnimationGroup(Create(pulsed_ax), Create(cw_ax), run_time=2),
+                AnimationGroup(
+                    Create(cw_graph), Create(pulsed_graph), Create(sq_graph), run_time=2
+                ),
+                Create(graph_arrow),
+                lag_ratio=0.8,
+            ),
+        )
+
+        self.wait(2)
 
 
 class CWandPulsedWaveformComparison(Scene):
