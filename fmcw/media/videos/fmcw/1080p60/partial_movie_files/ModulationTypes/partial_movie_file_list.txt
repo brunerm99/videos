@@ -1,0 +1,7 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/tech-videos/fmcw/media/videos/fmcw/1080p60/partial_movie_files/ModulationTypes/3529212410_3754801863_2358810818.mp4'
+file 'file:/home/marchall/documents/tech-videos/fmcw/media/videos/fmcw/1080p60/partial_movie_files/ModulationTypes/3040924799_1415979674_1033600284.mp4'
+file 'file:/home/marchall/documents/tech-videos/fmcw/media/videos/fmcw/1080p60/partial_movie_files/ModulationTypes/3040924799_607789404_2290032134.mp4'
+file 'file:/home/marchall/documents/tech-videos/fmcw/media/videos/fmcw/1080p60/partial_movie_files/ModulationTypes/3040924799_3890345977_3812261786.mp4'
+file 'file:/home/marchall/documents/tech-videos/fmcw/media/videos/fmcw/1080p60/partial_movie_files/ModulationTypes/3040924799_607789404_4204829503.mp4'
+file 'file:/home/marchall/documents/tech-videos/fmcw/media/videos/fmcw/1080p60/partial_movie_files/ModulationTypes/3040924799_1141282389_1753699699.mp4'

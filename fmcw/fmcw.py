@@ -210,6 +210,37 @@ def create_block_diagram(
     return bd
 
 
+def create_title(
+    s: str,
+    underline_buff=MED_SMALL_BUFF,
+    match_underline_width_to_text: bool = False,
+):
+    t = Tex(s)
+    t.to_edge(UP)
+    underline_width = config["frame_width"] - 2
+    underline = Line(LEFT, RIGHT)
+    underline.next_to(t, DOWN, buff=underline_buff)
+    if match_underline_width_to_text:
+        underline.match_width(t)
+    else:
+        underline.width = underline_width
+
+    return VGroup(
+        t,
+        Line(underline.get_midpoint(), underline.get_start()),
+        Line(underline.get_midpoint(), underline.get_end()),
+    )
+
+
+def get_title_animation(title_group, run_time=2):
+    return AnimationGroup(
+        FadeIn(title_group[0]),
+        Create(title_group[1]),
+        Create(title_group[2]),
+        run_time=2,
+    )
+
+
 """Scenes"""
 
 
@@ -2129,6 +2160,119 @@ class CWNotForRange(Scene):
         self.wait(2)
 
 
+class ModulationTypes(Scene):
+    def construct(self):
+        x0_reveal_tracker = ValueTracker(0.0)
+        x1_reveal_tracker = ValueTracker(0.0)
+
+        triangular_title = create_title("Triangular Modulation")
+        fsk_title = create_title("Frequency Shift Keyring Modulation")
+        square_title = create_title("Square Modulation")
+
+        carrier_freq = 10  # Carrier frequency in Hz
+        modulation_freq = 0.5  # Modulation frequency in Hz
+        modulation_index = 20  # Modulation index
+        duration = 1
+        fs = 1000
+
+        x_len = 11
+        y_len = 2.2
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 30, 5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        amp_labels = amp_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+        )
+        f_labels = f_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        modulating_signal = lambda t: modulation_index * np.arcsin(
+            np.sin(2 * np.pi * modulation_freq * t)
+        )
+        modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        triangular_amplitude = lambda t: np.sin(2 * np.pi * modulating_cumsum(t))
+
+        def get_x_reveal_updater(ax, func):
+            def updater(m: Mobject):
+                m.become(
+                    ax.plot(
+                        func,
+                        x_range=[
+                            x0_reveal_tracker.get_value(),
+                            x1_reveal_tracker.get_value(),
+                            1 / fs,
+                        ],
+                    )
+                )
+
+            return updater
+
+        triangular_f_graph = f_ax.plot(
+            modulating_signal,
+            x_range=[
+                x0_reveal_tracker.get_value(),
+                x1_reveal_tracker.get_value(),
+                1 / fs,
+            ],
+        )
+        triangular_amp_graph = amp_ax.plot(
+            triangular_amplitude,
+            x_range=[
+                x0_reveal_tracker.get_value(),
+                x1_reveal_tracker.get_value(),
+                1 / fs,
+            ],
+        )
+        triangular_f_graph_updater = get_x_reveal_updater(f_ax, modulating_signal)
+        triangular_amp_graph_updater = get_x_reveal_updater(
+            amp_ax, triangular_amplitude
+        )
+        triangular_f_graph.add_updater(triangular_f_graph_updater)
+        triangular_amp_graph.add_updater(triangular_amp_graph_updater)
+
+        amp_ax_group = VGroup(amp_ax, amp_labels, triangular_amp_graph)
+        f_ax_group = VGroup(f_ax, f_labels, triangular_f_graph)
+
+        both_graphs = (
+            VGroup(amp_ax_group, f_ax_group)
+            .arrange(direction=DOWN, buff=MED_LARGE_BUFF)
+            .next_to(triangular_title, direction=DOWN)
+        )
+
+        self.play(get_title_animation(triangular_title, run_time=2))
+
+        self.play(Create(f_ax), Create(amp_ax))
+        self.add(triangular_f_graph, triangular_amp_graph)
+        self.play(x1_reveal_tracker.animate.set_value(duration), run_time=2)
+
+        self.wait(1)
+
+        self.play(x0_reveal_tracker.animate.set_value(duration), run_time=2)
+
+        self.wait(2)
+
+
 class CWandPulsedWaveformComparison(Scene):
     def construct(self):
         x_max = 4
@@ -3140,6 +3284,32 @@ class SignalGettingDirty(Scene):
         )
 
         self.wait(2)
+
+
+class TriangularMod(Scene):
+    def construct(self):
+        carrier_freq = 10  # Carrier frequency in Hz
+        modulation_freq = 0.5  # Modulation frequency in Hz
+        modulation_index = 20  # Modulation index
+        duration = 1  # Duration of the signal in seconds
+        fs = 1000
+        modulating_signal = lambda t: modulation_index * np.arcsin(
+            np.sin(2 * np.pi * modulation_freq * t)
+        )
+        modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        amplitude = lambda t: np.sin(2 * np.pi * modulating_cumsum(t))
+
+        ax = Axes(x_range=[0, 1], y_range=[0, 30])
+
+        triangular_graph = ax.plot(modulating_signal, x_range=[0, duration, 1 / fs])
+        graph = ax.plot(modulating_cumsum, x_range=[0, duration, 1 / fs])
+        amp_graph = ax.plot(amplitude, x_range=[0, duration, 1 / fs])
+
+        self.add(ax, graph, amp_graph, triangular_graph)
 
 
 """ Thumbnail """
