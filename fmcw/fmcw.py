@@ -6,7 +6,7 @@ from typing import Callable, List
 import cv2
 import numpy as np
 from manim import *
-from scipy import signal
+from scipy import signal, constants
 
 config.background_color = BLACK
 
@@ -404,8 +404,6 @@ class Title(Scene):
 
 class Waveform(Scene):
     def construct(self):
-        # pass
-
         bw_tracker = ValueTracker(1.0)
         f_tracker = ValueTracker(2.0)
         f_0_tracker = ValueTracker(6.0)
@@ -426,6 +424,11 @@ class Waveform(Scene):
             axis_config={"include_numbers": True},
         ).scale(ax_scale)
 
+        labels = ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+        )
+
         tx = always_redraw(
             lambda: ax.plot(
                 lambda t: (signal.sawtooth(2 * PI * f_tracker.get_value() * t) + 1)
@@ -437,8 +440,9 @@ class Waveform(Scene):
             )
         )
 
-        self.play(Succession(Create(ax), Create(tx)))
-        plot = VGroup(ax, tx)
+        self.play(Create(ax), Create(labels))
+        self.play(Create(tx))
+        plot = VGroup(ax, labels, tx)
         self.play(plot.animate.shift(RIGHT * 2))
 
         """ f0 Variation """
@@ -454,8 +458,8 @@ class Waveform(Scene):
             )
         )  # TODO: Mess with spacing b/c values not showing
         f_0_variation = VGroup(f_0_arrow, f_0_label)
-        self.play(Create(f_0_variation))
 
+        self.play(FadeIn(f_0_variation, shift=RIGHT))
         self.play(f_0_tracker.animate.set_value(f_0_tracker.get_value() + 1))
         self.play(f_0_tracker.animate.set_value(f_0_tracker.get_value() - 1))
 
@@ -467,14 +471,32 @@ class Waveform(Scene):
                     ax.c2p(0, f_0_tracker.get_value() + bw_tracker.get_value()),
                 ),
                 f"BW=\\\\{bw_tracker.get_value():.02f}MHz",  # TODO: Mess with spacing b/c values not showing
-                # "BW",
                 brace_direction=LEFT,
                 label_constructor=Tex,
             ).shift(LEFT)
         )
+
+        # BW in MHz
+        def r_res(bw):
+            return constants.speed_of_light / (2 * bw_tracker.get_value() * 1e6)
+
+        def r_res_updater(m: Mobject):
+            m.become(
+                Tex(
+                    r"$R_{res}=\frac{c}{2 \cdot BW}=$",
+                    f"{r_res(bw_tracker.get_value()):.2f}m",
+                ).to_corner(UL)
+            )
+
+        range_resolution_eqn = Tex(
+            r"$R_{res}=\frac{c}{2 \cdot BW}=$",
+            f"{r_res(bw_tracker.get_value()):.2f}m",
+        ).to_corner(UL)
+        range_resolution_eqn.add_updater(r_res_updater)
+
+        self.play(FadeOut(f_0_variation, shift=LEFT))
         self.play(
-            Uncreate(f_0_variation),
-            Create(bw_brace),
+            FadeIn(bw_brace, shift=RIGHT), FadeIn(range_resolution_eqn, shift=DOWN)
         )
 
         self.play(bw_tracker.animate.set_value(bw_tracker.get_value() + 1))
@@ -482,9 +504,31 @@ class Waveform(Scene):
 
         """ Period Variation """
         self.play(
-            Uncreate(bw_brace),
+            FadeOut(bw_brace, shift=LEFT),
+            FadeOut(range_resolution_eqn, shift=UP),
             plot.animate.shift(LEFT * 2 + UP),
         )
+
+        # Period in ms
+        def v_max():
+            wavelength = constants.speed_of_light / (f_0_tracker.get_value() * 1e6)
+            return wavelength / (4 * (1e-3 * x_1 / f_tracker.get_value()))
+
+        def v_max_updater(m: Mobject):
+            m.become(
+                Tex(
+                    r"$v_{max} = \frac{\lambda}{4 \cdot T}$",
+                    f"{v_max():.2f} ",
+                    r"$\frac{m}{s}$",
+                ).to_corner(UL)
+            )
+
+        v_max_eqn = Tex(
+            r"$v_{max} = \frac{\lambda}{4 \cdot T}$",
+            f"{v_max():.2f} ",
+            r"$\frac{m}{s}$",
+        ).to_corner(UL)
+        v_max_eqn.add_updater(v_max_updater)
 
         period_brace = always_redraw(
             lambda: BraceLabel(
@@ -499,13 +543,13 @@ class Waveform(Scene):
             ).shift(DOWN)
         )
 
-        self.play(Create(period_brace))
+        self.play(FadeIn(period_brace, shift=UP), FadeIn(v_max_eqn, shift=DOWN))
 
         self.play(f_tracker.animate.set_value(f_tracker.get_value() - 0.5))
         self.play(f_tracker.animate.set_value(f_tracker.get_value() + 0.5))
 
         """ Back to origin """
-        self.play(Uncreate(period_brace))
+        self.play(FadeOut(period_brace, shift=DOWN), FadeOut(v_max_eqn, shift=UP))
         self.play(plot.animate.move_to(ORIGIN))
 
         self.wait(2)
