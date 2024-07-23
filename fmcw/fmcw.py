@@ -2162,12 +2162,21 @@ class CWNotForRange(Scene):
 
 class ModulationTypes(Scene):
     def construct(self):
-        x0_reveal_tracker = ValueTracker(0.0)
-        x1_reveal_tracker = ValueTracker(0.0)
+        x0_reveal_tracker_0 = ValueTracker(0.0)
+        x1_reveal_tracker_0 = ValueTracker(0.0)
+        x0_reveal_tracker_1 = ValueTracker(0.0)
+        x1_reveal_tracker_1 = ValueTracker(0.0)
+        x0_reveal_tracker_2 = ValueTracker(0.0)
+        x1_reveal_tracker_2 = ValueTracker(0.0)
+        x0_reveal_tracker_3 = ValueTracker(0.0)
+        x1_reveal_tracker_3 = ValueTracker(0.0)
 
+        no_mod_title = create_title("No Modulation")
         triangular_title = create_title("Triangular Modulation")
         fsk_title = create_title("Frequency Shift Keyring Modulation")
-        square_title = create_title("Square Modulation")
+        sawtooth_title = create_title("Sawtooth Modulation")
+        lfm_title = create_title("Linear Frequency Modulation (LFM)")
+        dash_title = create_title("|")
 
         carrier_freq = 10  # Carrier frequency in Hz
         modulation_freq = 0.5  # Modulation frequency in Hz
@@ -2203,53 +2212,188 @@ class ModulationTypes(Scene):
             Tex("$f$", font_size=DEFAULT_FONT_SIZE),
         )
 
-        modulating_signal = lambda t: modulation_index * np.arcsin(
-            np.sin(2 * np.pi * modulation_freq * t)
-        )
-        modulating_cumsum = (
-            lambda t: carrier_freq
-            + np.sum(modulating_signal(np.arange(0, t, 1 / fs))) / fs
-        )
-
-        triangular_amplitude = lambda t: np.sin(2 * np.pi * modulating_cumsum(t))
-
-        def get_x_reveal_updater(ax, func):
+        def get_x_reveal_updater(ax, func, x0_updater, x1_updater, clip_sq=False):
             def updater(m: Mobject):
+                x1 = (
+                    min(x1_updater.get_value(), duration - 1 / fs)
+                    if clip_sq
+                    else x1_updater.get_value()
+                )
                 m.become(
                     ax.plot(
                         func,
-                        x_range=[
-                            x0_reveal_tracker.get_value(),
-                            x1_reveal_tracker.get_value(),
-                            1 / fs,
-                        ],
+                        x_range=[x0_updater.get_value(), x1, 1 / fs],
+                        use_smoothing=False,
                     )
                 )
 
             return updater
 
-        triangular_f_graph = f_ax.plot(
-            modulating_signal,
+        """ Sine """
+        sine_f = 4
+        sine_modulating_signal = lambda t: sine_f
+        sine_amp = lambda t: np.sin(2 * PI * sine_modulating_signal(t) * t)
+
+        sine_f_graph = f_ax.plot(
+            sine_modulating_signal,
             x_range=[
-                x0_reveal_tracker.get_value(),
-                x1_reveal_tracker.get_value(),
+                x0_reveal_tracker_0.get_value(),
+                x1_reveal_tracker_0.get_value(),
                 1 / fs,
             ],
+            use_smoothing=False,
+        )
+        sine_amp_graph = amp_ax.plot(
+            sine_amp,
+            x_range=[
+                x0_reveal_tracker_0.get_value(),
+                x1_reveal_tracker_0.get_value(),
+                1 / fs,
+            ],
+            use_smoothing=False,
+        )
+
+        sine_f_graph_updater = get_x_reveal_updater(
+            f_ax,
+            sine_modulating_signal,
+            x0_reveal_tracker_0,
+            x1_reveal_tracker_0,
+            clip_sq=True,
+        )
+        sine_amp_graph_updater = get_x_reveal_updater(
+            amp_ax, sine_amp, x0_reveal_tracker_0, x1_reveal_tracker_0
+        )
+        sine_f_graph.add_updater(sine_f_graph_updater)
+        sine_amp_graph.add_updater(sine_amp_graph_updater)
+
+        """ Triangular """
+        triangular_modulating_signal = lambda t: modulation_index * np.arcsin(
+            np.sin(2 * np.pi * modulation_freq * t)
+        )
+        triangular_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(triangular_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        triangular_amp = lambda t: np.sin(2 * np.pi * triangular_modulating_cumsum(t))
+
+        triangular_f_graph = f_ax.plot(
+            triangular_modulating_signal,
+            x_range=[
+                x0_reveal_tracker_1.get_value(),
+                x1_reveal_tracker_1.get_value(),
+                1 / fs,
+            ],
+            use_smoothing=False,
         )
         triangular_amp_graph = amp_ax.plot(
-            triangular_amplitude,
+            triangular_amp,
             x_range=[
-                x0_reveal_tracker.get_value(),
-                x1_reveal_tracker.get_value(),
+                x0_reveal_tracker_1.get_value(),
+                x1_reveal_tracker_1.get_value(),
                 1 / fs,
             ],
+            use_smoothing=False,
         )
-        triangular_f_graph_updater = get_x_reveal_updater(f_ax, modulating_signal)
+        triangular_f_graph_updater = get_x_reveal_updater(
+            f_ax, triangular_modulating_signal, x0_reveal_tracker_1, x1_reveal_tracker_1
+        )
         triangular_amp_graph_updater = get_x_reveal_updater(
-            amp_ax, triangular_amplitude
+            amp_ax, triangular_amp, x0_reveal_tracker_1, x1_reveal_tracker_1
         )
         triangular_f_graph.add_updater(triangular_f_graph_updater)
         triangular_amp_graph.add_updater(triangular_amp_graph_updater)
+
+        """ FSK """
+        fsk_carrier_freq = 12
+        fsk_modulation_index = 6
+        fsk_modulating_signal_f = 2
+        fsk_modulating_signal = (
+            lambda t: fsk_modulation_index
+            * signal.square(2 * PI * fsk_modulating_signal_f * t)
+            + fsk_carrier_freq
+        )
+        fsk_amp = lambda t: np.sin(2 * PI * fsk_modulating_signal(t) * t)
+
+        fsk_f_graph = f_ax.plot(
+            fsk_modulating_signal,
+            x_range=[
+                x0_reveal_tracker_2.get_value(),
+                x1_reveal_tracker_2.get_value(),
+                1 / fs,
+            ],
+            use_smoothing=False,
+        )
+        fsk_amp_graph = amp_ax.plot(
+            fsk_amp,
+            x_range=[
+                x0_reveal_tracker_2.get_value(),
+                x1_reveal_tracker_2.get_value(),
+                1 / fs,
+            ],
+            use_smoothing=False,
+        )
+
+        fsk_f_graph_updater = get_x_reveal_updater(
+            f_ax,
+            fsk_modulating_signal,
+            x0_reveal_tracker_2,
+            x1_reveal_tracker_2,
+            clip_sq=True,
+        )
+        fsk_amp_graph_updater = get_x_reveal_updater(
+            amp_ax, fsk_amp, x0_reveal_tracker_2, x1_reveal_tracker_2
+        )
+        fsk_f_graph.add_updater(fsk_f_graph_updater)
+        fsk_amp_graph.add_updater(fsk_amp_graph_updater)
+
+        """ Sawtooth """
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp = lambda t: np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+
+        sawtooth_f_graph = f_ax.plot(
+            sawtooth_modulating_signal,
+            x_range=[
+                x0_reveal_tracker_3.get_value(),
+                x1_reveal_tracker_3.get_value(),
+                1 / fs,
+            ],
+            use_smoothing=False,
+        )
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[
+                x0_reveal_tracker_3.get_value(),
+                x1_reveal_tracker_3.get_value(),
+                1 / fs,
+            ],
+            use_smoothing=False,
+        )
+
+        sawtooth_f_graph_updater = get_x_reveal_updater(
+            f_ax,
+            sawtooth_modulating_signal,
+            x0_reveal_tracker_3,
+            x1_reveal_tracker_3,
+            clip_sq=True,
+        )
+        sawtooth_amp_graph_updater = get_x_reveal_updater(
+            amp_ax, sawtooth_amp, x0_reveal_tracker_3, x1_reveal_tracker_3
+        )
+        sawtooth_f_graph.add_updater(sawtooth_f_graph_updater)
+        sawtooth_amp_graph.add_updater(sawtooth_amp_graph_updater)
 
         amp_ax_group = VGroup(amp_ax, amp_labels, triangular_amp_graph)
         f_ax_group = VGroup(f_ax, f_labels, triangular_f_graph)
@@ -2260,15 +2404,72 @@ class ModulationTypes(Scene):
             .next_to(triangular_title, direction=DOWN)
         )
 
-        self.play(get_title_animation(triangular_title, run_time=2))
+        self.play(get_title_animation(no_mod_title, run_time=2))
 
-        self.play(Create(f_ax), Create(amp_ax))
-        self.add(triangular_f_graph, triangular_amp_graph)
-        self.play(x1_reveal_tracker.animate.set_value(duration), run_time=2)
+        self.play(Create(f_ax), Create(amp_ax), Create(f_labels), Create(amp_labels))
+        self.add(
+            sine_f_graph,
+            sine_amp_graph,
+            triangular_f_graph,
+            triangular_amp_graph,
+            fsk_f_graph,
+            fsk_amp_graph,
+            sawtooth_f_graph,
+            sawtooth_amp_graph,
+        )
+        self.play(x1_reveal_tracker_0.animate.set_value(duration), run_time=2)
 
         self.wait(1)
 
-        self.play(x0_reveal_tracker.animate.set_value(duration), run_time=2)
+        self.play(x0_reveal_tracker_0.animate.set_value(duration), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(no_mod_title[0], triangular_title[0], run_time=1),
+            x1_reveal_tracker_1.animate(run_time=2).set_value(duration),
+        )
+
+        self.wait(1)
+
+        self.play(x0_reveal_tracker_1.animate.set_value(duration), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(no_mod_title[0], fsk_title[0], run_time=1),
+            x1_reveal_tracker_2.animate(run_time=2).set_value(duration),
+        )
+
+        self.wait(1)
+
+        self.play(x0_reveal_tracker_2.animate.set_value(duration), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(no_mod_title[0], sawtooth_title[0], run_time=1),
+            x1_reveal_tracker_3.animate(run_time=2).set_value(duration),
+        )
+
+        self.wait(1)
+
+        # self.play(Transform(no_mod_title[0]))
+        sawtooth_title_copy = sawtooth_title[0].copy()
+        VGroup(sawtooth_title_copy, dash_title[0], lfm_title[0]).arrange(RIGHT).to_edge(
+            UP
+        )
+        self.play(
+            LaggedStart(
+                Transform(no_mod_title[0], sawtooth_title_copy),
+                Create(VGroup(dash_title[0], lfm_title[0])),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(1)
+
+        self.play(x0_reveal_tracker_3.animate.set_value(duration), run_time=2)
 
         self.wait(2)
 
