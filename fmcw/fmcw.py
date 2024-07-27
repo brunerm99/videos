@@ -3562,6 +3562,44 @@ class TriangularMod(Scene):
 
 class Thumbnail(Scene):
     def construct(self):
-        text = Tex("good", " the best", " video about fmcw radar")
-        line = Line(text[0].get_left(), text[0].get_right())
-        self.add(text, line)
+        text = Tex("FMCW Radar").scale(2)
+
+        carrier_freq = 1  # Carrier frequency in Hz
+        modulation_freq = 0.5  # Modulation frequency in Hz
+        modulation_index = 30  # Modulation index
+        duration = 1
+        fs = 10000
+        A = 0.2
+
+        triangular_modulating_signal = lambda t: modulation_index * np.arcsin(
+            np.sin(2 * np.pi * modulation_freq * t + PI / 2)
+        )
+        triangular_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(triangular_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        triangular_amp = lambda t: A * np.sin(
+            2 * np.pi * triangular_modulating_cumsum(t)
+        )
+
+        triangular_f_graph = FunctionGraph(
+            triangular_modulating_signal,
+            x_range=[-1, 1, 1 / fs],
+            use_smoothing=False,
+        ).scale_to_fit_width(12)
+        triangular_amp_graph = (
+            FunctionGraph(
+                triangular_amp,
+                x_range=[0.5, 1.5, 1 / fs],
+                use_smoothing=False,
+                color=BLUE,
+            )
+            .scale_to_fit_width(13)
+            .move_to(ORIGIN)
+        )
+
+        self.add(
+            triangular_amp_graph,
+            triangular_f_graph,
+        )
