@@ -14,6 +14,16 @@ config.background_color = BLACK
 """Helpers"""
 
 
+def pretty_num(n: float) -> str:
+    nstr, dec = str(f"{n:.2f}").split(".")
+
+    nstr_fmt = ",".join(
+        [nstr[::-1][start : start + 3][::-1] for start in range(0, len(nstr), 3)][::-1]
+    )
+
+    return f"{nstr_fmt}.{dec}"
+
+
 class WeatherRadarTower:
     def __init__(self, **kwargs):
         # super.__init__(**kwargs)
@@ -485,50 +495,52 @@ class Waveform(Scene):
                 Tex(
                     r"$R_{res}=\frac{c}{2 \cdot BW}=$",
                     f"{r_res(bw_tracker.get_value()):.2f}m",
-                ).to_corner(UL)
+                ).to_corner(UR)
             )
 
         range_resolution_eqn = Tex(
             r"$R_{res}=\frac{c}{2 \cdot BW}=$",
             f"{r_res(bw_tracker.get_value()):.2f}m",
-        ).to_corner(UL)
-        range_resolution_eqn.add_updater(r_res_updater)
+        ).to_corner(UR)
 
         self.play(FadeOut(f_0_variation, shift=LEFT))
         self.play(
             FadeIn(bw_brace, shift=RIGHT), FadeIn(range_resolution_eqn, shift=DOWN)
         )
+        range_resolution_eqn.add_updater(r_res_updater)
 
         self.play(bw_tracker.animate.set_value(bw_tracker.get_value() + 1))
         self.play(bw_tracker.animate.set_value(bw_tracker.get_value() - 1))
 
         """ Period Variation """
+        range_resolution_eqn.remove_updater(r_res_updater)
         self.play(
             FadeOut(bw_brace, shift=LEFT),
             FadeOut(range_resolution_eqn, shift=UP),
-            plot.animate.shift(LEFT * 2 + UP),
+            plot.animate.shift(LEFT * 2 + UP / 2),
         )
 
         # Period in ms
         def v_max():
             wavelength = constants.speed_of_light / (f_0_tracker.get_value() * 1e6)
-            return wavelength / (4 * (1e-3 * x_1 / f_tracker.get_value()))
+            v_max_float = wavelength / (4 * (1e-3 * x_1 / f_tracker.get_value()))
+            v_max_str = pretty_num(v_max_float)
+            return v_max_str
 
         def v_max_updater(m: Mobject):
             m.become(
                 Tex(
                     r"$v_{max} = \frac{\lambda}{4 \cdot T}$",
-                    f"{v_max():.2f} ",
+                    f"{v_max()} ",
                     r"$\frac{m}{s}$",
-                ).to_corner(UL)
+                ).to_corner(UR)
             )
 
         v_max_eqn = Tex(
             r"$v_{max} = \frac{\lambda}{4 \cdot T}$",
-            f"{v_max():.2f} ",
+            f"{v_max()} ",
             r"$\frac{m}{s}$",
-        ).to_corner(UL)
-        v_max_eqn.add_updater(v_max_updater)
+        ).to_corner(UR)
 
         period_brace = always_redraw(
             lambda: BraceLabel(
@@ -544,11 +556,13 @@ class Waveform(Scene):
         )
 
         self.play(FadeIn(period_brace, shift=UP), FadeIn(v_max_eqn, shift=DOWN))
+        v_max_eqn.add_updater(v_max_updater)
 
         self.play(f_tracker.animate.set_value(f_tracker.get_value() - 0.5))
         self.play(f_tracker.animate.set_value(f_tracker.get_value() + 0.5))
 
         """ Back to origin """
+        v_max_eqn.remove_updater(v_max_updater)
         self.play(FadeOut(period_brace, shift=DOWN), FadeOut(v_max_eqn, shift=UP))
         self.play(plot.animate.move_to(ORIGIN))
 
@@ -558,6 +572,28 @@ class Waveform(Scene):
 # TODO: Combine with Waveform - slo tho
 class TxAndRx(Scene):
     def construct(self):
+        cw_radar = WeatherRadarTower()
+        cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
+
+        cloud = SVGMobject(
+            "./figures/clouds.svg",
+            stroke_color=WHITE,
+            color=WHITE,
+            fill_color=WHITE,
+            opacity=1,
+            stroke_width=0.01,
+        ).to_corner(UR, buff=MED_SMALL_BUFF)
+
+        radar_to_cloud = Arrow(
+            cw_radar.radome.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
+        )
+        shift_factor = 3
+        shift_angle = radar_to_cloud.get_angle()
+        cloud_to_arrow = Arrow(
+            cloud.get_edge_center(LEFT), cw_radar.radome.get_edge_center(RIGHT)
+        ).shift([0, -math.sin(shift_angle) * shift_factor, 0])
+        radar_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
+
         def get_t_shift_dist(t0: float, t1: float, graph, axes: Axes) -> np.ndarray:
             return (
                 axes.input_to_graph_point(t1, graph)
@@ -608,10 +644,20 @@ class TxAndRx(Scene):
         )
         tx_label = Tex("Tx", color=tx_color).next_to(tx, direction=UP)
         rx_label = Tex("Rx", color=rx_color).move_to(tx_label)
+
+        self.add(ax, tx, tx_label)
+
+        self.play(
+            VGroup(ax, tx, tx_label).animate.to_edge(DOWN, buff=LARGE_BUFF),
+            Create(VGroup(cloud, cw_radar.vgroup)),
+        )
+
         rx = tx.copy().set_color(rx_color)
 
-        self.add(ax, tx, tx_label, rx)
         self.wait(1)
+
+        self.play(Create(radar_to_cloud))
+        self.play(Create(cloud_to_arrow))
 
         t_shift_dist = get_t_shift_dist(t0=0, t1=t_shift, graph=tx, axes=ax)
         self.play(rx.animate.shift(t_shift_dist), rx_label.animate.shift(t_shift_dist))
@@ -727,6 +773,9 @@ class TxAndRx(Scene):
             rx,
             ax,
             t_shift_brace,
+        )
+        self.play(
+            Uncreate(VGroup(cloud, cloud_to_arrow, radar_to_cloud, cw_radar.vgroup))
         )
         self.play(
             LaggedStart(
@@ -1862,8 +1911,6 @@ class CWWrapUp(Scene):
 
 class CWNotForRange(Scene):
     def construct(self):
-        cloud_vel_tracker = ValueTracker(0.0)
-
         cw_radar = WeatherRadarTower()
         cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
 
