@@ -421,6 +421,10 @@ class Title(Scene):
         #     )
         # )
 
+        self.wait(1)
+
+        self.play(FadeOut(*self.mobjects, shift=UP * 5))
+
         self.wait(2)
 
         # self.play(FadeOut(cw_box, f, dash, m, c, w, title))
@@ -909,26 +913,41 @@ class PulsedRadarIntro(Scene):
             lambda: FunctionGraph(
                 lambda t: 0.5 * np.sin(2 * PI * f * t + PI),
                 x_range=[
-                    min(
-                        max(
-                            ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw),
-                            0,
+                    max(
+                        x_max
+                        - max((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max, 0),
+                        0,
+                    ),
+                    max(
+                        x_max
+                        - max(
+                            (t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw, 0
                         ),
-                        x_max,
+                        0,
                     ),
-                    min(
-                        max(((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max), 0),
-                        x_max,
-                    ),
+                    # x_max,
                 ],
+                # x_range=[
+                #     min(
+                #         max(
+                #             ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw),
+                #             0,
+                #         ),
+                #         x_max,
+                #     ),
+                #     min(
+                #         max(((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max), 0),
+                #         x_max,
+                #     ),
+                # ],
                 color=BLUE,
             )
             .shift(p1)
             .rotate(line_pulsed.get_angle(), about_point=p1)
-            .rotate(
-                math.pi,
-                about_point=ref_wave.get_center() + rx_flip_pt_tracker.get_value() * UP,
-            )
+            # .rotate(
+            #     math.pi,
+            #     about_point=ref_wave.get_center() + rx_flip_pt_tracker.get_value() * UP,
+            # )
         )
 
         self.add(
@@ -937,7 +956,7 @@ class PulsedRadarIntro(Scene):
             # always_redraw(lambda: Dot([0, rx_flip_pt_tracker.get_value(), 0])),
         )
 
-        runs = 3
+        runs = 2
         self.play(
             t_tracker.animate.increment_value(x_max_tbuff * runs * 2),
             run_time=runs * 2,
