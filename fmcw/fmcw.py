@@ -300,7 +300,22 @@ class Title(Scene):
         c = expanded[3]
         w = expanded[4]
 
-        part_1 = Tex("Part ", "1", ": ", "The ", font_size=DEFAULT_FONT_SIZE * 0.8 * 2)
+        expanded_cap = Tex(
+            "Frequency",
+            "-",
+            "Modulated ",
+            "Continuous ",
+            "Wave",
+            font_size=DEFAULT_FONT_SIZE * 0.8,
+        ).shift(DOWN)
+
+        f_cap = expanded_cap[0]
+        dash_cap = expanded_cap[1]
+        m_cap = expanded_cap[2]
+        c_cap = expanded_cap[3]
+        w_cap = expanded_cap[4]
+
+        part_1 = Tex("Part ", "1", ": ", font_size=DEFAULT_FONT_SIZE * 0.8 * 2)
 
         but_what.next_to(
             title, direction=UP, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 2
@@ -382,32 +397,31 @@ class Title(Scene):
 
         self.play(Uncreate(cw_box))
 
-        cw_copy = VGroup(c.copy(), w.copy()).scale(2).set_color(WHITE)
+        cw_copy = VGroup(c_cap.copy(), w_cap.copy()).scale(2).set_color(WHITE)
         part_1.next_to(cw_copy, direction=LEFT)
         part_1_group = VGroup(part_1, cw_copy).move_to(ORIGIN)
 
         self.play(
-            FadeOut(cw_box, f, dash, m, title),
-            Write(part_1_group[0]),
-            Transform(VGroup(c, w), cw_copy),
+            AnimationGroup(Uncreate(cw_box), FadeOut(f, dash, m, title)),
+            AnimationGroup(Write(part_1_group[0]), Transform(VGroup(c, w), cw_copy)),
         )
 
-        self.wait()
+        # self.wait()
 
-        tcw = VGroup(part_1[3], cw_copy)
-        cw_strike = Line(tcw.get_left(), tcw.get_right())
-        radar_basics = Tex("Radar Basics").scale(0.8 * 2).next_to(tcw, direction=DOWN)
-        part_1_strike = Line(part_1[1].get_left(), part_1[1].get_right())
-        part_0 = Tex("0").scale(0.8 * 2).next_to(part_1[1], direction=DOWN)
-        self.play(
-            LaggedStart(
-                AnimationGroup(Create(part_1_strike), Create(cw_strike)),
-                AnimationGroup(Write(part_0), Write(radar_basics)),
-                lag_ratio=0.4,
-            )
-        )
+        # tcw = VGroup(part_1[3], cw_copy)
+        # cw_strike = Line(tcw.get_left(), tcw.get_right())
+        # radar_basics = Tex("Radar Basics").scale(0.8 * 2).next_to(tcw, direction=DOWN)
+        # part_1_strike = Line(part_1[1].get_left(), part_1[1].get_right())
+        # part_0 = Tex("0").scale(0.8 * 2).next_to(part_1[1], direction=DOWN)
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(Create(part_1_strike), Create(cw_strike)),
+        #         AnimationGroup(Write(part_0), Write(radar_basics)),
+        #         lag_ratio=0.4,
+        #     )
+        # )
 
-        self.wait(3)
+        self.wait(2)
 
         # self.play(FadeOut(cw_box, f, dash, m, c, w, title))
 
