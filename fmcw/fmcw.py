@@ -927,27 +927,10 @@ class PulsedRadarIntro(Scene):
                     ),
                     # x_max,
                 ],
-                # x_range=[
-                #     min(
-                #         max(
-                #             ((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max - pw),
-                #             0,
-                #         ),
-                #         x_max,
-                #     ),
-                #     min(
-                #         max(((t_tracker.get_value() % (2 * x_max_tbuff)) - x_max), 0),
-                #         x_max,
-                #     ),
-                # ],
                 color=BLUE,
             )
             .shift(p1)
             .rotate(line_pulsed.get_angle(), about_point=p1)
-            # .rotate(
-            #     math.pi,
-            #     about_point=ref_wave.get_center() + rx_flip_pt_tracker.get_value() * UP,
-            # )
         )
 
         self.add(
