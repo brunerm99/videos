@@ -8,7 +8,10 @@ import numpy as np
 from manim import *
 from scipy import signal, constants
 
-config.background_color = BLACK
+# config.background_color = BLACK
+config.background_color = ManimColor.from_hex("#183340")
+# config.background_color = ManimColor.from_hex("#253f4b")
+# config.background_color = ManimColor.from_hex("#183340")
 
 
 """Helpers"""
@@ -121,6 +124,52 @@ class WeatherRadarTower:
 
     # @override_animation(Create)
     # def _create_override(self, **kwargs):
+
+
+class FMCWRadarCartoon:
+    def __init__(self, text="FMCW"):
+        self.rect = Rectangle(height=3, width=1.5)
+        self.label = Tex(text).rotate(PI / 2)
+        self.line_1 = (
+            Line(ORIGIN, RIGHT / 2)
+            .next_to(self.rect, direction=RIGHT, buff=0)
+            .shift(UP)
+        )
+        self.line_2 = (
+            Line(ORIGIN, RIGHT / 2)
+            .next_to(self.rect, direction=RIGHT, buff=0)
+            .shift(DOWN)
+        )
+        self.antenna_tx = (
+            AnnularSector(inner_radius=1, outer_radius=1.2, angle=PI)
+            .rotate(PI / 2)
+            .scale(0.5)
+            .next_to(self.line_1, direction=RIGHT, buff=0)
+        )
+        self.antenna_rx = (
+            AnnularSector(inner_radius=1, outer_radius=1.2, angle=PI)
+            .rotate(PI / 2)
+            .scale(0.5)
+            .next_to(self.line_2, direction=RIGHT, buff=0)
+        )
+
+        self.vgroup = VGroup(
+            self.rect,
+            self.label,
+            self.line_1,
+            self.line_2,
+            self.antenna_tx,
+            self.antenna_rx,
+        ).move_to(ORIGIN)
+
+    def get_animation(self):
+        return Succession(
+            GrowFromCenter(VGroup(self.rect, self.label)),
+            AnimationGroup(Create(self.line_1), Create(self.line_2)),
+            AnimationGroup(
+                GrowFromCenter(self.antenna_tx), GrowFromCenter(self.antenna_rx)
+            ),
+        )
 
 
 def get_weather_radar_tower():
@@ -464,7 +513,7 @@ class Waveform(Scene):
                 * bw_tracker.get_value()
                 + f_0_tracker.get_value(),
                 use_smoothing=False,
-                x_range=[0, x_1, x_1 / 1000],
+                x_range=[0, x_1 - x_1 / 1000, x_1 / 1000],
             )
         )
 
@@ -548,14 +597,14 @@ class Waveform(Scene):
         def v_max_updater(m: Mobject):
             m.become(
                 Tex(
-                    r"$v_{max} = \frac{\lambda}{4 \cdot T}$",
+                    r"$v_{max} = \frac{\lambda}{4 \cdot T} = \ $",
                     f"{v_max()} ",
                     r"$\frac{m}{s}$",
                 ).to_corner(UR)
             )
 
         v_max_eqn = Tex(
-            r"$v_{max} = \frac{\lambda}{4 \cdot T}$",
+            r"$v_{max} = \frac{\lambda}{4 \cdot T} = \ $",
             f"{v_max()} ",
             r"$\frac{m}{s}$",
         ).to_corner(UR)
@@ -955,9 +1004,9 @@ class PulsedRadarIntro(Scene):
         p2 += radar.vgroup.get_y() * UP
         rx_flip_pt_tracker.increment_value(radar.vgroup.get_y())
 
-        cw_radar = WeatherRadarTower()  # Placeholder for CW radar cartoon
+        cw_radar = FMCWRadarCartoon(text="CW")
         self.play(cw_radar.get_animation())
-        self.play(cw_radar.vgroup.animate.scale(0.6).to_corner(DL, buff=MED_LARGE_BUFF))
+        self.play(cw_radar.vgroup.animate.scale(0.7).to_corner(DL, buff=MED_LARGE_BUFF))
 
         """ CW Transmission """
         t_cw_tracker = ValueTracker(0)
@@ -966,16 +1015,25 @@ class PulsedRadarIntro(Scene):
 
         # Propagation
         wave_buff = 0.3
-        p1_cw = cw_radar.radome.get_corner(RIGHT) + RIGHT * wave_buff
+        p1_cw = cw_radar.antenna_tx.get_edge_center(RIGHT) + RIGHT * wave_buff
         p2_cw = (
             Dot()
             .to_edge(RIGHT, buff=LARGE_BUFF)
-            .shift(cw_radar.radome.get_corner(RIGHT) * UP)
+            .shift(cw_radar.rect.get_edge_center(RIGHT) * UP)
             .get_center()
         )
         line_cw = Line(p1_cw, p2_cw)
+        p1_cw_rx = cw_radar.antenna_rx.get_edge_center(RIGHT) + RIGHT * wave_buff
+        p2_cw_rx = (
+            Dot()
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+            .shift(cw_radar.rect.get_edge_center(RIGHT) * UP)
+            .get_center()
+        )
+        line_cw_rx = Line(p1_cw_rx, p2_cw_rx)
 
         x_max = math.sqrt(np.sum(np.power(p2_cw - p1_cw, 2)))
+        line_cw_angle = line_cw.get_angle()
         tx_cw = always_redraw(
             lambda: FunctionGraph(
                 lambda t: 0.5 * np.sin(2 * PI * f * t),
@@ -984,8 +1042,11 @@ class PulsedRadarIntro(Scene):
                 color=RED,
             )
             .shift(p1_cw)
-            .rotate(line_cw.get_angle(), about_point=p1_cw)
-            .shift(t_cw_tracker.get_value() * RIGHT)
+            .rotate(line_cw_angle, about_point=p1_cw)
+            .shift(
+                t_cw_tracker.get_value()
+                * (RIGHT * math.cos(line_cw_angle) + UP * math.sin(line_cw_angle))
+            )
         )
         rx_cw = always_redraw(
             lambda: FunctionGraph(
@@ -996,18 +1057,16 @@ class PulsedRadarIntro(Scene):
                 + [max(t_cw_tracker.get_value() - 2 * x_max, 0), 0],
                 color=BLUE,
             )
-            .shift(p1_cw)
-            .rotate(line_cw.get_angle(), about_point=p1_cw)
-            .shift(max(t_cw_tracker.get_value() - x_max, 0) * LEFT)
+            .shift(p1_cw_rx)
+            .rotate(line_cw_rx.get_angle(), about_point=p1_cw_rx)
+            .shift(
+                max(t_cw_tracker.get_value() - x_max, 0)
+                * (LEFT * math.cos(line_cw_angle) + UP * math.sin(line_cw_angle))
+            )
         )
 
         self.add(tx_cw, rx_cw)
 
-        # self.play(
-        #     t_tracker.animate.set_value(x_max * 4),
-        #     run_time=4,
-        #     rate_func=linear,
-        # )
         runs = 3
         self.play(
             t_tracker.animate.increment_value(x_max_tbuff * runs * 2),
@@ -1462,42 +1521,52 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         pulsed_graph_copy.add_updater(pulsed_graph_copy_updater)
         sq_graph.add_updater(sq_graph_updater)
 
-        pulsed_graph_line_legend = FunctionGraph(
-            lambda x: 0, color=WHITE, x_range=[0, 1]
-        ).to_corner(UR)
-        pulsed_graph_legend = Tex("Pulses", color=WHITE).next_to(
-            pulsed_graph_line_legend, direction=LEFT, buff=SMALL_BUFF
+        pulsed_graph_line_legend = (
+            FunctionGraph(lambda x: 0, color=WHITE, x_range=[0, 1])
+            .to_corner(UR)
+            .set_z_index(2)
         )
-        pulsed_graph_avg_line_legend = FunctionGraph(
-            lambda x: 0, color=RED, x_range=[0, 1]
-        ).next_to(pulsed_graph_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
-        pulsed_graph_avg_legend = Tex(r"Pulsed Average Power", color=RED).next_to(
-            pulsed_graph_avg_line_legend, direction=LEFT, buff=SMALL_BUFF
+        pulsed_graph_legend = (
+            Tex("Pulses", color=WHITE)
+            .next_to(pulsed_graph_line_legend, direction=LEFT, buff=SMALL_BUFF)
+            .set_z_index(2)
+        )
+        pulsed_graph_avg_line_legend = (
+            FunctionGraph(lambda x: 0, color=RED, x_range=[0, 1])
+            .next_to(pulsed_graph_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
+            .set_z_index(2)
+        )
+        pulsed_graph_avg_legend = (
+            Tex(r"Pulsed Average Power", color=RED)
+            .next_to(pulsed_graph_avg_line_legend, direction=LEFT, buff=SMALL_BUFF)
+            .set_z_index(2)
         )
         desired_output_power_line_legend = DashedVMobject(
             FunctionGraph(lambda x: 0, color=GREEN, x_range=[0, 1]).next_to(
                 pulsed_graph_avg_line_legend, direction=DOWN, buff=MED_LARGE_BUFF
             )
-        )
-        desired_output_power_legend = Tex(r"Desired Output Power", color=GREEN).next_to(
-            desired_output_power_line_legend, direction=LEFT, buff=SMALL_BUFF
+        ).set_z_index(2)
+        desired_output_power_legend = (
+            Tex(r"Desired Output Power", color=GREEN)
+            .next_to(desired_output_power_line_legend, direction=LEFT, buff=SMALL_BUFF)
+            .set_z_index(2)
         )
 
         pulsed_graph_avg_legend_background = BackgroundRectangle(
             pulsed_graph_avg_legend,
             color=config.background_color,
             fill_opacity=0.8,
-        )
+        ).set_z_index(1)
         desired_output_power_legend_background = BackgroundRectangle(
             desired_output_power_legend,
             color=config.background_color,
             fill_opacity=0.8,
-        )
+        ).set_z_index(1)
         pulsed_graph_line_legend_background = BackgroundRectangle(
             pulsed_graph_legend,
             color=config.background_color,
             fill_opacity=0.8,
-        )
+        ).set_z_index(1)
 
         brace_buff = 0.3
 
@@ -1551,8 +1620,9 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         def avg_power_eqn_updater(m: Mobject):
             m.become(
                 Tex(
-                    r"$P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
-                    f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int(duty_cycle_tracker.get_value()*100)} \\%$",
+                    r"For pulsed: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$ ",
+                    f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int((1+duty_cycle_inc)*100)} \\%$ ",
+                    f"$= {pulsed_gain_copy_tracker.get_value()*(1+duty_cycle_inc):.2f} [W]$",
                 )
                 .scale(0.6)
                 .to_edge(DOWN, buff=MED_LARGE_BUFF)
@@ -1560,17 +1630,19 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         avg_power_eqn_pulsed = (
             Tex(
-                r"For pulsed: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
-                f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int((1+duty_cycle_inc)*100)}\\%$",
+                r"For pulsed: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$ ",
+                f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int((1+duty_cycle_inc)*100)} \\%$ ",
+                f"$= {pulsed_gain_copy_tracker.get_value()*(1+duty_cycle_inc):.2f} [W]$",
             )
             .scale(0.6)
             .to_edge(DOWN, buff=MED_LARGE_BUFF)
         )
-        avg_power_eqn_pulsed.add_updater(avg_power_eqn_updater)
 
         avg_power_eqn_cw = Tex(
-            r"For CW: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
-            f"${desired_output_power:.2f} [W] \\cdot 100 \\%$",
+            r"For CW: $P_{av} =$ ",  # P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$",
+            f"${desired_output_power:.2f} [W] \\ \\cdot \\  $",
+            "$100 \\%$ ",
+            f"$ = {desired_output_power:.2f} [W]$",
         ).scale(0.6)
 
         """ Animations """
@@ -1674,26 +1746,28 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.wait(1)
 
-        self.play(FadeOut(sq_graph))
+        self.play(Uncreate(sq_graph), Create(desired_output_power_graph))
 
         self.play(
-            FadeIn(desired_output_power_graph),
             FadeIn(
                 VGroup(
                     desired_output_power_legend_background,
                     desired_output_power_line_legend.set_z_index(1),
                     desired_output_power_legend.set_z_index(1),
-                    avg_power_eqn_pulsed,
                 ),
                 shift=UP,
             ),
+            FadeIn(avg_power_eqn_pulsed, shift=UP),
         )
+
+        avg_power_eqn_pulsed.add_updater(avg_power_eqn_updater)
 
         self.play(
             pulsed_gain_copy_tracker.animate.set_value(
                 desired_output_power / pulsed_gain_tracker.get_value()
             ),
             pulsed_gain_tracker.animate.set_value(desired_output_power),
+            run_time=2,
         )
 
         self.wait()
@@ -1703,19 +1777,28 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         avg_power_eqn_pulsed.remove_updater(avg_power_eqn_updater)
 
         self.play(
-            pulsed_graph.animate.shift(UP),
-            pulsed_graph_copy.animate.shift(UP),
-            ax.animate.shift(UP),
-            avg_power_eqn_pulsed.animate.shift(UP),
-            desired_output_power_graph.animate.shift(UP),
-            labels.animate.shift(UP),
+            VGroup(
+                pulsed_graph,
+                pulsed_graph_copy,
+                ax,
+                range_ax,
+                avg_power_eqn_pulsed,
+                desired_output_power_graph,
+                range_labels,
+                labels,
+            )
+            .set_z_index(0)
+            .animate.shift(UP),
         )
-
         self.play(
             FadeIn(
                 avg_power_eqn_cw.next_to(avg_power_eqn_pulsed, direction=DOWN), shift=UP
             )
         )
+
+        self.wait(0.5)
+
+        self.play(Circumscribe(avg_power_eqn_cw[2]))
 
         self.wait(2)
 
@@ -1724,7 +1807,7 @@ class CWWrapUp(Scene):
     def construct(self):
         ranging_highlight_width_tracker = ValueTracker(0.0)
 
-        cw_radar = WeatherRadarTower()
+        cw_radar = FMCWRadarCartoon(text="CW")
         radar = WeatherRadarTower()
 
         x_max = 4
@@ -1781,7 +1864,7 @@ class CWWrapUp(Scene):
             pulsed_graph.get_edge_center(RIGHT), cw_graph.get_edge_center(LEFT)
         )
 
-        radars = VGroup(radar.vgroup.scale(0.6), cw_radar.vgroup.scale(0.6)).arrange(
+        radars = VGroup(radar.vgroup.scale(0.6), cw_radar.vgroup.scale(0.7)).arrange(
             direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True
         )
 
@@ -1884,28 +1967,14 @@ class CWWrapUp(Scene):
         )
 
         arrow_to_cloud = Arrow(
-            cw_radar.radome.get_edge_center(RIGHT), cloud.get_corner(DL)
+            cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_corner(DL)
         )
         shift_factor = 1
         shift_angle = arrow_to_cloud.get_angle()
         cloud_to_arrow = Arrow(
-            cloud.get_corner(DL), cw_radar.radome.get_edge_center(RIGHT)
-        ).shift(
-            [
-                # math.cos(shift_angle) * shift_factor,
-                0,
-                -math.sin(shift_angle) * shift_factor,
-                0,
-            ]
-        )
-        arrow_to_cloud.shift(
-            [
-                # math.cos(shift_angle) * shift_factor,
-                0,
-                math.sin(shift_angle) * shift_factor,
-                0,
-            ]
-        )
+            cloud.get_corner(DL), cw_radar.antenna_rx.get_edge_center(RIGHT)
+        )  # .shift([0, -math.sin(shift_angle) * shift_factor, 0])
+        # arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
 
         propagation_brace = BraceLabel(
             Line(
@@ -1927,8 +1996,8 @@ class CWWrapUp(Scene):
 
 class CWNotForRange(Scene):
     def construct(self):
-        cw_radar = WeatherRadarTower()
-        cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
+        cw_radar = FMCWRadarCartoon()
+        cw_radar.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
 
         cloud = SVGMobject(
             "./figures/clouds.svg",
@@ -1940,14 +2009,14 @@ class CWNotForRange(Scene):
         ).to_corner(UR, buff=MED_SMALL_BUFF)
 
         arrow_to_cloud = Arrow(
-            cw_radar.radome.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
+            cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
         )
         shift_factor = 3
         shift_angle = arrow_to_cloud.get_angle()
         cloud_to_arrow = Arrow(
-            cloud.get_edge_center(LEFT), cw_radar.radome.get_edge_center(RIGHT)
-        ).shift([0, -math.sin(shift_angle) * shift_factor, 0])
-        arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
+            cloud.get_edge_center(LEFT), cw_radar.antenna_rx.get_edge_center(RIGHT)
+        )  # .shift([0, -math.sin(shift_angle) * shift_factor, 0])
+        # arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
 
         def get_prop_arrow_updater(from_mobj, to_mobj, y_shift_pm, edges=[RIGHT, LEFT]):
             def updater(m: Mobject):
@@ -1955,16 +2024,16 @@ class CWNotForRange(Scene):
                     Arrow(
                         from_mobj.get_edge_center(edges[0]),
                         to_mobj.get_edge_center(edges[1]),
-                    ).shift([0, y_shift_pm * math.sin(shift_angle) * shift_factor, 0])
+                    )  # .shift([0, y_shift_pm * math.sin(shift_angle) * shift_factor, 0])
                 )
 
             return updater
 
         arrow_to_cloud_updater = get_prop_arrow_updater(
-            cw_radar.radome, cloud, 1, edges=[RIGHT, LEFT]
+            cw_radar.antenna_tx, cloud, 1, edges=[RIGHT, LEFT]
         )
         cloud_to_arrow_updater = get_prop_arrow_updater(
-            cloud, cw_radar.radome, -1, edges=[LEFT, RIGHT]
+            cloud, cw_radar.antenna_rx, -1, edges=[LEFT, RIGHT]
         )
         arrow_to_cloud.add_updater(arrow_to_cloud_updater)
         cloud_to_arrow.add_updater(cloud_to_arrow_updater)
@@ -2141,7 +2210,7 @@ class CWNotForRange(Scene):
         f_shift_scale = 0.5
         self.play(Transform(cloud_vel_label, cloud_vel_label_pos), run_time=0.3)
         self.play(
-            GrowArrow(cloud_vel),
+            GrowArrow(cloud_vel, run_time=0.4),
             cloud.animate.shift(LEFT * 5),
             f_rx_graph.animate.shift(UP * f_shift_scale),
             run_time=3,
@@ -2151,7 +2220,7 @@ class CWNotForRange(Scene):
 
         self.play(Transform(cloud_vel_label, cloud_vel_label_neg), run_time=0.3)
         self.play(
-            cloud_vel.animate.flip(axis=[0, 1, 0]),
+            cloud_vel.animate(run_time=0.4).flip(axis=[0, 1, 0]),
             cloud.animate.shift(RIGHT * 5),
             f_rx_graph.animate.shift(DOWN * f_shift_scale * 2),
             run_time=3,
@@ -2162,7 +2231,7 @@ class CWNotForRange(Scene):
         self.play(
             Transform(cloud_vel_label, cloud_vel_label_copy),
             f_rx_graph.animate.shift(UP * f_shift_scale),
-            FadeOut(cloud_vel),
+            FadeOut(cloud_vel, run_time=0.4),
         )
 
         self.wait(1)
@@ -2207,7 +2276,7 @@ class CWNotForRange(Scene):
             round_trip_brace.get_edge_center(UP),
         )
         round_trip_brace_label_qmark = (
-            Tex("?")
+            Tex("?", color=YELLOW)
             .scale(2)
             .next_to(round_trip_brace_label, direction=RIGHT, buff=SMALL_BUFF)
         )
@@ -2563,9 +2632,10 @@ class ModulationTypes(Scene):
 
         # self.play(Transform(no_mod_title[0]))
         sawtooth_title_copy = sawtooth_title[0].copy()
+        title_y = sawtooth_title_copy.get_y()
         VGroup(sawtooth_title_copy, dash_title[0], lfm_title[0]).arrange(RIGHT).to_edge(
             UP
-        )
+        ).set_y(title_y)
         self.play(
             LaggedStart(
                 Transform(no_mod_title[0], sawtooth_title_copy),
@@ -3618,6 +3688,71 @@ class TriangularMod(Scene):
         amp_graph = ax.plot(amplitude, x_range=[0, duration, 1 / fs])
 
         self.add(ax, graph, amp_graph, triangular_graph)
+
+
+class FMCWRadarBlock(Scene):
+    def construct(self):
+        fmcw_radar = FMCWRadarCartoon()
+
+        self.play(fmcw_radar.get_animation())
+        self.wait(0.5)
+        self.play(fmcw_radar.vgroup.animate.shift(UR * 2))
+        self.wait(2)
+
+
+class BGColorTest(Scene):
+    def construct(self):
+        fmcw_radar = FMCWRadarCartoon()
+        # fmcw_radar.vgroup.scale(0.7)
+
+        c1 = ManimColor.from_hex("#253f4b")
+        c2 = ManimColor.from_hex("#183340")  # Winner
+        c3 = ManimColor.from_hex("#0f2d3b")
+        c4 = ManimColor.from_hex("#15455c")
+
+        g1 = VGroup(
+            SurroundingRectangle(
+                fmcw_radar.vgroup.copy(),
+                color=c1,
+                buff=LARGE_BUFF,
+                fill_color=c1,
+                fill_opacity=1,
+            ),
+            fmcw_radar.vgroup.copy(),
+        ).to_edge(LEFT, buff=0)
+        g2 = VGroup(
+            SurroundingRectangle(
+                fmcw_radar.vgroup.copy(),
+                color=c2,
+                buff=LARGE_BUFF,
+                fill_color=c2,
+                fill_opacity=1,
+            ),
+            fmcw_radar.vgroup.copy(),
+        ).next_to(g1, buff=0)
+
+        g3 = VGroup(
+            SurroundingRectangle(
+                fmcw_radar.vgroup.copy(),
+                color=c3,
+                buff=LARGE_BUFF,
+                fill_color=c3,
+                fill_opacity=1,
+            ),
+            fmcw_radar.vgroup.copy(),
+        ).next_to(g2, buff=0)
+        g4 = VGroup(
+            SurroundingRectangle(
+                fmcw_radar.vgroup.copy(),
+                color=c4,
+                buff=LARGE_BUFF,
+                fill_color=c4,
+                fill_opacity=1,
+            ),
+            fmcw_radar.vgroup.copy(),
+        ).next_to(g3, buff=0)
+
+        self.add(VGroup(g1, g2, g3, g4).scale_to_fit_width(14).to_edge(LEFT, buff=0))
 
 
 """ Thumbnail """
