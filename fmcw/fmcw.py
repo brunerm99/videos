@@ -14,6 +14,10 @@ config.background_color = ManimColor.from_hex("#183340")
 # config.background_color = ManimColor.from_hex("#183340")
 
 
+TX_COLOR = BLUE
+RX_COLOR = RED
+
+
 """Helpers"""
 
 
@@ -709,11 +713,11 @@ class TxAndRx(Scene):
                 func,
                 use_smoothing=False,
                 x_range=[0, x_1, x_1 / 1000],
-                color=YELLOW,
+                color=TX_COLOR,
             )
         )
-        tx_label = Tex("Tx", color=tx_color).next_to(tx, direction=UP)
-        rx_label = Tex("Rx", color=rx_color).move_to(tx_label)
+        tx_label = Tex("Tx", color=TX_COLOR).next_to(tx, direction=UP)
+        rx_label = Tex("Rx", color=RX_COLOR).move_to(tx_label)
 
         self.add(ax, tx, tx_label)
 
@@ -722,7 +726,7 @@ class TxAndRx(Scene):
             Create(VGroup(cloud, cw_radar.vgroup)),
         )
 
-        rx = tx.copy().set_color(rx_color)
+        rx = tx.copy().set_color(RX_COLOR)
 
         self.wait(1)
 
@@ -1973,13 +1977,10 @@ class CWWrapUp(Scene):
         arrow_to_cloud = Arrow(
             cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
         )
-        shift_factor = 1
-        shift_angle = arrow_to_cloud.get_angle()
         cloud_to_arrow = Arrow(
             cloud.get_edge_center(LEFT) + DOWN / 2,
             cw_radar.antenna_rx.get_edge_center(RIGHT),
-        )  # .shift([0, -math.sin(shift_angle) * shift_factor, 0])
-        # arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
+        )
 
         propagation_brace = BraceLabel(
             Line(
@@ -1989,7 +1990,6 @@ class CWWrapUp(Scene):
             "Round-trip time",
             label_constructor=Tex,
             buff=MED_SMALL_BUFF,
-            # brace_config=dict(sharpness=0.1),
         )
 
         self.play(Create(arrow_to_cloud))
@@ -2014,31 +2014,45 @@ class CWNotForRange(Scene):
         ).to_corner(UR, buff=MED_SMALL_BUFF)
 
         arrow_to_cloud = Arrow(
-            cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
+            cw_radar.antenna_tx.get_edge_center(RIGHT),
+            cloud.get_edge_center(LEFT),
+            color=TX_COLOR,
         )
-        shift_factor = 3
-        shift_angle = arrow_to_cloud.get_angle()
+        cloud_rx_shift = DOWN / 2
         cloud_to_arrow = Arrow(
-            cloud.get_edge_center(LEFT), cw_radar.antenna_rx.get_edge_center(RIGHT)
-        )  # .shift([0, -math.sin(shift_angle) * shift_factor, 0])
-        # arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
+            cloud.get_edge_center(LEFT) + cloud_rx_shift,
+            cw_radar.antenna_rx.get_edge_center(RIGHT),
+            color=RX_COLOR,
+        )
 
-        def get_prop_arrow_updater(from_mobj, to_mobj, y_shift_pm, edges=[RIGHT, LEFT]):
+        def get_prop_arrow_updater(
+            from_mobj,
+            to_mobj,
+            color=WHITE,
+            edges=[RIGHT, LEFT],
+            from_shift=[0, 0, 0],
+            to_shift=[0, 0, 0],
+        ):
             def updater(m: Mobject):
                 m.become(
                     Arrow(
-                        from_mobj.get_edge_center(edges[0]),
-                        to_mobj.get_edge_center(edges[1]),
-                    )  # .shift([0, y_shift_pm * math.sin(shift_angle) * shift_factor, 0])
+                        from_mobj.get_edge_center(edges[0]) + from_shift,
+                        to_mobj.get_edge_center(edges[1]) + to_shift,
+                        color=color,
+                    )
                 )
 
             return updater
 
         arrow_to_cloud_updater = get_prop_arrow_updater(
-            cw_radar.antenna_tx, cloud, 1, edges=[RIGHT, LEFT]
+            cw_radar.antenna_tx, cloud, edges=[RIGHT, LEFT], color=TX_COLOR
         )
         cloud_to_arrow_updater = get_prop_arrow_updater(
-            cloud, cw_radar.antenna_rx, -1, edges=[LEFT, RIGHT]
+            cloud,
+            cw_radar.antenna_rx,
+            edges=[LEFT, RIGHT],
+            color=RX_COLOR,
+            from_shift=cloud_rx_shift,
         )
         arrow_to_cloud.add_updater(arrow_to_cloud_updater)
         cloud_to_arrow.add_updater(cloud_to_arrow_updater)
@@ -2102,8 +2116,6 @@ class CWNotForRange(Scene):
 
         f = 2
         A = 1
-        tx_color = BLUE
-        rx_color = RED
         cw_sine = lambda t: A * np.sin(2 * PI * f * t)
         cw_graph = amp_ax.plot(cw_sine, x_range=[0, x_max, step], use_smoothing=False)
 
@@ -2115,7 +2127,7 @@ class CWNotForRange(Scene):
 
         amp_graph_group = VGroup(cw_graph, amp_ax, amp_labels)
         amp_graph_group_copy = VGroup(cw_graph.copy(), amp_ax.copy(), amp_labels.copy())
-        f_graph_group = VGroup(f_tx_graph, f_ax, f_labels)
+        f_graph_group = VGroup(f_ax, f_labels, f_tx_graph)
 
         both_graphs = (
             VGroup(amp_graph_group_copy, f_graph_group)
@@ -2124,15 +2136,15 @@ class CWNotForRange(Scene):
         )
 
         tx_line_legend = FunctionGraph(
-            lambda x: 0, color=tx_color, x_range=[0, 1]
+            lambda x: 0, color=TX_COLOR, x_range=[0, 1]
         ).next_to(f_ax, direction=UP + RIGHT, aligned_edge=RIGHT)
-        tx_legend = Tex("Tx", color=tx_color).next_to(
+        tx_legend = Tex("Tx", color=TX_COLOR).next_to(
             tx_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
         rx_line_legend = FunctionGraph(
-            lambda x: 0, color=rx_color, x_range=[0, 1]
+            lambda x: 0, color=RX_COLOR, x_range=[0, 1]
         ).next_to(tx_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
-        rx_legend = Tex(r"Rx", color=rx_color).next_to(
+        rx_legend = Tex(r"Rx", color=RX_COLOR).next_to(
             rx_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
 
@@ -2197,13 +2209,13 @@ class CWNotForRange(Scene):
             lambda t: f,
             x_range=[t_shift, x_max + t_shift, step],
             use_smoothing=False,
-            color=rx_color,
+            color=RX_COLOR,
         )
 
         self.play(cw_radar.get_animation(), Create(cloud))
         self.play(Create(arrow_to_cloud))
-        self.play(Create(cloud_to_arrow))
         self.play(
+            Create(cloud_to_arrow),
             TransformFromCopy(f_tx_graph, f_rx_graph),
             Create(VGroup(rx_line_legend, rx_legend)),
         )
@@ -2213,9 +2225,12 @@ class CWNotForRange(Scene):
         self.play(Create(cloud_vel_label))
 
         f_shift_scale = 0.5
-        self.play(Transform(cloud_vel_label, cloud_vel_label_pos), run_time=0.3)
         self.play(
-            GrowArrow(cloud_vel, run_time=0.4),
+            Transform(cloud_vel_label, cloud_vel_label_pos),
+            GrowArrow(cloud_vel),
+            run_time=0.3,
+        )
+        self.play(
             cloud.animate.shift(LEFT * 5),
             f_rx_graph.animate.shift(UP * f_shift_scale),
             run_time=3,
@@ -2223,20 +2238,32 @@ class CWNotForRange(Scene):
 
         self.wait(0.5)
 
-        self.play(Transform(cloud_vel_label, cloud_vel_label_neg), run_time=0.3)
         self.play(
-            cloud_vel.animate(run_time=0.4).flip(axis=[0, 1, 0]),
-            cloud.animate.shift(RIGHT * 5),
-            f_rx_graph.animate.shift(DOWN * f_shift_scale * 2),
-            run_time=3,
+            Succession(
+                AnimationGroup(
+                    Transform(cloud_vel_label, cloud_vel_label_neg),
+                    cloud_vel.animate.flip(axis=[0, 1, 0]),
+                    run_time=0.3,
+                ),
+                AnimationGroup(
+                    cloud.animate.shift(RIGHT * 5),
+                    f_rx_graph.animate.shift(DOWN * f_shift_scale * 2),
+                    run_time=3,
+                ),
+            )
         )
 
         self.wait(0.5)
 
         self.play(
-            Transform(cloud_vel_label, cloud_vel_label_copy),
-            f_rx_graph.animate.shift(UP * f_shift_scale),
-            FadeOut(cloud_vel, run_time=0.4),
+            Succession(
+                AnimationGroup(
+                    Transform(cloud_vel_label, cloud_vel_label_copy),
+                    FadeOut(cloud_vel),
+                    run_time=0.3,
+                ),
+                f_rx_graph.animate.shift(UP * f_shift_scale),
+            )
         )
 
         self.wait(1)
@@ -2302,7 +2329,7 @@ class CWNotForRange(Scene):
             tx_line_legend.animate.set_color(WHITE),
             rx_line_legend.animate.set_color(WHITE),
         )
-        self.play(Create(round_trip_brace_label_qmark))
+        self.play(FadeIn(round_trip_brace_label_qmark))
 
         self.wait(1)
 
