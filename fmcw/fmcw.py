@@ -1269,6 +1269,7 @@ class PulsedRadarIntro(Scene):
                     ),
                     min((t_tracker.get_value() % (2 * x_max_tbuff)), x_max),
                 ],
+                color=TX_COLOR,
             )
             .shift(p1)
             .rotate(line_pulsed.get_angle(), about_point=p1)
@@ -1291,17 +1292,13 @@ class PulsedRadarIntro(Scene):
                     ),
                     # x_max,
                 ],
-                color=BLUE,
+                color=RX_COLOR,
             )
             .shift(p1)
             .rotate(line_pulsed.get_angle(), about_point=p1)
         )
 
-        self.add(
-            tx,
-            rx,
-            # always_redraw(lambda: Dot([0, rx_flip_pt_tracker.get_value(), 0])),
-        )
+        self.add(tx, rx)
 
         runs = 2
         self.play(
@@ -1354,7 +1351,7 @@ class PulsedRadarIntro(Scene):
                 lambda t: 0.5 * np.sin(2 * PI * f * t),
                 x_range=np.array([-min(t_cw_tracker.get_value(), x_max), 0])
                 - max(t_cw_tracker.get_value() - x_max, 0),
-                color=RED,
+                color=TX_COLOR,
             )
             .shift(p1_cw)
             .rotate(line_cw_angle, about_point=p1_cw)
@@ -1370,7 +1367,7 @@ class PulsedRadarIntro(Scene):
                     [x_max, x_max + max(t_cw_tracker.get_value() - x_max, 0)]
                 )
                 + [max(t_cw_tracker.get_value() - 2 * x_max, 0), 0],
-                color=BLUE,
+                color=RX_COLOR,
             )
             .shift(p1_cw_rx)
             .rotate(line_cw_rx.get_angle(), about_point=p1_cw_rx)
