@@ -308,44 +308,46 @@ def get_title_animation(title_group, run_time=2):
     )
 
 
-"""Scenes"""
-
-
-class RadarTypesIntro(Scene):
-    def construct(self):
-        # small_radars = Tex("Small Radars")
-        t_tracker = ValueTracker(0)
-        rotation_mult_tracker = ValueTracker(1)
-
-        circ_color = RED
-        lcirc = Circle(radius=0.5, color=circ_color)
-        lcirc_line1 = Line(
-            lcirc.get_top(), lcirc.get_bottom(), color=circ_color
+class ConveyerBelt:
+    def __init__(
+        self,
+        time_tracker: ValueTracker,
+        rotation_mult_tracker: ValueTracker,
+        circ_color=RED,
+        nboxes=5,
+        base_shift=[0, 0, 0],
+        subsequent_shift=LEFT * 3,
+        radar_beam_scan_speed=1,
+    ):
+        self.circ_color = circ_color
+        self.lcirc = Circle(radius=0.5, color=self.circ_color)
+        self.lcirc_line1 = Line(
+            self.lcirc.get_top(), self.lcirc.get_bottom(), color=self.circ_color
         ).rotate(PI / 4)
-        lcirc_line2 = lcirc_line1.copy().rotate(PI / 2)
-        lcirc_vg = VGroup(lcirc, lcirc_line1, lcirc_line2)
-        rcirc = Circle(radius=0.5, color=circ_color)
-        rcirc_line1 = Line(
-            rcirc.get_top(), rcirc.get_bottom(), color=circ_color
+        self.lcirc_line2 = self.lcirc_line1.copy().rotate(PI / 2)
+        self.lcirc_vg = VGroup(self.lcirc, self.lcirc_line1, self.lcirc_line2)
+        self.rcirc = Circle(radius=0.5, color=self.circ_color)
+        self.rcirc_line1 = Line(
+            self.rcirc.get_top(), self.rcirc.get_bottom(), color=self.circ_color
         ).rotate(PI / 4)
-        rcirc_line2 = rcirc_line1.copy().rotate(PI / 2)
-        rcirc_vg = VGroup(rcirc, rcirc_line1, rcirc_line2)
+        self.rcirc_line2 = self.rcirc_line1.copy().rotate(PI / 2)
+        self.rcirc_vg = VGroup(self.rcirc, self.rcirc_line1, self.rcirc_line2)
 
-        circ_vg = VGroup(lcirc_vg, rcirc_vg).arrange(
+        self.circ_vg = VGroup(self.lcirc_vg, self.rcirc_vg).arrange(
             direction=RIGHT, buff=3 * LARGE_BUFF, center=True
         )
 
-        entry = (
+        self.entry = (
             Rectangle(height=4, width=2, fill_color=BACKGROUND_COLOR, fill_opacity=1)
-            .next_to(lcirc, direction=LEFT, buff=0)
+            .next_to(self.lcirc, direction=LEFT, buff=0)
             .shift(RIGHT / 2 + UP)
         )
-        exit = (
+        self.exit = (
             Rectangle(height=4, width=2, fill_color=BACKGROUND_COLOR, fill_opacity=1)
-            .next_to(rcirc, direction=RIGHT, buff=0)
+            .next_to(self.rcirc, direction=RIGHT, buff=0)
             .shift(LEFT / 2 + UP)
         )
-        entry_invis = (
+        self.entry_invis = (
             Rectangle(
                 height=4,
                 width=30,
@@ -354,10 +356,10 @@ class RadarTypesIntro(Scene):
                 fill_color=BACKGROUND_COLOR,
                 fill_opacity=1,
             )
-            .next_to(lcirc, direction=LEFT, buff=0)
+            .next_to(self.lcirc, direction=LEFT, buff=0)
             .shift(RIGHT / 2 + UP)
         )
-        exit_invis = (
+        self.exit_invis = (
             Rectangle(
                 height=4,
                 width=30,
@@ -366,138 +368,255 @@ class RadarTypesIntro(Scene):
                 fill_color=BACKGROUND_COLOR,
                 fill_opacity=1,
             )
-            .next_to(rcirc, direction=RIGHT, buff=0)
+            .next_to(self.rcirc, direction=RIGHT, buff=0)
             .shift(LEFT / 2 + UP)
         )
 
         def circle_updater(m: Mobject):
-            m.rotate(-PI * 0.75 * t_tracker.get_value())
+            m.rotate(-PI * 0.75 * time_tracker.get_value())
 
-        lcirc_vg.add_updater(circle_updater)
-        rcirc_vg.add_updater(circle_updater)
+        self.lcirc_vg.add_updater(circle_updater)
+        self.rcirc_vg.add_updater(circle_updater)
 
         def get_belt_updater(direction=RIGHT):
             def updater(m: Mobject):
-                m.shift(direction * t_tracker.get_value())
+                m.shift(direction * time_tracker.get_value())
 
             return updater
 
         def get_box_updater(shift=[0, 0, 0]):
             def updater(m: Mobject):
-                m.next_to(belt_top, direction=UP, buff=SMALL_BUFF).shift(shift)
+                m.next_to(self.belt_top, direction=UP, buff=SMALL_BUFF).shift(shift)
 
             return updater
 
-        belt_top = DashedLine(
-            entry.get_center() + LEFT * 20,
-            entry.get_center() + RIGHT * 20,
+        self.belt_top = DashedLine(
+            self.entry.get_center() + LEFT * 20,
+            self.entry.get_center() + RIGHT * 20,
             color=YELLOW,
             dash_length=DEFAULT_DASH_LENGTH * 5,
             dashed_ratio=0.6,
-        ).next_to(circ_vg, direction=UP, buff=SMALL_BUFF)
-        belt_bot = DashedLine(
-            exit.get_center() + LEFT * 20,
-            exit.get_center() + RIGHT * 20,
+        ).next_to(self.circ_vg, direction=UP, buff=SMALL_BUFF)
+        self.belt_bot = DashedLine(
+            self.exit.get_center() + LEFT * 20,
+            self.exit.get_center() + RIGHT * 20,
             color=YELLOW,
             dash_length=DEFAULT_DASH_LENGTH * 5,
             dashed_ratio=0.6,
-        ).next_to(circ_vg, direction=DOWN, buff=SMALL_BUFF)
+        ).next_to(self.circ_vg, direction=DOWN, buff=SMALL_BUFF)
 
-        nboxes = 5
-        boxes = []
-        base_shift = [0, 0, 0]
-        subsequent_shift = LEFT * 3
-        for idx in range(nboxes):
-            shift = base_shift + subsequent_shift * idx
+        self.nboxes = nboxes
+        self.boxes = []
+        self.base_shift = base_shift
+        self.subsequent_shift = subsequent_shift
+        for idx in range(self.nboxes):
+            shift = self.base_shift + self.subsequent_shift * idx
             box = (
                 Square(side_length=1, color=GRAY_BROWN)
-                .next_to(belt_top, direction=UP, buff=SMALL_BUFF)
+                .next_to(self.belt_top, direction=UP, buff=SMALL_BUFF)
                 .shift(shift)
             )
             box_updater = get_box_updater(shift=shift)
             box.add_updater(box_updater)
-            boxes.append(box)
+            self.boxes.append(box)
 
-        belt_top_updater = get_belt_updater(RIGHT)
-        belt_top.add_updater(belt_top_updater)
-        belt_bot_updater = get_belt_updater(LEFT)
-        belt_bot.add_updater(belt_bot_updater)
+        self.belt_top_updater = get_belt_updater(RIGHT)
+        self.belt_bot_updater = get_belt_updater(LEFT)
 
         radar_post = Line(
-            entry.get_corner(UR) + LEFT / 3, entry.get_corner(UR) + UP * 2 + RIGHT / 2
+            self.entry.get_corner(UR) + LEFT / 3,
+            self.entry.get_corner(UR) + UP * 2 + RIGHT / 2,
         )
-        radar_ant_dome = AnnularSector(inner_radius=0.8, outer_radius=0.6, angle=PI)
-        radar_ant_line = Line(
-            radar_ant_dome.get_top(),
-            radar_ant_dome.get_top() + DOWN,
+        self.radar_ant_dome = AnnularSector(
+            inner_radius=0.8, outer_radius=0.6, angle=PI
+        )
+        self.radar_ant_line = Line(
+            self.radar_ant_dome.get_top(),
+            self.radar_ant_dome.get_top() + DOWN,
             stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
         )
-        radar_ant_dot = Circle(
+        self.radar_ant_dot = Circle(
             radius=0.1, color=WHITE, fill_color=BACKGROUND_COLOR, fill_opacity=1
-        ).next_to(radar_ant_line, direction=DOWN, buff=0)
-        radar_ant = VGroup(radar_ant_dome, radar_ant_line, radar_ant_dot)
+        ).next_to(self.radar_ant_line, direction=DOWN, buff=0)
+        self.radar_ant = VGroup(
+            self.radar_ant_dome, self.radar_ant_line, self.radar_ant_dot
+        )
 
-        radar_ant.rotate(PI * 0.15).next_to(entry, direction=UR, buff=MED_LARGE_BUFF)
-        radar_line_1 = Line(ORIGIN, RIGHT).next_to(radar_ant, direction=LEFT, buff=0)
-        radar_line_2 = Line(ORIGIN, DOWN).next_to(radar_line_1, direction=DL, buff=0)
-        radar_line_1_dot = Dot(radar_line_1.get_end())
-        radar_line_2_dot_1 = Dot(radar_line_2.get_start())
-        radar_line_2_dot_2 = Dot(radar_line_2.get_end())
+        self.radar_ant.rotate(PI * 0.15).next_to(
+            self.entry, direction=UR, buff=MED_LARGE_BUFF
+        )
+        self.radar_line_1 = Line(ORIGIN, RIGHT).next_to(
+            self.radar_ant, direction=LEFT, buff=0
+        )
+        self.radar_line_2 = Line(ORIGIN, DOWN).next_to(
+            self.radar_line_1, direction=DL, buff=0
+        )
+        self.radar_line_1_dot = Dot(self.radar_line_1.get_end())
+        self.radar_line_2_dot_1 = Dot(self.radar_line_2.get_start())
+        self.radar_line_2_dot_2 = Dot(self.radar_line_2.get_end())
 
-        radar_beam_l = Line(
-            radar_ant_dot.get_center(),
-            radar_ant_dot.get_center() + DOWN * 1.5,
+        self.radar_beam_l = Line(
+            self.radar_ant_dot.get_center(),
+            self.radar_ant_dot.get_center() + DOWN * 1.5,
             color=BLUE,
         )
-        radar_beam_r = radar_beam_l.copy().rotate(
-            30 * DEGREES, about_point=radar_ant_dot.get_center()
+        self.radar_beam_r = self.radar_beam_l.copy().rotate(
+            30 * DEGREES, about_point=self.radar_ant_dot.get_center()
         )
 
-        start_angle = radar_beam_l.get_angle()
-        scan_width = 60
+        start_angle = self.radar_beam_l.get_angle()
+        self.scan_width = 60
 
         def radar_beam_updater(m: Mobject):
-            rotation = 30 * DEGREES * t_tracker.get_value()
-            if radar_beam_l.get_angle() > start_angle + (scan_width / 2) * DEGREES:
+            rotation = 30 * DEGREES * radar_beam_scan_speed * time_tracker.get_value()
+            if (
+                self.radar_beam_l.get_angle()
+                > start_angle + (self.scan_width / 2) * DEGREES
+            ):
                 rotation_mult_tracker.set_value(-1)
-            elif radar_beam_l.get_angle() < start_angle - (scan_width / 2) * DEGREES:
+            elif (
+                self.radar_beam_l.get_angle()
+                < start_angle - (self.scan_width / 2) * DEGREES
+            ):
                 rotation_mult_tracker.set_value(1)
             m.rotate(
                 rotation_mult_tracker.get_value() * rotation,
-                about_point=radar_ant_dot.get_center(),
+                about_point=self.radar_ant_dot.get_center(),
             )
 
-        radar_beams = VGroup(radar_beam_l, radar_beam_r)
-        radar_beams.add_updater(radar_beam_updater)
+        self.radar_beam_updater = radar_beam_updater
+        self.radar_beams = VGroup(self.radar_beam_l, self.radar_beam_r)
 
-        conveyer_belt = VGroup(
-            lcirc_vg,
-            rcirc_vg,
-            belt_top,
-            belt_bot,
-            *boxes,
-            entry_invis,
-            exit_invis,
-            entry,
-            exit,
-            radar_beams,
-            radar_line_1,
-            radar_line_2,
-            radar_ant,
-            radar_line_1_dot,
-            radar_line_2_dot_1,
-            radar_line_2_dot_2,
+        self.vgroup = VGroup(
+            self.lcirc_vg,
+            self.rcirc_vg,
+            self.belt_top,
+            self.belt_bot,
+            *self.boxes,
+            self.entry_invis,
+            self.exit_invis,
+            self.entry,
+            self.exit,
+            self.radar_beams,
+            self.radar_line_1,
+            self.radar_line_2,
+            self.radar_ant,
+            self.radar_line_1_dot,
+            self.radar_line_2_dot_1,
+            self.radar_line_2_dot_2,
         )
 
-        self.add(conveyer_belt.scale(0.7).shift(DL * 3))
+    def add_updaters(self):
+        self.belt_top.add_updater(self.belt_top_updater)
+        self.belt_bot.add_updater(self.belt_bot_updater)
+        self.radar_beams.add_updater(self.radar_beam_updater)
+
+    def remove_updaters(self):
+        self.belt_top.remove_updater(self.belt_top_updater)
+        self.belt_bot.remove_updater(self.belt_bot_updater)
+        self.radar_beams.remove_updater(self.radar_beam_updater)
+
+
+"""Scenes"""
+
+
+class RadarTypesIntro(Scene):
+    def construct(self):
+        t_tracker = ValueTracker(0)
+        rotation_mult_tracker = ValueTracker(1)
+        radar_beam_scan_speed = 2
+
+        small_radars = Tex("Small Radars").scale(1.5)
+        fmcw_radar = Tex("FMCW Radar", font_size=DEFAULT_FONT_SIZE * 2)
+
+        car = (
+            SVGMobject(
+                "./figures/car.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.005,
+            )
+            .to_corner(UR, buff=MED_LARGE_BUFF)
+            .flip()
+        )
+
+        car_radar_beam_start = car.get_left() + LEFT / 4
+        car_radar_beam_l = Line(
+            car_radar_beam_start, car_radar_beam_start + LEFT * 2, color=BLUE
+        )
+        car_radar_beam_r = car_radar_beam_l.copy().rotate(
+            30 * DEGREES, about_point=car_radar_beam_start
+        )
+        car_radar_beams = VGroup(car_radar_beam_l, car_radar_beam_r).rotate(
+            -15 * DEGREES, about_point=car_radar_beam_start
+        )
+
+        def car_radar_beam_updater(m: Mobject):
+            rotation = 30 * DEGREES * radar_beam_scan_speed * t_tracker.get_value()
+            m.rotate(
+                rotation_mult_tracker.get_value() * rotation,
+                about_point=car_radar_beam_start,
+            )
+
+        car_radar_beam_l.add_updater(car_radar_beam_updater)
+        car_radar_beam_r.add_updater(car_radar_beam_updater)
+
+        cb = ConveyerBelt(
+            t_tracker,
+            rotation_mult_tracker,
+            circ_color=RED,
+            nboxes=5,
+            base_shift=ORIGIN,
+            subsequent_shift=LEFT * 3,
+            radar_beam_scan_speed=radar_beam_scan_speed,
+        )
+        cb.add_updaters()
+
+        cb.vgroup.scale(0.6).shift(DOWN * 4 + LEFT * 4)
+
+        cb_p1 = small_radars.get_left() - [0.1, 0, 0]
+        cb_p2 = cb.exit.get_corner(UL) + [0, 0.1, 0]
+
+        cb_bezier = CubicBezier(
+            cb_p1,
+            cb_p1 + [-1, 0, 0],
+            cb_p2 + [0, 1, 0],
+            cb_p2,
+        )
+
+        car_p1 = small_radars.get_right() + [0.1, 0, 0]
+        car_p2 = car.get_bottom() - [0, 0.1, 0]
+
+        car_bezier = CubicBezier(
+            car_p1,
+            car_p1 + [2, -0.5, 0],
+            car_p2 + [0, -1, 0],
+            car_p2,
+        )
+
+        self.play(GrowFromCenter(small_radars))
+
+        self.wait(0.5)
 
         self.play(
-            # lcirc_vg.animate.rotate(2 * PI),
-            # rcirc_vg.animate.rotate(2 * PI),
-            t_tracker.animate.increment_value(0.04),
-            run_time=6,
-            rate_func=sigmoid,
+            Create(cb_bezier),
+            Create(car_bezier),
+            GrowFromCenter(cb.vgroup),
+            GrowFromCenter(car),
+            Create(car_radar_beam_l),
+            Create(car_radar_beam_r),
         )
+
+        self.play(
+            t_tracker.animate(rate_func=sigmoid, run_time=6).increment_value(0.04)
+        )
+        self.play(
+            FadeOut(*self.mobjects, shift=DOWN * 7), FadeIn(fmcw_radar, shift=DOWN * 2)
+        )
+
+        self.wait(2)
 
 
 class Title(Scene):
@@ -547,9 +666,11 @@ class Title(Scene):
         part_1 = Tex("Part ", "1", ": ", font_size=DEFAULT_FONT_SIZE * 0.8 * 2)
 
         but_what.next_to(
-            title, direction=UP, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 2
+            title, direction=UP, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 3
         )
 
+        self.add(title)
+        self.wait(1)
         self.add(but_what[0])
         self.wait(0.3)
         self.play(AddTextLetterByLetter(but_what[1]), run_time=1)
@@ -560,8 +681,8 @@ class Title(Scene):
         self.wait(0.3)
         self.add(but_what[4])
 
-        self.play(Write(title))
-        # self.wait(1)
+        # self.play(Write(title))
+        self.wait(0.5)
         self.play(
             LaggedStart(
                 FadeOut(but_what), title.animate.scale(0.7).shift(UP), lag_ratio=0.2
@@ -678,6 +799,17 @@ class Waveform(Scene):
             ],
             # y_range=[-1, 1],
             tips=False,
+            axis_config={"include_numbers": False},
+        ).scale(ax_scale)
+        ax_with_numbers = Axes(
+            x_range=[0, x_1, 0.2],
+            y_range=[
+                f_0_tracker.get_value() - bw_tracker.get_value() / 2.0,
+                f_1 + bw_tracker.get_value(),
+                0.5,
+            ],
+            # y_range=[-1, 1],
+            tips=False,
             axis_config={"include_numbers": True},
         ).scale(ax_scale)
 
@@ -697,8 +829,11 @@ class Waveform(Scene):
             )
         )
 
-        self.play(Create(ax), Create(labels))
-        self.play(Create(tx))
+        self.add(ax, labels, tx)
+        self.wait(1)
+        self.play(Transform(ax, ax_with_numbers))
+        # self.play(Create(ax), Create(labels))
+        # self.play(Create(tx))
         plot = VGroup(ax, labels, tx)
         self.play(plot.animate.shift(RIGHT * 2))
 
@@ -2877,8 +3012,77 @@ class ModulationTypes(Scene):
 
         self.wait(1)
 
-        self.play(x0_reveal_tracker_3.animate.set_value(duration), run_time=2)
+        # self.play(x0_reveal_tracker_3.animate.set_value(duration), run_time=2)
 
+        sine_f_graph.remove_updater(sine_f_graph_updater)
+        sine_amp_graph.remove_updater(sine_amp_graph_updater)
+        triangular_f_graph.remove_updater(triangular_f_graph_updater)
+        triangular_amp_graph.remove_updater(triangular_amp_graph_updater)
+        fsk_f_graph.remove_updater(fsk_f_graph_updater)
+        fsk_amp_graph.remove_updater(fsk_amp_graph_updater)
+        sawtooth_f_graph.remove_updater(sawtooth_f_graph_updater)
+        sawtooth_amp_graph.remove_updater(sawtooth_amp_graph_updater)
+
+        self.wait(2)
+
+        """ Transforming to Waveform initial plot """
+        bw_tracker = ValueTracker(1.0)
+        f_tracker = ValueTracker(2.0)
+        f_0_tracker = ValueTracker(6.0)
+
+        f_1 = f_0_tracker.get_value() + bw_tracker.get_value()
+        x_1 = 1
+
+        ax_scale = 0.6
+        f_ax_next = Axes(
+            x_range=[0, x_1, 0.2],
+            y_range=[
+                f_0_tracker.get_value() - bw_tracker.get_value() / 2.0,
+                f_1 + bw_tracker.get_value(),
+                0.5,
+            ],
+            # y_range=[-1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+        ).scale(ax_scale)
+
+        labels_next = f_ax_next.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        tx_next = f_ax_next.plot(
+            lambda t: (signal.sawtooth(2 * PI * f_tracker.get_value() * t) + 1)
+            / 2
+            * bw_tracker.get_value()
+            + f_0_tracker.get_value(),
+            use_smoothing=False,
+            x_range=[0, x_1 - x_1 / 1000, x_1 / 1000],
+            color=TX_COLOR,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    amp_ax_group,
+                    no_mod_title,
+                    dash_title[0],
+                    sine_amp_graph,
+                    triangular_amp_graph,
+                    fsk_amp_graph,
+                    sawtooth_amp_graph,
+                    sine_f_graph,
+                    lfm_title[0],
+                    shift=UP,
+                ),
+                AnimationGroup(
+                    Transform(f_ax, f_ax_next),
+                    Transform(sawtooth_f_graph, tx_next),
+                    Transform(f_labels, labels_next),
+                ),
+                lag_ratio=0.2,
+            )
+        )
         self.wait(2)
 
 
