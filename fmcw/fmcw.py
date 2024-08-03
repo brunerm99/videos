@@ -165,9 +165,12 @@ class FMCWRadarCartoon:
     def get_animation(self):
         return Succession(
             GrowFromCenter(VGroup(self.rect, self.label)),
-            AnimationGroup(Create(self.line_1), Create(self.line_2)),
-            AnimationGroup(
-                GrowFromCenter(self.antenna_tx), GrowFromCenter(self.antenna_rx)
+            LaggedStart(
+                AnimationGroup(Create(self.line_1), Create(self.line_2)),
+                AnimationGroup(
+                    GrowFromCenter(self.antenna_tx), GrowFromCenter(self.antenna_rx)
+                ),
+                lag_ratio=0.6,
             ),
         )
 
@@ -1864,7 +1867,7 @@ class CWWrapUp(Scene):
             pulsed_graph.get_edge_center(RIGHT), cw_graph.get_edge_center(LEFT)
         )
 
-        radars = VGroup(radar.vgroup.scale(0.6), cw_radar.vgroup.scale(0.7)).arrange(
+        radars = VGroup(radar.vgroup.scale(0.6), cw_radar.vgroup.scale(0.8)).arrange(
             direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True
         )
 
@@ -1915,7 +1918,7 @@ class CWWrapUp(Scene):
 
         """ Animations """
 
-        self.play(Create(radar.vgroup), Create(cw_radar.vgroup))
+        self.play(radar.get_animation(), cw_radar.get_animation())
 
         self.wait(1)
 
@@ -1934,7 +1937,7 @@ class CWWrapUp(Scene):
 
         wip_group = (
             VGroup(wip.set_z_index(1), wip_bounding_box)
-            .scale_to_fit_width(cw_radar.vgroup.width * 3)
+            .scale_to_fit_width(cw_radar.vgroup.width * 2)
             .rotate(PI / 6)
             .shift(cw_radar.vgroup.get_center())
         )
@@ -1963,16 +1966,18 @@ class CWWrapUp(Scene):
         self.play(FadeOut(radar_definition, ranging_highlight, wip_group))
 
         self.play(
-            cw_radar.vgroup.animate.to_corner(DL, buff=MED_LARGE_BUFF), Create(cloud)
+            cw_radar.vgroup.animate.to_corner(DL, buff=MED_LARGE_BUFF).shift(UP),
+            Create(cloud),
         )
 
         arrow_to_cloud = Arrow(
-            cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_corner(DL)
+            cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
         )
         shift_factor = 1
         shift_angle = arrow_to_cloud.get_angle()
         cloud_to_arrow = Arrow(
-            cloud.get_corner(DL), cw_radar.antenna_rx.get_edge_center(RIGHT)
+            cloud.get_edge_center(LEFT) + DOWN / 2,
+            cw_radar.antenna_rx.get_edge_center(RIGHT),
         )  # .shift([0, -math.sin(shift_angle) * shift_factor, 0])
         # arrow_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
 
