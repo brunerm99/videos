@@ -9,7 +9,8 @@ from manim import *
 from scipy import signal, constants
 
 # config.background_color = BLACK
-config.background_color = ManimColor.from_hex("#183340")
+BACKGROUND_COLOR = ManimColor.from_hex("#183340")
+config.background_color = BACKGROUND_COLOR
 # config.background_color = ManimColor.from_hex("#253f4b")
 # config.background_color = ManimColor.from_hex("#183340")
 
@@ -312,19 +313,191 @@ def get_title_animation(title_group, run_time=2):
 
 class RadarTypesIntro(Scene):
     def construct(self):
-        radar_0 = ImageMobject("figures/images/chivo.png")
-        self.play(GrowFromCenter(radar_0))
-        # self.play(
-        #     Wiggle(
-        #         radar_0,
-        #         scale_value=1.005,
-        #         n_wiggles=10,
-        #         rotation_angle=0.001 * TAU,
-        #     ),
-        #     # rate_func=linear,
-        #     # run_time=5,
-        # )
-        self.wait()
+        # small_radars = Tex("Small Radars")
+        t_tracker = ValueTracker(0)
+        rotation_mult_tracker = ValueTracker(1)
+
+        circ_color = RED
+        lcirc = Circle(radius=0.5, color=circ_color)
+        lcirc_line1 = Line(
+            lcirc.get_top(), lcirc.get_bottom(), color=circ_color
+        ).rotate(PI / 4)
+        lcirc_line2 = lcirc_line1.copy().rotate(PI / 2)
+        lcirc_vg = VGroup(lcirc, lcirc_line1, lcirc_line2)
+        rcirc = Circle(radius=0.5, color=circ_color)
+        rcirc_line1 = Line(
+            rcirc.get_top(), rcirc.get_bottom(), color=circ_color
+        ).rotate(PI / 4)
+        rcirc_line2 = rcirc_line1.copy().rotate(PI / 2)
+        rcirc_vg = VGroup(rcirc, rcirc_line1, rcirc_line2)
+
+        circ_vg = VGroup(lcirc_vg, rcirc_vg).arrange(
+            direction=RIGHT, buff=3 * LARGE_BUFF, center=True
+        )
+
+        entry = (
+            Rectangle(height=4, width=2, fill_color=BACKGROUND_COLOR, fill_opacity=1)
+            .next_to(lcirc, direction=LEFT, buff=0)
+            .shift(RIGHT / 2 + UP)
+        )
+        exit = (
+            Rectangle(height=4, width=2, fill_color=BACKGROUND_COLOR, fill_opacity=1)
+            .next_to(rcirc, direction=RIGHT, buff=0)
+            .shift(LEFT / 2 + UP)
+        )
+        entry_invis = (
+            Rectangle(
+                height=4,
+                width=30,
+                stroke_color=BACKGROUND_COLOR,
+                # stroke_color=BLUE,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .next_to(lcirc, direction=LEFT, buff=0)
+            .shift(RIGHT / 2 + UP)
+        )
+        exit_invis = (
+            Rectangle(
+                height=4,
+                width=30,
+                stroke_color=BACKGROUND_COLOR,
+                # stroke_color=BLUE,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .next_to(rcirc, direction=RIGHT, buff=0)
+            .shift(LEFT / 2 + UP)
+        )
+
+        def circle_updater(m: Mobject):
+            m.rotate(-PI * 0.75 * t_tracker.get_value())
+
+        lcirc_vg.add_updater(circle_updater)
+        rcirc_vg.add_updater(circle_updater)
+
+        def get_belt_updater(direction=RIGHT):
+            def updater(m: Mobject):
+                m.shift(direction * t_tracker.get_value())
+
+            return updater
+
+        def get_box_updater(shift=[0, 0, 0]):
+            def updater(m: Mobject):
+                m.next_to(belt_top, direction=UP, buff=SMALL_BUFF).shift(shift)
+
+            return updater
+
+        belt_top = DashedLine(
+            entry.get_center() + LEFT * 20,
+            entry.get_center() + RIGHT * 20,
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 5,
+            dashed_ratio=0.6,
+        ).next_to(circ_vg, direction=UP, buff=SMALL_BUFF)
+        belt_bot = DashedLine(
+            exit.get_center() + LEFT * 20,
+            exit.get_center() + RIGHT * 20,
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 5,
+            dashed_ratio=0.6,
+        ).next_to(circ_vg, direction=DOWN, buff=SMALL_BUFF)
+
+        nboxes = 5
+        boxes = []
+        base_shift = [0, 0, 0]
+        subsequent_shift = LEFT * 3
+        for idx in range(nboxes):
+            shift = base_shift + subsequent_shift * idx
+            box = (
+                Square(side_length=1, color=GRAY_BROWN)
+                .next_to(belt_top, direction=UP, buff=SMALL_BUFF)
+                .shift(shift)
+            )
+            box_updater = get_box_updater(shift=shift)
+            box.add_updater(box_updater)
+            boxes.append(box)
+
+        belt_top_updater = get_belt_updater(RIGHT)
+        belt_top.add_updater(belt_top_updater)
+        belt_bot_updater = get_belt_updater(LEFT)
+        belt_bot.add_updater(belt_bot_updater)
+
+        radar_post = Line(
+            entry.get_corner(UR) + LEFT / 3, entry.get_corner(UR) + UP * 2 + RIGHT / 2
+        )
+        radar_ant_dome = AnnularSector(inner_radius=0.8, outer_radius=0.6, angle=PI)
+        radar_ant_line = Line(
+            radar_ant_dome.get_top(),
+            radar_ant_dome.get_top() + DOWN,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        )
+        radar_ant_dot = Circle(
+            radius=0.1, color=WHITE, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        ).next_to(radar_ant_line, direction=DOWN, buff=0)
+        radar_ant = VGroup(radar_ant_dome, radar_ant_line, radar_ant_dot)
+
+        radar_ant.rotate(PI * 0.15).next_to(entry, direction=UR, buff=MED_LARGE_BUFF)
+        radar_line_1 = Line(ORIGIN, RIGHT).next_to(radar_ant, direction=LEFT, buff=0)
+        radar_line_2 = Line(ORIGIN, DOWN).next_to(radar_line_1, direction=DL, buff=0)
+        radar_line_1_dot = Dot(radar_line_1.get_end())
+        radar_line_2_dot_1 = Dot(radar_line_2.get_start())
+        radar_line_2_dot_2 = Dot(radar_line_2.get_end())
+
+        radar_beam_l = Line(
+            radar_ant_dot.get_center(),
+            radar_ant_dot.get_center() + DOWN * 1.5,
+            color=BLUE,
+        )
+        radar_beam_r = radar_beam_l.copy().rotate(
+            30 * DEGREES, about_point=radar_ant_dot.get_center()
+        )
+
+        start_angle = radar_beam_l.get_angle()
+        scan_width = 60
+
+        def radar_beam_updater(m: Mobject):
+            rotation = 30 * DEGREES * t_tracker.get_value()
+            if radar_beam_l.get_angle() > start_angle + (scan_width / 2) * DEGREES:
+                rotation_mult_tracker.set_value(-1)
+            elif radar_beam_l.get_angle() < start_angle - (scan_width / 2) * DEGREES:
+                rotation_mult_tracker.set_value(1)
+            m.rotate(
+                rotation_mult_tracker.get_value() * rotation,
+                about_point=radar_ant_dot.get_center(),
+            )
+
+        radar_beams = VGroup(radar_beam_l, radar_beam_r)
+        radar_beams.add_updater(radar_beam_updater)
+
+        conveyer_belt = VGroup(
+            lcirc_vg,
+            rcirc_vg,
+            belt_top,
+            belt_bot,
+            *boxes,
+            entry_invis,
+            exit_invis,
+            entry,
+            exit,
+            radar_beams,
+            radar_line_1,
+            radar_line_2,
+            radar_ant,
+            radar_line_1_dot,
+            radar_line_2_dot_1,
+            radar_line_2_dot_2,
+        )
+
+        self.add(conveyer_belt.scale(0.7).shift(DL * 3))
+
+        self.play(
+            # lcirc_vg.animate.rotate(2 * PI),
+            # rcirc_vg.animate.rotate(2 * PI),
+            t_tracker.animate.increment_value(0.04),
+            run_time=6,
+            rate_func=sigmoid,
+        )
 
 
 class Title(Scene):
@@ -2420,7 +2593,9 @@ class ModulationTypes(Scene):
             Tex("$f$", font_size=DEFAULT_FONT_SIZE),
         )
 
-        def get_x_reveal_updater(ax, func, x0_updater, x1_updater, clip_sq=False):
+        def get_x_reveal_updater(
+            ax, func, x0_updater, x1_updater, clip_sq=False, color=WHITE
+        ):
             def updater(m: Mobject):
                 x1 = (
                     min(x1_updater.get_value(), duration - 1 / fs)
@@ -2432,6 +2607,7 @@ class ModulationTypes(Scene):
                         func,
                         x_range=[x0_updater.get_value(), x1, 1 / fs],
                         use_smoothing=False,
+                        color=color,
                     )
                 )
 
@@ -2450,6 +2626,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
         sine_amp_graph = amp_ax.plot(
             sine_amp,
@@ -2459,6 +2636,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
 
         sine_f_graph_updater = get_x_reveal_updater(
@@ -2467,9 +2645,10 @@ class ModulationTypes(Scene):
             x0_reveal_tracker_0,
             x1_reveal_tracker_0,
             clip_sq=True,
+            color=TX_COLOR,
         )
         sine_amp_graph_updater = get_x_reveal_updater(
-            amp_ax, sine_amp, x0_reveal_tracker_0, x1_reveal_tracker_0
+            amp_ax, sine_amp, x0_reveal_tracker_0, x1_reveal_tracker_0, color=TX_COLOR
         )
         sine_f_graph.add_updater(sine_f_graph_updater)
         sine_amp_graph.add_updater(sine_amp_graph_updater)
@@ -2493,6 +2672,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
         triangular_amp_graph = amp_ax.plot(
             triangular_amp,
@@ -2502,12 +2682,21 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
         triangular_f_graph_updater = get_x_reveal_updater(
-            f_ax, triangular_modulating_signal, x0_reveal_tracker_1, x1_reveal_tracker_1
+            f_ax,
+            triangular_modulating_signal,
+            x0_reveal_tracker_1,
+            x1_reveal_tracker_1,
+            color=TX_COLOR,
         )
         triangular_amp_graph_updater = get_x_reveal_updater(
-            amp_ax, triangular_amp, x0_reveal_tracker_1, x1_reveal_tracker_1
+            amp_ax,
+            triangular_amp,
+            x0_reveal_tracker_1,
+            x1_reveal_tracker_1,
+            color=TX_COLOR,
         )
         triangular_f_graph.add_updater(triangular_f_graph_updater)
         triangular_amp_graph.add_updater(triangular_amp_graph_updater)
@@ -2531,6 +2720,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
         fsk_amp_graph = amp_ax.plot(
             fsk_amp,
@@ -2540,6 +2730,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
 
         fsk_f_graph_updater = get_x_reveal_updater(
@@ -2548,9 +2739,10 @@ class ModulationTypes(Scene):
             x0_reveal_tracker_2,
             x1_reveal_tracker_2,
             clip_sq=True,
+            color=TX_COLOR,
         )
         fsk_amp_graph_updater = get_x_reveal_updater(
-            amp_ax, fsk_amp, x0_reveal_tracker_2, x1_reveal_tracker_2
+            amp_ax, fsk_amp, x0_reveal_tracker_2, x1_reveal_tracker_2, color=TX_COLOR
         )
         fsk_f_graph.add_updater(fsk_f_graph_updater)
         fsk_amp_graph.add_updater(fsk_amp_graph_updater)
@@ -2579,6 +2771,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
         sawtooth_amp_graph = amp_ax.plot(
             sawtooth_amp,
@@ -2588,6 +2781,7 @@ class ModulationTypes(Scene):
                 1 / fs,
             ],
             use_smoothing=False,
+            color=TX_COLOR,
         )
 
         sawtooth_f_graph_updater = get_x_reveal_updater(
@@ -2596,9 +2790,14 @@ class ModulationTypes(Scene):
             x0_reveal_tracker_3,
             x1_reveal_tracker_3,
             clip_sq=True,
+            color=TX_COLOR,
         )
         sawtooth_amp_graph_updater = get_x_reveal_updater(
-            amp_ax, sawtooth_amp, x0_reveal_tracker_3, x1_reveal_tracker_3
+            amp_ax,
+            sawtooth_amp,
+            x0_reveal_tracker_3,
+            x1_reveal_tracker_3,
+            color=TX_COLOR,
         )
         sawtooth_f_graph.add_updater(sawtooth_f_graph_updater)
         sawtooth_amp_graph.add_updater(sawtooth_amp_graph_updater)
