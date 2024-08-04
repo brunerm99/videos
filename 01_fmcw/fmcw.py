@@ -2121,6 +2121,8 @@ class CWWrapUp(Scene):
 
         cw_radar = FMCWRadarCartoon(text="CW")
         radar = WeatherRadarTower()
+        cw_radar_end = FMCWRadarCartoon(text="CW")
+        cw_radar_end.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF)
 
         x_max = 4
         x_len = 6
@@ -2304,12 +2306,21 @@ class CWWrapUp(Scene):
         self.play(Create(cloud_to_arrow))
         self.play(FadeIn(propagation_brace, shift=UP))
 
+        self.wait(1)
+
+        self.play(
+            Transform(cw_radar.vgroup, cw_radar_end.vgroup),
+            FadeOut(propagation_brace, arrow_to_cloud, cloud_to_arrow, cloud),
+        )
+
         self.wait(2)
 
 
 class CWNotForRange(Scene):
     def construct(self):
         cw_radar = FMCWRadarCartoon()
+        cw_radar_old = FMCWRadarCartoon()
+        cw_radar_old.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF)
         cw_radar.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
 
         cloud = SVGMobject(
@@ -2482,6 +2493,8 @@ class CWNotForRange(Scene):
 
         """ Animations """
 
+        self.add(cw_radar_old.vgroup)
+
         self.play(
             LaggedStart(
                 Create(VGroup(amp_ax, amp_labels)), Create(cw_graph), lag_ratio=0.8
@@ -2520,7 +2533,8 @@ class CWNotForRange(Scene):
             color=RX_COLOR,
         )
 
-        self.play(cw_radar.get_animation(), Create(cloud))
+        # self.play(cw_radar.get_animation(), Create(cloud))
+        self.play(Transform(cw_radar_old.vgroup, cw_radar.vgroup), Create(cloud))
         self.play(Create(arrow_to_cloud))
         self.play(
             Create(cloud_to_arrow),
@@ -2589,7 +2603,7 @@ class CWNotForRange(Scene):
                 arrow_to_cloud,
                 cloud_to_arrow,
                 cloud_vel_label,
-                cw_radar.vgroup,
+                cw_radar_old.vgroup,
                 shift=UP,
             ),
             FadeOut(amp_graph_group_copy, shift=LEFT),

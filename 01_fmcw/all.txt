@@ -1,1 +1,1 @@
-Title PulsedRadarIntro PulsedPowerProblemUsingUpdaters CWWrapUp CWNotForRange ModulationTypes Waveform TxAndRx
+RadarTypesIntro Title PulsedRadarIntro PulsedPowerProblemUsingUpdaters CWWrapUp CWNotForRange ModulationTypes Waveform TxAndRx
