@@ -350,7 +350,7 @@ class ConveyerBelt:
         self.entry_invis = (
             Rectangle(
                 height=4,
-                width=30,
+                width=50,
                 stroke_color=BACKGROUND_COLOR,
                 # stroke_color=BLUE,
                 fill_color=BACKGROUND_COLOR,
@@ -362,7 +362,7 @@ class ConveyerBelt:
         self.exit_invis = (
             Rectangle(
                 height=4,
-                width=30,
+                width=50,
                 stroke_color=BACKGROUND_COLOR,
                 # stroke_color=BLUE,
                 fill_color=BACKGROUND_COLOR,
@@ -391,15 +391,15 @@ class ConveyerBelt:
             return updater
 
         self.belt_top = DashedLine(
-            self.entry.get_center() + LEFT * 20,
-            self.entry.get_center() + RIGHT * 20,
+            self.entry.get_center() + LEFT * 40,
+            self.entry.get_center() + RIGHT * 40,
             color=YELLOW,
             dash_length=DEFAULT_DASH_LENGTH * 5,
             dashed_ratio=0.6,
         ).next_to(self.circ_vg, direction=UP, buff=SMALL_BUFF)
         self.belt_bot = DashedLine(
-            self.exit.get_center() + LEFT * 20,
-            self.exit.get_center() + RIGHT * 20,
+            self.exit.get_center() + LEFT * 40,
+            self.exit.get_center() + RIGHT * 40,
             color=YELLOW,
             dash_length=DEFAULT_DASH_LENGTH * 5,
             dashed_ratio=0.6,
@@ -497,7 +497,6 @@ class ConveyerBelt:
             self.exit_invis,
             self.entry,
             self.exit,
-            self.radar_beams,
             self.radar_line_1,
             self.radar_line_2,
             self.radar_ant,
@@ -505,11 +504,15 @@ class ConveyerBelt:
             self.radar_line_2_dot_1,
             self.radar_line_2_dot_2,
         )
+        self.vgroup_w_beams = VGroup(self.vgroup, self.radar_beams)
 
     def add_updaters(self):
         self.belt_top.add_updater(self.belt_top_updater)
         self.belt_bot.add_updater(self.belt_bot_updater)
         self.radar_beams.add_updater(self.radar_beam_updater)
+
+    def remove_beam_updaters(self):
+        self.radar_beams.remove_updater(self.radar_beam_updater)
 
     def remove_updaters(self):
         self.belt_top.remove_updater(self.belt_top_updater)
@@ -572,9 +575,41 @@ class RadarTypesIntro(Scene):
             subsequent_shift=LEFT * 3,
             radar_beam_scan_speed=radar_beam_scan_speed,
         )
+        cb_centered = ConveyerBelt(
+            t_tracker,
+            rotation_mult_tracker,
+            circ_color=RED,
+            nboxes=5,
+            base_shift=ORIGIN,
+            subsequent_shift=LEFT * 3,
+            radar_beam_scan_speed=radar_beam_scan_speed,
+        )
         cb.add_updaters()
 
-        cb.vgroup.scale(0.6).shift(DOWN * 4 + LEFT * 4)
+        cb.vgroup_w_beams.scale(0.6).shift(DOWN * 4 + LEFT * 4)
+
+        cb_centered.vgroup.scale(0.6).shift(DOWN * 4 + LEFT * 4).move_to(ORIGIN).scale(
+            1.5
+        )
+        pulsed_label = (
+            Tex("Pulsed Radar?")
+            .next_to(cb_centered.radar_ant_dome, direction=UR, buff=MED_LARGE_BUFF)
+            .shift(RIGHT)
+        )
+        pulsed_arrow = Arrow(
+            pulsed_label.get_left(), cb_centered.radar_ant_dome.get_right()
+        )
+        downside_1 = Tex(
+            "- High peak power", color=RED, font_size=DEFAULT_FONT_SIZE / 2
+        ).next_to(pulsed_label, direction=DOWN, buff=SMALL_BUFF)
+        downside_2 = Tex(
+            "- Large minimum range", color=RED, font_size=DEFAULT_FONT_SIZE / 2
+        ).next_to(downside_1, direction=DOWN, buff=SMALL_BUFF)
+        downside_3 = Tex(
+            "- Harder to get fine range resolution",
+            color=RED,
+            font_size=DEFAULT_FONT_SIZE / 2,
+        ).next_to(downside_2, direction=DOWN, buff=SMALL_BUFF)
 
         cb_p1 = small_radars.get_left() - [0.1, 0, 0]
         cb_p2 = cb.exit.get_corner(UL) + [0, 0.1, 0]
@@ -603,15 +638,42 @@ class RadarTypesIntro(Scene):
         self.play(
             Create(cb_bezier),
             Create(car_bezier),
-            GrowFromCenter(cb.vgroup),
+            GrowFromCenter(cb.vgroup_w_beams),
             GrowFromCenter(car),
             Create(car_radar_beam_l),
             Create(car_radar_beam_r),
         )
 
         self.play(
-            t_tracker.animate(rate_func=sigmoid, run_time=6).increment_value(0.04)
+            t_tracker.animate(rate_func=sigmoid, run_time=4).increment_value(0.04)
         )
+        cb.remove_beam_updaters()
+        car_radar_beam_l.remove_updater(car_radar_beam_updater)
+        car_radar_beam_r.remove_updater(car_radar_beam_updater)
+
+        self.play(
+            FadeOut(
+                cb.radar_beams,
+                small_radars,
+                car,
+                cb_bezier,
+                car_bezier,
+                car_radar_beam_l,
+                car_radar_beam_r,
+            ),
+        )
+        self.play(
+            t_tracker.animate(rate_func=sigmoid, run_time=3).increment_value(0.04),
+            cb.vgroup.animate.move_to(ORIGIN).scale(1.5),
+            Succession(
+                AnimationGroup(Create(pulsed_label), Create(pulsed_arrow)),
+                FadeIn(downside_1, shift=UP / 2),
+                FadeIn(downside_2, shift=UP / 2),
+                FadeIn(downside_3, shift=UP / 2),
+                run_time=2,
+            ),
+        )
+        cb.remove_updaters()
         self.play(
             FadeOut(*self.mobjects, shift=DOWN * 7), FadeIn(fmcw_radar, shift=DOWN * 2)
         )
