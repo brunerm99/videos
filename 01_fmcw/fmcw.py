@@ -695,14 +695,15 @@ class Title(Scene):
         )
         w = Text("wave", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(c, direction=RIGHT)
 
+        expanded_scale = 1.2
         expanded = Tex(
             "Frequency",
             "-",
             "modulated ",
             "continuous ",
             "wave",
-            font_size=DEFAULT_FONT_SIZE * 0.8,
-        ).shift(DOWN)
+            font_size=DEFAULT_FONT_SIZE * expanded_scale,
+        ).shift(DOWN * 1.5)
 
         f = expanded[0]
         dash = expanded[1]
@@ -716,8 +717,8 @@ class Title(Scene):
             "Modulated ",
             "Continuous ",
             "Wave",
-            font_size=DEFAULT_FONT_SIZE * 0.8,
-        ).shift(DOWN)
+            font_size=DEFAULT_FONT_SIZE * expanded_scale,
+        ).shift(DOWN * 1.5)
 
         f_cap = expanded_cap[0]
         dash_cap = expanded_cap[1]
@@ -725,7 +726,13 @@ class Title(Scene):
         c_cap = expanded_cap[3]
         w_cap = expanded_cap[4]
 
-        part_1 = Tex("Part ", "1", ": ", font_size=DEFAULT_FONT_SIZE * 0.8 * 2)
+        part_1_scale = 1.8
+        part_1 = Tex(
+            "Part ",
+            "1",
+            ": ",
+            font_size=DEFAULT_FONT_SIZE * expanded_scale * part_1_scale,
+        )
 
         but_what.next_to(
             title, direction=UP, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 3
@@ -746,9 +753,7 @@ class Title(Scene):
         # self.play(Write(title))
         self.wait(0.5)
         self.play(
-            LaggedStart(
-                FadeOut(but_what), title.animate.scale(0.7).shift(UP), lag_ratio=0.2
-            )
+            LaggedStart(FadeOut(but_what), title.animate.shift(UP * 1.5), lag_ratio=0.2)
         )
 
         # self.play(Write(f), Write(m), Write(c), Write(w))
@@ -790,32 +795,42 @@ class Title(Scene):
             )
         )
 
-        self.wait(1)
+        self.wait(0.5)
 
+        fm_box = SurroundingRectangle(VGroup(f, m))
         cw_box = SurroundingRectangle(VGroup(c, w))
 
         self.play(
             LaggedStart(
+                Create(fm_box),
                 Uncreate(f_bezier),
                 Uncreate(m_bezier),
                 Uncreate(c_bezier),
                 Uncreate(w_bezier),
-                Create(cw_box),
-                lag_ratio=0.2,
+                lag_ratio=0.1,
             )
         )
+        self.play(Transform(fm_box, cw_box))
 
         self.wait(2)
 
         self.play(Uncreate(cw_box))
 
-        cw_copy = VGroup(c_cap.copy(), w_cap.copy()).scale(2).set_color(WHITE)
+        cw_copy = (
+            VGroup(c_cap.copy(), w_cap.copy()).scale(part_1_scale).set_color(WHITE)
+        )
         part_1.next_to(cw_copy, direction=LEFT)
         part_1_group = VGroup(part_1, cw_copy).move_to(ORIGIN)
 
+        self.play(Uncreate(fm_box))
         self.play(
-            AnimationGroup(Uncreate(cw_box), FadeOut(f, dash, m, title)),
-            AnimationGroup(Write(part_1_group[0]), Transform(VGroup(c, w), cw_copy)),
+            LaggedStart(
+                FadeOut(f, dash, m, title),
+                AnimationGroup(
+                    Write(part_1_group[0]), Transform(VGroup(c, w), cw_copy)
+                ),
+                lag_ratio=0.2,
+            )
         )
 
         # self.wait()
