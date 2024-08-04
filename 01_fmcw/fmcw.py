@@ -2280,11 +2280,14 @@ class CWWrapUp(Scene):
         )
 
         arrow_to_cloud = Arrow(
-            cw_radar.antenna_tx.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
+            cw_radar.antenna_tx.get_edge_center(RIGHT),
+            cloud.get_edge_center(LEFT),
+            color=TX_COLOR,
         )
         cloud_to_arrow = Arrow(
             cloud.get_edge_center(LEFT) + DOWN / 2,
             cw_radar.antenna_rx.get_edge_center(RIGHT),
+            color=RX_COLOR,
         )
 
         propagation_brace = BraceLabel(
@@ -4186,6 +4189,8 @@ class BGColorTest(Scene):
 
         self.add(VGroup(g1, g2, g3, g4).scale_to_fit_width(14).to_edge(LEFT, buff=0))
 
+
+""" End screen """
 
 """ Thumbnail """
 
