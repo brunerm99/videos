@@ -827,7 +827,9 @@ class Title(Scene):
             LaggedStart(
                 FadeOut(f, dash, m, title),
                 AnimationGroup(
-                    Write(part_1_group[0]), Transform(VGroup(c, w), cw_copy)
+                    Write(part_1_group[0]),
+                    Transform(VGroup(c, w), cw_copy),
+                    run_time=2,
                 ),
                 lag_ratio=0.2,
             )
