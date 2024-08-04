@@ -905,14 +905,20 @@ class Waveform(Scene):
                 + f_0_tracker.get_value(),
                 use_smoothing=False,
                 x_range=[0, x_1 - x_1 / 1000, x_1 / 1000],
+                color=TX_COLOR,
             )
         )
 
         self.add(ax, labels, tx)
         self.wait(1)
         self.play(Transform(ax, ax_with_numbers))
-        # self.play(Create(ax), Create(labels))
-        # self.play(Create(tx))
+        self.wait(1)
+        self.play(Transform(labels[1], ax.get_y_axis_label(Tex("frequency"))))
+        self.play(Transform(labels[0], ax.get_x_axis_label(Tex("time"))))
+        self.wait(0.5)
+        self.play(Transform(labels[1], ax.get_y_axis_label(Tex("$f$"))))
+        self.play(Transform(labels[0], ax.get_x_axis_label(Tex("$t$"))))
+
         plot = VGroup(ax, labels, tx)
         self.play(plot.animate.shift(RIGHT * 2))
 
@@ -927,12 +933,16 @@ class Waveform(Scene):
             lambda: Tex(f"$f_0$=\\\\{f_0_tracker.get_value():.02f}MHz").next_to(
                 f_0_arrow, direction=LEFT
             )
-        )  # TODO: Mess with spacing b/c values not showing
+        )
         f_0_variation = VGroup(f_0_arrow, f_0_label)
 
         self.play(FadeIn(f_0_variation, shift=RIGHT))
-        self.play(f_0_tracker.animate.set_value(f_0_tracker.get_value() + 1))
-        self.play(f_0_tracker.animate.set_value(f_0_tracker.get_value() - 1))
+        self.play(
+            f_0_tracker.animate.set_value(f_0_tracker.get_value() + 1), run_time=0.8
+        )
+        self.play(
+            f_0_tracker.animate.set_value(f_0_tracker.get_value() - 1), run_time=0.8
+        )
 
         """ BW Variation """
         bw_brace = always_redraw(
@@ -970,8 +980,12 @@ class Waveform(Scene):
         )
         range_resolution_eqn.add_updater(r_res_updater)
 
-        self.play(bw_tracker.animate.set_value(bw_tracker.get_value() + 1))
-        self.play(bw_tracker.animate.set_value(bw_tracker.get_value() - 1))
+        self.play(
+            bw_tracker.animate.set_value(bw_tracker.get_value() + 1), run_time=1.4
+        )
+        self.play(
+            bw_tracker.animate.set_value(bw_tracker.get_value() - 1), run_time=1.4
+        )
 
         """ Period Variation """
         range_resolution_eqn.remove_updater(r_res_updater)
@@ -1019,8 +1033,12 @@ class Waveform(Scene):
         self.play(FadeIn(period_brace, shift=UP), FadeIn(v_max_eqn, shift=DOWN))
         v_max_eqn.add_updater(v_max_updater)
 
-        self.play(f_tracker.animate.set_value(f_tracker.get_value() - 0.5))
-        self.play(f_tracker.animate.set_value(f_tracker.get_value() + 0.5))
+        self.play(
+            f_tracker.animate.set_value(f_tracker.get_value() - 0.5), run_time=1.4
+        )
+        self.play(
+            f_tracker.animate.set_value(f_tracker.get_value() + 0.5), run_time=1.4
+        )
 
         """ Back to origin """
         v_max_eqn.remove_updater(v_max_updater)
@@ -1267,11 +1285,7 @@ class PulsedRadarIntro(Scene):
             .scale(weather_channel_scale)
             .to_corner(UR, buff=LARGE_BUFF)
         )
-        weather_channel_rect = SurroundingRectangle(
-            weather_channel,
-            # corner_radius=0.5,
-            buff=0,
-        )
+        weather_channel_rect = SurroundingRectangle(weather_channel, buff=0)
 
         """ Weather channel animation """
         self.play(radar.get_animation())
@@ -1379,11 +1393,51 @@ class PulsedRadarIntro(Scene):
 
         self.add(tx, rx)
 
-        runs = 2
+        round_trip_time_brace = Brace(Line(p1.copy(), p2.copy()), buff=LARGE_BUFF)
+        round_trip_time_brace_label = Tex("Round-trip time").next_to(
+            round_trip_time_brace, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        range_eqn = MathTex(
+            r"\text{Range} = ",
+            r"\ \frac{\text{Speed of light} \cdot \text{Round-trip time}}{2}",
+        ).to_corner(DR, buff=MED_LARGE_BUFF)
+
+        range_eqn_bez_p1 = round_trip_time_brace_label.get_bottom() + [0, 0, 0]
+        range_eqn_bez_p2 = range_eqn[1].get_top() + [2, 0.1, 0]
+
+        range_eqn_bezier = CubicBezier(
+            range_eqn_bez_p1,
+            range_eqn_bez_p1 + [0, -1, 0],
+            range_eqn_bez_p2 + [0, 1, 0],
+            range_eqn_bez_p2,
+        )
+
+        runs = 5
+        lag_ratio = 0.5 * 4 / runs  # Start after 2 runs
         self.play(
-            t_tracker.animate.increment_value(x_max_tbuff * runs * 2),
-            run_time=runs * 2,
-            rate_func=linear,
+            LaggedStart(
+                t_tracker.animate(run_time=runs * 2, rate_func=linear).increment_value(
+                    x_max_tbuff * runs * 2
+                ),
+                LaggedStart(
+                    FadeIn(
+                        round_trip_time_brace, round_trip_time_brace_label, shift=UP
+                    ),
+                    Create(range_eqn_bezier),
+                    FadeIn(range_eqn, shift=UP),
+                    lag_ratio=0.5,
+                ),
+                lag_ratio=lag_ratio,
+            )
+        )
+
+        self.play(
+            FadeOut(
+                round_trip_time_brace,
+                round_trip_time_brace_label,
+                range_eqn_bezier,
+                range_eqn,
+            )
         )
 
         t_tracker.set_value(0.0)
@@ -1480,6 +1534,22 @@ class PulsedRadarIntro(Scene):
         for word, wait in zip(actually_very_important, waits):
             self.add(word)
             self.wait(wait)
+
+        self.wait(1)
+
+        cw_benefit = Tex("+ Benefit", color=GREEN).next_to(
+            cw_radar.vgroup, direction=UP, buff=LARGE_BUFF
+        )
+        self.play(FadeIn(cw_benefit, shift=UP), rate_func=rate_functions.ease_in_sine)
+        self.play(FadeOut(cw_benefit, shift=UP), rate_func=rate_functions.ease_out_sine)
+
+        self.wait(1)
+
+        self.play(
+            FadeOut(cw_radar.vgroup, shift=RIGHT * 3),
+            FadeOut(radar.vgroup, shift=LEFT * 3),
+            FadeOut(actually_very_important),
+        )
 
         self.wait(2)
 
@@ -1745,8 +1815,8 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             range_arrow, direction=DOWN, buff=SMALL_BUFF
         )
 
-        range_attenuation_relation = Tex(r"Power $\propto \frac{1}{R^2}$").shift(
-            RIGHT + 2
+        range_attenuation_relation = (
+            Tex(r"Power $\propto \frac{1}{R^2}$").shift(RIGHT + 2).scale(2)
         )
 
         def sine_updater(m: Mobject):
@@ -2039,16 +2109,21 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         """ Animations """
 
         self.add(
-            range_ax,
-            range_labels,
             sine_graph,
             exp_graph,
             range_arrow,
-            range_arrow_label,
-            range_attenuation_relation,
+        )
+        self.play(
+            Create(range_ax),
+            Create(range_labels),
+            FadeIn(range_attenuation_relation),
         )
 
-        self.play(range_tracker.animate.set_value(6.0), run_time=3)
+        self.play(
+            range_tracker.animate(run_time=3).set_value(6.0), FadeIn(range_arrow_label)
+        )
+
+        self.play(Indicate(range_attenuation_relation))
 
         self.wait(1)
 
@@ -2163,20 +2238,24 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.wait()
 
+        self.play(Circumscribe(desired_output_power_graph))
+
+        self.wait(0.5)
+
         self.play(Circumscribe(pulsed_graph))
 
         avg_power_eqn_pulsed.remove_updater(avg_power_eqn_updater)
 
         self.play(
             VGroup(
-                pulsed_graph,
-                pulsed_graph_copy,
                 ax,
                 range_ax,
                 avg_power_eqn_pulsed,
                 desired_output_power_graph,
                 range_labels,
                 labels,
+                pulsed_graph,
+                pulsed_graph_copy,
             )
             .set_z_index(0)
             .animate.shift(UP),
@@ -2376,7 +2455,7 @@ class CWWrapUp(Scene):
                 cloud_to_arrow.get_end(),
                 cloud_to_arrow.get_end() + arrow_to_cloud.width * RIGHT,
             ),
-            "Round-trip time",
+            "Round-trip time?",
             label_constructor=Tex,
             buff=MED_SMALL_BUFF,
         )
@@ -2764,7 +2843,27 @@ class CWNotForRange(Scene):
 
         self.wait(2)
 
-        self.play(FadeOut(part_2), run_time=2)
+        self.play(
+            LaggedStart(
+                FadeOut(part_2[:3]),
+                part_2[3].animate.move_to(ORIGIN).shift(UP),
+                lag_ratio=0.4,
+            )
+        )
+
+        f = Tex("frequency").shift(DOWN)
+        f_of_t = Tex("frequency", "(", "time", ")").shift(DOWN)
+        f_of_t_small = Tex("$f(t)$").shift(DOWN)
+        self.play(FadeIn(f))
+        self.play(Transform(f, f_of_t))
+
+        self.wait(0.5)
+
+        self.play(Transform(f, f_of_t_small))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
