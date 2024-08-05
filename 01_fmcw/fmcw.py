@@ -1299,18 +1299,17 @@ class TxAndRx(Scene):
 
         self.play(
             Uncreate(how_do_we_derive),
-            plot_group.animate.scale(0.6).to_edge(LEFT),
+            plot_group.animate.scale(0.7).to_edge(LEFT).set_y(0),
         )
 
         self.wait(0.5)
 
         screen_split = Line(DOWN, UP)
         screen_split.height = config["frame_height"] - 1
+        screen_split_bot = Line(screen_split.get_midpoint(), screen_split.get_bottom())
+        screen_split_top = Line(screen_split.get_midpoint(), screen_split.get_top())
 
-        self.play(
-            Create(Line(screen_split.get_midpoint(), screen_split.get_bottom())),
-            Create(Line(screen_split.get_midpoint(), screen_split.get_top())),
-        )
+        self.play(Create(screen_split_bot), Create(screen_split_top))
 
         self.wait(0.5)
 
@@ -1360,6 +1359,145 @@ class TxAndRx(Scene):
         self.wait(1)
 
         self.play(Transform(distance_traveled, range_eqn))
+
+        self.wait(1)
+
+        self.play(Indicate(unknown_time))
+
+        self.wait(1)
+
+        right_side = VGroup(
+            screen_split_bot,
+            screen_split_top,
+            unknown_time,
+            speed_of_light,
+            distance_traveled,
+            range_eqn,
+        )
+
+        temp_ax_scale = 2
+        self.play(
+            right_side.animate.shift(RIGHT * 10),
+            plot_group.animate.scale(temp_ax_scale).move_to(ORIGIN),
+            FadeOut(f_arrow),
+        )
+
+        self.wait(0.5)
+
+        self.play(Indicate(f_tx_label))
+
+        self.wait(0.5)
+
+        self.play(Indicate(f_rx_label))
+
+        self.wait(1)
+
+        rx_f_on_tx = Dot(ax.input_to_graph_point(f_rx_tracker.get_value(), tx)).scale(
+            2 * 0.7
+        )
+        starting_dot = Dot(
+            ax.input_to_graph_point(f_rx_tracker.get_value(), tx),
+            stroke_width=0,
+            fill_opacity=0,
+        )
+
+        rx_to_tx = Arrow(f_rx_dot, rx_f_on_tx)
+
+        dot_tracer = TracedPath(
+            starting_dot.get_center,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            stroke_color=YELLOW,
+            dissipating_time=None,
+        )
+        self.add(dot_tracer)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(rx_to_tx),
+                Create(rx_f_on_tx),
+                FadeOut(rx_to_tx),
+                lag_ratio=0.7,
+            )
+        )
+
+        f_tx_dot.set_z_index(1)
+
+        tx_start_to_end = Line(rx_f_on_tx.get_center(), f_tx_dot.get_center())
+        self.play(MoveAlongPath(starting_dot, tx_start_to_end))
+
+        self.wait(1)
+
+        tx_start_to_end_brace = Brace(tx_start_to_end, direction=UP)
+        tx_start_to_end_brace.rotate(
+            tx_start_to_end.get_angle(), about_point=f_tx_dot.get_center()
+        )
+        f_beat_label = (
+            Tex(r"$f_{beat}$")
+            .scale(1.5)
+            .next_to(tx_start_to_end_brace, direction=UL, buff=SMALL_BUFF)
+        )
+
+        self.play(FadeIn(tx_start_to_end_brace, f_beat_label))
+
+        self.wait(1)
+
+        plot_group.add(f_beat_label, tx_start_to_end_brace, rx_f_on_tx, dot_tracer)
+        plot_group.remove(f_arrow)
+
+        self.play(
+            right_side.animate.shift(LEFT * 10),
+            plot_group.animate.scale(1 / temp_ax_scale).to_edge(LEFT),
+        )
+
+        self.wait(0.5)
+
+        f_0_dot = Dot(
+            ax.input_to_graph_point(0, tx),
+            stroke_width=0,
+            fill_opacity=0,
+        )
+
+        f_0_dot_tracer = TracedPath(
+            f_0_dot.get_center,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            stroke_color=YELLOW,
+            dissipating_time=None,
+        )
+        self.add(f_0_dot_tracer)
+
+        slope_line = Line(
+            ax.input_to_graph_point(0, tx),
+            ax.input_to_graph_point(0.5, tx),
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            stroke_color=YELLOW,
+        )
+
+        self.play(MoveAlongPath(starting_dot, slope_line))
+
+        self.add(slope_line)
+        self.remove(f_0_dot_tracer)
+
+        self.play(slope_line.animate.scale(1).next_to(range_eqn, direction=DOWN))
+
+        bw_triangle_side = DashedLine(
+            slope_line.get_end(),
+            [slope_line.get_end()[0], slope_line.get_start()[1], 0],
+        )
+        bw_triangle_label = Tex("BW").next_to(bw_triangle_side, direction=RIGHT)
+
+        ramp_time_triangle_side = DashedLine(
+            bw_triangle_side.get_end(), slope_line.get_start()
+        )
+        ramp_time_triangle_label = Tex("Ramp time").next_to(
+            ramp_time_triangle_side, direction=DOWN
+        )
+
+        self.play(
+            Create(bw_triangle_side),
+            Create(bw_triangle_label),
+            Create(ramp_time_triangle_side),
+            Create(ramp_time_triangle_label),
+        )
 
         self.wait(2)
 
