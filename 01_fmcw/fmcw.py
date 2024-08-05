@@ -1041,9 +1041,11 @@ class Waveform(Scene):
         )
 
         """ Back to origin """
+        next_ax_scale = 0.7
+
         v_max_eqn.remove_updater(v_max_updater)
         self.play(FadeOut(period_brace, shift=DOWN), FadeOut(v_max_eqn, shift=UP))
-        self.play(plot.animate.move_to(ORIGIN))
+        self.play(plot.animate.move_to(ORIGIN).scale(next_ax_scale * ax_scale))
 
         self.wait(2)
 
@@ -1051,8 +1053,8 @@ class Waveform(Scene):
 # TODO: Combine with Waveform - slo tho
 class TxAndRx(Scene):
     def construct(self):
-        cw_radar = WeatherRadarTower()
-        cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
+        cw_radar = FMCWRadarCartoon()
+        cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_LARGE_BUFF)
 
         cloud = SVGMobject(
             "./figures/clouds.svg",
@@ -1064,23 +1066,19 @@ class TxAndRx(Scene):
         ).to_corner(UR, buff=MED_SMALL_BUFF)
 
         radar_to_cloud = Arrow(
-            cw_radar.radome.get_edge_center(RIGHT), cloud.get_edge_center(LEFT)
+            cw_radar.antenna_tx.get_right(), cloud.get_edge_center(LEFT), color=TX_COLOR
         )
-        shift_factor = 3
-        shift_angle = radar_to_cloud.get_angle()
-        cloud_to_arrow = Arrow(
-            cloud.get_edge_center(LEFT), cw_radar.radome.get_edge_center(RIGHT)
-        ).shift([0, -math.sin(shift_angle) * shift_factor, 0])
-        radar_to_cloud.shift([0, math.sin(shift_angle) * shift_factor, 0])
+        cloud_to_radar = Arrow(
+            cloud.get_edge_center(LEFT) + DOWN / 2,
+            cw_radar.antenna_rx.get_right(),
+            color=RX_COLOR,
+        )
 
         def get_t_shift_dist(t0: float, t1: float, graph, axes: Axes) -> np.ndarray:
             return (
                 axes.input_to_graph_point(t1, graph)
                 - axes.input_to_graph_point(t0, graph)
             ) * RIGHT
-
-        tx_color = YELLOW
-        rx_color = BLUE
 
         f_units = "MHz"
         bw = 1.0
@@ -1100,7 +1098,7 @@ class TxAndRx(Scene):
                 f_tx_tracker.animate.set_value(f_tx_tracker.get_value() + t),
             ]
 
-        ax_scale = 0.7
+        ax_scale = 0.6
         ax = Axes(
             x_range=[0, x_1, 0.2],
             y_range=[
@@ -1121,33 +1119,58 @@ class TxAndRx(Scene):
                 color=TX_COLOR,
             )
         )
-        tx_label = Tex("Tx", color=TX_COLOR).next_to(tx, direction=UP)
-        rx_label = Tex("Rx", color=RX_COLOR).move_to(tx_label)
+        rx_line_legend = Line(ORIGIN, RIGHT, color=RX_COLOR).next_to(
+            tx, direction=UR, buff=MED_LARGE_BUFF
+        )
+        rx_legend = Tex("Rx", color=RX_COLOR).next_to(
+            rx_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        tx_line_legend = Line(ORIGIN, RIGHT, color=TX_COLOR).next_to(
+            rx_line_legend, direction=UP, buff=MED_LARGE_BUFF
+        )
+        tx_legend = Tex("Tx", color=TX_COLOR).next_to(
+            tx_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
 
-        self.add(ax, tx, tx_label)
+        self.add(ax, tx)
+        self.play(FadeIn(tx_line_legend, tx_legend, shift=LEFT))
 
         self.play(
-            VGroup(ax, tx, tx_label).animate.to_edge(DOWN, buff=LARGE_BUFF),
-            Create(VGroup(cloud, cw_radar.vgroup)),
+            VGroup(ax, tx, tx_line_legend, tx_legend).animate.to_edge(
+                DOWN, buff=LARGE_BUFF
+            ),
+            AnimationGroup(Create(cloud), cw_radar.get_animation()),
         )
+
+        rx_line_legend.next_to(tx_line_legend, direction=DOWN, buff=MED_LARGE_BUFF)
+        rx_legend.next_to(rx_line_legend, direction=LEFT, buff=SMALL_BUFF)
 
         rx = tx.copy().set_color(RX_COLOR)
 
         self.wait(1)
 
         self.play(Create(radar_to_cloud))
-        self.play(Create(cloud_to_arrow))
 
         t_shift_dist = get_t_shift_dist(t0=0, t1=t_shift, graph=tx, axes=ax)
-        self.play(rx.animate.shift(t_shift_dist), rx_label.animate.shift(t_shift_dist))
+        self.play(
+            LaggedStart(
+                Create(cloud_to_radar),
+                AnimationGroup(
+                    rx.animate.shift(t_shift_dist),
+                    FadeIn(VGroup(rx_legend, rx_line_legend), shift=LEFT),
+                ),
+                lag_ratio=0.4,
+            )
+        )
 
         shift_start = ax.input_to_graph_point(0, tx)
         t_shift_line = Line(shift_start, shift_start + t_shift_dist)
-        t_shift_brace = BraceLabel(
-            t_shift_line, "t", label_constructor=Tex, buff=LARGE_BUFF
+        t_shift_brace = Brace(t_shift_line, buff=LARGE_BUFF)
+        t_shift_brace_label = Tex("$t$").next_to(
+            t_shift_brace, direction=DOWN, buff=SMALL_BUFF
         )
 
-        self.play(Create(t_shift_brace))
+        self.play(Create(t_shift_brace), Create(t_shift_brace_label))
 
         f_tx_dot = Dot(ax.input_to_graph_point(f_tx_tracker.get_value(), tx))
         f_rx_dot = Dot(ax.input_to_graph_point(f_rx_tracker.get_value(), rx)).shift(
@@ -1177,18 +1200,18 @@ class TxAndRx(Scene):
 
         f_rx_label = (
             Tex(
-                r"$f_{rx}$=",
+                r"$f_{rx}=\ $",
                 f"{func(f_rx_tracker.get_value()):.02f}{f_units}",
-                color=rx_color,
+                color=RX_COLOR,
             )
             .scale(0.8)
-            .next_to(tx, direction=UP, buff=MED_LARGE_BUFF)
+            .next_to(tx, direction=UP, buff=MED_LARGE_BUFF * 1.3)
         )
         f_tx_label = (
             Tex(
-                r"$f_{tx}=$",
+                r"$f_{tx}=\ $",
                 f"{func(f_tx_tracker.get_value()):.02f}{f_units}",
-                color=tx_color,
+                color=TX_COLOR,
             )
             .scale(0.8)
             .next_to(f_rx_label, direction=UP)
@@ -1197,27 +1220,27 @@ class TxAndRx(Scene):
         def update_tx_freq(m: Mobject):
             m.become(
                 Tex(
-                    r"$f_{tx}=$",
+                    r"$f_{tx}=\ $",
                     f"{func(f_tx_tracker.get_value()):.02f}{f_units}",
-                    color=tx_color,
+                    color=TX_COLOR,
                 ).next_to(f_rx_label, direction=UP)
             )
 
         def update_rx_freq(m: Mobject):
             m.become(
                 Tex(
-                    r"$f_{rx}$=",
+                    r"$f_{rx}=\ $",
                     f"{func(f_rx_tracker.get_value()):.02f}{f_units}",
-                    color=rx_color,
-                ).next_to(tx, direction=UP, buff=MED_LARGE_BUFF)
+                    color=RX_COLOR,
+                ).next_to(tx, direction=UP, buff=MED_LARGE_BUFF * 1.3)
             )
 
         f_rx_label.add_updater(update_rx_freq)
         f_tx_label.add_updater(update_tx_freq)
 
         self.play(
-            Uncreate(tx_label),
-            Uncreate(rx_label),
+            # Uncreate(tx_label),
+            # Uncreate(rx_label),
             Create(f_arrow),
             Create(f_tx_label),
             Create(f_rx_label),
@@ -1244,18 +1267,28 @@ class TxAndRx(Scene):
 
         plot_group = VGroup(
             f_arrow,
+            tx,
+            rx,
+            ax,
             f_tx_label,
             f_rx_label,
             f_rx_dot,
             f_tx_dot,
-            tx,
-            rx,
-            ax,
             t_shift_brace,
+            t_shift_brace_label,
+            tx_line_legend,
+            tx_legend,
+            rx_line_legend,
+            rx_legend,
         )
         self.play(
-            Uncreate(VGroup(cloud, cloud_to_arrow, radar_to_cloud, cw_radar.vgroup))
+            Uncreate(cloud_to_radar),
+            Uncreate(radar_to_cloud),
+            FadeOut(cw_radar.vgroup, cloud),
         )
+
+        self.wait(0.5)
+
         self.play(
             LaggedStart(
                 plot_group.animate.to_edge(DOWN, buff=MED_LARGE_BUFF),
@@ -1268,6 +1301,65 @@ class TxAndRx(Scene):
             Uncreate(how_do_we_derive),
             plot_group.animate.scale(0.6).to_edge(LEFT),
         )
+
+        self.wait(0.5)
+
+        screen_split = Line(DOWN, UP)
+        screen_split.height = config["frame_height"] - 1
+
+        self.play(
+            Create(Line(screen_split.get_midpoint(), screen_split.get_bottom())),
+            Create(Line(screen_split.get_midpoint(), screen_split.get_top())),
+        )
+
+        self.wait(0.5)
+
+        right_center = (config["frame_width"] / 4) * RIGHT
+
+        speed_of_light = (
+            Tex(r"$c$", r"$\ \approx 3 \cdot 10^{8} \ \frac{m}{s}$")
+            .to_edge(UP, buff=LARGE_BUFF)
+            .shift(right_center)
+        )
+
+        unknown_time = Tex(r"$t$", r"$\ =\ $", "?", r"$\ s$").next_to(
+            speed_of_light, direction=DOWN, buff=MED_LARGE_BUFF
+        )
+        unknown_time[2].set_color(YELLOW)
+
+        distance_traveled = Tex(
+            r"Distance traveled", r"$\ =\ $", r"$c$", r"$\ \cdot \ $", r"$t$"
+        ).next_to(unknown_time, direction=DOWN, buff=MED_LARGE_BUFF)
+
+        range_eqn = Tex(r"$R$", r"$\ =\ $", r"$\frac{c \ \cdot \  t}{2}$").move_to(
+            distance_traveled
+        )
+
+        self.play(Create(speed_of_light))
+
+        self.wait(1)
+
+        self.play(Indicate(t_shift_brace_label, scale_factor=2))
+        self.play(
+            TransformFromCopy(t_shift_brace_label, unknown_time[0]),
+            Create(unknown_time[1:]),
+        )
+
+        self.wait(1)
+
+        self.play(
+            LaggedStart(
+                Create(distance_traveled[:2]),
+                TransformFromCopy(speed_of_light[0], distance_traveled[2]),
+                Create(distance_traveled[3]),
+                TransformFromCopy(unknown_time[0], distance_traveled[4]),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(1)
+
+        self.play(Transform(distance_traveled, range_eqn))
 
         self.wait(2)
 
@@ -1423,9 +1515,11 @@ class PulsedRadarIntro(Scene):
                     FadeIn(
                         round_trip_time_brace, round_trip_time_brace_label, shift=UP
                     ),
-                    Create(range_eqn_bezier),
-                    FadeIn(range_eqn, shift=UP),
-                    lag_ratio=0.5,
+                    AnimationGroup(
+                        Create(range_eqn_bezier),
+                        FadeIn(range_eqn, shift=UP),
+                    ),
+                    lag_ratio=1.3,
                 ),
                 lag_ratio=lag_ratio,
             )
@@ -1816,7 +1910,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         )
 
         range_attenuation_relation = (
-            Tex(r"Power $\propto \frac{1}{R^2}$").shift(RIGHT + 2).scale(2)
+            Tex(r"Power $\propto \frac{1}{R^2}$").shift(RIGHT + 2).scale(1.4)
         )
 
         def sine_updater(m: Mobject):
@@ -2008,7 +2102,7 @@ class PulsedPowerProblemUsingUpdaters(Scene):
             )
         ).set_z_index(2)
         desired_output_power_legend = (
-            Tex(r"Desired Output Power", color=GREEN)
+            Tex(r"Desired Average Power", color=GREEN)
             .next_to(desired_output_power_line_legend, direction=LEFT, buff=SMALL_BUFF)
             .set_z_index(2)
         )
@@ -2081,9 +2175,12 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         def avg_power_eqn_updater(m: Mobject):
             m.become(
                 Tex(
-                    r"For pulsed: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$ ",
-                    f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int((1+duty_cycle_inc)*100)} \\%$ ",
-                    f"$= {pulsed_gain_copy_tracker.get_value()*(1+duty_cycle_inc):.2f} [W]$",
+                    r"For pulsed: $P_{av} = P_{peak} \cdot $",
+                    r"$\underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$ ",
+                    f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot $",
+                    f"${int((1+duty_cycle_inc)*100)} \\%$ ",
+                    f"$=$",
+                    f"${pulsed_gain_copy_tracker.get_value()*(1+duty_cycle_inc):.2f} [W]$",
                 )
                 .scale(0.6)
                 .to_edge(DOWN, buff=MED_LARGE_BUFF)
@@ -2091,9 +2188,12 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         avg_power_eqn_pulsed = (
             Tex(
-                r"For pulsed: $P_{av} = P_{peak} \cdot \underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$ ",
-                f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot {int((1+duty_cycle_inc)*100)} \\%$ ",
-                f"$= {pulsed_gain_copy_tracker.get_value()*(1+duty_cycle_inc):.2f} [W]$",
+                r"For pulsed: $P_{av} = P_{peak} \cdot $",
+                r"$\underbrace{\frac{t_{on}}{t_{on}+t_{off}}}_{\text{Duty cycle}}=$ ",
+                f"${pulsed_gain_copy_tracker.get_value():.2f} [W] \\cdot $",
+                f"${int((1+duty_cycle_inc)*100)} \\%$ ",
+                f"$=$",
+                f"${pulsed_gain_copy_tracker.get_value()*(1+duty_cycle_inc):.2f} [W]$",
             )
             .scale(0.6)
             .to_edge(DOWN, buff=MED_LARGE_BUFF)
@@ -2242,6 +2342,17 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.wait(0.5)
 
+        self.play(
+            Circumscribe(avg_power_eqn_pulsed[1]),  # Duty cycle
+            Circumscribe(avg_power_eqn_pulsed[3]),  # Duty cycle
+        )
+
+        self.wait(0.5)
+
+        self.play(Circumscribe(avg_power_eqn_pulsed[5]))  # Desired average power
+
+        self.wait(0.5)
+
         self.play(Circumscribe(pulsed_graph))
 
         avg_power_eqn_pulsed.remove_updater(avg_power_eqn_updater)
@@ -2254,8 +2365,8 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                 desired_output_power_graph,
                 range_labels,
                 labels,
-                pulsed_graph,
                 pulsed_graph_copy,
+                pulsed_graph,
             )
             .set_z_index(0)
             .animate.shift(UP),
@@ -2269,6 +2380,12 @@ class PulsedPowerProblemUsingUpdaters(Scene):
         self.wait(0.5)
 
         self.play(Circumscribe(avg_power_eqn_cw[2]))
+
+        self.wait(1)
+
+        pulsed_graph.remove_updater(pulsed_graph_updater)
+        pulsed_graph_copy.remove_updater(pulsed_graph_copy_updater)
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
@@ -2477,7 +2594,7 @@ class CWWrapUp(Scene):
 class CWNotForRange(Scene):
     def construct(self):
         cw_radar = FMCWRadarCartoon()
-        cw_radar_old = FMCWRadarCartoon()
+        cw_radar_old = FMCWRadarCartoon("CW")
         cw_radar_old.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF)
         cw_radar.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
 
@@ -2813,6 +2930,33 @@ class CWNotForRange(Scene):
 
         self.wait(1)
 
+        plot_group = VGroup(
+            f_ax,
+            f_labels,
+            round_trip_brace,
+            round_trip_brace_label,
+            round_trip_brace_arrow,
+            f_tx_graph,
+            f_rx_graph,
+            tx_legend,
+            rx_legend,
+            tx_line_legend,
+            rx_line_legend,
+            round_trip_brace_label_qmark,
+        )
+
+        self.play(plot_group.animate.shift(UP))
+
+        self.wait(1)
+
+        what_if_we_changed = Tex(
+            r"What if we modified our signal\\to make this shift visible?"
+        ).next_to(f_ax, direction=DOWN, buff=MED_LARGE_BUFF)
+
+        self.play(Create(what_if_we_changed))
+
+        self.wait(1)
+
         part_2 = Tex(
             "Part ",
             "2",
@@ -2822,21 +2966,7 @@ class CWNotForRange(Scene):
         )
 
         self.play(
-            FadeOut(
-                f_ax,
-                f_labels,
-                round_trip_brace,
-                round_trip_brace_label,
-                round_trip_brace_arrow,
-                f_tx_graph,
-                f_rx_graph,
-                tx_legend,
-                rx_legend,
-                tx_line_legend,
-                rx_line_legend,
-                round_trip_brace_label_qmark,
-                shift=UP * 3,
-            ),
+            FadeOut(plot_group, what_if_we_changed, shift=UP * 3),
             FadeIn(part_2, shift=UP * 3),
             run_time=2,
         )
