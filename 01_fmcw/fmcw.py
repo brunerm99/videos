@@ -951,7 +951,7 @@ class Waveform(Scene):
                     ax.c2p(0, f_0_tracker.get_value()),
                     ax.c2p(0, f_0_tracker.get_value() + bw_tracker.get_value()),
                 ),
-                f"BW=\\\\{bw_tracker.get_value():.02f}MHz",  # TODO: Mess with spacing b/c values not showing
+                f"$B=$\\\\{bw_tracker.get_value():.02f}MHz",  # TODO: Mess with spacing b/c values not showing
                 brace_direction=LEFT,
                 label_constructor=Tex,
             ).shift(LEFT)
@@ -964,13 +964,13 @@ class Waveform(Scene):
         def r_res_updater(m: Mobject):
             m.become(
                 Tex(
-                    r"$R_{res}=\frac{c}{2 \cdot BW}=$",
+                    r"$R_{res}=\frac{c}{2 \cdot B}=\ $",
                     f"{r_res(bw_tracker.get_value()):.2f}m",
                 ).to_corner(UR)
             )
 
         range_resolution_eqn = Tex(
-            r"$R_{res}=\frac{c}{2 \cdot BW}=$",
+            r"$R_{res}=\frac{c}{2 \cdot B}=\ $",
             f"{r_res(bw_tracker.get_value()):.2f}m",
         ).to_corner(UR)
 
@@ -1005,14 +1005,14 @@ class Waveform(Scene):
         def v_max_updater(m: Mobject):
             m.become(
                 Tex(
-                    r"$v_{max} = \frac{\lambda}{4 \cdot T} = \ $",
+                    r"$v_{max} = \frac{\lambda}{4 \cdot T_{c}} = \ $",
                     f"{v_max()} ",
                     r"$\frac{m}{s}$",
                 ).to_corner(UR)
             )
 
         v_max_eqn = Tex(
-            r"$v_{max} = \frac{\lambda}{4 \cdot T} = \ $",
+            r"$v_{max} = \frac{\lambda}{4 \cdot T_{c}} = \ $",
             f"{v_max()} ",
             r"$\frac{m}{s}$",
         ).to_corner(UR)
@@ -1023,7 +1023,7 @@ class Waveform(Scene):
                     ax.c2p(0, f_0_tracker.get_value()),
                     ax.c2p(x_1 / f_tracker.get_value(), f_0_tracker.get_value()),
                 ),
-                f"T={x_1/f_tracker.get_value():.02f}s",
+                f"$T_{{c}}$={x_1/f_tracker.get_value():.02f}s",
                 # f"T=",
                 brace_direction=DOWN,
                 label_constructor=Tex,
@@ -1041,11 +1041,11 @@ class Waveform(Scene):
         )
 
         """ Back to origin """
-        next_ax_scale = 0.7
+        next_ax_scale = 1
 
         v_max_eqn.remove_updater(v_max_updater)
         self.play(FadeOut(period_brace, shift=DOWN), FadeOut(v_max_eqn, shift=UP))
-        self.play(plot.animate.move_to(ORIGIN).scale(next_ax_scale * ax_scale))
+        self.play(plot.animate.move_to(ORIGIN))  # .scale(next_ax_scale * ax_scale))
 
         self.wait(2)
 
@@ -1054,7 +1054,7 @@ class Waveform(Scene):
 class TxAndRx(Scene):
     def construct(self):
         cw_radar = FMCWRadarCartoon()
-        cw_radar.vgroup.scale(0.4).to_corner(UL, buff=MED_LARGE_BUFF)
+        cw_radar.vgroup.scale(0.6).to_corner(UL, buff=MED_LARGE_BUFF)
 
         cloud = SVGMobject(
             "./figures/clouds.svg",
@@ -1166,7 +1166,7 @@ class TxAndRx(Scene):
         shift_start = ax.input_to_graph_point(0, tx)
         t_shift_line = Line(shift_start, shift_start + t_shift_dist)
         t_shift_brace = Brace(t_shift_line, buff=LARGE_BUFF)
-        t_shift_brace_label = Tex("$t$").next_to(
+        t_shift_brace_label = Tex(r"$t_{0}$").next_to(
             t_shift_brace, direction=DOWN, buff=SMALL_BUFF
         )
 
@@ -1319,7 +1319,7 @@ class TxAndRx(Scene):
 
         comma = Tex(" , ")
 
-        unknown_time = Tex(r"$t$", r"$\ =\ $", "?", r"$\ s$")
+        unknown_time = Tex(r"$t_{0}$", r"$\ =\ $", "?", r"$\ s$")
         unknown_time[2].set_color(YELLOW)
 
         first_line_vgroup = (
@@ -1331,10 +1331,10 @@ class TxAndRx(Scene):
         comma.set_y(speed_of_light.get_bottom()[1])
 
         distance_traveled = Tex(
-            r"Distance traveled", r"$\ =\ $", r"$c$", r"$\ \cdot \ $", r"$t$"
+            r"Distance traveled", r"$\ =\ $", r"$c$", r"$\ \cdot \ $", r"$t_{0}$"
         ).next_to(first_line_vgroup, direction=DOWN, buff=MED_LARGE_BUFF)
 
-        range_eqn = Tex(r"$R$", r"$\ =\ $", r"$\frac{c \ \cdot \  t}{2}$").move_to(
+        range_eqn = Tex(r"$R$", r"$\ =\ $", r"$\frac{c \ \cdot \  t_{0}}{2}$").move_to(
             distance_traveled
         )
 
@@ -1378,14 +1378,15 @@ class TxAndRx(Scene):
             speed_of_light,
             distance_traveled,
             range_eqn,
+            comma,
         )
 
         temp_ax_scale = 2
         self.play(
             right_side.animate.shift(RIGHT * 10),
             plot_group.animate.scale(temp_ax_scale).move_to(ORIGIN),
-            FadeOut(f_arrow),
         )
+        self.play(FadeOut(f_arrow))
 
         self.wait(0.5)
 
@@ -1480,12 +1481,14 @@ class TxAndRx(Scene):
             slope_line.get_end(),
             [slope_line.get_end()[0], slope_line.get_start()[1], 0],
         ).set_z_index(0)
-        bw_triangle_label = Tex("BW").next_to(bw_triangle_side, direction=RIGHT)
+        bw_triangle_label = Tex("BW ", "(", r"$B$", ")").next_to(
+            bw_triangle_side, direction=RIGHT
+        )
 
         ramp_time_triangle_side = DashedLine(
             bw_triangle_side.get_end(), slope_line.get_start()
         ).set_z_index(0)
-        ramp_time_triangle_label = Tex("Ramp time").next_to(
+        ramp_time_triangle_label = Tex(r"Chirp time ", "(", r"$T_{c}$", ")").next_to(
             ramp_time_triangle_side, direction=DOWN
         )
 
@@ -1498,9 +1501,9 @@ class TxAndRx(Scene):
 
         self.wait(0.5)
 
-        slope_eqn_l = Tex(r"Slope", r"$\ =\ $ ")
-        slope_bw = Tex("BW")
-        slope_ramp_time = Tex("Ramp time")
+        slope_eqn_l = Tex(r"$S$", r"$\ =\ $ ")
+        slope_bw = Tex(r"$B$")
+        slope_ramp_time = Tex(r"$T_{c}$")
         slope_division_bar = Line(LEFT, RIGHT)
         slope_division_bar.width = max(slope_bw.width, slope_ramp_time.width)
         slope_division_bar.next_to(slope_eqn_l, direction=RIGHT, buff=MED_SMALL_BUFF)
@@ -1514,17 +1517,19 @@ class TxAndRx(Scene):
         self.play(
             LaggedStart(
                 Create(slope_eqn_l),
-                TransformFromCopy(bw_triangle_label, slope_bw),
+                TransformFromCopy(bw_triangle_label[2], slope_bw),
                 Create(slope_division_bar),
-                TransformFromCopy(ramp_time_triangle_label, slope_ramp_time),
+                TransformFromCopy(ramp_time_triangle_label[2], slope_ramp_time),
                 lag_ratio=0.6,
             )
         )
 
         self.wait(0.5)
 
-        time_shift_eqn_top = Tex("Slope").next_to(slope_eqn_vgroup, direction=DOWN)
-        time_shift_eqn_bot = Tex(r"$f_{beat}$")
+        time_shift_eqn_top = Tex(r"$f_{beat}$").next_to(
+            slope_eqn_vgroup, direction=DOWN
+        )
+        time_shift_eqn_bot = Tex(r"$S$")
         time_shift_division_bar = Line(LEFT, RIGHT)
         time_shift_division_bar.width = max(
             time_shift_eqn_top.width, time_shift_eqn_bot.width
@@ -1546,9 +1551,9 @@ class TxAndRx(Scene):
 
         self.play(
             LaggedStart(
-                TransformFromCopy(slope_eqn_l[0], time_shift_eqn_top),
+                TransformFromCopy(f_beat_label, time_shift_eqn_top),
                 Create(time_shift_division_bar),
-                TransformFromCopy(f_beat_label, time_shift_eqn_bot),
+                TransformFromCopy(slope_eqn_l, time_shift_eqn_bot),
                 lag_ratio=0.6,
             )
         )
@@ -1568,7 +1573,8 @@ class TxAndRx(Scene):
         self.wait(0.5)
 
         range_eqn_final = Tex(
-            r"$R = \frac{c}{2} \cdot  \frac{\text{Slope}}{f_{beat}}$"
+            r"$R = \frac{c}{2} \cdot  \frac{f_{beat}}{S}$",
+            r"$\ = \frac{c T_{c} f_{beat}}{2 B}$",
         ).next_to(slope_eqn_vgroup, direction=DOWN, buff=MED_LARGE_BUFF)
         # range_eqn_final_mid = Tex(r"$\frac{c}{2} \ \cdot \ $")
         # range_eqn_final_r = Tex(r"$\frac{\text{Slope}}{f_{beat}}$")
@@ -1578,12 +1584,15 @@ class TxAndRx(Scene):
         # )
         range_eqn_final_box = SurroundingRectangle(range_eqn_final, color=GREEN)
         range_eqn_arrow = CurvedArrow(
-            range_eqn.get_left(), range_eqn_final_box.get_left(), angle=1.5 * PI / 2
+            range_eqn.get_left(), range_eqn_final_box.get_left(), angle=1.2 * PI / 2
         )
 
         self.play(
-            LaggedStart(Create(range_eqn_arrow), Create(range_eqn_final), lag_ratio=0.7)
+            LaggedStart(
+                Create(range_eqn_arrow), Create(range_eqn_final[0]), lag_ratio=0.7
+            )
         )
+        self.play(Create(range_eqn_final[1]))
         self.play(Create(range_eqn_final_box))
 
         self.wait(2)
@@ -3630,6 +3639,80 @@ class ModulationTypes(Scene):
                 lag_ratio=0.2,
             )
         )
+        self.wait(2)
+
+
+class FMCWTopics(Scene):
+    def construct(self):
+        fmcw = Tex("FMCW Radar").scale(1.5)
+
+        vel = Tex("Velocity").shift(UR * 2)
+        radar_cube = Tex(r"radar data\\cube").next_to(
+            vel, direction=UP + RIGHT / 2, buff=MED_LARGE_BUFF
+        )
+        cpi = Tex("CPI").next_to(vel, direction=RIGHT, buff=LARGE_BUFF)
+        triangular = Tex(r"triangular\\modulation").next_to(
+            vel, direction=DR, buff=MED_LARGE_BUFF
+        )
+
+        fmcw_to_vel_p1 = fmcw.get_top()
+        fmcw_to_vel_p2 = vel.get_corner(DL)
+
+        fmcw_to_vel_bezier = CubicBezier(
+            fmcw_to_vel_p1,
+            fmcw_to_vel_p1 + [0, 1, 0],
+            fmcw_to_vel_p2 + [-1, 0, 0],
+            fmcw_to_vel_p2,
+        )
+
+        vel_to_cube_p1 = vel.get_top()
+        vel_to_cube_p2 = radar_cube.get_left()
+
+        vel_to_cube_bezier = CubicBezier(
+            vel_to_cube_p1,
+            vel_to_cube_p1 + [0, 1, 0],
+            vel_to_cube_p2 + [-1, 0, 0],
+            vel_to_cube_p2,
+        )
+
+        vel_to_cpi_p1 = vel.get_right()
+        vel_to_cpi_p2 = cpi.get_left()
+
+        vel_to_cpi_bezier = CubicBezier(
+            vel_to_cpi_p1,
+            vel_to_cpi_p1 + [0, 0, 0],
+            vel_to_cpi_p2 + [0, 0, 0],
+            vel_to_cpi_p2,
+        )
+
+        vel_to_triangular_p1 = vel.get_bottom()
+        vel_to_triangular_p2 = triangular.get_top()
+
+        vel_to_triangular_bezier = CubicBezier(
+            vel_to_triangular_p1,
+            vel_to_triangular_p1 + [0, -1, 0],
+            vel_to_triangular_p2 + [0, 1, 0],
+            vel_to_triangular_p2,
+        )
+
+        self.play(FadeIn(fmcw))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(fmcw_to_vel_bezier),
+                Create(vel),
+                AnimationGroup(
+                    Create(vel_to_cube_bezier),
+                    Create(vel_to_cpi_bezier),
+                    Create(vel_to_triangular_bezier),
+                ),
+                AnimationGroup(Create(radar_cube), Create(cpi), Create(triangular)),
+                lag_ratio=0.7,
+            )
+        )
+
         self.wait(2)
 
 
