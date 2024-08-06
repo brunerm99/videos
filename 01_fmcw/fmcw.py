@@ -1315,20 +1315,24 @@ class TxAndRx(Scene):
 
         right_center = (config["frame_width"] / 4) * RIGHT
 
-        speed_of_light = (
-            Tex(r"$c$", r"$\ \approx 3 \cdot 10^{8} \ \frac{m}{s}$")
+        speed_of_light = Tex(r"$c$", r"$\ \approx 3 \cdot 10^{8} \ \frac{m}{s}$")
+
+        comma = Tex(" , ")
+
+        unknown_time = Tex(r"$t$", r"$\ =\ $", "?", r"$\ s$")
+        unknown_time[2].set_color(YELLOW)
+
+        first_line_vgroup = (
+            VGroup(speed_of_light, comma, unknown_time)
+            .arrange(direction=RIGHT, buff=MED_SMALL_BUFF)
             .to_edge(UP, buff=LARGE_BUFF)
             .shift(right_center)
         )
-
-        unknown_time = Tex(r"$t$", r"$\ =\ $", "?", r"$\ s$").next_to(
-            speed_of_light, direction=DOWN, buff=MED_LARGE_BUFF
-        )
-        unknown_time[2].set_color(YELLOW)
+        comma.set_y(speed_of_light.get_bottom()[1])
 
         distance_traveled = Tex(
             r"Distance traveled", r"$\ =\ $", r"$c$", r"$\ \cdot \ $", r"$t$"
-        ).next_to(unknown_time, direction=DOWN, buff=MED_LARGE_BUFF)
+        ).next_to(first_line_vgroup, direction=DOWN, buff=MED_LARGE_BUFF)
 
         range_eqn = Tex(r"$R$", r"$\ =\ $", r"$\frac{c \ \cdot \  t}{2}$").move_to(
             distance_traveled
@@ -1340,6 +1344,7 @@ class TxAndRx(Scene):
 
         self.play(Indicate(t_shift_brace_label, scale_factor=2))
         self.play(
+            Create(comma),
             TransformFromCopy(t_shift_brace_label, unknown_time[0]),
             Create(unknown_time[1:]),
         )
@@ -1441,7 +1446,9 @@ class TxAndRx(Scene):
 
         self.wait(1)
 
-        plot_group.add(f_beat_label, tx_start_to_end_brace, rx_f_on_tx, dot_tracer)
+        dot_tracer.remove_updater(dot_tracer.update_path)
+
+        plot_group.add(f_beat_label, tx_start_to_end_brace, dot_tracer, rx_f_on_tx)
         plot_group.remove(f_arrow)
 
         self.play(
@@ -1451,43 +1458,33 @@ class TxAndRx(Scene):
 
         self.wait(0.5)
 
-        f_0_dot = Dot(
-            ax.input_to_graph_point(0, tx),
-            stroke_width=0,
-            fill_opacity=0,
-        )
-
-        f_0_dot_tracer = TracedPath(
-            f_0_dot.get_center,
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-            stroke_color=YELLOW,
-            dissipating_time=None,
-        )
-        self.add(f_0_dot_tracer)
-
         slope_line = Line(
             ax.input_to_graph_point(0, tx),
-            ax.input_to_graph_point(0.5, tx),
+            ax.input_to_graph_point(0.5 - 0.001, tx),
             stroke_width=DEFAULT_STROKE_WIDTH * 2,
             stroke_color=YELLOW,
-        )
+        ).set_z_index(1)
+        slope_line_start_dot = Dot(
+            slope_line.get_start(), color=YELLOW, radius=DEFAULT_DOT_RADIUS / 2
+        ).set_z_index(1)
+        slope_line_end_dot = Dot(
+            slope_line.get_end(), color=YELLOW, radius=DEFAULT_DOT_RADIUS / 2
+        ).set_z_index(1)
+        slope_line_vgroup = VGroup(slope_line_start_dot, slope_line, slope_line_end_dot)
 
-        self.play(MoveAlongPath(starting_dot, slope_line))
+        self.play(Create(slope_line_vgroup))
 
-        self.add(slope_line)
-        self.remove(f_0_dot_tracer)
-
-        self.play(slope_line.animate.scale(1).next_to(range_eqn, direction=DOWN))
+        self.play(slope_line_vgroup.animate.scale(1).next_to(range_eqn, direction=DOWN))
 
         bw_triangle_side = DashedLine(
             slope_line.get_end(),
             [slope_line.get_end()[0], slope_line.get_start()[1], 0],
-        )
+        ).set_z_index(0)
         bw_triangle_label = Tex("BW").next_to(bw_triangle_side, direction=RIGHT)
 
         ramp_time_triangle_side = DashedLine(
             bw_triangle_side.get_end(), slope_line.get_start()
-        )
+        ).set_z_index(0)
         ramp_time_triangle_label = Tex("Ramp time").next_to(
             ramp_time_triangle_side, direction=DOWN
         )
@@ -1498,6 +1495,96 @@ class TxAndRx(Scene):
             Create(ramp_time_triangle_side),
             Create(ramp_time_triangle_label),
         )
+
+        self.wait(0.5)
+
+        slope_eqn_l = Tex(r"Slope", r"$\ =\ $ ")
+        slope_bw = Tex("BW")
+        slope_ramp_time = Tex("Ramp time")
+        slope_division_bar = Line(LEFT, RIGHT)
+        slope_division_bar.width = max(slope_bw.width, slope_ramp_time.width)
+        slope_division_bar.next_to(slope_eqn_l, direction=RIGHT, buff=MED_SMALL_BUFF)
+        slope_bw.next_to(slope_division_bar, direction=UP, buff=SMALL_BUFF)
+        slope_ramp_time.next_to(slope_division_bar, direction=DOWN, buff=SMALL_BUFF)
+
+        slope_eqn_vgroup = VGroup(
+            slope_eqn_l, slope_bw, slope_ramp_time, slope_division_bar
+        ).next_to(ramp_time_triangle_label, direction=DOWN)
+
+        self.play(
+            LaggedStart(
+                Create(slope_eqn_l),
+                TransformFromCopy(bw_triangle_label, slope_bw),
+                Create(slope_division_bar),
+                TransformFromCopy(ramp_time_triangle_label, slope_ramp_time),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        time_shift_eqn_top = Tex("Slope").next_to(slope_eqn_vgroup, direction=DOWN)
+        time_shift_eqn_bot = Tex(r"$f_{beat}$")
+        time_shift_division_bar = Line(LEFT, RIGHT)
+        time_shift_division_bar.width = max(
+            time_shift_eqn_top.width, time_shift_eqn_bot.width
+        )
+        time_shift_division_bar.next_to(
+            time_shift_eqn_top, direction=DOWN, buff=SMALL_BUFF
+        )
+        time_shift_eqn_bot.next_to(
+            time_shift_division_bar, direction=DOWN, buff=SMALL_BUFF
+        )
+        time_shift_eqn_vgroup = VGroup(
+            time_shift_eqn_top, time_shift_division_bar, time_shift_eqn_bot
+        )
+        time_shift_eqn_vgroup_copy = (
+            time_shift_eqn_vgroup.copy()
+            .scale(0.7)
+            .next_to(unknown_time[1], direction=RIGHT, buff=SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(slope_eqn_l[0], time_shift_eqn_top),
+                Create(time_shift_division_bar),
+                TransformFromCopy(f_beat_label, time_shift_eqn_bot),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(unknown_time[2]),
+                Transform(time_shift_eqn_vgroup, time_shift_eqn_vgroup_copy),
+                unknown_time[3].animate.next_to(
+                    time_shift_eqn_vgroup_copy, buff=SMALL_BUFF
+                ),
+            )
+        )
+
+        self.wait(0.5)
+
+        range_eqn_final = Tex(
+            r"$R = \frac{c}{2} \cdot  \frac{\text{Slope}}{f_{beat}}$"
+        ).next_to(slope_eqn_vgroup, direction=DOWN, buff=MED_LARGE_BUFF)
+        # range_eqn_final_mid = Tex(r"$\frac{c}{2} \ \cdot \ $")
+        # range_eqn_final_r = Tex(r"$\frac{\text{Slope}}{f_{beat}}$")
+        # range_eqn_final = (
+        #     VGroup(range_eqn_final_l, range_eqn_final_mid, range_eqn_final_r)
+        #     .arrange(direction=RIGHT, buff=SMALL_BUFF)
+        # )
+        range_eqn_final_box = SurroundingRectangle(range_eqn_final, color=GREEN)
+        range_eqn_arrow = CurvedArrow(
+            range_eqn.get_left(), range_eqn_final_box.get_left(), angle=1.5 * PI / 2
+        )
+
+        self.play(
+            LaggedStart(Create(range_eqn_arrow), Create(range_eqn_final), lag_ratio=0.7)
+        )
+        self.play(Create(range_eqn_final_box))
 
         self.wait(2)
 
