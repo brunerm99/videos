@@ -3644,14 +3644,16 @@ class ModulationTypes(Scene):
 
 class FMCWTopics(Scene):
     def construct(self):
+        l1 = GREEN
+        l2 = BLUE
         fmcw = Tex("FMCW Radar").scale(1.5)
 
-        vel = Tex("Velocity").shift(UR * 2)
-        radar_cube = Tex(r"radar data\\cube").next_to(
+        vel = Tex("Velocity", color=l1).shift(UR * 2)
+        radar_cube = Tex(r"Radar data\\cube", color=l2).next_to(
             vel, direction=UP + RIGHT / 2, buff=MED_LARGE_BUFF
         )
-        cpi = Tex("CPI").next_to(vel, direction=RIGHT, buff=LARGE_BUFF)
-        triangular = Tex(r"triangular\\modulation").next_to(
+        cpi = Tex("CPI", color=l2).next_to(vel, direction=RIGHT, buff=LARGE_BUFF)
+        triangular = Tex(r"Triangular\\modulation", color=l2).next_to(
             vel, direction=DR, buff=MED_LARGE_BUFF
         )
 
@@ -3676,7 +3678,7 @@ class FMCWTopics(Scene):
         )
 
         vel_to_cpi_p1 = vel.get_right()
-        vel_to_cpi_p2 = cpi.get_left()
+        vel_to_cpi_p2 = cpi.get_left() + [-0.1, 0, 0]
 
         vel_to_cpi_bezier = CubicBezier(
             vel_to_cpi_p1,
@@ -3695,21 +3697,169 @@ class FMCWTopics(Scene):
             vel_to_triangular_p2,
         )
 
-        self.play(FadeIn(fmcw))
+        hardware = (
+            Tex("Hardware", color=l1)
+            .next_to(fmcw, direction=DL, buff=MED_LARGE_BUFF)
+            .shift(RIGHT + DOWN / 3)
+        )
 
-        self.wait(0.5)
+        fmcw_to_hardware_p1 = fmcw.get_bottom() + [-1, -0.1, 0]
+        fmcw_to_hardware_p2 = hardware.get_top() + [0, 0.1, 0]
+
+        fmcw_to_hardware_bezier = CubicBezier(
+            fmcw_to_hardware_p1,
+            fmcw_to_hardware_p1 + [0, -1, 0],
+            fmcw_to_hardware_p2 + [1, 1, 0],
+            fmcw_to_hardware_p2,
+        )
+
+        pll = Tex("PLL", color=l2).next_to(
+            hardware, direction=DOWN / 2 + RIGHT, buff=LARGE_BUFF * 1.4
+        )
+
+        hardware_to_pll_p1 = hardware.get_right() + [0.1, -0.2, 0]
+        hardware_to_pll_p2 = pll.get_left() + [-0.1, 0, 0]
+
+        hardware_to_pll_bezier = CubicBezier(
+            hardware_to_pll_p1,
+            hardware_to_pll_p1 + [0.5, 0, 0],
+            hardware_to_pll_p2 + [-0.5, 0, 0],
+            hardware_to_pll_p2,
+        )
+
+        mixing = (
+            Tex("Mixing", color=l2)
+            .next_to(hardware, direction=DOWN, buff=LARGE_BUFF * 1.5)
+            .shift(RIGHT / 2)
+        )
+
+        hardware_to_mixing_p1 = hardware.get_bottom() + [0, -0.1, 0]
+        hardware_to_mixing_p2 = mixing.get_top() + [0, 0.1, 0]
+
+        hardware_to_mixing_bezier = CubicBezier(
+            hardware_to_mixing_p1,
+            hardware_to_mixing_p1 + [0.5, -0.8, 0],
+            hardware_to_mixing_p2 + [-0.5, 0.8, 0],
+            hardware_to_mixing_p2,
+        )
+
+        sampling = (
+            Tex("Sampling", color=l2)
+            .next_to(hardware, direction=LEFT, buff=MED_SMALL_BUFF)
+            .shift(DOWN)
+        )
+
+        hardware_to_sampling_p1 = hardware.get_left() + [-0.1, 0, 0]
+        hardware_to_sampling_p2 = sampling.get_top() + [0, 0.1, 0]
+
+        hardware_to_sampling_bezier = CubicBezier(
+            hardware_to_sampling_p1,
+            hardware_to_sampling_p1 + [-0.5, 0.5, 0],
+            hardware_to_sampling_p2 + [-0.5, 0.8, 0],
+            hardware_to_sampling_p2,
+        )
+
+        antenna = (
+            Tex(r"Antenna\\design", color=l1)
+            .next_to(fmcw, direction=UP, buff=LARGE_BUFF * 1.5)
+            .shift(LEFT * 4)
+        )
+
+        fmcw_to_antenna_p1 = fmcw.get_top() + [-1.5, 0.1, 0]
+        fmcw_to_antenna_p2 = antenna.get_bottom() + [0, -0.1, 0]
+
+        fmcw_to_antenna_bezier = CubicBezier(
+            fmcw_to_antenna_p1,
+            fmcw_to_antenna_p1 + [0, 1, 0],
+            fmcw_to_antenna_p2 + [0, -1, 0],
+            fmcw_to_antenna_p2,
+        )
+
+        txrx = (
+            Tex("Tx/Rx", color=l2)
+            .next_to(antenna, direction=LEFT, buff=MED_SMALL_BUFF)
+            .shift(DOWN)
+        )
+
+        antenna_to_txrx_p1 = antenna.get_left() + [-0.1, 0, 0]
+        antenna_to_txrx_p2 = txrx.get_top() + [0, 0.1, 0]
+
+        antenna_to_txrx_bezier = CubicBezier(
+            antenna_to_txrx_p1,
+            antenna_to_txrx_p1 + [-0.5, 0.2, 0],
+            antenna_to_txrx_p2 + [0, 0.2, 0],
+            antenna_to_txrx_p2,
+        )
+
+        spacing = (
+            Tex("Spacing", color=l2)
+            .next_to(antenna, direction=RIGHT, buff=LARGE_BUFF * 1.3)
+            .shift(UP / 2)
+        )
+
+        antenna_to_spacing_p1 = antenna.get_right() + [0.1, 0, 0]
+        antenna_to_spacing_p2 = spacing.get_left() + [-0.1, 0, 0]
+
+        antenna_to_spacing_bezier = CubicBezier(
+            antenna_to_spacing_p1,
+            antenna_to_spacing_p1 + [0.5, 0, 0],
+            antenna_to_spacing_p2 + [-0.5, 0, 0],
+            antenna_to_spacing_p2,
+        )
+
+        much_more = (
+            Tex("Much more...", color=l1)
+            .next_to(fmcw, direction=DOWN, buff=LARGE_BUFF * 1.5)
+            .shift(RIGHT * 4)
+        )
+
+        fmcw_to_much_more_p1 = fmcw.get_corner(DR) + [-0.8, -0.1, 0]
+        fmcw_to_much_more_p2 = much_more.get_top() + [0, 0.1, 0]
+
+        fmcw_to_much_more_bezier = CubicBezier(
+            fmcw_to_much_more_p1,
+            fmcw_to_much_more_p1 + [0, -1, 0],
+            fmcw_to_much_more_p2 + [0, 1, 0],
+            fmcw_to_much_more_p2,
+        )
+
+        self.play(FadeIn(fmcw))
 
         self.play(
             LaggedStart(
-                Create(fmcw_to_vel_bezier),
-                Create(vel),
+                AnimationGroup(
+                    Create(fmcw_to_vel_bezier),
+                    Create(fmcw_to_hardware_bezier),
+                    Create(fmcw_to_antenna_bezier),
+                ),
+                FadeIn(
+                    vel,
+                    hardware,
+                    antenna,
+                ),
                 AnimationGroup(
                     Create(vel_to_cube_bezier),
                     Create(vel_to_cpi_bezier),
                     Create(vel_to_triangular_bezier),
+                    Create(hardware_to_pll_bezier),
+                    Create(hardware_to_mixing_bezier),
+                    Create(hardware_to_sampling_bezier),
+                    Create(antenna_to_txrx_bezier),
+                    Create(antenna_to_spacing_bezier),
                 ),
-                AnimationGroup(Create(radar_cube), Create(cpi), Create(triangular)),
-                lag_ratio=0.7,
+                FadeIn(
+                    radar_cube,
+                    cpi,
+                    triangular,
+                    pll,
+                    mixing,
+                    sampling,
+                    txrx,
+                    spacing,
+                ),
+                Create(fmcw_to_much_more_bezier),
+                FadeIn(much_more),
+                lag_ratio=0.4,
             )
         )
 
