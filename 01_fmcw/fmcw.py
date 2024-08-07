@@ -911,13 +911,15 @@ class Waveform(Scene):
 
         self.add(ax, labels, tx)
         self.wait(1)
-        self.play(Transform(ax, ax_with_numbers))
-        self.wait(1)
         self.play(Transform(labels[1], ax.get_y_axis_label(Tex("frequency"))))
         self.play(Transform(labels[0], ax.get_x_axis_label(Tex("time"))))
         self.wait(0.5)
-        self.play(Transform(labels[1], ax.get_y_axis_label(Tex("$f$"))))
-        self.play(Transform(labels[0], ax.get_x_axis_label(Tex("$t$"))))
+        self.play(
+            Transform(labels[1], ax.get_y_axis_label(Tex("$f$"))),
+            Transform(labels[0], ax.get_x_axis_label(Tex("$t$"))),
+        )
+        self.wait(1)
+        self.play(Transform(ax, ax_with_numbers))
 
         plot = VGroup(ax, labels, tx)
         self.play(plot.animate.shift(RIGHT * 2))
@@ -1110,12 +1112,17 @@ class TxAndRx(Scene):
             axis_config={"include_numbers": True},
         ).scale(ax_scale)
 
+        labels = ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+        )
+
         func = lambda t: (signal.sawtooth(2 * PI * f * t) + 1) / 2 * bw + f_0
         tx = always_redraw(
             lambda: ax.plot(
                 func,
                 use_smoothing=False,
-                x_range=[0, x_1, x_1 / 1000],
+                x_range=[0, x_1 - x_1 / 1000, x_1 / 1000],
                 color=TX_COLOR,
             )
         )
@@ -1132,13 +1139,14 @@ class TxAndRx(Scene):
             tx_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
 
-        self.add(ax, tx)
+        # TODO: Render
+        plot_group = VGroup(ax, labels, tx).move_to(ORIGIN)
+        self.add(plot_group)
         self.play(FadeIn(tx_line_legend, tx_legend, shift=LEFT))
 
+        plot_group.add(tx_line_legend, tx_legend)
         self.play(
-            VGroup(ax, tx, tx_line_legend, tx_legend).animate.to_edge(
-                DOWN, buff=LARGE_BUFF
-            ),
+            plot_group.animate.to_edge(DOWN, buff=LARGE_BUFF),
             AnimationGroup(Create(cloud), cw_radar.get_animation()),
         )
 
@@ -1270,6 +1278,7 @@ class TxAndRx(Scene):
             tx,
             rx,
             ax,
+            labels,
             f_tx_label,
             f_rx_label,
             f_rx_dot,
@@ -2587,8 +2596,6 @@ class PulsedPowerProblemUsingUpdaters(Scene):
 
         self.wait(0.5)
 
-        self.play(Circumscribe(pulsed_graph))
-
         avg_power_eqn_pulsed.remove_updater(avg_power_eqn_updater)
 
         self.play(
@@ -2610,6 +2617,10 @@ class PulsedPowerProblemUsingUpdaters(Scene):
                 avg_power_eqn_cw.next_to(avg_power_eqn_pulsed, direction=DOWN), shift=UP
             )
         )
+
+        self.wait(0.5)
+
+        self.play(Circumscribe(pulsed_graph))
 
         self.wait(0.5)
 
@@ -4971,6 +4982,73 @@ class BGColorTest(Scene):
 
 
 """ End screen """
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Tex("Stats for Nerds")
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "5,040"],
+                    ["Script word count", "1,312"],
+                    ["Days to make", "36"],
+                    ["Git commits", "59"],
+                ]
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = VGroup(stats_title, stats_table)
+
+        profile_pic = Circle(radius=1.2)
+        marshall_bruner = Tex("Marshall Bruner").next_to(
+            profile_pic, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        profile_group = VGroup(profile_pic, marshall_bruner)
+
+        video_height = 3
+        aspect_ratio = 16 / 9
+
+        next_video = Rectangle(height=video_height, width=aspect_ratio * video_height)
+        next_video_inside = Tex(r"Next Video\\(WIP)").move_to(next_video.get_center())
+        next_video_group = VGroup(next_video, next_video_inside)
+
+        recommended_video = Rectangle(
+            height=video_height, width=aspect_ratio * video_height
+        )
+        recommended_video_inside = Tex(r"Recommended\\Video").move_to(
+            recommended_video.get_center()
+        )
+        recommended_video_group = VGroup(recommended_video, recommended_video_inside)
+
+        VGroup(
+            profile_group,
+            recommended_video_group,
+            stats_group,
+            next_video_group,
+        ).arrange_in_grid(rows=2, cols=2, buff=(LARGE_BUFF * 1.7, LARGE_BUFF)).move_to(
+            ORIGIN
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(profile_pic), FadeIn(marshall_bruner, shift=UP)),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                AnimationGroup(
+                    Create(recommended_video), FadeIn(recommended_video_inside)
+                ),
+                AnimationGroup(Create(next_video), FadeIn(next_video_inside)),
+                lag_ratio=0.9,
+                run_time=5,
+            )
+        )
+
+        self.wait(2)
+
 
 """ Thumbnail """
 
