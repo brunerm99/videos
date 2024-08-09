@@ -5033,10 +5033,10 @@ class EndScreen(Scene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "5,040"],
+                    ["Lines of code", "5,274"],
                     ["Script word count", "1,312"],
-                    ["Days to make", "36"],
-                    ["Git commits", "59"],
+                    ["Days to make", "38"],
+                    ["Git commits", "62"],
                 ]
             )
             .scale(0.5)
