@@ -23,7 +23,7 @@ class Banner(Scene):
         f = 2
         fs = 1000
         wave = FunctionGraph(
-            lambda t: 0.5 * np.sin(2 * PI * f * t), x_range=[0, 2, 1 / fs], color=RED
+            lambda t: 0.5 * np.sin(2 * PI * f * t), x_range=[0, 2, 1 / fs], color=ORANGE
         ).next_to(radar.radome, direction=RIGHT)
 
         title_scale = 2
