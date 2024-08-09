@@ -17,7 +17,7 @@ config.background_color = BACKGROUND_COLOR
 class Banner(Scene):
     def construct(self):
         radar = WeatherRadarTower()
-        radar.vgroup.scale(0.6).to_edge(LEFT, buff=LARGE_BUFF)
+        radar.vgroup.scale(0.4).to_edge(LEFT, buff=LARGE_BUFF)
 
         A = 0.5
         f = 2
