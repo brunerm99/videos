@@ -1558,12 +1558,23 @@ class TxAndRx(Scene):
         )
 
         self.play(
+            LaggedStart(Create(range_eqn_arrow), Create(range_eqn_final), lag_ratio=0.7)
+        )
+        self.play(Create(range_eqn_final_box))
+
+        self.wait(2)
+
+        all_except_eqn = Group(*self.mobjects).remove(
+            range_eqn_final, range_eqn_final_box
+        )
+        eqn_group = VGroup(range_eqn_final_box, range_eqn_final)
+        self.play(
             LaggedStart(
-                Create(range_eqn_arrow), Create(range_eqn_final[0]), lag_ratio=0.7
+                FadeOut(all_except_eqn),
+                eqn_group.animate.move_to(ORIGIN).scale(2),
+                lag_ratio=0.4,
             )
         )
-        self.play(Create(range_eqn_final[1]))
-        self.play(Create(range_eqn_final_box))
 
         self.wait(2)
 
@@ -3879,6 +3890,16 @@ class FMCWTopics(Scene):
             )
         )
 
+        caveats = Tex("*caveats in description").scale(1.5)
+
+        self.wait(1)
+
+        self.play(FadeIn(caveats))
+
+        self.wait(2)
+
+        self.play(FadeOut(*self.mobjects))
+
         self.wait(2)
 
 
@@ -4995,10 +5016,10 @@ class EndScreen(Scene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "5,274"],
+                    ["Lines of code", "5,265"],
                     ["Script word count", "1,312"],
                     ["Days to make", "38"],
-                    ["Git commits", "62"],
+                    ["Git commits", "66"],
                 ]
             )
             .scale(0.5)
@@ -5051,6 +5072,14 @@ class EndScreen(Scene):
                 run_time=5,
             )
         )
+
+        self.wait(1)
+
+        self.play(Indicate(recommended_video, scale_factor=1.1))
+
+        self.wait(1)
+
+        self.play(Indicate(next_video, scale_factor=1.1))
 
         self.wait(2)
 
