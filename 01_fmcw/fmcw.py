@@ -5098,11 +5098,24 @@ class EndScreen(Scene):
 
 class Thumbnail(Scene):
     def construct(self):
-        text = Tex("FMCW Radar").scale(2)
+        text = Tex("FMCW Radar").scale(3)
+        # sub_header = Tex("an ANIMATED intro to").scale(1.5).next_to(text, direction=UP)
+        # sub_header = Tex("calculating range in").scale(1.5).next_to(text, direction=UP)
+        sub_header = (
+            Tex("The Basics, Animated").scale(1.7).next_to(text, direction=DOWN)
+        )
+        text_group = VGroup(text, sub_header).move_to(ORIGIN)
+        text_box = SurroundingRectangle(
+            text_group,
+            color=BACKGROUND_COLOR,
+            buff=SMALL_BUFF,
+            fill_opacity=0.7,
+            stroke_opacity=0,
+        )
 
-        carrier_freq = 1  # Carrier frequency in Hz
+        carrier_freq = 0.5  # Carrier frequency in Hz
         modulation_freq = 0.5  # Modulation frequency in Hz
-        modulation_index = 30  # Modulation index
+        modulation_index = 20  # Modulation index
         duration = 1
         fs = 10000
         A = 0.2
@@ -5124,18 +5137,137 @@ class Thumbnail(Scene):
             x_range=[-1, 1, 1 / fs],
             use_smoothing=False,
         ).scale_to_fit_width(12)
-        triangular_amp_graph = (
-            FunctionGraph(
-                triangular_amp,
-                x_range=[0.5, 1.5, 1 / fs],
-                use_smoothing=False,
-                color=BLUE,
-            )
-            .scale_to_fit_width(13)
-            .move_to(ORIGIN)
-        )
+        triangular_amp_graph = FunctionGraph(
+            triangular_amp,
+            x_range=[0.5, 1.5, 1 / fs],
+            use_smoothing=False,
+            color=RED,
+        ).move_to(ORIGIN)
+        triangular_amp_graph.width = config["frame_width"] - 1
+        triangular_amp_graph.height = config["frame_height"] - 1
 
         self.add(
             triangular_amp_graph,
-            triangular_f_graph,
+            # triangular_f_graph,
+            text_box,
+            text_group,
         )
+
+
+class ComparisonThumbnail(Scene):
+    def construct(self):
+        cw_radar = FMCWRadarCartoon(text="CW")
+        radar = WeatherRadarTower()
+        cw_radar_end = FMCWRadarCartoon(text="CW")
+        cw_radar_end.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF)
+
+        x_max = 4
+        x_len = 6
+        y_len = 3.5
+        fs = 1000
+        step = 1 / fs
+        y_max = 3
+        cw_ax = Axes(
+            x_range=[-0.1, x_max, 1],
+            y_range=[-y_max, y_max, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        pulsed_ax = Axes(
+            x_range=[-0.1, x_max, 0.5],
+            y_range=[-y_max, y_max, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        f = 4
+        pulsed_amp = 5
+        A = 0.5
+        cw_sine = lambda t: A * np.sin(2 * PI * f * t)
+        pulsed_sine = (
+            lambda t: pulsed_amp
+            * A
+            * np.sin(2 * PI * f * t)
+            * ((signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2)
+        )
+        sq = (
+            lambda t: pulsed_amp * A * (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2
+        )
+
+        sawtooth_carrier_freq = 6
+        sawtooth_modulation_index = 6
+        sawtooth_modulating_signal_f = 0.5
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: sawtooth_carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp = lambda t: np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+
+        fmcw_graph = cw_ax.plot(
+            sawtooth_amp,
+            x_range=[0, x_max - step, step],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        cw_graph = cw_ax.plot(cw_sine, x_range=[0, x_max, step], use_smoothing=False)
+        pulsed_graph = pulsed_ax.plot(
+            pulsed_sine, x_range=[0, x_max, step], use_smoothing=False, color=TX_COLOR
+        )
+        sq_graph = pulsed_ax.plot(
+            sq, x_range=[0, x_max - step, step], use_smoothing=False, color=YELLOW
+        )
+
+        graphs = (
+            VGroup(VGroup(pulsed_ax, pulsed_graph, sq_graph), VGroup(cw_ax, fmcw_graph))
+            .arrange(direction=RIGHT, buff=LARGE_BUFF * 1.5, center=True)
+            .scale_to_fit_width(13)
+            .to_edge(DOWN, buff=MED_LARGE_BUFF)
+        )
+        graph_arrow = Arrow(
+            pulsed_graph.get_edge_center(RIGHT), fmcw_graph.get_edge_center(LEFT)
+        )
+
+        fmcw = Tex("FMCW Radar").scale(3).to_edge(UP, buff=LARGE_BUFF)
+
+        x_rect1 = Rectangle(
+            width=2, height=0.3, fill_color=RED, fill_opacity=1, color=RED
+        ).rotate(PI / 4)
+        x_rect2 = x_rect1.copy().rotate(PI / 2)
+        x = (
+            VGroup(x_rect1, x_rect2)
+            .scale(0.7)
+            .next_to(pulsed_ax, direction=UP, buff=MED_SMALL_BUFF)
+        )
+
+        check_rect1 = Rectangle(
+            width=2, height=0.3, fill_color=GREEN, fill_opacity=1, color=GREEN
+        )
+        check_rect2 = (
+            Rectangle(
+                width=1, height=0.3, fill_color=GREEN, fill_opacity=1, color=GREEN
+            )
+            .rotate(PI / 2)
+            .move_to(check_rect1.get_left())
+            .shift(UP * 0.35)
+        )
+
+        check = (
+            VGroup(check_rect1, check_rect2)
+            .rotate(PI / 4)
+            .scale(0.7)
+            .next_to(cw_ax, direction=UP, buff=MED_SMALL_BUFF)
+        )
+
+        self.add(graphs, graph_arrow, fmcw, x, check)
