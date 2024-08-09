@@ -1139,7 +1139,6 @@ class TxAndRx(Scene):
             tx_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
 
-        # TODO: Render
         plot_group = VGroup(ax, labels, tx).move_to(ORIGIN)
         self.add(plot_group)
         self.play(FadeIn(tx_line_legend, tx_legend, shift=LEFT))
@@ -1603,6 +1602,10 @@ class TxAndRx(Scene):
         )
         self.play(Create(range_eqn_final[1]))
         self.play(Create(range_eqn_final_box))
+
+        self.wait(2)
+
+        self.play(FadeOut(*self.mobjects), run_time=2)
 
         self.wait(2)
 
@@ -2838,7 +2841,7 @@ class CWWrapUp(Scene):
 
 class CWNotForRange(Scene):
     def construct(self):
-        cw_radar = FMCWRadarCartoon()
+        cw_radar = FMCWRadarCartoon("CW")
         cw_radar_old = FMCWRadarCartoon("CW")
         cw_radar_old.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF)
         cw_radar.vgroup.scale(0.5).to_corner(UL, buff=MED_SMALL_BUFF).shift(DOWN)
@@ -3871,6 +3874,46 @@ class FMCWTopics(Scene):
                 Create(fmcw_to_much_more_bezier),
                 FadeIn(much_more),
                 lag_ratio=0.4,
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(much_more),
+                Uncreate(fmcw_to_much_more_bezier),
+                FadeOut(
+                    radar_cube,
+                    cpi,
+                    triangular,
+                    pll,
+                    mixing,
+                    sampling,
+                    txrx,
+                    spacing,
+                ),
+                AnimationGroup(
+                    Uncreate(vel_to_cube_bezier),
+                    Uncreate(vel_to_cpi_bezier),
+                    Uncreate(vel_to_triangular_bezier),
+                    Uncreate(hardware_to_pll_bezier),
+                    Uncreate(hardware_to_mixing_bezier),
+                    Uncreate(hardware_to_sampling_bezier),
+                    Uncreate(antenna_to_txrx_bezier),
+                    Uncreate(antenna_to_spacing_bezier),
+                ),
+                FadeOut(
+                    vel,
+                    hardware,
+                    antenna,
+                ),
+                AnimationGroup(
+                    Uncreate(fmcw_to_vel_bezier),
+                    Uncreate(fmcw_to_hardware_bezier),
+                    Uncreate(fmcw_to_antenna_bezier),
+                ),
+                FadeOut(fmcw),
+                lag_ratio=0.2,
+                run_time=2,
             )
         )
 
