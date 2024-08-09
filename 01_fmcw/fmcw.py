@@ -34,8 +34,6 @@ def pretty_num(n: float) -> str:
 
 class WeatherRadarTower:
     def __init__(self, **kwargs):
-        # super.__init__(**kwargs)
-
         width_scale = 2
         LINE_STYLE = dict(
             color=WHITE, stroke_width=DEFAULT_STROKE_WIDTH * width_scale * 2
@@ -45,25 +43,6 @@ class WeatherRadarTower:
         self.left_leg = leg.copy().shift(LEFT)
         self.right_leg = leg.copy().shift(RIGHT)
         self.middle_leg = leg.copy().shift(DOWN / 1.5)
-
-        # self.left_start_cap = Dot(
-        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        # ).move_to(self.left_leg.get_start())
-        # self.right_start_cap = Dot(
-        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        # ).move_to(self.right_leg.get_start())
-        # self.middle_start_cap = Dot(
-        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        # ).move_to(self.middle_leg.get_start())
-        # self.left_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
-        #     self.left_leg.get_end()
-        # )
-        # self.right_end_cap = Dot(radius=DEFAULT_SMALL_DOT_RADIUS * width_scale).move_to(
-        #     self.right_leg.get_end()
-        # )
-        # self.middle_end_cap = Dot(
-        #     radius=DEFAULT_SMALL_DOT_RADIUS * width_scale
-        # ).move_to(self.middle_leg.get_end())
 
         self.conn1_y_shift = DOWN / 2
         self.conn1 = Line(
@@ -78,8 +57,6 @@ class WeatherRadarTower:
         )
         self.conn3 = self.conn1.copy().shift(-self.conn1_y_shift * 2)
         self.conn4 = self.conn2.copy().shift(-self.conn1_y_shift * 2)
-        # conn5 = conn1.copy().shift(-conn1_y_shift * 4)
-        # conn6 = conn2.copy().shift(-conn1_y_shift * 2)
 
         self.radome = Circle(radius=1.08, **LINE_STYLE).next_to(
             self.middle_leg,
@@ -91,12 +68,6 @@ class WeatherRadarTower:
             self.left_leg,
             self.right_leg,
             self.middle_leg,
-            # self.left_start_cap,
-            # self.middle_start_cap,
-            # self.right_start_cap,
-            # self.left_end_cap,
-            # self.middle_end_cap,
-            # self.right_end_cap,
             self.conn1,
             self.conn2,
             self.conn3,
@@ -110,14 +81,8 @@ class WeatherRadarTower:
                 Create(self.left_leg),
                 Create(self.middle_leg),
                 Create(self.right_leg),
-                # Create(self.left_start_cap),
-                # Create(self.middle_start_cap),
-                # Create(self.right_start_cap),
             ),
             AnimationGroup(
-                # Create(self.left_end_cap),
-                # Create(self.middle_end_cap),
-                # Create(self.right_end_cap),
                 Create(self.conn1),
                 Create(self.conn2),
                 Create(self.conn3),
@@ -126,9 +91,6 @@ class WeatherRadarTower:
             Create(self.radome),
             lag_ratio=0.75,
         )
-
-    # @override_animation(Create)
-    # def _create_override(self, **kwargs):
 
 
 class FMCWRadarCartoon:
