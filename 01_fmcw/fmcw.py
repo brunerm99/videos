@@ -5028,13 +5028,17 @@ class EndScreen(Scene):
         for row in stats_table.get_rows():
             row[1].set_color(GREEN)
 
-        stats_group = VGroup(stats_title, stats_table)
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
 
         profile_pic = Circle(radius=1.2)
         marshall_bruner = Tex("Marshall Bruner").next_to(
             profile_pic, direction=DOWN, buff=MED_SMALL_BUFF
         )
-        profile_group = VGroup(profile_pic, marshall_bruner)
+        profile_group = VGroup(profile_pic, marshall_bruner).scale(0.7)
 
         video_height = 3
         aspect_ratio = 16 / 9
@@ -5049,16 +5053,28 @@ class EndScreen(Scene):
         recommended_video_inside = Tex(r"Recommended\\Video").move_to(
             recommended_video.get_center()
         )
-        recommended_video_group = VGroup(recommended_video, recommended_video_inside)
+        recommended_video_group = VGroup(
+            recommended_video, recommended_video_inside
+        ).scale(0.7)
 
-        VGroup(
-            profile_group,
-            recommended_video_group,
-            stats_group,
-            next_video_group,
-        ).arrange_in_grid(rows=2, cols=2, buff=(LARGE_BUFF * 1.7, LARGE_BUFF)).move_to(
-            ORIGIN
+        # VGroup(
+        #     profile_group,
+        #     recommended_video_group,
+        #     stats_group,
+        #     next_video_group,
+        # ).arrange_in_grid(rows=2, cols=2, buff=(LARGE_BUFF * 1.7, LARGE_BUFF)).move_to(
+        #     ORIGIN
+        # )
+
+        left = (
+            VGroup(profile_group, recommended_video_group)
+            .arrange(
+                direction=DOWN, center=True, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 2
+            )
+            .to_edge(LEFT, buff=LARGE_BUFF)
         )
+
+        # next_video_group.scale(0.7).shift(UP)
 
         self.play(
             LaggedStart(
@@ -5067,19 +5083,19 @@ class EndScreen(Scene):
                 AnimationGroup(
                     Create(recommended_video), FadeIn(recommended_video_inside)
                 ),
-                AnimationGroup(Create(next_video), FadeIn(next_video_inside)),
+                # AnimationGroup(Create(next_video), FadeIn(next_video_inside)),
                 lag_ratio=0.9,
                 run_time=5,
             )
         )
 
-        self.wait(1)
+        # self.wait(1)
 
-        self.play(Indicate(recommended_video, scale_factor=1.1))
+        # self.play(Indicate(recommended_video, scale_factor=1.1))
 
-        self.wait(1)
+        # self.wait(1)
 
-        self.play(Indicate(next_video, scale_factor=1.1))
+        # self.play(Indicate(next_video, scale_factor=1.1))
 
         self.wait(2)
 
