@@ -333,7 +333,9 @@ class BlockSections(Scene):
             phase_detector.get_left() + (LEFT * BLOCK_BUFF),
             phase_detector.get_left(),
         )
-        loop_filter = BLOCKS.get("amp").copy().next_to(phase_detector, buff=BLOCK_BUFF)
+        loop_filter = (
+            BLOCKS.get("lp_filter").copy().next_to(phase_detector, buff=BLOCK_BUFF)
+        )
         phase_detector_to_loop_filter = Line(
             phase_detector.get_right(), loop_filter.get_left()
         )
@@ -523,7 +525,9 @@ class PLL(MovingCameraScene):
             phase_detector.get_left() + (LEFT * BLOCK_BUFF),
             phase_detector.get_left(),
         )
-        loop_filter = BLOCKS.get("amp").copy().next_to(phase_detector, buff=BLOCK_BUFF)
+        loop_filter = (
+            BLOCKS.get("lp_filter").copy().next_to(phase_detector, buff=BLOCK_BUFF)
+        )
         phase_detector_to_loop_filter = Line(
             phase_detector.get_right(), loop_filter.get_left()
         )
@@ -588,26 +592,14 @@ class PLL(MovingCameraScene):
             .scale_to_fit_width(PLL_WIDTH)
         )
 
-        phase_detector_to_loop_filter_copy = (
-            phase_detector_to_loop_filter.copy().set_color(YELLOW)
-        )
-        loop_filter_to_vco_copy = loop_filter_to_vco.copy().set_color(YELLOW)
-        from_vco_copy = from_vco.copy().set_color(YELLOW)
-        vco_to_ndiv_0_copy = vco_to_ndiv_0.copy().set_color(YELLOW)
-        vco_to_ndiv_1_copy = vco_to_ndiv_1.copy().set_color(YELLOW)
-        vco_to_ndiv_2_copy = vco_to_ndiv_2.copy().set_color(YELLOW)
-        ndiv_to_phase_detector_1_copy = ndiv_to_phase_detector_1.copy().set_color(
-            YELLOW
-        )
-        ndiv_to_phase_detector_2_copy = ndiv_to_phase_detector_2.copy().set_color(
-            YELLOW
-        )
-
         label_scale = 0.5
         pfd_label = Tex(r"Phase Frequency\\Detector (PFD)").scale(label_scale)
         loop_filter_label = Tex(r"Loop Filter").scale(label_scale)
         vco_label = Tex(r"Voltage-Controlled\\Oscillator (VCO)").scale(label_scale)
         ndiv_label = Tex(r"$1/N$ Frequency\\Divider").scale(label_scale)
+
+        lo = BLOCKS.get("oscillator").copy()
+        lo_label = Tex(r"Local Oscillator\\(LO)").scale(label_scale)
 
         """ Modulated signals"""
         x0_reveal_tracker_1 = ValueTracker(0.0)
@@ -962,48 +954,242 @@ class PLL(MovingCameraScene):
 
         self.play(Restore(self.camera.frame))
 
-        # highlight_color = YELLOW
+        self.wait(0.5)
 
-        # self.play(phase_detector.animate.set_color(highlight_color))
+        self.play(
+            LaggedStart(
+                VGroup(
+                    ndiv_to_phase_detector,
+                    ndiv,
+                    vco_to_ndiv,
+                    phase_detector_to_loop_filter,
+                    loop_filter,
+                    loop_filter_to_vco,
+                    vco,
+                    vco_output_conn,
+                    from_vco,
+                ).animate.set_opacity(0.2),
+                # to_phase_detector.animate.set_color(GREEN),
+                lag_ratio=0.5,
+            )
+        )
 
-        # self.wait(0.5)
+        lo.scale_to_fit_width(vco.width).next_to(
+            to_phase_detector, direction=LEFT, buff=0
+        )
+        lo_label.next_to(lo, direction=UP, buff=SMALL_BUFF)
+        self.play(GrowFromCenter(lo), FadeIn(lo_label, shift=DOWN))
 
-        # self.play(Create(phase_detector_to_loop_filter_copy))
+        self.wait(0.5)
 
-        # self.wait(0.5)
+        A = 1
+        f_lo = 2
+        fs = 1000
+        step = 1 / fs
+        x_len = 5
+        y_len = 2.5
 
-        # self.play(loop_filter.animate.set_color(highlight_color))
+        lo_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1.5, 1.5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
 
-        # self.wait(0.5)
+        lo_f_label = (
+            Tex(r"$f_{LO}=1$ MHz")
+            .next_to(lo_ax, direction=UP, buff=MED_SMALL_BUFF)
+            .shift(RIGHT)
+        )
 
-        # self.play(Create(loop_filter_to_vco_copy))
+        lo_labels = lo_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+        )
 
-        # self.wait(0.5)
+        self.camera.frame.save_state()
 
-        # self.play(vco.animate.set_color(highlight_color))
+        pll.add(lo, lo_label, pfd_label, loop_filter_label, vco_label, ndiv_label)
 
-        # self.wait(0.5)
+        lo_ax_group = VGroup(lo_ax, lo_labels, lo_f_label).to_corner(UL).shift(UL)
 
-        # self.play(
-        #     LaggedStart(
-        #         Create(vco_to_ndiv_0_copy),
-        #         vco_output_conn.animate.set_color(highlight_color),
-        #         lag_ratio=0.5,
-        #     )
-        # )
-        # self.play(Create(vco_to_ndiv_1_copy))
-        # self.play(Create(vco_to_ndiv_2_copy))
+        lo_signal = lo_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_lo * t),
+            x_range=[0, 1, step],
+        )
 
-        # self.wait(0.5)
+        self.play(
+            self.camera.frame.animate.scale(1.2),
+            pll.animate.to_edge(RIGHT).shift(RIGHT),
+        )
 
-        # self.play(ndiv.animate.set_color(highlight_color))
+        lo_f_plot_p1 = to_phase_detector.get_midpoint() + [-0.2, 0.1, 0]
+        lo_f_plot_p1_handle = lo_f_plot_p1 + [0.5, 2, 0]
+        lo_f_plot_p2 = lo_ax_group.get_right() + [0.2, 0, 0]
+        lo_f_plot_p2_handle = lo_f_plot_p2 + [1, 0, 0]
 
-        # self.wait(0.5)
+        lo_f_bezier = CubicBezier(
+            lo_f_plot_p1,
+            lo_f_plot_p1_handle,
+            lo_f_plot_p2_handle,
+            lo_f_plot_p2,
+        )
+        lo_f_bezier_arrowhead = (
+            Triangle(fill_opacity=1, fill_color=WHITE, stroke_color=WHITE)
+            .scale(0.2)
+            .rotate(-PI / 6)
+        ).move_to(lo_f_bezier.get_end())
+        lo_f_bezier_group = VGroup(lo_f_bezier, lo_f_bezier_arrowhead)
 
-        # self.play(Create(ndiv_to_phase_detector_1_copy))
-        # self.play(Create(ndiv_to_phase_detector_2_copy))
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    lo_label.animate.shift(LEFT / 6),
+                    pfd_label.animate.shift(RIGHT / 6),
+                ),
+                Create(lo_f_bezier_group),
+                Create(lo_ax_group),
+                Create(lo_signal),
+                lag_ratio=0.4,
+            )
+        )
 
-        # self.wait(0.5)
+        self.wait(0.5)
+
+        pfd_output_label_xshift = 0.3
+        pfd_output_label_all = Tex("$I$", r"$(f_{diff})$").next_to(
+            phase_detector_to_loop_filter.get_midpoint() + [0, 0, 0],
+            direction=UP,
+            buff=LARGE_BUFF * 2.5,
+        )
+        pfd_output_label = Tex("$I$").move_to(pfd_output_label_all)
+        pfd_output_label_p1 = phase_detector_to_loop_filter.get_midpoint() + [0, 0.1, 0]
+        pfd_output_label_p1_handle = pfd_output_label_p1 + [0, 0.5, 0]
+        pfd_output_label_p2 = pfd_output_label.get_bottom() + [0, -0.5, 0]
+        pfd_output_label_p2_handle = pfd_output_label_p1 + [
+            pfd_output_label_xshift,
+            0.7,
+            0,
+        ]
+
+        pfd_output_label_bezier = CubicBezier(
+            pfd_output_label_p1,
+            pfd_output_label_p1_handle,
+            pfd_output_label_p2_handle,
+            pfd_output_label_p2,
+        )
+        pfd_output_label_bezier_arrowhead = (
+            Triangle(fill_opacity=1, fill_color=WHITE, stroke_color=WHITE)
+            .scale(0.2)
+            .move_to(pfd_output_label_bezier.get_end())
+            .rotate(10 * DEGREES)
+        )
+        pfd_output_label_bezier_group = VGroup(
+            pfd_output_label_bezier, pfd_output_label_bezier_arrowhead
+        )
+
+        self.play(
+            LaggedStart(
+                Create(pfd_output_label_bezier_group),
+                Create(pfd_output_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Transform(pfd_output_label, pfd_output_label_all))
+
+        self.wait(0.5)
+
+        pfd_piecewise_top = Tex(r"$I > 0 \ , \ f_{LO} > f_{feedback}$")
+        pfd_piecewise_bot = Tex(r"$I < 0 \ , \ f_{LO} < f_{feedback}$").next_to(
+            pfd_piecewise_top, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        pfd_piecewise_brace = Brace(
+            Line(pfd_piecewise_top.get_corner(UL), pfd_piecewise_bot.get_corner(DL)),
+            direction=LEFT,
+        )
+        pfd_piecewise_eq = Tex("$=$").next_to(
+            pfd_piecewise_brace, direction=LEFT, buff=MED_SMALL_BUFF
+        )
+        pfd_piecewise = (
+            VGroup(
+                pfd_piecewise_top,
+                pfd_piecewise_bot,
+                pfd_piecewise_brace,
+                pfd_piecewise_eq,
+            )
+            .scale(0.7)
+            .next_to(pfd_output_label, direction=RIGHT, buff=MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(pfd_piecewise, shift=LEFT),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        fb_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1.5, 1.5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        fb_f_label = (
+            Tex(r"No signal")
+            .next_to(fb_ax, direction=UP, buff=MED_SMALL_BUFF)
+            .shift(RIGHT)
+        )
+
+        fb_labels = fb_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        fb_ax_group = VGroup(fb_ax, fb_f_label, fb_labels).next_to(
+            lo_ax_group, direction=DOWN, aligned_edge=LEFT
+        )
+
+        fb_f_plot_p1 = ndiv_to_phase_detector_2.get_midpoint() + [-0.1, 0, 0]
+        fb_f_plot_p1_handle = fb_f_plot_p1 + [-1, -0.5, 0]
+        fb_f_plot_p2 = fb_ax_group.get_right() + [0.2, 0, 0]
+        fb_f_plot_p2_handle = fb_f_plot_p2 + [1, 0, 0]
+
+        fb_f_bezier = CubicBezier(
+            fb_f_plot_p1,
+            fb_f_plot_p1_handle,
+            fb_f_plot_p2_handle,
+            fb_f_plot_p2,
+        )
+        fb_f_bezier_arrowhead = (
+            Triangle(fill_opacity=1, fill_color=WHITE, stroke_color=WHITE)
+            .scale(0.2)
+            .rotate(-PI / 6)
+        ).move_to(fb_f_bezier.get_end())
+        fb_f_bezier_group = VGroup(fb_f_bezier, fb_f_bezier_arrowhead)
+
+        self.play(
+            LaggedStart(
+                Create(fb_f_bezier_group),
+                AnimationGroup(Create(fb_ax), Create(fb_labels), FadeIn(fb_f_label)),
+                lag_ratio=0.4,
+                run_time=2,
+            )
+        )
+
+        self.wait(0.5)
+
+        pfd_piecewise_top.set_color(GREEN)
+        self.play(Indicate(pfd_piecewise_top, color=GREEN))
 
         self.wait(2)
 
