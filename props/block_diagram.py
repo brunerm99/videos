@@ -33,7 +33,7 @@ def get_blocks(color=WHITE):
     }
 
 
-def get_bd_animation(bd, lagged: bool = False, lag_ratio=0.8):
+def get_bd_animation(bd, lagged: bool = False, lag_ratio=0.8, run_time=None):
     animations = (
         *[
             Create(block)
@@ -43,5 +43,19 @@ def get_bd_animation(bd, lagged: bool = False, lag_ratio=0.8):
         ],
     )
     if lagged:
-        return LaggedStart(animations, lag_ratio=lag_ratio)
-    return Succession(animations)
+        return LaggedStart(animations, lag_ratio=lag_ratio, run_time=run_time)
+    return Succession(animations, run_time=run_time)
+
+
+class ShowBlocks(Scene):
+    def construct(self):
+        blocks = get_blocks()
+        labeled_blocks = Group()
+        for name, block in blocks.items():
+            label = Text(name).next_to(block, direction=UP, buff=SMALL_BUFF)
+            labeled_blocks.add(Group(label, block))
+        self.add(
+            labeled_blocks.arrange_in_grid(4, 6).scale_to_fit_width(
+                config["frame_width"] - 1
+            )
+        )
