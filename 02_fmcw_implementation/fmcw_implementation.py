@@ -379,7 +379,7 @@ class BlockSections(Scene):
         label_buff = SMALL_BUFF
         label_scale = 0.6
         pll_label = (
-            Tex(r"Phase-locked\\Loop")
+            Tex(r"Signal\\Generator")
             .next_to(pll_block, direction=DOWN, buff=label_buff)
             .scale(label_scale)
             .set_opacity(0)
@@ -459,6 +459,8 @@ class BlockSections(Scene):
             pll_block.get_corner(UR), pll_box.get_corner(DR), color=DARK_GRAY
         )
 
+        pll_label_specific = Tex("Phase-locked Loop")
+
         self.play(
             pll_label.animate.set_opacity(1),
             Create(pll_box),
@@ -512,8 +514,17 @@ class BlockSections(Scene):
         self.wait(1)
 
         self.play(bd_w_pll.animate.shift(-pll.get_center()))
-        self.play(FadeOut(bd, pll_box_bound_l, pll_box_bound_r, pll_box))
-        self.play(pll.animate.scale_to_fit_width(PLL_WIDTH))
+        self.play(
+            LaggedStart(
+                FadeOut(bd, pll_box_bound_l, pll_box_bound_r, pll_box),
+                pll.animate.scale_to_fit_width(PLL_WIDTH),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(pll_label_specific.to_edge(UP, buff=LARGE_BUFF), shift=DOWN))
 
         self.wait(2)
 
@@ -945,7 +956,15 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.move_to(ndiv))
+        self.play(
+            self.camera.frame.animate.scale(1.2).move_to(
+                VGroup(ndiv, vco_to_ndiv_2, ndiv_to_phase_detector_1)
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.scale(1 / 1.2).move_to(ndiv))
         self.play(
             FadeIn(ndiv_label.next_to(ndiv, direction=DOWN, buff=SMALL_BUFF), shift=UP)
         )
@@ -987,7 +1006,7 @@ class PLL(MovingCameraScene):
         fs = 1000
         step = 1 / fs
         x_len = 5
-        y_len = 2.5
+        y_len = 2
 
         lo_ax = Axes(
             x_range=[-0.1, duration, duration / 4],
@@ -1027,7 +1046,7 @@ class PLL(MovingCameraScene):
 
         lo_f_plot_p1 = to_phase_detector.get_midpoint() + [-0.2, 0.1, 0]
         lo_f_plot_p1_handle = lo_f_plot_p1 + [0.5, 2, 0]
-        lo_f_plot_p2 = lo_ax_group.get_right() + [0.2, 0, 0]
+        lo_f_plot_p2 = lo_ax_group.get_right() + [0.5, 0, 0]
         lo_f_plot_p2_handle = lo_f_plot_p2 + [1, 0, 0]
 
         lo_f_bezier = CubicBezier(
@@ -1092,6 +1111,7 @@ class PLL(MovingCameraScene):
 
         self.play(
             LaggedStart(
+                phase_detector_to_loop_filter.animate.set_opacity(1),
                 Create(pfd_output_label_bezier_group),
                 Create(pfd_output_label),
                 lag_ratio=0.4,
@@ -1135,6 +1155,14 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
+        self.play(Indicate(pfd_piecewise_top))
+
+        self.wait(0.5)
+
+        self.play(Indicate(pfd_piecewise_bot))
+
+        self.wait(0.5)
+
         fb_ax = Axes(
             x_range=[-0.1, duration, duration / 4],
             y_range=[-1.5, 1.5, 1],
@@ -1161,7 +1189,7 @@ class PLL(MovingCameraScene):
 
         fb_f_plot_p1 = ndiv_to_phase_detector_2.get_midpoint() + [-0.1, 0, 0]
         fb_f_plot_p1_handle = fb_f_plot_p1 + [-1, -0.5, 0]
-        fb_f_plot_p2 = fb_ax_group.get_right() + [0.2, 0, 0]
+        fb_f_plot_p2 = fb_ax_group.get_right() + [0.5, 0, 0]
         fb_f_plot_p2_handle = fb_f_plot_p2 + [1, 0, 0]
 
         fb_f_bezier = CubicBezier(
@@ -1191,7 +1219,183 @@ class PLL(MovingCameraScene):
         pfd_piecewise_top.set_color(GREEN)
         self.play(Indicate(pfd_piecewise_top, color=GREEN))
 
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                loop_filter.animate.set_opacity(1),
+                loop_filter_to_vco.animate.set_opacity(1),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        pfd_out_f = 0.5
+        pfd_out_length = 1 / pfd_out_f
+        _tracker = ValueTracker(0)
+        pfd_out = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: signal.square(2 * PI * pfd_out_f * t - PI / 2, duty=0.5)
+                + np.random.normal(0, 0.05, 1)[0],
+                x_range=[
+                    0,
+                    pfd_out_length - step,
+                    step,
+                ],
+                use_smoothing=False,
+            ).shift(LEFT * 4 + DOWN * 3.5)
+        )
+        pfd_out_label = (
+            Tex(r"PFD Output\\(Dirty)").scale(0.6).next_to(pfd_out, direction=UP)
+        )
+        loop_filter_out = FunctionGraph(
+            lambda t: signal.square(2 * PI * pfd_out_f * t - PI / 2, duty=0.5),
+            x_range=[0, pfd_out_length - step, step],
+            use_smoothing=False,
+        ).shift(DOWN * 3.5)
+        loop_filter_out_label = (
+            Tex(r"Loop Filter\\Output (Clean)")
+            .scale(0.6)
+            .next_to(loop_filter_out, direction=UP)
+        )
+        pfd_out_to_loop_filter_out = Arrow(
+            pfd_out.get_right(), loop_filter_out.get_left()
+        )
+
+        vco_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1.5, 1.5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        f_vco_tracker = ValueTracker(f_lo / 2)
+        vco_f_label = (
+            Tex(r"$f_{VCO}=\ $", f"{int(1000 * (f_vco_tracker.get_value() / f_lo))}kHz")
+            .next_to(vco_ax, direction=UP, buff=MED_SMALL_BUFF)
+            .shift(RIGHT)
+        )
+
+        vco_labels = vco_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        vco_ax_group = VGroup(vco_ax, vco_f_label, vco_labels).next_to(
+            fb_ax_group, direction=DOWN, aligned_edge=LEFT
+        )
+
+        vco_signal = vco_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_vco_tracker.get_value() * t),
+            x_range=[0, 1, step],
+        )
+
+        self.play(Create(pfd_out), FadeIn(pfd_out_label))
+        self.play(
+            _tracker.animate(
+                run_time=3, rate_func=rate_functions.linear
+            ).increment_value(1)
+        )
+        self.play(
+            _tracker.animate(
+                run_time=6, rate_func=rate_functions.linear
+            ).increment_value(1),
+            LaggedStart(
+                GrowArrow(pfd_out_to_loop_filter_out),
+                AnimationGroup(Create(loop_filter_out), FadeIn(loop_filter_out_label)),
+                lag_ratio=0.5,
+            ),
+        )
+
+        self.play(
+            FadeOut(
+                pfd_out,
+                pfd_out_label,
+                pfd_out_to_loop_filter_out,
+            ),
+        )
+        self.play(
+            VGroup(loop_filter_out, loop_filter_out_label)
+            .animate.next_to(vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF)
+            .to_edge(DOWN, buff=0)
+            .shift(DOWN / 2),
+            Create(vco_ax),
+            Create(vco_labels),
+            FadeIn(vco_f_label),
+            Create(vco_signal),
+        )
+
+        self.wait(0.5)
+
+        self.play(vco.animate.set_opacity(1))
+
+        self.wait(0.5)
+
+        loop_filter_phase_tracker = ValueTracker(0)  # 0 -> PI
+
+        def loop_filter_out_updater(m: Mobject):
+            m.become(
+                FunctionGraph(
+                    lambda t: signal.square(
+                        2 * PI * pfd_out_f * t
+                        - PI / 2
+                        + loop_filter_phase_tracker.get_value(),
+                        duty=0.5,
+                    ),
+                    x_range=[0, pfd_out_length - step, step],
+                    use_smoothing=False,
+                )
+                .next_to(vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF)
+                .to_edge(DOWN, buff=0)
+                .shift(DOWN / 2)
+            )
+
+        def vco_signal_updater(m: Mobject):
+            m.become(
+                vco_ax.plot(
+                    lambda t: A * np.sin(2 * PI * f_vco_tracker.get_value() * t),
+                    x_range=[0, 1, step],
+                )
+            )
+
+        def vco_f_label_updater(m: Mobject):
+            m.become(
+                Tex(
+                    r"$f_{VCO}=\ $",
+                    f"{int(1000 * (f_vco_tracker.get_value() / f_lo))}kHz",
+                )
+                .next_to(vco_ax, direction=UP, buff=MED_SMALL_BUFF)
+                .shift(RIGHT)
+            )
+
+        loop_filter_out.add_updater(loop_filter_out_updater)
+        vco_f_label.add_updater(vco_f_label_updater)
+        vco_signal.add_updater(vco_signal_updater)
+
+        self.play(
+            loop_filter_phase_tracker.animate.increment_value(PI),
+            f_vco_tracker.animate.increment_value(-0.5),
+        )
+        # self.play(
+        # )
+
+        self.wait(0.5)
+
+        self.play(
+            loop_filter_phase_tracker.animate.increment_value(PI),
+            f_vco_tracker.animate.increment_value(0.5),
+        )
+        # self.play(
+        # )
+
         self.wait(2)
+
+        loop_filter_out.remove_updater(loop_filter_out_updater)
+        vco_f_label.remove_updater(vco_f_label_updater)
+        vco_signal.remove_updater(vco_signal_updater)
 
 
 """ Testing """
@@ -1234,3 +1438,27 @@ class ProgressBar(Scene):
             rate_func=rate_functions.linear,
             run_time=4,
         )
+
+
+class LoopFilter(Scene):
+    def construct(self):
+        step = 1 / 1000
+        pfd_out_f = 0.5
+        length = 1 / pfd_out_f
+        x = ValueTracker(0)
+        pfd_out = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: signal.square(2 * PI * pfd_out_f * t - PI / 2, duty=0.5)
+                + np.random.normal(0, 0.05, 1)[0],
+                x_range=[-0.25 * length, 1.25 * length - step, step],
+                use_smoothing=False,
+            )
+            # .to_edge(DOWN)
+            .shift(DOWN * 3 + LEFT * 2)
+        )
+
+        self.add(pfd_out)
+
+        self.play(x.animate.set_value(1), run_time=2)
+
+        self.wait(1)
