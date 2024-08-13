@@ -346,7 +346,10 @@ class BlockSections(Scene):
             vco.get_right(),
         )
         n_div_label = Tex(r"$\frac{1}{N}$")
-        n_div_box = SurroundingRectangle(n_div_label, buff=MED_SMALL_BUFF)
+        n_div_label_n2 = Tex(r"$\frac{1}{2}$")
+        n_div_box = SurroundingRectangle(
+            n_div_label, buff=MED_SMALL_BUFF, color=WHITE, fill_opacity=0
+        )
         ndiv = (
             VGroup(n_div_label, n_div_box)
             .next_to(loop_filter, direction=DOWN, buff=BLOCK_BUFF)
@@ -549,7 +552,10 @@ class PLL(MovingCameraScene):
             vco.get_right(),
         )
         n_div_label = Tex(r"$\frac{1}{N}$")
-        n_div_box = SurroundingRectangle(n_div_label, buff=MED_SMALL_BUFF)
+        n_div_label_n2 = Tex(r"$\frac{1}{2}$")
+        n_div_box = SurroundingRectangle(
+            n_div_label, buff=MED_SMALL_BUFF, color=WHITE, fill_opacity=0
+        )
         ndiv = (
             VGroup(n_div_label, n_div_box)
             .next_to(loop_filter, direction=DOWN, buff=BLOCK_BUFF)
@@ -607,7 +613,7 @@ class PLL(MovingCameraScene):
         pfd_label = Tex(r"Phase Frequency\\Detector (PFD)").scale(label_scale)
         loop_filter_label = Tex(r"Loop Filter").scale(label_scale)
         vco_label = Tex(r"Voltage-Controlled\\Oscillator (VCO)").scale(label_scale)
-        ndiv_label = Tex(r"$1/N$ Frequency\\Divider").scale(label_scale)
+        ndiv_label_below = Tex(r"$1/N$ Frequency\\Divider").scale(label_scale)
 
         lo = BLOCKS.get("oscillator").copy()
         lo_label = Tex(r"Local Oscillator\\(LO)").scale(label_scale)
@@ -966,7 +972,10 @@ class PLL(MovingCameraScene):
 
         self.play(self.camera.frame.animate.scale(1 / 1.2).move_to(ndiv))
         self.play(
-            FadeIn(ndiv_label.next_to(ndiv, direction=DOWN, buff=SMALL_BUFF), shift=UP)
+            FadeIn(
+                ndiv_label_below.next_to(ndiv, direction=DOWN, buff=SMALL_BUFF),
+                shift=UP,
+            )
         )
 
         self.wait(0.5)
@@ -1030,7 +1039,7 @@ class PLL(MovingCameraScene):
 
         self.camera.frame.save_state()
 
-        pll.add(lo, lo_label, pfd_label, loop_filter_label, vco_label, ndiv_label)
+        pll.add(lo, lo_label, pfd_label, loop_filter_label, vco_label, ndiv_label_below)
 
         lo_ax_group = VGroup(lo_ax, lo_labels, lo_f_label).to_corner(UL).shift(UL)
 
@@ -1183,6 +1192,12 @@ class PLL(MovingCameraScene):
             Tex("$A$", font_size=DEFAULT_FONT_SIZE),
         )
 
+        ndiv_val = ValueTracker(2)
+        fb_signal = fb_ax.plot(
+            lambda t: A * np.sin(2 * PI * (f_lo / ndiv_val.get_value()) * t),
+            x_range=[0, 1, step],
+        )
+
         fb_ax_group = VGroup(fb_ax, fb_f_label, fb_labels).next_to(
             lo_ax_group, direction=DOWN, aligned_edge=LEFT
         )
@@ -1330,7 +1345,7 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(vco.animate.set_opacity(1))
+        self.play(vco.animate.set_opacity(1), from_vco.animate.set_opacity(1))
 
         self.wait(0.5)
 
@@ -1379,8 +1394,6 @@ class PLL(MovingCameraScene):
             loop_filter_phase_tracker.animate.increment_value(PI),
             f_vco_tracker.animate.increment_value(-0.5),
         )
-        # self.play(
-        # )
 
         self.wait(0.5)
 
@@ -1388,12 +1401,41 @@ class PLL(MovingCameraScene):
             loop_filter_phase_tracker.animate.increment_value(PI),
             f_vco_tracker.animate.increment_value(0.5),
         )
-        # self.play(
-        # )
+        loop_filter_out.remove_updater(loop_filter_out_updater)
+
+        self.wait(0.5)
+
+        self.play(
+            f_vco_tracker.animate(
+                run_time=3, rate_func=rate_functions.ease_in_circ
+            ).increment_value(6)
+        )
+
+        self.wait(0.5)
+
+        self.play(f_vco_tracker.animate(run_time=1).increment_value(-6))
+
+        self.wait(0.5)
+
+        self.play(
+            # ndiv.animate.set_opacity(1),
+            ndiv_to_phase_detector.animate.set_opacity(1),
+            n_div_label.animate.set_opacity(1),
+            n_div_box.animate.set_stroke(color=WHITE, opacity=1).set_fill(opacity=0),
+            vco_to_ndiv.animate.set_opacity(1),
+            vco_output_conn.animate.set_opacity(1),
+        )
+
+        self.wait(0.5)
+
+        self.play(Transform(n_div_label, n_div_label_n2.move_to(n_div_label)))
+
+        # self.wait(0.5)
+
+        # self.play()
 
         self.wait(2)
 
-        loop_filter_out.remove_updater(loop_filter_out_updater)
         vco_f_label.remove_updater(vco_f_label_updater)
         vco_signal.remove_updater(vco_signal_updater)
 
