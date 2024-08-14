@@ -1133,8 +1133,8 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
-        pfd_piecewise_top = Tex(r"$I > 0 \ , \ f_{LO} > f_{feedback}$")
-        pfd_piecewise_bot = Tex(r"$I < 0 \ , \ f_{LO} < f_{feedback}$").next_to(
+        pfd_piecewise_top = Tex(r"$I > 0 \ , \ f_{LO} > f_{\text{feedback}}$")
+        pfd_piecewise_bot = Tex(r"$I < 0 \ , \ f_{LO} < f_{\text{feedback}}$").next_to(
             pfd_piecewise_top, direction=DOWN, buff=MED_SMALL_BUFF
         )
         pfd_piecewise_brace = Brace(
@@ -1172,6 +1172,12 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
+        f_vco_tracker = ValueTracker(f_lo / 2)
+        ndiv_val_tracker = ValueTracker(2)
+        f_fb_tracker = ValueTracker(
+            f_vco_tracker.get_value() / ndiv_val_tracker.get_value()
+        )
+
         fb_ax = Axes(
             x_range=[-0.1, duration, duration / 4],
             y_range=[-1.5, 1.5, 1],
@@ -1186,20 +1192,30 @@ class PLL(MovingCameraScene):
             .next_to(fb_ax, direction=UP, buff=MED_SMALL_BUFF)
             .shift(RIGHT)
         )
+        fb_f_label_w_val = (
+            Tex(
+                r"$f_{\text{feedback}}=\ $",
+                f"{int(1000 * f_fb_tracker.get_value() / f_lo)} kHz",
+            )
+            .next_to(fb_ax, direction=UP, buff=MED_SMALL_BUFF)
+            .shift(RIGHT)
+        )
 
         fb_labels = fb_ax.get_axis_labels(
             Tex("$t$", font_size=DEFAULT_FONT_SIZE),
             Tex("$A$", font_size=DEFAULT_FONT_SIZE),
         )
 
-        ndiv_val = ValueTracker(2)
-        fb_signal = fb_ax.plot(
-            lambda t: A * np.sin(2 * PI * (f_lo / ndiv_val.get_value()) * t),
-            x_range=[0, 1, step],
-        )
-
         fb_ax_group = VGroup(fb_ax, fb_f_label, fb_labels).next_to(
             lo_ax_group, direction=DOWN, aligned_edge=LEFT
+        )
+
+        fb_signal = fb_ax.plot(
+            lambda t: A
+            * np.sin(
+                2 * PI * (f_vco_tracker.get_value() / ndiv_val_tracker.get_value()) * t
+            ),
+            x_range=[0, 1, step],
         )
 
         fb_f_plot_p1 = ndiv_to_phase_detector_2.get_midpoint() + [-0.1, 0, 0]
@@ -1251,7 +1267,7 @@ class PLL(MovingCameraScene):
         _tracker = ValueTracker(0)
         pfd_out = always_redraw(
             lambda: FunctionGraph(
-                lambda t: signal.square(2 * PI * pfd_out_f * t - PI / 2, duty=0.5)
+                lambda t: ((signal.square(2 * PI * pfd_out_f * t - PI / 2) + 1) / 2)
                 + np.random.normal(0, 0.05, 1)[0],
                 x_range=[
                     0,
@@ -1264,8 +1280,25 @@ class PLL(MovingCameraScene):
         pfd_out_label = (
             Tex(r"PFD Output\\(Dirty)").scale(0.6).next_to(pfd_out, direction=UP)
         )
+
+        loop_filter_phase_tracker = ValueTracker(0)  # 0 -> PI
         loop_filter_out = FunctionGraph(
-            lambda t: signal.square(2 * PI * pfd_out_f * t - PI / 2, duty=0.5),
+            lambda t: (
+                (
+                    signal.square(
+                        2 * PI * pfd_out_f * t
+                        - PI / 2
+                        + loop_filter_phase_tracker.get_value(),
+                        duty=0.5,
+                    )
+                    + 1
+                )
+                / 2
+            )
+            * signal.square(
+                2 * PI * pfd_out_f / 2 * t + loop_filter_phase_tracker.get_value() / 2,
+                duty=0.5,
+            ),
             x_range=[0, pfd_out_length - step, step],
             use_smoothing=False,
         ).shift(DOWN * 3.5)
@@ -1287,9 +1320,10 @@ class PLL(MovingCameraScene):
             y_length=y_len,
         )
 
-        f_vco_tracker = ValueTracker(f_lo / 2)
         vco_f_label = (
-            Tex(r"$f_{VCO}=\ $", f"{int(1000 * (f_vco_tracker.get_value() / f_lo))}kHz")
+            Tex(
+                r"$f_{VCO}=\ $", f"{int(1000 * (f_vco_tracker.get_value() / f_lo))} kHz"
+            )
             .next_to(vco_ax, direction=UP, buff=MED_SMALL_BUFF)
             .shift(RIGHT)
         )
@@ -1334,8 +1368,10 @@ class PLL(MovingCameraScene):
         )
         self.play(
             VGroup(loop_filter_out, loop_filter_out_label)
-            .animate.next_to(vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF)
-            .to_edge(DOWN, buff=0)
+            .animate.next_to(
+                vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF, aligned_edge=UP
+            )
+            # .to_edge(DOWN, buff=0)
             .shift(DOWN / 2),
             Create(vco_ax),
             Create(vco_labels),
@@ -1349,22 +1385,48 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
-        loop_filter_phase_tracker = ValueTracker(0)  # 0 -> PI
-
         def loop_filter_out_updater(m: Mobject):
+            # m.function = lambda t: (
+            #     (
+            #         signal.square(
+            #             2 * PI * pfd_out_f * t
+            #             - PI / 2
+            #             + loop_filter_phase_tracker.get_value(),
+            #             duty=0.5,
+            #         )
+            #         + 1
+            #     )
+            #     / 2
+            # ) * signal.square(
+            #     2 * PI * pfd_out_f / 2 * t + loop_filter_phase_tracker.get_value() / 2,
+            #     duty=0.5,
+            # )
             m.become(
                 FunctionGraph(
-                    lambda t: signal.square(
-                        2 * PI * pfd_out_f * t
-                        - PI / 2
-                        + loop_filter_phase_tracker.get_value(),
+                    lambda t: (
+                        (
+                            signal.square(
+                                2 * PI * pfd_out_f * t
+                                - PI / 2
+                                + loop_filter_phase_tracker.get_value(),
+                                duty=0.5,
+                            )
+                            + 1
+                        )
+                        / 2
+                    )
+                    * signal.square(
+                        2 * PI * pfd_out_f / 2 * t
+                        + loop_filter_phase_tracker.get_value() / 2,
                         duty=0.5,
                     ),
                     x_range=[0, pfd_out_length - step, step],
                     use_smoothing=False,
                 )
-                .next_to(vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF)
-                .to_edge(DOWN, buff=0)
+                .next_to(
+                    vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF, aligned_edge=UP
+                )
+                # .to_edge(DOWN, buff=0)
                 .shift(DOWN / 2)
             )
 
@@ -1376,13 +1438,31 @@ class PLL(MovingCameraScene):
                 )
             )
 
+        def fb_signal_updater(m: Mobject):
+            m.become(
+                fb_ax.plot(
+                    lambda t: A * np.sin(2 * PI * f_fb_tracker.get_value() * t),
+                    x_range=[0, 1, step],
+                )
+            )
+
         def vco_f_label_updater(m: Mobject):
             m.become(
                 Tex(
                     r"$f_{VCO}=\ $",
-                    f"{int(1000 * (f_vco_tracker.get_value() / f_lo))}kHz",
+                    f"{int(1000 * (f_vco_tracker.get_value() / f_lo))} kHz",
                 )
                 .next_to(vco_ax, direction=UP, buff=MED_SMALL_BUFF)
+                .shift(RIGHT)
+            )
+
+        def fb_f_label_updater(m: Mobject):
+            m.become(
+                Tex(
+                    r"$f_{\text{feedback}}=\ $",
+                    f"{int(1000 * f_fb_tracker.get_value() / f_lo)} kHz",
+                )
+                .next_to(fb_ax, direction=UP, buff=MED_SMALL_BUFF)
                 .shift(RIGHT)
             )
 
@@ -1391,14 +1471,14 @@ class PLL(MovingCameraScene):
         vco_signal.add_updater(vco_signal_updater)
 
         self.play(
-            loop_filter_phase_tracker.animate.increment_value(PI),
+            loop_filter_phase_tracker.animate.increment_value(2 * PI),
             f_vco_tracker.animate.increment_value(-0.5),
         )
 
         self.wait(0.5)
 
         self.play(
-            loop_filter_phase_tracker.animate.increment_value(PI),
+            loop_filter_phase_tracker.animate.increment_value(2 * PI),
             f_vco_tracker.animate.increment_value(0.5),
         )
         loop_filter_out.remove_updater(loop_filter_out_updater)
@@ -1430,9 +1510,69 @@ class PLL(MovingCameraScene):
 
         self.play(Transform(n_div_label, n_div_label_n2.move_to(n_div_label)))
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play()
+        self.play(
+            Transform(fb_f_label, fb_f_label_w_val.move_to(fb_f_label)),
+            Create(fb_signal),
+        )
+        fb_signal.add_updater(fb_signal_updater)
+        fb_f_label.add_updater(fb_f_label_updater)
+
+        self.wait(0.5)
+
+        self.play(
+            f_vco_tracker.animate.increment_value(1),
+            f_fb_tracker.animate.increment_value(1 / ndiv_val_tracker.get_value()),
+        )
+        self.play(
+            f_vco_tracker.animate.increment_value(-1),
+            f_fb_tracker.animate.increment_value(-1 / ndiv_val_tracker.get_value()),
+        )
+
+        self.wait(0.5)
+
+        self.play(Indicate(lo_signal))
+
+        self.wait(0.5)
+
+        fb_signal.remove_updater(fb_signal_updater)
+        self.play(Indicate(fb_signal))
+        fb_signal.add_updater(fb_signal_updater)
+
+        self.wait(0.5)
+
+        loop_count_start = 1
+        n_loops = 5
+        loop_f_step = (f_lo - f_fb_tracker.get_value()) / n_loops
+
+        loop_count_tracker = ValueTracker(loop_count_start)
+        loop_counter = Tex(
+            f"Loop count: {int(loop_count_tracker.get_value())}"
+        ).to_corner(DR, buff=LARGE_BUFF)
+        loop_counter.add_updater(
+            lambda m: m.become(
+                Tex(f"Loop count: {int(loop_count_tracker.get_value())}")
+            ).to_corner(DR, buff=LARGE_BUFF)
+        )
+
+        self.play(FadeIn(loop_counter, shift=LEFT))
+        for loop_count in range(loop_count_start, n_loops + 1, 1):
+            loop_count_tracker.set_value(loop_count)
+            self.play(
+                f_vco_tracker.animate.increment_value(
+                    loop_f_step * ndiv_val_tracker.get_value()
+                ),
+                f_fb_tracker.animate.increment_value(loop_f_step),
+                run_time=0.5,
+            )
+
+        self.wait(0.5)
+
+        locked_label = Tex("LOCKED", color=GREEN).next_to(
+            loop_counter, direction=DOWN, buff=SMALL_BUFF
+        )
+        self.play(FadeIn(locked_label))
 
         self.wait(2)
 
