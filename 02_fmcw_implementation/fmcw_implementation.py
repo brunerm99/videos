@@ -1580,6 +1580,143 @@ class PLL(MovingCameraScene):
         vco_signal.remove_updater(vco_signal_updater)
 
 
+class MixerIntro(Scene):
+    def construct(self):
+        (
+            bd,
+            (
+                inp,
+                input_to_vco,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+        ) = get_bd()
+
+        carrier_freq = 10  # Carrier frequency in Hz
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+        A = 0.5
+        A_amped = 1
+
+        x_len = 6
+        y_len = 2.2
+
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        amp_labels = amp_ax.get_axis_labels(
+            Tex("$t$", font_size=DEFAULT_FONT_SIZE),
+            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+        sawtooth_amp_amped = lambda t: A_amped * np.sin(
+            2 * PI * sawtooth_modulating_cumsum(t)
+        )
+
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[0, 1, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+        sawtooth_amp_amped_graph = amp_ax.plot(
+            sawtooth_amp_amped,
+            x_range=[0, 1, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        fm_plot_group = VGroup(amp_ax, amp_labels, sawtooth_amp_graph).to_corner(
+            UL, buff=SMALL_BUFF
+        )
+
+        self.add(bd)
+
+        self.play(bd.animate.to_edge(DOWN))
+
+        fm_plot_pll_p1 = pll_block_to_pa.get_midpoint() + [0, 0.1, 0]
+        fm_plot_pll_p2 = fm_plot_group.get_bottom() + [0.1, 0.4, 0]
+
+        fm_plot_bezier_pll = CubicBezier(
+            fm_plot_pll_p1,
+            fm_plot_pll_p1 + [0, 1, 0],
+            fm_plot_pll_p2 + [0.5, -1, 0],
+            fm_plot_pll_p2,
+        )
+
+        self.play(*[Create(x) for x in fm_plot_group], Create(fm_plot_bezier_pll))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(fm_plot_bezier_pll),
+                fm_plot_group.animate.set_x(pa_to_splitter.get_end()[0]),
+                lag_ratio=0.7,
+            )
+        )
+
+        fm_plot_pa_p1 = pa_to_splitter.get_midpoint() + [0, 0.1, 0]
+        fm_plot_pa_p2 = fm_plot_group.get_bottom() + [0.1, 0.4, 0]
+
+        fm_plot_bezier_pa = CubicBezier(
+            fm_plot_pa_p1,
+            fm_plot_pa_p1 + [0, 1, 0],
+            fm_plot_pa_p2 + [0.5, -1, 0],
+            fm_plot_pa_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(fm_plot_bezier_pa),
+                Transform(
+                    sawtooth_amp_graph,
+                    sawtooth_amp_amped_graph.move_to(sawtooth_amp_graph),
+                ),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(2)
+
+
 """ Testing """
 
 
