@@ -2087,7 +2087,7 @@ class MixerIntro(MovingCameraScene):
         self.wait(2)
 
 
-class Mixer(Scene):
+class Mixer(MovingCameraScene):
     def construct(self):
         part_2 = Tex("Part 2: Mixing").scale(2)
 
@@ -2158,18 +2158,26 @@ class Mixer(Scene):
             color=IF_COLOR,
         )
 
-        f_tx_label = MathTex(r"f_{TX} (t)", color=TX_COLOR).next_to(
+        f_tx_label = MathTex(r"f_{TX}", r"(t)", color=TX_COLOR).next_to(
             tx_signal, buff=MED_SMALL_BUFF
         )
+        f_tx_at_t0_label = Tex(
+            r"$f_{TX}$", r"$(t_{0})$", f"$ = {f_tx}$ GHz", color=TX_COLOR
+        ).next_to(tx_signal, buff=MED_SMALL_BUFF)
         f_rx_label = (
-            MathTex(r"f_{TX}", r"(t)", color=RX_COLOR)
-            .next_to(rx_signal, direction=UP, buff=MED_SMALL_BUFF, aligned_edge=LEFT)
-            .shift(RIGHT * 1.5)
+            MathTex(r"f_{TX}", r"(t)", color=RX_COLOR).next_to(
+                rx_signal, direction=UP, buff=MED_SMALL_BUFF, aligned_edge=LEFT
+            )
+            # .shift(RIGHT * 1.5)
         )
         f_rx_w_shift_label = (
-            MathTex(r"f_{TX}", r"(t - t_{shift})", color=RX_COLOR)
-            .next_to(rx_signal, direction=UP, buff=MED_SMALL_BUFF, aligned_edge=LEFT)
-            .shift(RIGHT * 1.5)
+            Tex(
+                r"$f_{TX}$",
+                r"$(t_{0} - t_{shift})$",
+                f"$ = {f_rx}$ GHz",
+                color=RX_COLOR,
+            ).next_to(rx_signal, direction=UP, buff=MED_SMALL_BUFF, aligned_edge=LEFT)
+            # .shift(RIGHT * 1.5)
         )
 
         lo_arrow = (
@@ -2260,20 +2268,130 @@ class Mixer(Scene):
             rfmw_mixer_article, marki_mixer_video, in_the_desc, in_the_desc_arrow
         )
 
+        """ Reminder """
+
+        def get_t_shift_dist(t0: float, t1: float, graph, axes: Axes):
+            return (
+                axes.input_to_graph_point(t1, graph)
+                - axes.input_to_graph_point(t0, graph)
+            ) * RIGHT
+
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+        A = 1
+
+        x_len = 6
+        y_len = 2.2
+
+        f_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 30, 5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_corner(DL)
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+        sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+        sawtooth_f_tx_graph = f_ax.plot(
+            sawtooth_modulating_signal,
+            x_range=[0, 1, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        t_shift = 0.1
+        t_shift_dist = get_t_shift_dist(0, t_shift, sawtooth_f_tx_graph, f_ax)
+        sawtooth_f_rx_graph = (
+            sawtooth_f_tx_graph.copy().set_color(RX_COLOR).shift(t_shift_dist)
+        )
+
+        t_now = 0.4
+        f_tx_dot = Dot(f_ax.input_to_graph_point(t_now, sawtooth_f_tx_graph))
+        f_rx_dot = Dot(
+            f_ax.input_to_graph_point(t_now - t_shift, sawtooth_f_rx_graph)
+        ).shift(t_shift_dist)
+
+        f_tx_graph_label = (
+            Tex("12 GHz", color=TX_COLOR).move_to(f_tx_dot).shift(UP * 1.5 + RIGHT)
+        )
+        f_rx_graph_label = (
+            Tex("10 GHz", color=RX_COLOR).move_to(f_tx_dot).shift(UP + LEFT)
+        )
+
+        f_tx_dot_bezier = CubicBezier(
+            f_tx_dot.get_center() + [0.1, 0.1, 0],
+            f_tx_dot.get_center() + [0.5, 0.5, 0],
+            f_tx_graph_label.get_bottom() + [0, -0.5, 0],
+            f_tx_graph_label.get_bottom() + [0, -0.1, 0],
+            color=TX_COLOR,
+        )
+        f_rx_dot_bezier = CubicBezier(
+            f_rx_dot.get_center() + [-0.1, 0.1, 0],
+            f_rx_dot.get_center() + [-0.5, 0.5, 0],
+            f_rx_graph_label.get_bottom() + [0, -0.5, 0],
+            f_rx_graph_label.get_bottom() + [0, -0.1, 0],
+            color=RX_COLOR,
+        )
+
+        unrealistic = Tex(r"2 GHz difference\\unrealistic").next_to(
+            f_tx_dot, direction=UP, buff=LARGE_BUFF * 2
+        )
+        unrealistic_to_f_tx = Arrow(
+            unrealistic.get_bottom(), f_tx_graph_label.get_top()
+        )
+        unrealistic_to_f_rx = Arrow(
+            unrealistic.get_bottom(), f_rx_graph_label.get_top()
+        )
+
+        """ /Reminder"""
+
+        if_eqn_scale = 0.7
         if_mult = (
             mixer_x_yellow.copy()
             .scale(0.2)
             .next_to(if_signal, direction=UP, buff=MED_SMALL_BUFF)
+            .shift(LEFT / 2)
         )
-        f_tx_if_label = f_tx_label.copy().next_to(
-            if_mult, direction=LEFT, buff=SMALL_BUFF
+        f_tx_if_label = (
+            f_tx_at_t0_label.copy()[:2]
+            .scale(if_eqn_scale)
+            .next_to(if_mult, direction=LEFT, buff=SMALL_BUFF)
         )
-        f_rx_if_label = f_rx_label.copy().next_to(
-            if_mult, direction=RIGHT, buff=SMALL_BUFF
+        f_rx_if_label = (
+            f_rx_w_shift_label.copy()[:2]
+            .scale(if_eqn_scale)
+            .next_to(if_mult, direction=RIGHT, buff=SMALL_BUFF)
         )
-        f_if_label = MathTex(r"f_{IF}=\ ").next_to(
-            f_tx_if_label, direction=LEFT, buff=SMALL_BUFF
+        f_if_label = (
+            MathTex(r"f_{IF}=\ ")
+            .scale(if_eqn_scale)
+            .next_to(f_tx_if_label, direction=LEFT, buff=SMALL_BUFF)
         )
+
+        mult_sines_left = MathTex(
+            r"\sin{2 \pi f_1 t} \cdot \sin{2 \pi f_2 t}",
+            r"\ =\ ",
+            r"\frac{1}{2}",
+            r"[",
+            r"\cos{(f_1 - f_2) 2 \pi t}",
+            r"\ -\ ",
+            r"\cos{(f_1 + f_2) 2 \pi t}",
+            r"]",
+        ).to_corner(DL, buff=LARGE_BUFF)
 
         """ Animations """
 
@@ -2315,6 +2433,16 @@ class Mixer(Scene):
 
         self.wait(0.5)
 
+        self.play(
+            LaggedStart(
+                Transform(f_tx_label[1], f_tx_at_t0_label[1]),
+                Create(f_tx_at_t0_label[2]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
         self.play(FadeIn(lo_port))
 
         self.wait(0.5)
@@ -2347,11 +2475,75 @@ class Mixer(Scene):
 
         self.wait(0.5)
 
-        self.play(Transform(f_rx_label[1], f_rx_w_shift_label[1]))
+        self.play(
+            LaggedStart(
+                Transform(f_rx_label[1], f_rx_w_shift_label[1]),
+                Create(f_rx_w_shift_label[2]),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
         self.play(FadeIn(rf_port))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(f_ax),
+                Create(sawtooth_f_tx_graph),
+                Create(sawtooth_f_rx_graph),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Create(f_tx_dot),
+                    Create(f_tx_dot_bezier),
+                    FadeIn(f_tx_graph_label),
+                    lag_ratio=0.4,
+                ),
+                LaggedStart(
+                    Create(f_rx_dot),
+                    Create(f_rx_dot_bezier),
+                    FadeIn(f_rx_graph_label),
+                    lag_ratio=0.4,
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(unrealistic, unrealistic_to_f_tx, unrealistic_to_f_rx))
+
+        self.wait(1)
+
+        self.play(
+            FadeOut(
+                f_ax,
+                sawtooth_f_tx_graph,
+                sawtooth_f_rx_graph,
+                f_tx_dot,
+                f_tx_dot_bezier,
+                f_tx_graph_label,
+                f_rx_dot,
+                f_rx_dot_bezier,
+                f_rx_graph_label,
+                shift=DOWN,
+            ),
+            FadeOut(
+                unrealistic,
+                unrealistic_to_f_tx,
+                unrealistic_to_f_rx,
+                shift=UP,
+            ),
+        )
 
         self.wait(0.5)
 
