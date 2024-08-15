@@ -985,21 +985,18 @@ class PLL(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            LaggedStart(
-                VGroup(
-                    ndiv_to_phase_detector,
-                    ndiv,
-                    vco_to_ndiv,
-                    phase_detector_to_loop_filter,
-                    loop_filter,
-                    loop_filter_to_vco,
-                    vco,
-                    vco_output_conn,
-                    from_vco,
-                ).animate.set_opacity(0.2),
-                # to_phase_detector.animate.set_color(GREEN),
-                lag_ratio=0.5,
-            )
+            VGroup(
+                ndiv_to_phase_detector,
+                n_div_label,
+                vco_to_ndiv,
+                phase_detector_to_loop_filter,
+                loop_filter,
+                loop_filter_to_vco,
+                vco,
+                vco_output_conn,
+                from_vco,
+            ).animate.set_opacity(0.2),
+            n_div_box.animate.set_stroke(color=WHITE, opacity=0.2).set_fill(opacity=0),
         )
 
         lo.scale_to_fit_width(vco.width).next_to(
@@ -1366,13 +1363,25 @@ class PLL(MovingCameraScene):
                 pfd_out_to_loop_filter_out,
             ),
         )
+        loop_filter_shifted_copy = loop_filter.copy().next_to(
+            loop_filter_out_label.copy().next_to(
+                vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF
+            ),
+            direction=DOWN,
+            buff=SMALL_BUFF,
+        )
+        loop_filter_shift = loop_filter_shifted_copy.get_corner(DL)
+        loop_filter_base_shift = UP
         self.play(
-            VGroup(loop_filter_out, loop_filter_out_label)
-            .animate.next_to(
-                vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF, aligned_edge=UP
-            )
-            # .to_edge(DOWN, buff=0)
-            .shift(DOWN / 2),
+            loop_filter_out_label.animate.next_to(
+                vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF
+            ).shift(loop_filter_base_shift),
+            loop_filter_out.animate.shift(
+                -(
+                    loop_filter_out.get_corner(DL)
+                    - (loop_filter_shift + loop_filter_base_shift)
+                )
+            ),
             Create(vco_ax),
             Create(vco_labels),
             FadeIn(vco_f_label),
@@ -1386,21 +1395,6 @@ class PLL(MovingCameraScene):
         self.wait(0.5)
 
         def loop_filter_out_updater(m: Mobject):
-            # m.function = lambda t: (
-            #     (
-            #         signal.square(
-            #             2 * PI * pfd_out_f * t
-            #             - PI / 2
-            #             + loop_filter_phase_tracker.get_value(),
-            #             duty=0.5,
-            #         )
-            #         + 1
-            #     )
-            #     / 2
-            # ) * signal.square(
-            #     2 * PI * pfd_out_f / 2 * t + loop_filter_phase_tracker.get_value() / 2,
-            #     duty=0.5,
-            # )
             m.become(
                 FunctionGraph(
                     lambda t: (
@@ -1422,12 +1416,7 @@ class PLL(MovingCameraScene):
                     ),
                     x_range=[0, pfd_out_length - step, step],
                     use_smoothing=False,
-                )
-                .next_to(
-                    vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF, aligned_edge=UP
-                )
-                # .to_edge(DOWN, buff=0)
-                .shift(DOWN / 2)
+                ).shift(loop_filter_shift + loop_filter_base_shift)
             )
 
         def vco_signal_updater(m: Mobject):
@@ -1481,7 +1470,6 @@ class PLL(MovingCameraScene):
             loop_filter_phase_tracker.animate.increment_value(2 * PI),
             f_vco_tracker.animate.increment_value(0.5),
         )
-        loop_filter_out.remove_updater(loop_filter_out_updater)
 
         self.wait(0.5)
 
@@ -1543,23 +1531,26 @@ class PLL(MovingCameraScene):
         self.wait(0.5)
 
         loop_count_start = 1
-        n_loops = 5
+        n_loops = 10
         loop_f_step = (f_lo - f_fb_tracker.get_value()) / n_loops
 
         loop_count_tracker = ValueTracker(loop_count_start)
-        loop_counter = Tex(
-            f"Loop count: {int(loop_count_tracker.get_value())}"
-        ).to_corner(DR, buff=LARGE_BUFF)
-        loop_counter.add_updater(
-            lambda m: m.become(
-                Tex(f"Loop count: {int(loop_count_tracker.get_value())}")
+        loop_counter = always_redraw(
+            lambda: Tex(
+                "Loop count: ", f"{int(loop_count_tracker.get_value())}"
             ).to_corner(DR, buff=LARGE_BUFF)
         )
+        loop_counter_box = SurroundingRectangle(
+            Tex("Loop count: 10").move_to(loop_counter),
+            color=YELLOW,
+            buff=SMALL_BUFF * 1.2,
+        )
 
-        self.play(FadeIn(loop_counter, shift=LEFT))
+        self.play(FadeIn(loop_counter), Create(loop_counter_box))
         for loop_count in range(loop_count_start, n_loops + 1, 1):
             loop_count_tracker.set_value(loop_count)
             self.play(
+                Indicate(loop_counter[1]),
                 f_vco_tracker.animate.increment_value(
                     loop_f_step * ndiv_val_tracker.get_value()
                 ),
@@ -1572,12 +1563,70 @@ class PLL(MovingCameraScene):
         locked_label = Tex("LOCKED", color=GREEN).next_to(
             loop_counter, direction=DOWN, buff=SMALL_BUFF
         )
-        self.play(FadeIn(locked_label))
+        self.play(
+            LaggedStart(
+                Transform(
+                    loop_counter_box,
+                    SurroundingRectangle(VGroup(loop_counter, locked_label)),
+                ),
+                FadeIn(locked_label),
+                lag_ratio=0.7,
+            )
+        )
 
-        self.wait(2)
+        self.wait(0.5)
 
+        n_loops = 10
+        current_loop = int(loop_count_tracker.get_value())
+        step_direction = -1
+
+        for loop_count in range(current_loop, current_loop + n_loops + 1, 1):
+            loop_count_tracker.set_value(loop_count)
+            self.play(
+                Indicate(loop_counter[1]),
+                f_vco_tracker.animate.increment_value(
+                    step_direction * loop_f_step * ndiv_val_tracker.get_value()
+                ),
+                f_fb_tracker.animate.increment_value(step_direction * loop_f_step),
+                loop_filter_phase_tracker.animate.increment_value(2 * PI),
+                run_time=0.5,
+            )
+            step_direction *= -1
+
+        self.wait(1)
+
+        loop_filter_out.remove_updater(loop_filter_out_updater)
         vco_f_label.remove_updater(vco_f_label_updater)
         vco_signal.remove_updater(vco_signal_updater)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(vco_signal),
+                    Uncreate(lo_signal),
+                    Uncreate(fb_signal),
+                    Uncreate(loop_filter_out),
+                    Uncreate(loop_counter_box),
+                    Uncreate(lo_f_bezier_group),
+                    Uncreate(fb_f_bezier_group),
+                    Uncreate(lo_ax_group),
+                    Uncreate(fb_ax_group),
+                    Uncreate(vco_ax_group),
+                    FadeOut(
+                        loop_counter,
+                        loop_filter_out_label,
+                        pfd_piecewise,
+                        pfd_output_label,
+                        pfd_output_label_bezier_group,
+                        locked_label,
+                    ),
+                ),
+                pll.animate.move_to(ORIGIN).to_edge(UP, buff=MED_SMALL_BUFF),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(2)
 
 
 class MixerIntro(Scene):
@@ -1609,6 +1658,49 @@ class MixerIntro(Scene):
             ),
         ) = get_bd()
 
+        tx_section = Group(
+            inp,
+            input_to_vco,
+            pll_block,
+            pll_block_to_pa,
+            pa,
+            pa_to_splitter,
+            splitter,
+            splitter_to_tx_antenna,
+            tx_antenna,
+        )
+        tx_section_wo_splitter = Group(
+            inp,
+            input_to_vco,
+            pll_block,
+            pll_block_to_pa,
+            pa,
+            pa_to_splitter,
+            tx_antenna,
+        )
+        tx_section_before_splitter = Group(
+            inp,
+            input_to_vco,
+            pll_block,
+            pll_block_to_pa,
+            pa,
+            pa_to_splitter,
+        )
+        rx_section = Group(
+            splitter_to_mixer,
+            mixer,
+            lna,
+            lna_to_mixer,
+            rx_antenna,
+            rx_antenna_to_lna,
+            mixer_to_lp_filter,
+            lp_filter,
+            lp_filter_to_adc,
+            adc,
+            adc_to_signal_proc,
+            signal_proc,
+        )
+
         carrier_freq = 10  # Carrier frequency in Hz
         sawtooth_carrier_freq = 14
         sawtooth_modulation_index = 12
@@ -1618,12 +1710,12 @@ class MixerIntro(Scene):
         A = 0.5
         A_amped = 1
 
-        x_len = 6
-        y_len = 2.2
+        x_len = 4
+        y_len = 1.2
 
         amp_ax = Axes(
             x_range=[-0.1, duration, duration / 4],
-            y_range=[-2, 2, 0.5],
+            y_range=[-1, 1, 0.5],
             tips=False,
             axis_config={"include_numbers": False},
             x_length=x_len,
@@ -1632,7 +1724,7 @@ class MixerIntro(Scene):
 
         amp_labels = amp_ax.get_axis_labels(
             Tex("$t$", font_size=DEFAULT_FONT_SIZE),
-            Tex("$A$", font_size=DEFAULT_FONT_SIZE),
+            Tex("", font_size=DEFAULT_FONT_SIZE),
         )
 
         sawtooth_modulating_signal = (
@@ -1689,7 +1781,7 @@ class MixerIntro(Scene):
             LaggedStart(
                 Uncreate(fm_plot_bezier_pll),
                 fm_plot_group.animate.set_x(pa_to_splitter.get_end()[0]),
-                lag_ratio=0.7,
+                lag_ratio=0.3,
             )
         )
 
@@ -1699,9 +1791,11 @@ class MixerIntro(Scene):
         fm_plot_bezier_pa = CubicBezier(
             fm_plot_pa_p1,
             fm_plot_pa_p1 + [0, 1, 0],
-            fm_plot_pa_p2 + [0.5, -1, 0],
+            fm_plot_pa_p2 + [0.5, -1.5, 0],
             fm_plot_pa_p2,
         )
+
+        sawtooth_amp_graph.save_state()
 
         self.play(
             LaggedStart(
@@ -1712,6 +1806,105 @@ class MixerIntro(Scene):
                 ),
                 lag_ratio=0.6,
             )
+        )
+
+        self.wait(0.5)
+
+        amp_ax_rx = amp_ax.copy()
+        amp_labels_rx = amp_labels.copy()
+        sawtooth_amp_graph_rx = sawtooth_amp_graph.copy().set_color(RX_COLOR)
+        fm_plot_group_rx = (
+            VGroup(amp_ax_rx, amp_labels_rx, sawtooth_amp_graph_rx)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Uncreate(fm_plot_bezier_pa),
+                bd.animate.move_to(ORIGIN).shift(LEFT),
+                fm_plot_group.animate.next_to(
+                    splitter_to_tx_antenna.get_midpoint(), direction=UP
+                )
+                .to_edge(UP, buff=MED_SMALL_BUFF)
+                .shift(LEFT),
+                TransformFromCopy(fm_plot_group, fm_plot_group_rx),
+                # AnimationGroup(Create(amp_ax_rx), Create(amp_labels_rx)),
+                # Create(sawtooth_amp_graph_rx),
+                lag_ratio=0.5,
+            ),
+        )
+
+        fm_plot_tx_p1 = splitter_to_tx_antenna.get_midpoint() + [0, 0.1, 0]
+        fm_plot_tx_p2 = fm_plot_group.get_bottom() + [0.1, 0.4, 0]
+
+        fm_plot_tx_bezier = CubicBezier(
+            fm_plot_tx_p1,
+            fm_plot_tx_p1 + [0, 0.5, 0],
+            fm_plot_tx_p2 + [0.5, -0.5, 0],
+            fm_plot_tx_p2,
+        )
+
+        fm_plot_rx_p1 = splitter_to_mixer.get_midpoint() + [0.1, 0, 0]
+        fm_plot_rx_p2 = fm_plot_group_rx.get_left() + [-0.1, 0, 0]
+
+        fm_plot_rx_bezier = CubicBezier(
+            fm_plot_rx_p1,
+            fm_plot_rx_p1 + [0.5, 0.5, 0],
+            fm_plot_rx_p2 + [-0.5, -0.5, 0],
+            fm_plot_rx_p2,
+        )
+
+        self.play(
+            Create(fm_plot_tx_bezier),
+            Create(fm_plot_rx_bezier),
+            sawtooth_amp_graph.animate.stretch(0.5, dim=1),
+            sawtooth_amp_graph_rx.animate.stretch(0.5, dim=1),
+        )
+
+        bd.save_state()
+
+        self.play(
+            ShrinkToCenter(splitter),
+            tx_section_before_splitter.animate.set_y(splitter_to_tx_antenna.get_y()),
+            Uncreate(splitter_to_mixer),
+        )
+        pa_to_tx_antenna = Line(pa.get_right(), splitter_to_tx_antenna.get_left())
+        self.play(Transform(pa_to_splitter, pa_to_tx_antenna))
+
+        mixer_lo = mixer.get_top()
+        coupler_up = Line(mixer_lo, [mixer_lo[0], pa_to_tx_antenna.get_y() - 0.3, 0])
+        coupler_left = Line(coupler_up.get_end(), coupler_up.get_end() + LEFT * 1.5)
+
+        fm_plot_rx_coupler_p1 = coupler_up.get_midpoint() + [0.1, 0, 0]
+        fm_plot_rx_coupler_p2 = fm_plot_group_rx.get_left() + [-0.1, 0, 0]
+
+        fm_plot_rx_coupler_bezier = CubicBezier(
+            fm_plot_rx_coupler_p1,
+            fm_plot_rx_coupler_p1 + [0.5, 0.5, 0],
+            fm_plot_rx_coupler_p2 + [-0.5, -0.5, 0],
+            fm_plot_rx_coupler_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(coupler_up),
+                    Transform(fm_plot_rx_bezier, fm_plot_rx_coupler_bezier),
+                ),
+                Create(coupler_left),
+                AnimationGroup(
+                    sawtooth_amp_graph.animate.stretch((1 / 0.5) * 0.8, dim=1),
+                    sawtooth_amp_graph_rx.animate.stretch((1 / 0.5) * 0.2, dim=1),
+                ),
+                lag_ratio=0.9,
+            )
+        )
+
+        self.wait(0.5)
+
+        tx_propagation = fm_plot_group.copy().next_to(
+            tx_antenna.get_corner(UR, buff=SMALL_BUFF)
         )
 
         self.wait(2)
@@ -1763,21 +1956,141 @@ class LoopFilter(Scene):
     def construct(self):
         step = 1 / 1000
         pfd_out_f = 0.5
-        length = 1 / pfd_out_f
-        x = ValueTracker(0)
-        pfd_out = always_redraw(
+        pfd_out_length = 1 / pfd_out_f
+
+        ref_box = Square().to_edge(LEFT, buff=LARGE_BUFF)
+
+        loop_filter_phase_tracker = ValueTracker(0)
+        loop_filter_out = always_redraw(
             lambda: FunctionGraph(
-                lambda t: signal.square(2 * PI * pfd_out_f * t - PI / 2, duty=0.5)
-                + np.random.normal(0, 0.05, 1)[0],
-                x_range=[-0.25 * length, 1.25 * length - step, step],
+                lambda t: (
+                    (
+                        signal.square(
+                            2 * PI * pfd_out_f * t
+                            - PI / 2
+                            + loop_filter_phase_tracker.get_value(),
+                            duty=0.5,
+                        )
+                        + 1
+                    )
+                    / 2
+                )
+                * signal.square(
+                    2 * PI * pfd_out_f / 2 * t
+                    + loop_filter_phase_tracker.get_value() / 2,
+                    duty=0.5,
+                ),
+                x_range=[0, pfd_out_length - step, step],
                 use_smoothing=False,
             )
-            # .to_edge(DOWN)
-            .shift(DOWN * 3 + LEFT * 2)
+            # .next_to(ref_box)
+            .shift(LEFT + DOWN * 1.5)
         )
 
-        self.add(pfd_out)
+        self.add(loop_filter_out)
 
-        self.play(x.animate.set_value(1), run_time=2)
+        self.play(loop_filter_phase_tracker.animate.increment_value(2 * PI), run_time=1)
+
+        self.wait(0.5)
+
+        self.play(loop_filter_phase_tracker.animate.increment_value(2 * PI), run_time=1)
 
         self.wait(1)
+
+
+class CurveFunction(Scene):
+    def construct(self):
+        carrier_freq = 10  # Carrier frequency in Hz
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+        A = 1
+
+        x_len = 6
+        y_len = 2.2
+
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+        sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[0, 1, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        p1 = sawtooth_amp_graph.get_start()
+        p2 = sawtooth_amp_graph.get_end()
+
+        bez = CubicBezier(
+            p1,
+            p1 + [1, 1, 0],
+            p2 + [-1, 1, 0],
+            p2,
+        )
+
+        self.add(sawtooth_amp_graph, bez)
+
+        self.play(
+            ApplyPointwiseFunction(
+                bez.get_curve_functions_with_lengths, sawtooth_amp_graph
+            )
+        )
+
+
+class Propagation(Scene):
+    def construct(self):
+        carrier_freq = 10  # Carrier frequency in Hz
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+        A = 1
+
+        x_len = 6
+        y_len = 2.2
+
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+        sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[0, 1, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
