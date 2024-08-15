@@ -1629,7 +1629,7 @@ class PLL(MovingCameraScene):
         self.wait(2)
 
 
-class MixerIntro(Scene):
+class MixerIntro(MovingCameraScene):
     def construct(self):
         (
             bd,
@@ -1903,11 +1903,208 @@ class MixerIntro(Scene):
 
         self.wait(0.5)
 
-        tx_propagation = fm_plot_group.copy().next_to(
-            tx_antenna.get_corner(UR, buff=SMALL_BUFF)
+        A_propagation = 0.5
+        pw = 2
+
+        tx_x_tracker = ValueTracker(0)
+
+        tx_propagation_ax = Axes(
+            x_range=[0, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=6,
+            y_length=2.2,
         )
 
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+        sawtooth_amp = lambda t: A_propagation * np.sin(
+            2 * PI * sawtooth_modulating_cumsum(t)
+        )
+
+        rotation = PI / 6
+        rotation_line = Line(DOWN, UP).rotate(rotation)
+
+        tx_propagation_graph = always_redraw(
+            lambda: tx_propagation_ax.plot(
+                sawtooth_amp,
+                x_range=[0, tx_x_tracker.get_value(), 1 / fs],
+                use_smoothing=False,
+                color=TX_COLOR,
+            ).flip(rotation_line.get_end() - rotation_line.get_start())
+        )
+
+        tx_propagation_group = always_redraw(
+            lambda: VGroup(tx_propagation_ax, tx_propagation_graph)
+            .rotate(rotation)
+            .next_to(tx_antenna.get_corner(UR))
+            .shift(UP * tx_antenna.height + LEFT / 2)
+        )
+
+        self.add(tx_propagation_graph)
+
+        self.play(
+            tx_x_tracker.animate(rate_func=rate_functions.linear, run_time=4).set_value(
+                2
+            )
+        )
+        self.play(FadeOut(tx_propagation_graph, run_time=0.5))
+        self.remove(tx_propagation_group)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(sawtooth_amp_graph),
+                    Uncreate(sawtooth_amp_graph_rx),
+                    FadeOut(amp_labels),
+                    FadeOut(amp_labels_rx),
+                ),
+                AnimationGroup(
+                    Uncreate(amp_ax),
+                    Uncreate(amp_ax_rx),
+                    Uncreate(fm_plot_tx_bezier),
+                    Uncreate(fm_plot_rx_bezier),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        self.play(
+            tx_antenna.animate.set_opacity(0.2),
+            pa_to_splitter.animate.set_opacity(0.2),
+            pa.animate.set_opacity(0.2),
+            inp.animate.set_opacity(0.2),
+            input_to_vco.animate.set_opacity(0.2),
+            pll_block.animate.set_opacity(0.2),
+            pll_block_to_pa.animate.set_opacity(0.2),
+            splitter_to_tx_antenna.animate.set_opacity(0.2),
+        )
+        bd.add(coupler_left, coupler_up)
+        self.play(bd.animate.to_edge(UP, buff=LARGE_BUFF))
+
+        self.wait(0.5)
+
+        coupler_up_shifted = coupler_up.copy().shift(UP / 4 + RIGHT / 2)
+        reference_tx_arrow = Arrow(
+            coupler_up_shifted.get_top() + UP / 2,
+            coupler_up_shifted.get_bottom(),
+            color=TX_COLOR,
+        )
+        reference_tx_label = Tex("Tx", color=TX_COLOR).next_to(reference_tx_arrow)
+
+        rra_r = rx_antenna.get_corner(DR) + DOWN
+        reference_rx_arrow = Arrow(
+            rra_r, [lna_to_mixer.get_end()[0], rra_r[1], 0], color=RX_COLOR
+        )
+        reference_rx_label = Tex("Rx", color=RX_COLOR).next_to(
+            reference_rx_arrow, direction=DOWN
+        )
+
+        self.play(GrowArrow(reference_tx_arrow), FadeIn(reference_tx_label))
+
+        self.wait(0.5)
+
+        self.play(GrowArrow(reference_rx_arrow), FadeIn(reference_rx_label))
+
+        self.wait(0.5)
+
+        f_beat = MathTex(r"f_{beat}").next_to(reference_tx_label, buff=MED_LARGE_BUFF)
+        qmark = Tex("?", color=YELLOW).next_to(f_beat, buff=SMALL_BUFF)
+        f_beat_eqn = MathTex(r"f_{beat}", r"= f_{RX} - f_{TX}").next_to(
+            reference_tx_label, buff=MED_LARGE_BUFF
+        )
+
+        self.play(FadeIn(f_beat, qmark))
+
+        self.wait(0.5)
+
+        range_eqn = MathTex(r"R = \frac{c T_{c} f_{beat}}{2 B}").to_edge(
+            LEFT, buff=LARGE_BUFF
+        )
+        range_eqn_label = (
+            Tex("From last episode:")
+            .scale(0.7)
+            .next_to(range_eqn, direction=UP, buff=SMALL_BUFF, aligned_edge=LEFT)
+        )
+        range_eqn_box = SurroundingRectangle(
+            VGroup(range_eqn, range_eqn_label), color=ORANGE
+        )
+        range_eqn_group = VGroup(range_eqn, range_eqn_label, range_eqn_box)
+        self.play(FadeIn(range_eqn_group, shift=RIGHT))
+
+        self.wait(0.5)
+
+        self.play(Transform(qmark, f_beat_eqn[1]))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(range_eqn_group, shift=LEFT))
+
+        self.wait(1)
+
+        self.camera.frame.save_state()
+
+        camera_zoom = 0.001
+        self.play(self.camera.frame.animate.move_to(mixer))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(camera_zoom),
+                FadeOut(mixer),
+                lag_ratio=0.5,
+            )
+        )
+
+        part_2 = (
+            Tex("Part 2: Mixing")
+            .move_to(self.camera.frame.get_center())
+            .scale(camera_zoom * 2)
+        )
+
+        self.play(Create(part_2), run_time=2)
+
+        # self.wait(1)
+
+        # self.remove(f_beat_eqn, f_beat, qmark, range_eqn_group)
+
+        # self.play(
+        #     LaggedStart(
+        #         ShrinkToCenter(part_2),
+        #         AnimationGroup(Restore(self.camera.frame), FadeIn(mixer)),
+        #         lag_ratio=0.4,
+        #     )
+        # )
+
         self.wait(2)
+
+
+class Mixer(Scene):
+    def construct(self):
+        part_2 = Tex("Part 2: Mixing").scale(2)
+
+        mixer_circ = Circle(color=WHITE)
+        mixer_line_1 = Line(
+            mixer_circ.get_bottom(), mixer_circ.get_top(), color=WHITE
+        ).rotate(PI / 4)
+        mixer_line_2 = mixer_line_1.copy().rotate(PI / 2)
+        mixer_x = VGroup(mixer_line_1, mixer_line_1)
+        mixer = VGroup(mixer_circ, mixer_x)
+
+        mixer_x_red = mixer_x.set_color(RED)
+
+        self.add(part_2)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(part_2, shift=UP * 5), FadeIn(mixer, shift=UP * 5))
 
 
 """ Testing """
@@ -2066,11 +2263,13 @@ class Propagation(Scene):
         fs = 1000
         A = 1
 
+        x_tracker = ValueTracker(0)
+
         x_len = 6
         y_len = 2.2
 
         amp_ax = Axes(
-            x_range=[-0.1, duration, duration / 4],
+            x_range=[0, duration, duration / 4],
             y_range=[-2, 2, 0.5],
             tips=False,
             axis_config={"include_numbers": False},
@@ -2088,9 +2287,76 @@ class Propagation(Scene):
             + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
         )
         sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
-        sawtooth_amp_graph = amp_ax.plot(
-            sawtooth_amp,
-            x_range=[0, 1, 1 / fs],
-            use_smoothing=False,
-            color=TX_COLOR,
+
+        antenna = BLOCKS.get("antenna").copy().shift(RIGHT + UP)
+        rx_antenna = BLOCKS.get("antenna").copy().shift(RIGHT + DOWN)
+
+        rotation = PI / 6
+        rotation_line = Line(DOWN, UP).rotate(rotation)
+
+        sawtooth_amp_graph = always_redraw(
+            lambda: amp_ax.plot(
+                sawtooth_amp,
+                x_range=[0, x_tracker.get_value(), 1 / fs],
+                use_smoothing=False,
+                color=TX_COLOR,
+            ).flip(rotation_line.get_end() - rotation_line.get_start())
         )
+
+        propagation_group = always_redraw(
+            lambda: VGroup(amp_ax, sawtooth_amp_graph)
+            .rotate(rotation)
+            .next_to(antenna.get_corner(UR))
+            .shift(UP * antenna.height / 2 + LEFT / 2)
+        )
+
+        rx_x_tracker = ValueTracker(0)
+
+        rx_propagation_ax = Axes(
+            x_range=[0, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=6,
+            y_length=2.2,
+        )
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        rx_propagation_graph = always_redraw(
+            lambda: rx_propagation_ax.plot(
+                sawtooth_amp,
+                x_range=[0, min(rx_x_tracker.get_value(), duration), 1 / fs],
+                use_smoothing=False,
+                color=TX_COLOR,
+            ).flip(UP)
+        )
+
+        rx_propagation_group = always_redraw(
+            lambda: VGroup(rx_propagation_ax, rx_propagation_graph)
+            .flip()
+            .next_to(rx_antenna.get_corner(UR))
+            # .shift(UP * rx_antenna.height + LEFT / 2)
+        )
+
+        # self.add(sawtooth_amp_graph, amp_ax, antenna)
+        self.add(rx_propagation_ax, rx_antenna, rx_propagation_graph)
+
+        # self.play(
+        #     x_tracker.animate(rate_func=rate_functions.linear, run_time=6).set_value(2)
+        # )
+        self.play(
+            rx_x_tracker.animate(rate_func=rate_functions.linear, run_time=6).set_value(
+                duration
+            )
+        )
+
+        self.wait(2)
