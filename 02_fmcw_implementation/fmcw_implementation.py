@@ -7,7 +7,7 @@ import math
 import sys
 
 sys.path.insert(0, "..")
-from props import get_blocks, get_bd_animation
+from props import get_blocks, get_bd_animation, get_resistor, get_diode
 
 
 BACKGROUND_COLOR = ManimColor.from_hex("#183340")
@@ -17,6 +17,7 @@ config.background_color = BACKGROUND_COLOR
 TX_COLOR = BLUE
 RX_COLOR = RED
 GAIN_COLOR = GREEN
+IF_COLOR = ORANGE
 
 
 BLOCKS = get_blocks()
@@ -2095,16 +2096,276 @@ class Mixer(Scene):
             mixer_circ.get_bottom(), mixer_circ.get_top(), color=WHITE
         ).rotate(PI / 4)
         mixer_line_2 = mixer_line_1.copy().rotate(PI / 2)
-        mixer_x = VGroup(mixer_line_1, mixer_line_1)
+        mixer_x = VGroup(mixer_line_1, mixer_line_2)
         mixer = VGroup(mixer_circ, mixer_x)
 
-        mixer_x_red = mixer_x.set_color(RED)
+        mixer_x_yellow = mixer_x.copy().set_color(YELLOW)
+
+        used_to_subtract = Tex(r"used to\\subtract").next_to(
+            mixer, direction=DL, buff=LARGE_BUFF
+        )
+
+        uts_p1 = used_to_subtract.get_right() + [0.1, 0, 0]
+        uts_p2 = mixer.get_bottom() + [0, -0.1, 0]
+
+        uts_bezier = CubicBezier(
+            uts_p1,
+            uts_p1 + [1, 0, 0],
+            uts_p2 + [0, -1, 0],
+            uts_p2,
+        )
+
+        multiply_to_subtract = (
+            Tex("We multiply to subtract?").scale(1.5).to_edge(UP, buff=LARGE_BUFF)
+        )
+
+        fs = 1000
+        step = 1 / fs
+        x_range = [0, 1, step]
+        x_range_lo = [0, 0.7, step]
+        x_len = 4
+        y_len = 2
+        tx_ax = (
+            Axes(
+                x_range=x_range_lo[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len
+            )
+            .rotate(-PI / 2)
+            .next_to(mixer, direction=UP, buff=0)
+        )
+        rx_ax = (
+            Axes(x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len)
+            .rotate(PI)
+            .next_to(mixer, direction=RIGHT, buff=0)
+        )
+        if_ax = (
+            Axes(x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len)
+            .rotate(PI)
+            .next_to(mixer, direction=LEFT, buff=0)
+        )
+
+        A = 1
+        f_tx = 12
+        f_rx = 10
+        tx_signal = tx_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_tx * t), x_range=x_range_lo, color=TX_COLOR
+        )
+        rx_signal = rx_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_rx * t), x_range=x_range, color=RX_COLOR
+        )
+        if_signal = if_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_tx * t) * A * np.sin(2 * PI * f_rx * t),
+            x_range=x_range,
+            color=IF_COLOR,
+        )
+
+        f_tx_label = MathTex(r"f_{TX} (t)", color=TX_COLOR).next_to(
+            tx_signal, buff=MED_SMALL_BUFF
+        )
+        f_rx_label = (
+            MathTex(r"f_{TX}", r"(t)", color=RX_COLOR)
+            .next_to(rx_signal, direction=UP, buff=MED_SMALL_BUFF, aligned_edge=LEFT)
+            .shift(RIGHT * 1.5)
+        )
+        f_rx_w_shift_label = (
+            MathTex(r"f_{TX}", r"(t - t_{shift})", color=RX_COLOR)
+            .next_to(rx_signal, direction=UP, buff=MED_SMALL_BUFF, aligned_edge=LEFT)
+            .shift(RIGHT * 1.5)
+        )
+
+        lo_arrow = (
+            Arrow(tx_signal.get_end(), tx_signal.get_end() + DOWN * 3, color=TX_COLOR)
+            .next_to(tx_signal, direction=LEFT)
+            .shift(DOWN / 2)
+        )
+        rf_arrow = Arrow(
+            rx_signal.get_start(), rx_signal.get_end(), color=RX_COLOR
+        ).next_to(rx_signal, direction=DOWN)
+        if_arrow = Arrow(
+            if_signal.get_start(), if_signal.get_end(), color=IF_COLOR
+        ).next_to(if_signal, direction=DOWN)
+
+        lo_port = (
+            Tex("LO")
+            .scale(0.6)
+            .next_to(mixer.get_top(), direction=DOWN, buff=SMALL_BUFF)
+        )
+        rf_port = (
+            Tex("RF")
+            .scale(0.6)
+            .next_to(mixer.get_right(), direction=LEFT, buff=SMALL_BUFF)
+        )
+        if_port = (
+            Tex("IF")
+            .scale(0.6)
+            .next_to(mixer.get_left(), direction=RIGHT, buff=SMALL_BUFF)
+        )
+
+        diode = (
+            get_diode()
+            .next_to(lo_arrow, direction=LEFT, buff=LARGE_BUFF * 2)
+            .scale(0.5)
+            .set_stroke(color=WHITE, width=DEFAULT_STROKE_WIDTH * 1.5)
+            .rotate(PI / 6)
+        )
+        diode_p = (
+            Tex("+", color=YELLOW, stroke_width=DEFAULT_STROKE_WIDTH * 2)
+            .next_to(diode, direction=UP, buff=MED_SMALL_BUFF)
+            .shift(LEFT / 2)
+        )
+        diode_n = (
+            Tex("-", color=RED, stroke_width=DEFAULT_STROKE_WIDTH * 2)
+            .next_to(diode, direction=DOWN, buff=MED_SMALL_BUFF)
+            .shift(RIGHT / 2)
+        )
+
+        out_of_scope = Tex("Out of scope", color=BLACK)
+        out_of_scope_box = SurroundingRectangle(
+            out_of_scope, color=YELLOW, fill_color=YELLOW, fill_opacity=1
+        )
+        out_of_scope_group = (
+            VGroup(out_of_scope_box, out_of_scope).move_to(diode).rotate(PI / 6)
+        )
+
+        article_rotation = 10 * DEGREES
+        marki_mixer_video = (
+            ImageMobject("../props/static/marki_mixer_talk.png")
+            .shift(RIGHT)
+            .rotate(-article_rotation)
+            .scale(0.7)
+        )
+        rfmw_mixer_article = (
+            ImageMobject("../props/static/rfmw_mixer_article.png")
+            .rotate(article_rotation)
+            .shift(LEFT)
+        )
+
+        article_shift = 7
+
+        rfmw_mixer_article.to_edge(DOWN, buff=0).scale(0.7).shift(DOWN).shift(
+            DOWN * article_shift
+        )
+        marki_mixer_video.move_to(rfmw_mixer_article).shift(RIGHT * 2)
+
+        in_the_desc_arrow = Arrow(
+            rfmw_mixer_article.get_corner(UR),
+            rfmw_mixer_article.get_corner(UR) + DOWN * 2,
+        ).next_to(marki_mixer_video, direction=RIGHT, buff=MED_LARGE_BUFF)
+        in_the_desc = (
+            Tex("in the description")
+            .rotate(-PI / 2)
+            .next_to(in_the_desc_arrow, buff=SMALL_BUFF)
+        )
+
+        articles = Group(
+            rfmw_mixer_article, marki_mixer_video, in_the_desc, in_the_desc_arrow
+        )
+
+        if_mult = (
+            mixer_x_yellow.copy()
+            .scale(0.2)
+            .next_to(if_signal, direction=UP, buff=MED_SMALL_BUFF)
+        )
+        f_tx_if_label = f_tx_label.copy().next_to(
+            if_mult, direction=LEFT, buff=SMALL_BUFF
+        )
+        f_rx_if_label = f_rx_label.copy().next_to(
+            if_mult, direction=RIGHT, buff=SMALL_BUFF
+        )
+        f_if_label = MathTex(r"f_{IF}=\ ").next_to(
+            f_tx_if_label, direction=LEFT, buff=SMALL_BUFF
+        )
+
+        """ Animations """
 
         self.add(part_2)
 
         self.wait(0.5)
 
         self.play(FadeOut(part_2, shift=UP * 5), FadeIn(mixer, shift=UP * 5))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(mixer_x_yellow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(used_to_subtract),
+                Create(uts_bezier),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(multiply_to_subtract))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(multiply_to_subtract, shift=UP),
+            FadeOut(used_to_subtract),
+            Uncreate(uts_bezier),
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(tx_signal), GrowArrow(lo_arrow), FadeIn(f_tx_label))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(lo_port))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(Create(diode), Create(diode_p), Create(diode_n), lag_ratio=0.9)
+        )
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(out_of_scope_group))
+
+        self.wait(0.5)
+
+        self.add(rfmw_mixer_article, marki_mixer_video)
+
+        self.play(articles.animate.to_edge(DOWN, buff=0))
+
+        self.wait(1)
+
+        self.play(
+            articles.animate.move_to(DOWN * 10),
+            FadeOut(diode, diode_p, diode_n, out_of_scope_group, shift=UP * 2),
+        )
+        self.remove(articles)
+
+        self.wait(0.5)
+
+        self.play(Create(rx_signal), GrowArrow(rf_arrow), FadeIn(f_rx_label))
+
+        self.wait(0.5)
+
+        self.play(Transform(f_rx_label[1], f_rx_w_shift_label[1]))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(rf_port))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(f_if_label))
+        self.play(TransformFromCopy(f_tx_label, f_tx_if_label))
+        self.play(Transform(mixer_x_yellow, if_mult))
+        self.play(TransformFromCopy(f_rx_label, f_rx_if_label))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(if_port))
+        self.play(Create(if_signal), GrowArrow(if_arrow))
+
+        self.wait(2)
 
 
 """ Testing """
@@ -2357,6 +2618,101 @@ class Propagation(Scene):
             rx_x_tracker.animate(rate_func=rate_functions.linear, run_time=6).set_value(
                 duration
             )
+        )
+
+        self.wait(2)
+
+
+class PassiveComponents(Scene):
+    def construct(self):
+        diode_tri = Triangle(color=WHITE).rotate(PI / 3)
+        diode_line = Line(
+            LEFT * diode_tri.width / 2, RIGHT * diode_tri.width / 2
+        ).next_to(diode_tri, direction=DOWN, buff=0)
+        diode_conn_1 = Line(diode_tri.get_top() + UP / 2, diode_tri.get_top())
+        diode_conn_2 = Line(diode_tri.get_bottom() + DOWN / 2, diode_tri.get_bottom())
+        diode = VGroup(diode_tri, diode_line, diode_conn_1, diode_conn_2)
+
+        rotation = -PI / 4
+        res_line_start = Line(LEFT / 2, ORIGIN).rotate(-rotation / 2)
+        res_line_start_inv = Line(ORIGIN, RIGHT / 2).rotate(-rotation / 2)
+        res_line_1 = VGroup(res_line_start, res_line_start_inv)
+        res_line_2 = (
+            Line(LEFT / 2, RIGHT / 2)
+            .rotate(rotation / 2)
+            .next_to(res_line_1, direction=DOWN, buff=0)
+        )
+        res_line_3 = (
+            Line(LEFT / 2, RIGHT / 2)
+            .rotate(-rotation / 2)
+            .next_to(res_line_2, direction=DOWN, buff=0)
+        )
+        res_line_4 = (
+            Line(LEFT / 2, RIGHT / 2)
+            .rotate(rotation / 2)
+            .next_to(res_line_3, direction=DOWN, buff=0)
+        )
+        res_line_end_inv = Line(LEFT / 2, ORIGIN)
+        res_line_end = Line(ORIGIN, RIGHT / 2)
+        res_line_5 = (
+            VGroup(res_line_end, res_line_end_inv)
+            .rotate(-rotation / 2)
+            .next_to(res_line_4, direction=DOWN, buff=0)
+        )
+        res_conn_1 = Line(res_line_start.get_end() + UP / 2, res_line_start.get_end())
+        res_conn_2 = Line(res_line_end.get_start() + DOWN / 2, res_line_end.get_start())
+        resistor = VGroup(
+            res_conn_1,
+            res_line_start,
+            res_line_2,
+            res_line_3,
+            res_line_4,
+            res_line_end,
+            res_conn_2,
+        )
+
+        self.add(
+            VGroup(
+                diode,
+                resistor,
+            ).arrange(RIGHT, buff=LARGE_BUFF)
+        )
+
+
+class Articles(Scene):
+    def construct(self):
+        article_rotation = 10 * DEGREES
+        marki_mixer_video = (
+            ImageMobject("../props/static/marki_mixer_talk.png")
+            .shift(RIGHT)
+            .rotate(-article_rotation)
+            .scale(0.7)
+        )
+        rfmw_mixer_article = (
+            ImageMobject("../props/static/rfmw_mixer_article.png")
+            .rotate(article_rotation)
+            .shift(LEFT)
+        )
+
+        article_shift = 7
+
+        rfmw_mixer_article.to_edge(DOWN, buff=0).scale(0.7).shift(DOWN).shift(
+            DOWN * article_shift
+        )
+        marki_mixer_video.move_to(rfmw_mixer_article).shift(RIGHT * 2)
+
+        self.add(rfmw_mixer_article, marki_mixer_video)
+
+        self.play(
+            rfmw_mixer_article.animate.to_edge(DOWN, buff=0),
+            marki_mixer_video.animate.to_edge(DOWN, buff=MED_LARGE_BUFF),
+        )
+
+        self.wait(1)
+
+        self.play(
+            rfmw_mixer_article.animate.move_to(DOWN * 10),
+            marki_mixer_video.animate.move_to(DOWN * 10),
         )
 
         self.wait(2)
