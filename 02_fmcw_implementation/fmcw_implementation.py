@@ -5,6 +5,9 @@ import numpy as np
 from scipy import signal, constants
 import math
 import sys
+import warnings
+
+warnings.filterwarnings("ignore")
 
 sys.path.insert(0, "..")
 from props import get_blocks, get_bd_animation, get_resistor, get_diode
@@ -2465,6 +2468,42 @@ class Mixer(MovingCameraScene):
 
         if_sub_f_beat_label = MathTex(r"f_{beat}")
 
+        mixer_2 = mixer.copy()
+        lo_port_2 = lo_port.copy()
+        rf_port_2 = rf_port.copy()
+        if_port_2 = if_port.copy()
+        if_filter = (
+            BLOCKS.get("lp_filter")
+            .next_to(mixer_2, direction=LEFT, buff=0)
+            .shift(LEFT * if_signal.width)
+        )
+        mixer_2_to_if_filter = Arrow(
+            mixer_2.get_left(), if_filter.get_right(), color=IF_COLOR
+        ).next_to(mixer_2, direction=LEFT, buff=0)
+        if_filter.next_to(mixer_2_to_if_filter, direction=LEFT, buff=0)
+
+        mixer_2_bd = VGroup(
+            mixer_2,
+            lo_port_2,
+            rf_port_2,
+            if_port_2,
+            if_filter,
+            mixer_2_to_if_filter,
+        ).scale(0.7)
+
+        if_filter_signal_label = MathTex(r"\sin (2 \pi f_{beat} t)", color=IF_COLOR)
+
+        f_beat_label = Tex(f"$f_{{beat}} = {f_tx - f_rx}$ GHz", color=IF_COLOR)
+
+        f_conversion_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1.5, 1.5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
         """ Animations """
 
         self.add(part_2)
@@ -2642,6 +2681,8 @@ class Mixer(MovingCameraScene):
         self.play(Create(if_signal), GrowArrow(if_arrow))
 
         self.wait(0.5)
+
+        self.camera.frame.save_state()
 
         self.play(
             LaggedStart(
@@ -2831,6 +2872,229 @@ class Mixer(MovingCameraScene):
                 lag_ratio=0.3,
             )
         )
+
+        self.wait(0.5)
+
+        mixer_2_bd.next_to(
+            self.camera.frame.get_corner(DR), direction=UL, buff=MED_LARGE_BUFF
+        )
+        self.play(
+            LaggedStart(
+                GrowFromCenter(VGroup(mixer_2, lo_port_2, rf_port_2, if_port_2)),
+                GrowArrow(mixer_2_to_if_filter),
+                GrowFromCenter(if_filter),
+                lag_ratio=0.8,
+            ),
+        )
+
+        self.wait(0.5)
+
+        x_out_hf_1 = Line(
+            if_add_box.get_corner(DL),
+            if_add_box.get_corner(UR),
+            color=RED,
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        )
+        x_out_hf_2 = Line(
+            if_add_box.get_corner(UL),
+            if_add_box.get_corner(DR),
+            color=RED,
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        )
+
+        self.play(
+            Create(x_out_hf_1),
+            Create(x_out_hf_2),
+            VGroup(if_add_ax_group, if_add_f_label, mult_sines_add).animate.set_opacity(
+                0.2
+            ),
+        )
+
+        self.wait(0.5)
+
+        all_except_bd = Group(*self.mobjects).remove(
+            mixer,
+            mixer_2,
+            mixer_2_to_if_filter,
+            lo_port_2,
+            rf_port_2,
+            if_port_2,
+            if_filter,
+            if_signal,
+        )
+        self.play(FadeOut(all_except_bd))
+
+        if_signal_original = if_signal.copy().next_to(mixer, direction=LEFT, buff=0)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Restore(self.camera.frame),
+                    Transform(mixer_2, mixer),
+                    Transform(lo_port_2, lo_port),
+                    Transform(rf_port_2, rf_port),
+                    Transform(if_port_2, if_port),
+                    if_filter.animate.next_to(
+                        if_signal_original, direction=LEFT, buff=0
+                    ),
+                    Transform(if_signal, if_signal_original),
+                    Transform(mixer_2_to_if_filter, if_arrow),
+                ),
+                AnimationGroup(
+                    Create(rx_signal),
+                    Create(rf_arrow),
+                    Create(tx_signal),
+                    Create(lo_arrow),
+                    FadeIn(f_tx_at_t0_label, f_rx_w_shift_label),
+                ),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        bd_scale = 0.6
+        current_bd = Group(
+            if_filter,
+            mixer_2,
+            lo_port_2,
+            rf_port_2,
+            if_port_2,
+            if_signal,
+            mixer_2_to_if_filter,
+            rx_signal,
+            rf_arrow,
+            tx_signal,
+            lo_arrow,
+            f_tx_at_t0_label,
+            f_rx_w_shift_label,
+        )
+
+        self.play(current_bd.animate.scale(bd_scale).shift(DOWN))
+
+        if_sub_signal.scale(bd_scale).next_to(if_filter, direction=LEFT, buff=0).flip()
+        if_filter_signal_label.scale(bd_scale).next_to(
+            if_sub_signal, direction=UP, buff=MED_SMALL_BUFF
+        )
+        f_beat_label.scale(bd_scale).next_to(
+            if_sub_signal, direction=UP, buff=MED_SMALL_BUFF
+        )
+
+        self.play(
+            Create(if_sub_signal),
+            # FadeIn(if_filter_signal_label),
+            FadeIn(f_beat_label),
+        )
+
+        self.wait(0.5)
+
+        current_bd.add(f_beat_label, if_sub_signal)
+
+        # self.play(current_bd.animate.to_edge(UP, buff=MED_SMALL_BUFF))
+
+        self.play(FadeOut(*self.mobjects, shift=UP * 3))
+
+        self.wait(2)
+
+
+class MixerProducts(Scene):
+    def construct(self):
+        f_lo = 12
+        f_if = 2
+        f_rf_l = f_lo - f_if
+        f_rf_h = f_lo + f_if
+
+        lo_conversion_loss = 6  # dB
+        rf_h_power_relative_to_lo = ValueTracker(40)  # dB
+        rf_l_power_relative_to_lo = ValueTracker(15)  # dB
+
+        stop_time = 4
+        fs = 1000
+        N = fs * stop_time
+        t = np.linspace(0, stop_time, N)
+        mag_offset = 60
+
+        x_len = config["frame_width"] * 0.8
+        y_len = config["frame_height"] * 0.5
+
+        f_max = 20
+        f_ax = Axes(
+            x_range=[-0.1, f_max, f_max / 8],
+            y_range=[-60 + mag_offset, 10 + mag_offset, 20],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, buff=LARGE_BUFF)
+
+        f_labels = f_ax.get_axis_labels(
+            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+            Tex(r"$\lvert X(f) \rvert$", font_size=DEFAULT_FONT_SIZE),
+        )
+
+        plot = f_ax.plot_line_graph([0], [0], add_vertex_dots=False)
+
+        def get_plot_values():
+            lo_signal = np.sin(2 * PI * f_lo * t)
+            if_signal = np.sin(2 * PI * f_if * t) / (
+                10
+                ** (
+                    (
+                        lo_conversion_loss
+                        + min(
+                            rf_h_power_relative_to_lo.get_value(),
+                            rf_l_power_relative_to_lo.get_value(),
+                        )
+                    )
+                    / 10
+                )
+            )
+            rf_l_signal = np.sin(2 * PI * f_rf_l * t) / (
+                10 ** (rf_l_power_relative_to_lo.get_value() / 10)
+            )
+            rf_h_signal = np.sin(2 * PI * f_rf_h * t) / (
+                10 ** (rf_h_power_relative_to_lo.get_value() / 10)
+            )
+
+            summed_signals = lo_signal + if_signal + rf_l_signal + rf_h_signal
+
+            blackman_window = signal.windows.blackman(N)
+            summed_signals *= blackman_window
+
+            fft_len = 2**18
+            summed_fft = np.fft.fft(summed_signals, fft_len) / (N / 2)
+            summed_fft /= summed_fft.max()
+            summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft)) + mag_offset
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+            indices = np.where((freq > 0) & (freq < f_max))
+            x_values = freq[indices]
+            y_values = summed_fft_log[indices]
+
+            return dict(x_values=x_values, y_values=y_values)
+
+        plot = f_ax.plot_line_graph(**get_plot_values(), add_vertex_dots=False)
+
+        # plot = f_ax.plot_line_graph(
+        #     np.arange(0, f_max, 1), np.linspace(0, 1, f_max), add_vertex_dots=False
+        # )
+
+        # plt.plot(freq, 10 * np.log10(np.fft.fftshift(summed_fft)))
+        # plt.xlim(0, 20)
+        # plt.ylim(-60, 10)
+
+        # self.add(f_ax, f_labels, plot)
+
+        self.play(AnimationGroup(Create(f_ax), FadeIn(f_labels)))
+        self.play(Create(plot, run_time=1.5))
+
+        self.wait(0.5)
+
+        plot.add_updater(
+            lambda m: m.become(
+                f_ax.plot_line_graph(**get_plot_values(), add_vertex_dots=False)
+            )
+        )
+
+        self.play(rf_h_power_relative_to_lo.animate(run_time=3).increment_value(-50))
 
         self.wait(2)
 
