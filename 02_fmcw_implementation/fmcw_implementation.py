@@ -2138,10 +2138,19 @@ class Mixer(MovingCameraScene):
             .next_to(mixer, direction=RIGHT, buff=0)
         )
         if_ax = (
-            Axes(x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len)
+            Axes(
+                x_range=x_range[:2],
+                y_range=[-2, 2],
+                x_length=x_len,
+                y_length=y_len,
+                tips=False,
+                axis_config={"include_numbers": False},
+            )
             .rotate(PI)
             .next_to(mixer, direction=LEFT, buff=0)
         )
+        if_sub_ax = if_ax.copy()
+        if_add_ax = if_ax.copy()
 
         A = 1
         f_tx = 12
@@ -2157,6 +2166,21 @@ class Mixer(MovingCameraScene):
             x_range=x_range,
             color=IF_COLOR,
         )
+
+        if_sub_signal = if_sub_ax.plot(
+            lambda t: A * np.cos(2 * PI * (f_tx - f_rx) * t),
+            x_range=x_range,
+            color=IF_COLOR,
+        )
+        if_add_signal = if_add_ax.plot(
+            lambda t: A * np.cos(2 * PI * (f_tx + f_rx) * t),
+            x_range=x_range,
+            color=IF_COLOR,
+        )
+
+        if_ax_group = VGroup(if_ax, if_signal)
+        if_sub_ax_group = VGroup(if_sub_ax, if_sub_signal)
+        if_add_ax_group = VGroup(if_add_ax, if_add_signal)
 
         f_tx_label = MathTex(r"f_{TX}", r"(t)", color=TX_COLOR).next_to(
             tx_signal, buff=MED_SMALL_BUFF
@@ -2308,7 +2332,7 @@ class Mixer(MovingCameraScene):
         sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
         sawtooth_f_tx_graph = f_ax.plot(
             sawtooth_modulating_signal,
-            x_range=[0, 1, 1 / fs],
+            x_range=[0, 1 - 1 / fs, 1 / fs],
             use_smoothing=False,
             color=TX_COLOR,
         )
@@ -2360,38 +2384,86 @@ class Mixer(MovingCameraScene):
         """ /Reminder"""
 
         if_eqn_scale = 0.7
+        sine_rx_label = (
+            MathTex(r"\sin [ 2 \pi", r"f_{TX}(t_{0} - t_{shift})", r"t]")
+            .scale(if_eqn_scale)
+            .next_to(if_signal, direction=UP, buff=MED_SMALL_BUFF)
+        )
         if_mult = (
             mixer_x_yellow.copy()
-            .scale(0.2)
-            .next_to(if_signal, direction=UP, buff=MED_SMALL_BUFF)
-            .shift(LEFT / 2)
+            .scale(0.25)
+            .next_to(sine_rx_label, direction=UP, buff=MED_SMALL_BUFF)
         )
-        f_tx_if_label = (
-            f_tx_at_t0_label.copy()[:2]
+        sine_tx_label = (
+            MathTex(r"\sin [ 2 \pi", r"f_{TX}(t_{0})", r"t]")
+            .next_to(if_mult, direction=UP, buff=MED_SMALL_BUFF)
             .scale(if_eqn_scale)
-            .next_to(if_mult, direction=LEFT, buff=SMALL_BUFF)
         )
-        f_rx_if_label = (
-            f_rx_w_shift_label.copy()[:2]
+        sine_tx_label[1].set_color(TX_COLOR)
+        sine_rx_label[1].set_color(RX_COLOR)
+        if_eqn_right = VGroup(sine_rx_label, if_mult, sine_tx_label)
+        if_eqn_brace = Brace(
+            if_eqn_right,
+            direction=LEFT,
+            color=IF_COLOR,
+            fill_color=IF_COLOR,
+            fill_opacity=1,
+        )
+        if_eqn_right.remove(if_mult)
+        if_eqn_right.add(mixer_x_yellow)
+        if_label = (
+            Tex(r"IF", r"$\ =\ $", color=IF_COLOR)
             .scale(if_eqn_scale)
-            .next_to(if_mult, direction=RIGHT, buff=SMALL_BUFF)
+            .next_to(if_eqn_brace, direction=LEFT, buff=SMALL_BUFF)
         )
-        f_if_label = (
-            MathTex(r"f_{IF}=\ ")
-            .scale(if_eqn_scale)
-            .next_to(f_tx_if_label, direction=LEFT, buff=SMALL_BUFF)
-        )
+        if_eqn_group = VGroup(if_label, if_eqn_brace, if_eqn_right)
 
-        mult_sines_left = MathTex(
-            r"\sin{2 \pi f_1 t} \cdot \sin{2 \pi f_2 t}",
+        mult_sines = MathTex(
+            r"\sin ( 2 \pi",
+            r"f_1",
+            r" t ) \times \sin ( 2 \pi ",
+            r"f_2",
+            r" t )",
             r"\ =\ ",
             r"\frac{1}{2}",
             r"[",
-            r"\cos{(f_1 - f_2) 2 \pi t}",
+            r"\cos ( ",
+            r"f_1",
+            r" - ",
+            r"f_2",
+            r") 2 \pi t",
             r"\ -\ ",
-            r"\cos{(f_1 + f_2) 2 \pi t}",
+            r"\cos ( ",
+            r"f_1",
+            r" + ",
+            r"f_2",
+            r") 2 \pi t",
             r"]",
-        ).to_corner(DL, buff=LARGE_BUFF)
+        )
+        mult_sines_sub = MathTex(
+            r"\cos ( ",
+            r"f_{TX}(t_0)",
+            r" - ",
+            r"f_{TX}(t_0 - t_{shift})",
+            r") 2 \pi t",
+        ).scale(0.6)
+        mult_sines_sub[1].set_color(TX_COLOR)
+        mult_sines_sub[3].set_color(RX_COLOR)
+
+        mult_sines_add = MathTex(
+            r"\cos ( ",
+            r"f_{TX}(t_0)",
+            r" + ",
+            r"f_{TX}(t_0 - t_{shift})",
+            r") 2 \pi t",
+        ).scale(0.6)
+        mult_sines_add[1].set_color(TX_COLOR)
+        mult_sines_add[3].set_color(RX_COLOR)
+
+        if_sub_f_label = Tex(f"{f_tx - f_rx} GHz").scale(0.7)
+        if_add_f_label = Tex(f"{f_tx + f_rx} GHz").scale(0.7)
+
+        if_sub_f_beat_label = MathTex(r"f_{beat}")
 
         """ Animations """
 
@@ -2535,27 +2607,230 @@ class Mixer(MovingCameraScene):
                 f_rx_dot,
                 f_rx_dot_bezier,
                 f_rx_graph_label,
-                shift=DOWN,
-            ),
-            FadeOut(
                 unrealistic,
                 unrealistic_to_f_tx,
                 unrealistic_to_f_rx,
-                shift=UP,
+                shift=DOWN * 2,
             ),
         )
 
         self.wait(0.5)
 
-        self.play(FadeIn(f_if_label))
-        self.play(TransformFromCopy(f_tx_label, f_tx_if_label))
+        self.play(FadeIn(if_label))
+        self.play(
+            LaggedStart(
+                FadeIn(sine_tx_label[0]),
+                TransformFromCopy(f_tx_label, sine_tx_label[1]),
+                FadeIn(sine_tx_label[2]),
+                lag_ratio=0.6,
+            )
+        )
         self.play(Transform(mixer_x_yellow, if_mult))
-        self.play(TransformFromCopy(f_rx_label, f_rx_if_label))
+        self.play(
+            LaggedStart(
+                FadeIn(sine_rx_label[0]),
+                TransformFromCopy(f_rx_label, sine_rx_label[1]),
+                FadeIn(sine_rx_label[2]),
+                lag_ratio=0.6,
+            )
+        )
+        self.play(FadeIn(if_eqn_brace))
 
         self.wait(0.5)
 
         self.play(FadeIn(if_port))
         self.play(Create(if_signal), GrowArrow(if_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    mixer,
+                    tx_signal,
+                    lo_arrow,
+                    lo_port,
+                    f_tx_label,
+                    rx_signal,
+                    rf_arrow,
+                    rf_port,
+                    f_rx_label,
+                    if_port,
+                    if_arrow,
+                    f_tx_at_t0_label[2],
+                    f_rx_w_shift_label[2],
+                ),
+                self.camera.frame.animate.move_to(if_signal),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        if_ax_group_cornered = (
+            if_ax_group.copy()
+            .rotate(PI)
+            .next_to(
+                self.camera.frame.get_corner(UL),
+                direction=DR,
+                buff=MED_LARGE_BUFF,
+            )
+            .shift(RIGHT)
+        )
+        self.play(
+            LaggedStart(
+                if_eqn_group.animate.next_to(
+                    self.camera.frame.get_corner(UR), direction=DL, buff=MED_LARGE_BUFF
+                ).shift(LEFT),
+                Succession(
+                    FadeIn(if_ax),
+                    Transform(if_ax_group, if_ax_group_cornered, path_arc=-PI),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Indicate(sine_tx_label))
+        self.wait(0.2)
+        self.play(Indicate(sine_rx_label))
+
+        self.wait(0.5)
+
+        self.play(Create(mult_sines.move_to(self.camera.frame.get_center()).scale(0.8)))
+
+        self.wait(0.5)
+
+        subtracted_box = SurroundingRectangle(mult_sines[8:13])
+        summed_box = SurroundingRectangle(mult_sines[14:19])
+
+        self.play(Create(summed_box))
+
+        self.wait(0.5)
+
+        self.play(Transform(summed_box, subtracted_box))
+
+        self.wait(0.5)
+
+        self.play(
+            VGroup(
+                mult_sines[1],
+                mult_sines[9],
+                mult_sines[15],
+            ).animate.set_color(TX_COLOR)
+        )
+
+        self.wait(0.2)
+
+        self.play(
+            VGroup(
+                mult_sines[3],
+                mult_sines[11],
+                mult_sines[17],
+            ).animate.set_color(RX_COLOR)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformFromCopy(
+                if_label[0],
+                if_label[0]
+                .copy()
+                .next_to(if_signal, direction=UP, buff=MED_SMALL_BUFF),
+            )
+        )
+
+        self.wait(0.2)
+
+        self.play(Uncreate(summed_box))
+        self.play(
+            FadeOut(mult_sines[:6]),
+            mult_sines[6:].animate.next_to(
+                self.camera.frame.get_edge_center(RIGHT),
+                direction=LEFT,
+                buff=SMALL_BUFF,
+            ),
+        )
+
+        if_sub_ax_group.next_to(if_ax_group, direction=DOWN, buff=MED_LARGE_BUFF)
+        if_add_ax_group.next_to(if_sub_ax_group, direction=DOWN, buff=MED_LARGE_BUFF)
+        self.play(
+            LaggedStart(
+                TransformFromCopy(if_ax_group, if_add_ax_group.flip()),
+                TransformFromCopy(if_ax_group, if_sub_ax_group.flip()),
+                lag_ratio=0.4,
+            ),
+            LaggedStart(
+                TransformFromCopy(
+                    mult_sines[8:13],
+                    mult_sines_sub.next_to(
+                        if_sub_signal, direction=UP, buff=MED_SMALL_BUFF
+                    ).shift(RIGHT),
+                ),
+                TransformFromCopy(
+                    mult_sines[14:19],
+                    mult_sines_add.next_to(
+                        if_add_signal, direction=UP, buff=MED_SMALL_BUFF
+                    ).shift(RIGHT),
+                ),
+                lag_ratio=0.4,
+            ),
+        )
+
+        self.wait(0.5)
+
+        if_sub_f_label.next_to(if_sub_ax_group, direction=LEFT, buff=SMALL_BUFF)
+        if_add_f_label.next_to(if_add_ax_group, direction=LEFT, buff=SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                FadeIn(if_sub_f_label),
+                FadeIn(if_add_f_label),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        if_sub_box = SurroundingRectangle(
+            VGroup(
+                if_sub_f_label,
+                if_sub_ax_group,
+                mult_sines_sub,
+            )
+        )
+        if_add_box = SurroundingRectangle(
+            VGroup(
+                if_add_f_label,
+                if_add_ax_group,
+                mult_sines_add,
+            )
+        )
+        if_sub_f_beat_label.next_to(if_sub_box, direction=DR, buff=LARGE_BUFF)
+        if_sub_f_beat_to_box_arrow = Arrow(
+            if_sub_f_beat_label.get_corner(UL), if_sub_box.get_corner(DR) + UP / 2
+        )
+
+        self.play(
+            LaggedStart(
+                Create(if_sub_box),
+                FadeIn(if_sub_f_beat_label),
+                GrowArrow(if_sub_f_beat_to_box_arrow),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(if_sub_f_beat_label, if_sub_f_beat_to_box_arrow),
+                Transform(if_sub_box, if_add_box),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(2)
 
