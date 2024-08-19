@@ -3031,9 +3031,9 @@ class MixerProducts(Scene):
             Tex(r"$\lvert X(f) \rvert$", font_size=DEFAULT_FONT_SIZE),
         )
 
-        plot = f_ax.plot_line_graph([0], [0], add_vertex_dots=False)
+        if_plot = f_ax.plot_line_graph([0], [0], add_vertex_dots=False)
 
-        def get_plot_values():
+        def get_plot_values(ports=["lo", "rf", "if"]):
             lo_signal = np.sin(2 * PI * f_lo * t)
             if_signal = np.sin(2 * PI * f_if * t) / (
                 10
@@ -3054,8 +3054,11 @@ class MixerProducts(Scene):
             rf_h_signal = np.sin(2 * PI * f_rf_h * t) / (
                 10 ** (rf_h_power_relative_to_lo.get_value() / 10)
             )
+            rf_signals = rf_l_signal + rf_h_signal
 
-            summed_signals = lo_signal + if_signal + rf_l_signal + rf_h_signal
+            signals = {"lo": lo_signal, "rf": rf_signals, "if": if_signal}
+            summed_signals = sum([signals.get(port) for port in ports])
+            # summed_signals = lo_signal + if_signal + rf_l_signal + rf_h_signal
 
             blackman_window = signal.windows.blackman(N)
             summed_signals *= blackman_window
@@ -3071,7 +3074,15 @@ class MixerProducts(Scene):
 
             return dict(x_values=x_values, y_values=y_values)
 
-        plot = f_ax.plot_line_graph(**get_plot_values(), add_vertex_dots=False)
+        if_plot = f_ax.plot_line_graph(
+            **get_plot_values(ports=["if"]), add_vertex_dots=False, line_color=IF_COLOR
+        )
+        rf_plot = f_ax.plot_line_graph(
+            **get_plot_values(ports=["rf"]), add_vertex_dots=False, line_color=RX_COLOR
+        )
+        lo_plot = f_ax.plot_line_graph(
+            **get_plot_values(ports=["lo"]), add_vertex_dots=False, line_color=TX_COLOR
+        )
 
         # plot = f_ax.plot_line_graph(
         #     np.arange(0, f_max, 1), np.linspace(0, 1, f_max), add_vertex_dots=False
@@ -3084,13 +3095,37 @@ class MixerProducts(Scene):
         # self.add(f_ax, f_labels, plot)
 
         self.play(AnimationGroup(Create(f_ax), FadeIn(f_labels)))
-        self.play(Create(plot, run_time=1.5))
+        self.play(Create(lo_plot, run_time=1.5))
+        self.play(Create(rf_plot, run_time=1.5))
+        self.play(Create(if_plot, run_time=1.5))
 
         self.wait(0.5)
 
-        plot.add_updater(
+        if_plot.add_updater(
             lambda m: m.become(
-                f_ax.plot_line_graph(**get_plot_values(), add_vertex_dots=False)
+                f_ax.plot_line_graph(
+                    **get_plot_values(ports=["if"]),
+                    add_vertex_dots=False,
+                    line_color=IF_COLOR,
+                )
+            )
+        )
+        rf_plot.add_updater(
+            lambda m: m.become(
+                f_ax.plot_line_graph(
+                    **get_plot_values(ports=["rf"]),
+                    add_vertex_dots=False,
+                    line_color=RX_COLOR,
+                )
+            )
+        )
+        lo_plot.add_updater(
+            lambda m: m.become(
+                f_ax.plot_line_graph(
+                    **get_plot_values(ports=["lo"]),
+                    add_vertex_dots=False,
+                    line_color=TX_COLOR,
+                )
             )
         )
 
