@@ -3017,23 +3017,36 @@ class MixerProducts(Scene):
         y_len = config["frame_height"] * 0.5
 
         f_max = 20
+        y_min = -40
         f_ax = Axes(
             x_range=[-0.1, f_max, f_max / 8],
-            y_range=[-60 + mag_offset, 10 + mag_offset, 20],
+            y_range=[y_min + mag_offset, 10 + mag_offset, 20],
             tips=False,
             axis_config={"include_numbers": False},
             x_length=x_len,
             y_length=y_len,
         ).to_edge(DOWN, buff=LARGE_BUFF)
 
-        f_labels = f_ax.get_axis_labels(
+        ax_labels = f_ax.get_axis_labels(
             Tex("$f$", font_size=DEFAULT_FONT_SIZE),
-            Tex(r"$\lvert X(f) \rvert$", font_size=DEFAULT_FONT_SIZE),
+            Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
+        )
+        ax_labels.save_state()
+        ax_labels_f_spelled = f_ax.get_axis_labels(
+            Tex("frequency", font_size=DEFAULT_FONT_SIZE),
+            Tex(
+                r"$\lvert$",
+                "$X($",
+                "$f$",
+                "$)$",
+                r"$\rvert$",
+                font_size=DEFAULT_FONT_SIZE,
+            ),
         )
 
         if_plot = f_ax.plot_line_graph([0], [0], add_vertex_dots=False)
 
-        def get_plot_values(ports=["lo", "rf", "if"]):
+        def get_plot_values(ports=["lo", "rf", "if"], y_min=None):
             lo_signal = np.sin(2 * PI * f_lo * t)
             if_signal = np.sin(2 * PI * f_if * t) / (
                 10
@@ -3072,6 +3085,9 @@ class MixerProducts(Scene):
             x_values = freq[indices]
             y_values = summed_fft_log[indices]
 
+            # if y_min is not None:
+            #     y_values[np.where(y_values < y_min)] = np.nan
+
             return dict(x_values=x_values, y_values=y_values)
 
         if_plot = f_ax.plot_line_graph(
@@ -3094,7 +3110,22 @@ class MixerProducts(Scene):
 
         # self.add(f_ax, f_labels, plot)
 
-        self.play(AnimationGroup(Create(f_ax), FadeIn(f_labels)))
+        self.play(AnimationGroup(Create(f_ax), FadeIn(ax_labels)))
+
+        self.wait(0.5)
+
+        self.play(Transform(ax_labels[0], ax_labels_f_spelled[0]))
+
+        self.wait(0.5)
+
+        self.play(Indicate(ax_labels[1]))
+
+        self.wait(0.5)
+
+        self.play(Restore(ax_labels))
+
+        self.wait(0.5)
+
         self.play(Create(lo_plot, run_time=1.5))
         self.play(Create(rf_plot, run_time=1.5))
         self.play(Create(if_plot, run_time=1.5))
@@ -3104,7 +3135,7 @@ class MixerProducts(Scene):
         if_plot.add_updater(
             lambda m: m.become(
                 f_ax.plot_line_graph(
-                    **get_plot_values(ports=["if"]),
+                    **get_plot_values(ports=["if"], y_min=y_min),
                     add_vertex_dots=False,
                     line_color=IF_COLOR,
                 )
@@ -3113,7 +3144,7 @@ class MixerProducts(Scene):
         rf_plot.add_updater(
             lambda m: m.become(
                 f_ax.plot_line_graph(
-                    **get_plot_values(ports=["rf"]),
+                    **get_plot_values(ports=["rf"], y_min=y_min),
                     add_vertex_dots=False,
                     line_color=RX_COLOR,
                 )
@@ -3122,7 +3153,7 @@ class MixerProducts(Scene):
         lo_plot.add_updater(
             lambda m: m.become(
                 f_ax.plot_line_graph(
-                    **get_plot_values(ports=["lo"]),
+                    **get_plot_values(ports=["lo"], y_min=y_min),
                     add_vertex_dots=False,
                     line_color=TX_COLOR,
                 )
