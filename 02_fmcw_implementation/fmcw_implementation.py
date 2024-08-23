@@ -3017,12 +3017,12 @@ class MixerProducts(Scene):
         y_len = config["frame_height"] * 0.5
 
         f_max = 20
-        y_min = -40
+        y_min = -28
         f_ax = Axes(
             x_range=[-0.1, f_max, f_max / 8],
-            y_range=[y_min + mag_offset, 10 + mag_offset, 20],
+            y_range=[0, 40, 20],
             tips=False,
-            axis_config={"include_numbers": False},
+            axis_config={"include_numbers": True},
             x_length=x_len,
             y_length=y_len,
         ).to_edge(DOWN, buff=LARGE_BUFF)
@@ -3079,25 +3079,32 @@ class MixerProducts(Scene):
             fft_len = 2**18
             summed_fft = np.fft.fft(summed_signals, fft_len) / (N / 2)
             summed_fft /= summed_fft.max()
-            summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft)) + mag_offset
+            summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft))
             freq = np.linspace(-fs / 2, fs / 2, fft_len)
             indices = np.where((freq > 0) & (freq < f_max))
             x_values = freq[indices]
             y_values = summed_fft_log[indices]
 
             # if y_min is not None:
-            #     y_values[np.where(y_values < y_min)] = np.nan
+            y_values[y_values < y_min] = y_min
+            y_values -= y_min
 
             return dict(x_values=x_values, y_values=y_values)
 
         if_plot = f_ax.plot_line_graph(
-            **get_plot_values(ports=["if"]), add_vertex_dots=False, line_color=IF_COLOR
+            **get_plot_values(ports=["if"], y_min=y_min),
+            add_vertex_dots=False,
+            line_color=IF_COLOR,
         )
         rf_plot = f_ax.plot_line_graph(
-            **get_plot_values(ports=["rf"]), add_vertex_dots=False, line_color=RX_COLOR
+            **get_plot_values(ports=["rf"], y_min=y_min),
+            add_vertex_dots=False,
+            line_color=RX_COLOR,
         )
         lo_plot = f_ax.plot_line_graph(
-            **get_plot_values(ports=["lo"]), add_vertex_dots=False, line_color=TX_COLOR
+            **get_plot_values(ports=["lo"], y_min=y_min),
+            add_vertex_dots=False,
+            line_color=TX_COLOR,
         )
 
         # plot = f_ax.plot_line_graph(
@@ -3132,35 +3139,35 @@ class MixerProducts(Scene):
 
         self.wait(0.5)
 
-        if_plot.add_updater(
-            lambda m: m.become(
-                f_ax.plot_line_graph(
-                    **get_plot_values(ports=["if"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=IF_COLOR,
-                )
-            )
-        )
-        rf_plot.add_updater(
-            lambda m: m.become(
-                f_ax.plot_line_graph(
-                    **get_plot_values(ports=["rf"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=RX_COLOR,
-                )
-            )
-        )
-        lo_plot.add_updater(
-            lambda m: m.become(
-                f_ax.plot_line_graph(
-                    **get_plot_values(ports=["lo"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=TX_COLOR,
-                )
-            )
-        )
+        # if_plot.add_updater(
+        #     lambda m: m.become(
+        #         f_ax.plot_line_graph(
+        #             **get_plot_values(ports=["if"], y_min=y_min),
+        #             add_vertex_dots=False,
+        #             line_color=IF_COLOR,
+        #         )
+        #     )
+        # )
+        # rf_plot.add_updater(
+        #     lambda m: m.become(
+        #         f_ax.plot_line_graph(
+        #             **get_plot_values(ports=["rf"], y_min=y_min),
+        #             add_vertex_dots=False,
+        #             line_color=RX_COLOR,
+        #         )
+        #     )
+        # )
+        # lo_plot.add_updater(
+        #     lambda m: m.become(
+        #         f_ax.plot_line_graph(
+        #             **get_plot_values(ports=["lo"], y_min=y_min),
+        #             add_vertex_dots=False,
+        #             line_color=TX_COLOR,
+        #         )
+        #     )
+        # )
 
-        self.play(rf_h_power_relative_to_lo.animate(run_time=3).increment_value(-50))
+        # self.play(rf_h_power_relative_to_lo.animate(run_time=3).increment_value(-50))
 
         self.wait(2)
 
