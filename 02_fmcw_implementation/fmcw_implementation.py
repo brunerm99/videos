@@ -3004,8 +3004,10 @@ class MixerProducts(Scene):
         f_rf_h = f_lo + f_if
 
         lo_conversion_loss = 6  # dB
-        rf_h_power_relative_to_lo = ValueTracker(40)  # dB
-        rf_l_power_relative_to_lo = ValueTracker(15)  # dB
+        lo_loss = ValueTracker(40)  # dB
+        rf_h_loss = ValueTracker(40)  # dB
+        rf_l_loss = ValueTracker(40)  # dB
+        if_loss = ValueTracker(40)
 
         stop_time = 4
         fs = 1000
@@ -3018,21 +3020,24 @@ class MixerProducts(Scene):
 
         f_max = 20
         y_min = -28
-        f_ax = Axes(
+        ax = Axes(
             x_range=[-0.1, f_max, f_max / 8],
-            y_range=[0, 40, 20],
+            y_range=[0, 30, 20],
             tips=False,
-            axis_config={"include_numbers": True},
+            axis_config={
+                "include_numbers": False,
+                "include_ticks": False,
+            },
             x_length=x_len,
             y_length=y_len,
         ).to_edge(DOWN, buff=LARGE_BUFF)
 
-        ax_labels = f_ax.get_axis_labels(
+        ax_labels = ax.get_axis_labels(
             Tex("$f$", font_size=DEFAULT_FONT_SIZE),
             Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
         )
         ax_labels.save_state()
-        ax_labels_f_spelled = f_ax.get_axis_labels(
+        ax_labels_f_spelled = ax.get_axis_labels(
             Tex("frequency", font_size=DEFAULT_FONT_SIZE),
             Tex(
                 r"$\lvert$",
@@ -3044,80 +3049,169 @@ class MixerProducts(Scene):
             ),
         )
 
-        if_plot = f_ax.plot_line_graph([0], [0], add_vertex_dots=False)
+        lo_tick_pos = ax.c2p(f_lo, 0, 0)
+        lo_tick = Line(lo_tick_pos + DOWN / 4, lo_tick_pos + UP / 4)
+        lo_tick_label = Tex(f"{f_lo}").next_to(lo_tick, direction=DOWN, buff=SMALL_BUFF)
 
-        def get_plot_values(ports=["lo", "rf", "if"], y_min=None):
-            lo_signal = np.sin(2 * PI * f_lo * t)
-            if_signal = np.sin(2 * PI * f_if * t) / (
-                10
-                ** (
-                    (
-                        lo_conversion_loss
-                        + min(
-                            rf_h_power_relative_to_lo.get_value(),
-                            rf_l_power_relative_to_lo.get_value(),
-                        )
-                    )
-                    / 10
-                )
-            )
+        rf_l_tick_pos = ax.c2p(f_rf_l, 0, 0)
+        rf_l_tick = Line(rf_l_tick_pos + DOWN / 4, rf_l_tick_pos + UP / 4)
+        rf_l_tick_label = Tex(f"{f_rf_l}").next_to(
+            rf_l_tick, direction=DOWN, buff=SMALL_BUFF
+        )
+
+        rf_h_tick_pos = ax.c2p(f_rf_h, 0, 0)
+        rf_h_tick = Line(rf_h_tick_pos + DOWN / 4, rf_h_tick_pos + UP / 4)
+        rf_h_tick_label = Tex(f"{f_rf_h}").next_to(
+            rf_h_tick, direction=DOWN, buff=SMALL_BUFF
+        )
+
+        if_tick_pos = ax.c2p(f_if, 0, 0)
+        if_tick = Line(if_tick_pos + DOWN / 4, if_tick_pos + UP / 4)
+        if_tick_label = Tex(f"{f_if}").next_to(if_tick, direction=DOWN, buff=SMALL_BUFF)
+
+        unit_label = (
+            Tex("GHz")
+            .next_to(ax_labels[0], direction=DOWN)
+            .set_y(lo_tick_label.get_y())
+        )
+
+        lo_line_legend = Line(ORIGIN, RIGHT, color=TX_COLOR).to_corner(
+            UR, buff=MED_LARGE_BUFF
+        )
+        lo_legend = Tex("LO", color=TX_COLOR).next_to(
+            lo_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        rf_line_legend = Line(ORIGIN, RIGHT, color=RX_COLOR).next_to(
+            lo_line_legend, direction=DOWN, buff=MED_LARGE_BUFF
+        )
+        rf_legend = Tex("RF", color=RX_COLOR).next_to(
+            rf_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        if_line_legend = Line(ORIGIN, RIGHT, color=IF_COLOR).next_to(
+            rf_line_legend, direction=DOWN, buff=MED_LARGE_BUFF
+        )
+        if_legend = Tex("IF", color=IF_COLOR).next_to(
+            if_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+
+        f_if_eqn = Tex(r"$f_{LO} - f_{RF}$")
+
+        if_plot = ax.plot_line_graph([0], [0], add_vertex_dots=False)
+
+        def get_plot_values(ports=["lo", "rf_l", "rf_h", "if"], y_min=None):
+            lo_signal = np.sin(2 * PI * f_lo * t) / (10 ** (lo_loss.get_value() / 10))
+            if_signal = np.sin(2 * PI * f_if * t) / (10 ** (if_loss.get_value() / 10))
             rf_l_signal = np.sin(2 * PI * f_rf_l * t) / (
-                10 ** (rf_l_power_relative_to_lo.get_value() / 10)
+                10 ** (rf_l_loss.get_value() / 10)
             )
             rf_h_signal = np.sin(2 * PI * f_rf_h * t) / (
-                10 ** (rf_h_power_relative_to_lo.get_value() / 10)
+                10 ** (rf_h_loss.get_value() / 10)
             )
-            rf_signals = rf_l_signal + rf_h_signal
 
-            signals = {"lo": lo_signal, "rf": rf_signals, "if": if_signal}
+            signals = {
+                "lo": lo_signal,
+                "rf_l": rf_l_signal,
+                "rf_h": rf_h_signal,
+                "if": if_signal,
+            }
             summed_signals = sum([signals.get(port) for port in ports])
-            # summed_signals = lo_signal + if_signal + rf_l_signal + rf_h_signal
 
             blackman_window = signal.windows.blackman(N)
             summed_signals *= blackman_window
 
             fft_len = 2**18
             summed_fft = np.fft.fft(summed_signals, fft_len) / (N / 2)
-            summed_fft /= summed_fft.max()
+            # summed_fft /= summed_fft.max()
             summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft))
             freq = np.linspace(-fs / 2, fs / 2, fft_len)
             indices = np.where((freq > 0) & (freq < f_max))
             x_values = freq[indices]
             y_values = summed_fft_log[indices]
 
-            # if y_min is not None:
-            y_values[y_values < y_min] = y_min
-            y_values -= y_min
+            if y_min is not None:
+                y_values[y_values < y_min] = y_min
+                y_values -= y_min
 
             return dict(x_values=x_values, y_values=y_values)
 
-        if_plot = f_ax.plot_line_graph(
+        if_plot = ax.plot_line_graph(
             **get_plot_values(ports=["if"], y_min=y_min),
             add_vertex_dots=False,
             line_color=IF_COLOR,
         )
-        rf_plot = f_ax.plot_line_graph(
-            **get_plot_values(ports=["rf"], y_min=y_min),
+        rf_l_plot = ax.plot_line_graph(
+            **get_plot_values(ports=["rf_l"], y_min=y_min),
             add_vertex_dots=False,
             line_color=RX_COLOR,
         )
-        lo_plot = f_ax.plot_line_graph(
+        rf_h_plot = ax.plot_line_graph(
+            **get_plot_values(ports=["rf_h"], y_min=y_min),
+            add_vertex_dots=False,
+            line_color=RX_COLOR,
+        )
+        lo_plot = ax.plot_line_graph(
             **get_plot_values(ports=["lo"], y_min=y_min),
             add_vertex_dots=False,
             line_color=TX_COLOR,
         )
 
-        # plot = f_ax.plot_line_graph(
-        #     np.arange(0, f_max, 1), np.linspace(0, 1, f_max), add_vertex_dots=False
-        # )
+        time_ax_x_len = 4
+        time_ax_y_len = 3
+        time_ax_x_max = 0.6
+        rf_h_A = 0.3
+        rf_l_time_ax = Axes(
+            x_range=[-0.1, time_ax_x_max, time_ax_x_max / 8],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+                "include_ticks": False,
+            },
+            x_length=time_ax_x_len,
+            y_length=time_ax_y_len,
+        )
+        rf_h_time_ax = Axes(
+            x_range=[-0.1, time_ax_x_max, time_ax_x_max / 8],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+                "include_ticks": False,
+            },
+            x_length=time_ax_x_len,
+            y_length=time_ax_y_len,
+        )
 
-        # plt.plot(freq, 10 * np.log10(np.fft.fftshift(summed_fft)))
-        # plt.xlim(0, 20)
-        # plt.ylim(-60, 10)
+        rf_l_signal_time = rf_l_time_ax.plot(
+            lambda t: np.sin(2 * PI * f_rf_l * t), color=RX_COLOR
+        )
+        rf_h_signal_time = rf_h_time_ax.plot(
+            lambda t: rf_h_A * np.sin(2 * PI * f_rf_h * t), color=RX_COLOR
+        )
+        rf_summed_signal_time = rf_l_time_ax.plot(
+            lambda t: np.sin(2 * PI * f_rf_l * t)
+            + rf_h_A * np.sin(2 * PI * f_rf_h * t),
+            color=RX_COLOR,
+        )
 
-        # self.add(f_ax, f_labels, plot)
+        plot_group = VGroup(
+            ax,
+            ax_labels,
+            if_plot,
+            rf_l_plot,
+            rf_h_plot,
+            lo_plot,
+            if_tick,
+            if_tick_label,
+            lo_tick,
+            lo_tick_label,
+            rf_l_tick,
+            rf_l_tick_label,
+            rf_h_tick,
+            rf_h_tick_label,
+        )
 
-        self.play(AnimationGroup(Create(f_ax), FadeIn(ax_labels)))
+        self.play(AnimationGroup(Create(ax), FadeIn(ax_labels)))
 
         self.wait(0.5)
 
@@ -3133,41 +3227,80 @@ class MixerProducts(Scene):
 
         self.wait(0.5)
 
-        self.play(Create(lo_plot, run_time=1.5))
-        self.play(Create(rf_plot, run_time=1.5))
-        self.play(Create(if_plot, run_time=1.5))
+        self.play(
+            Create(lo_plot), Create(rf_l_plot), Create(rf_h_plot), Create(if_plot)
+        )
 
         self.wait(0.5)
 
-        # if_plot.add_updater(
-        #     lambda m: m.become(
-        #         f_ax.plot_line_graph(
-        #             **get_plot_values(ports=["if"], y_min=y_min),
-        #             add_vertex_dots=False,
-        #             line_color=IF_COLOR,
-        #         )
-        #     )
-        # )
-        # rf_plot.add_updater(
-        #     lambda m: m.become(
-        #         f_ax.plot_line_graph(
-        #             **get_plot_values(ports=["rf"], y_min=y_min),
-        #             add_vertex_dots=False,
-        #             line_color=RX_COLOR,
-        #         )
-        #     )
-        # )
-        # lo_plot.add_updater(
-        #     lambda m: m.become(
-        #         f_ax.plot_line_graph(
-        #             **get_plot_values(ports=["lo"], y_min=y_min),
-        #             add_vertex_dots=False,
-        #             line_color=TX_COLOR,
-        #         )
-        #     )
-        # )
+        if_plot.add_updater(
+            lambda m: m.become(
+                ax.plot_line_graph(
+                    **get_plot_values(ports=["if"], y_min=y_min),
+                    add_vertex_dots=False,
+                    line_color=IF_COLOR,
+                )
+            )
+        )
+        rf_l_plot.add_updater(
+            lambda m: m.become(
+                ax.plot_line_graph(
+                    **get_plot_values(ports=["rf_l"], y_min=y_min),
+                    add_vertex_dots=False,
+                    line_color=RX_COLOR,
+                )
+            )
+        )
+        rf_h_plot.add_updater(
+            lambda m: m.become(
+                ax.plot_line_graph(
+                    **get_plot_values(ports=["rf_h"], y_min=y_min),
+                    add_vertex_dots=False,
+                    line_color=RX_COLOR,
+                )
+            )
+        )
+        lo_plot.add_updater(
+            lambda m: m.become(
+                ax.plot_line_graph(
+                    **get_plot_values(ports=["lo"], y_min=y_min),
+                    add_vertex_dots=False,
+                    line_color=TX_COLOR,
+                )
+            )
+        )
 
-        # self.play(rf_h_power_relative_to_lo.animate(run_time=3).increment_value(-50))
+        self.play(
+            lo_loss.animate(run_time=1.5).set_value(0),
+            FadeIn(lo_line_legend, lo_legend),
+            FadeIn(lo_tick, lo_tick_label),
+            FadeIn(unit_label),
+        )
+        self.play(
+            rf_l_loss.animate(run_time=1.5).set_value(8),
+            FadeIn(rf_line_legend, rf_legend),
+            FadeIn(rf_l_tick, rf_l_tick_label),
+        )
+        self.play(
+            if_loss.animate(run_time=1.5).set_value(15),
+            FadeIn(if_line_legend, if_legend),
+            FadeIn(if_tick, if_tick_label),
+        )
+
+        self.wait(1)
+
+        f_if_eqn.next_to(
+            ax.c2p(f_if, -y_min - if_loss.get_value()), direction=UP, buff=SMALL_BUFF
+        ).shift(RIGHT / 4)
+        self.play(FadeIn(f_if_eqn))
+
+        self.wait(1)
+
+        self.play(FadeIn(rf_h_tick, rf_h_tick_label))
+
+        self.wait(0.5)
+
+        self.play(plot_group.to_edge(DOWN, buff=SMALL_BUFF))
 
         self.wait(2)
 
