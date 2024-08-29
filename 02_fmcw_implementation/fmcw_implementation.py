@@ -3016,13 +3016,13 @@ class MixerProducts(Scene):
         mag_offset = 60
 
         x_len = config["frame_width"] * 0.8
-        y_len = config["frame_height"] * 0.5
+        y_len = config["frame_height"] * 0.4
 
         f_max = 20
         y_min = -28
         ax = Axes(
             x_range=[-0.1, f_max, f_max / 8],
-            y_range=[0, 30, 20],
+            y_range=[0, -y_min, 20],
             tips=False,
             axis_config={
                 "include_numbers": False,
@@ -3032,21 +3032,14 @@ class MixerProducts(Scene):
             y_length=y_len,
         ).to_edge(DOWN, buff=LARGE_BUFF)
 
-        ax_labels = ax.get_axis_labels(
-            Tex("$f$", font_size=DEFAULT_FONT_SIZE),
+        ax_x_label = ax.get_x_axis_label(Tex("$f$", font_size=DEFAULT_FONT_SIZE))
+        ax_y_label = ax.get_y_axis_label(
             Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
+            edge=UL,
         )
-        ax_labels.save_state()
-        ax_labels_f_spelled = ax.get_axis_labels(
-            Tex("frequency", font_size=DEFAULT_FONT_SIZE),
-            Tex(
-                r"$\lvert$",
-                "$X($",
-                "$f$",
-                "$)$",
-                r"$\rvert$",
-                font_size=DEFAULT_FONT_SIZE,
-            ),
+        ax_x_label.save_state()
+        ax_x_label_spelled = ax.get_x_axis_label(
+            Tex("frequency", font_size=DEFAULT_FONT_SIZE)
         )
 
         lo_tick_pos = ax.c2p(f_lo, 0, 0)
@@ -3070,9 +3063,7 @@ class MixerProducts(Scene):
         if_tick_label = Tex(f"{f_if}").next_to(if_tick, direction=DOWN, buff=SMALL_BUFF)
 
         unit_label = (
-            Tex("GHz")
-            .next_to(ax_labels[0], direction=DOWN)
-            .set_y(lo_tick_label.get_y())
+            Tex("GHz").next_to(ax_x_label, direction=DOWN).set_y(lo_tick_label.get_y())
         )
 
         lo_line_legend = Line(ORIGIN, RIGHT, color=TX_COLOR).to_corner(
@@ -3094,7 +3085,10 @@ class MixerProducts(Scene):
             if_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
 
-        f_if_eqn = Tex(r"$f_{LO} - f_{RF}$")
+        f_if_eqn_desired = Tex(r"$f_{LO} - f_{RF}$")
+        f_if_eqn_and = Tex("and")
+        f_if_eqn_flipped = Tex(r"$f_{RF} - f_{IF}$")
+        f_if_eqn = VGroup(f_if_eqn_desired, f_if_eqn_and, f_if_eqn_flipped)
 
         if_plot = ax.plot_line_graph([0], [0], add_vertex_dots=False)
 
@@ -3155,52 +3149,57 @@ class MixerProducts(Scene):
             line_color=TX_COLOR,
         )
 
-        time_ax_x_len = 4
-        time_ax_y_len = 3
-        time_ax_x_max = 0.6
+        time_ax_x_len = 3
+        time_ax_y_len = 2
+        time_ax_x_max = 0.4
         rf_h_A = 0.3
+        rf_A = 0.5
         rf_l_time_ax = Axes(
-            x_range=[-0.1, time_ax_x_max, time_ax_x_max / 8],
-            y_range=[-1, 1, 0.5],
+            x_range=[0, time_ax_x_max, time_ax_x_max / 4],
+            y_range=[-rf_A, rf_A, rf_A / 2],
             tips=False,
             axis_config={
                 "include_numbers": False,
-                "include_ticks": False,
+                "include_ticks": True,
             },
             x_length=time_ax_x_len,
             y_length=time_ax_y_len,
         )
         rf_h_time_ax = Axes(
-            x_range=[-0.1, time_ax_x_max, time_ax_x_max / 8],
-            y_range=[-1, 1, 0.5],
+            x_range=[0, time_ax_x_max, time_ax_x_max / 4],
+            y_range=[-rf_A, rf_A, rf_A / 2],
             tips=False,
             axis_config={
                 "include_numbers": False,
-                "include_ticks": False,
+                "include_ticks": True,
             },
             x_length=time_ax_x_len,
             y_length=time_ax_y_len,
         )
 
         rf_l_signal_time = rf_l_time_ax.plot(
-            lambda t: np.sin(2 * PI * f_rf_l * t), color=RX_COLOR
+            lambda t: rf_A * np.sin(2 * PI * f_rf_l * t), color=RX_COLOR
         )
         rf_h_signal_time = rf_h_time_ax.plot(
-            lambda t: rf_h_A * np.sin(2 * PI * f_rf_h * t), color=RX_COLOR
+            lambda t: rf_A * rf_h_A * np.sin(2 * PI * f_rf_h * t), color=RX_COLOR
         )
         rf_summed_signal_time = rf_l_time_ax.plot(
-            lambda t: np.sin(2 * PI * f_rf_l * t)
-            + rf_h_A * np.sin(2 * PI * f_rf_h * t),
+            lambda t: rf_A
+            * (np.sin(2 * PI * f_rf_l * t) + rf_h_A * np.sin(2 * PI * f_rf_h * t)),
             color=RX_COLOR,
         )
 
+        rf_l_plot_group = VGroup(rf_l_time_ax, rf_l_signal_time, rf_summed_signal_time)
+        rf_h_plot_group = VGroup(rf_h_time_ax, rf_h_signal_time)
+
         plot_group = VGroup(
             ax,
-            ax_labels,
-            if_plot,
+            ax_x_label,
+            ax_y_label,
+            lo_plot,
             rf_l_plot,
             rf_h_plot,
-            lo_plot,
+            if_plot,
             if_tick,
             if_tick_label,
             lo_tick,
@@ -3209,21 +3208,36 @@ class MixerProducts(Scene):
             rf_l_tick_label,
             rf_h_tick,
             rf_h_tick_label,
+            unit_label,
+            f_if_eqn_desired,
         )
 
-        self.play(AnimationGroup(Create(ax), FadeIn(ax_labels)))
+        def get_rect_updater(f, loss_tracker):
+            def get_f_rect():
+                top = ax.c2p(f, -y_min - loss_tracker.get_value(), 0)
+                bot = ax.c2p(f, 0, 0)
+                mid = ax.c2p(f, (-y_min - loss_tracker.get_value()) / 2, 0)
+                return top, bot, mid
+
+            def if_rect_updater(m: Mobject):
+                top, bot, mid = get_f_rect()
+                m.become(Rectangle(width=1, height=Line(bot, top).height).move_to(mid))
+
+            return if_rect_updater
+
+        self.play(AnimationGroup(Create(ax), FadeIn(ax_x_label, ax_y_label)))
 
         self.wait(0.5)
 
-        self.play(Transform(ax_labels[0], ax_labels_f_spelled[0]))
+        self.play(Transform(ax_x_label, ax_x_label_spelled))
 
         self.wait(0.5)
 
-        self.play(Indicate(ax_labels[1]))
+        self.play(Indicate(ax_y_label))
 
         self.wait(0.5)
 
-        self.play(Restore(ax_labels))
+        self.play(Restore(ax_x_label))
 
         self.wait(0.5)
 
@@ -3289,10 +3303,29 @@ class MixerProducts(Scene):
 
         self.wait(1)
 
-        f_if_eqn.next_to(
+        f_if_eqn_desired.next_to(
             ax.c2p(f_if, -y_min - if_loss.get_value()), direction=UP, buff=SMALL_BUFF
         ).shift(RIGHT / 4)
-        self.play(FadeIn(f_if_eqn))
+        self.play(FadeIn(f_if_eqn_desired))
+
+        self.wait(0.5)
+
+        f_if_eqn_desired_copy = f_if_eqn_desired.copy()
+        f_if_eqn_flipped.move_to(f_if_eqn_desired)
+        f_if_eqn_and.next_to(f_if_eqn_flipped, direction=UP, buff=SMALL_BUFF)
+        f_if_eqn_desired_copy.next_to(f_if_eqn_and, direction=UP, buff=SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                Transform(f_if_eqn_desired, f_if_eqn_desired_copy),
+                FadeIn(f_if_eqn_and),
+                FadeIn(f_if_eqn_flipped),
+                lag_ratio=0.8,
+            )
+        )
+
+        plot_group.remove(f_if_eqn_desired)
+        plot_group.add(f_if_eqn)
 
         self.wait(1)
 
@@ -3300,7 +3333,111 @@ class MixerProducts(Scene):
 
         self.wait(0.5)
 
-        self.play(plot_group.to_edge(DOWN, buff=SMALL_BUFF))
+        self.play(plot_group.animate.to_edge(DOWN, buff=MED_SMALL_BUFF))
+
+        self.wait(0.5)
+
+        rf_l_p1 = ax.c2p(f_rf_l, -y_min - rf_l_loss.get_value(), 0) + DOWN / 4
+        rf_l_plot_group.next_to(rf_l_p1, direction=UP).shift(LEFT * 2).to_edge(UP)
+        rf_l_p2 = rf_l_plot_group.get_bottom()
+        rf_l_bezier = CubicBezier(
+            rf_l_p1,
+            rf_l_p1 + [0, 0.5, 0],
+            rf_l_p2 + [0, -1, 0],
+            rf_l_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(rf_l_bezier),
+                Create(rf_l_time_ax),
+                Create(rf_l_signal_time),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(rf_h_loss.animate.set_value(rf_l_loss.get_value() + 10))
+
+        rf_h_p1 = ax.c2p(f_rf_h, -y_min - rf_h_loss.get_value(), 0) + DOWN / 4
+        rf_h_plot_group.next_to(
+            rf_l_time_ax, direction=RIGHT, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 3
+        )
+        rf_h_p2 = rf_h_plot_group.get_bottom() + [0, -0.2, 0]
+        rf_h_bezier = CubicBezier(
+            rf_h_p1,
+            rf_h_p1 + [0.5, 0.5, 0],
+            rf_h_p2 + [0, -0.5, 0],
+            rf_h_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(rf_h_bezier),
+                Create(rf_h_time_ax),
+                Create(rf_h_signal_time),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        if_rect = Rectangle()
+        if_rect_updater = get_rect_updater(f_if, if_loss)
+        if_rect.add_updater(if_rect_updater)
+
+        self.play(
+            Create(if_rect),
+            f_if_eqn.animate.next_to(if_rect, direction=UP, buff=MED_SMALL_BUFF).shift(
+                RIGHT / 4
+            ),
+        )
+
+        self.wait(0.5)
+
+        f_if_eqn_updater = lambda m: m.next_to(
+            if_rect, direction=UP, buff=MED_SMALL_BUFF
+        ).shift(RIGHT / 4)
+        f_if_eqn.add_updater(f_if_eqn_updater)
+
+        self.play(
+            if_loss.animate.increment_value(-5),
+            # f_if_eqn_desired.animate.shift(UP * 0.8),
+        )
+
+        f_if_eqn.remove_updater(f_if_eqn_updater)
+
+        self.wait(0.5)
+
+        if_rect.remove_updater(if_rect_updater)
+        self.play(Uncreate(if_rect))
+
+        self.play(
+            Uncreate(rf_l_bezier),
+            Uncreate(rf_h_bezier),
+            LaggedStart(
+                Uncreate(rf_l_signal_time),
+                Uncreate(rf_l_time_ax),
+                lag_ratio=0.7,
+            ),
+            LaggedStart(
+                Uncreate(rf_h_signal_time),
+                Uncreate(rf_h_time_ax),
+                lag_ratio=0.7,
+            ),
+        )
+        self.play(plot_group.animate.move_to(ORIGIN))
+
+        self.wait(0.5)
+
+        # rf_l_to_if_p1 = rf_l
+
+        # rf_h_rect = Rectangle()
+        # rf_h_rect_updater = get_rect_updater(f_rf_h, rf_h_loss)
+        # rf_h_rect_updater(rf_h_rect)
+
+        # self.play(Create(rf_h_rect))
 
         self.wait(2)
 
