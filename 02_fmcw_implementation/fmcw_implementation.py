@@ -10,7 +10,14 @@ import warnings
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, "..")
-from props import get_blocks, get_bd_animation, get_resistor, get_diode
+from props import (
+    get_blocks,
+    get_bd_animation,
+    get_resistor,
+    get_diode,
+    FMCWRadarCartoon,
+    VideoMobject,
+)
 
 
 BACKGROUND_COLOR = ManimColor.from_hex("#183340")
@@ -175,6 +182,307 @@ def get_bd():
         adc_to_signal_proc,
         signal_proc,
     )
+
+
+class Intro(Scene):
+    def construct(self):
+        fmcw = FMCWRadarCartoon()
+
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+
+        x_len = 6
+        y_len = 2.2
+
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).scale(1.1)
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp = lambda t: np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[0, duration, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        plot_group = VGroup(amp_ax, sawtooth_amp_graph)
+
+        range_eqn_color = ORANGE
+        range_eqn = Tex(
+            r"$R = \frac{c T_{c} f_{beat}}{2 B}$", color=range_eqn_color
+        ).scale(1.2)
+
+        useful_color = GREEN
+        useful = Tex(
+            r"\begin{itemize}"
+            r"\item Lower peak power"
+            r"\item Small minimum range"
+            r"\item Fine range resolution"
+            r"\end{itemize}",
+            color=useful_color,
+        )
+        useful_brace = Brace(useful, direction=LEFT, sharpness=1)
+        useful_group = VGroup(useful, useful_brace)
+
+        VGroup(plot_group, range_eqn, useful_group).arrange(
+            direction=DOWN, buff=MED_LARGE_BUFF
+        ).to_edge(RIGHT, buff=LARGE_BUFF)
+
+        kicad = ImageMobject("../props/static/kicad.png")
+
+        gears = SVGMobject("../props/static/Gears.svg").scale(3)
+        (red_gear, blue_gear) = gears.shift(DOWN * 0.5 + RIGHT)
+
+        gr = 24 / 12
+
+        red_accel = ValueTracker(0)
+        red_vel = ValueTracker(0)
+        blue_vel = ValueTracker(0)
+
+        def driver_updater(m, dt):
+            red_vel.set_value(red_vel.get_value() + dt * red_accel.get_value())
+            blue_vel.set_value(-red_vel.get_value() / gr)
+            m.rotate(dt * red_vel.get_value())
+
+        def driven_updater(m, dt):
+            m.rotate(dt * blue_vel.get_value())
+
+        red_gear.add_updater(driver_updater)
+        blue_gear.add_updater(driven_updater)
+
+        f_beat_eqn = MathTex(r"f_{beat} = f_{TX} - f_{RX}")
+
+        amp, lp_filter, mixer, oscillator, phase_shifter, switch = (
+            BLOCKS.get("amp").copy().scale(0.7),
+            BLOCKS.get("lp_filter").copy().scale(0.7),
+            BLOCKS.get("mixer").copy().scale(0.7),
+            BLOCKS.get("oscillator").copy().scale(0.7),
+            BLOCKS.get("phase_shifter").copy().scale(0.7),
+            BLOCKS.get("spdt_switch").copy().scale(0.7),
+        )
+        rf_blocks = Group(
+            amp, lp_filter, mixer, oscillator, phase_shifter, switch
+        ).arrange_in_grid(rows=3, cols=2, buff=(MED_LARGE_BUFF, MED_LARGE_BUFF))
+
+        self.play(fmcw.get_animation())
+
+        self.play(fmcw.vgroup.animate.scale(0.8).to_edge(LEFT, buff=LARGE_BUFF))
+
+        self.wait(0.3)
+
+        tx_wf_p0 = fmcw.vgroup.get_right() + [0.1, 0, 0]
+        tx_wf_p1 = amp_ax.get_left() + [-0.1, 0, 0]
+        tx_wf_bez = CubicBezier(
+            tx_wf_p0,
+            tx_wf_p0 + [1, 0, 0],
+            tx_wf_p1 + [-1, 0, 0],
+            tx_wf_p1,
+            color=TX_COLOR,
+        )
+
+        range_eqn_p0 = fmcw.vgroup.get_right() + [0.1, 0, 0]
+        range_eqn_p1 = range_eqn.get_left() + [-0.1, 0, 0]
+        range_eqn_bez = CubicBezier(
+            range_eqn_p0,
+            range_eqn_p0 + [1, 0, 0],
+            range_eqn_p1 + [-1, 0, 0],
+            range_eqn_p1,
+            color=range_eqn_color,
+        )
+
+        useful_p0 = fmcw.vgroup.get_right() + [0.1, 0, 0]
+        useful_p1 = useful_group.get_left() + [-0.1, 0, 0]
+        useful_bez = CubicBezier(
+            useful_p0,
+            useful_p0 + [1, 0, 0],
+            useful_p1 + [-1, 0, 0],
+            useful_p1,
+            color=useful_color,
+        )
+
+        self.play(Create(tx_wf_bez), Create(amp_ax), Create(sawtooth_amp_graph))
+
+        self.play(Create(range_eqn_bez), Create(range_eqn))
+
+        self.play(Create(useful_bez), FadeIn(useful_brace), Create(useful))
+
+        self.wait(0.5)
+
+        fmcw_copy = fmcw.vgroup.copy()
+        Group(fmcw_copy, kicad).arrange(center=True, buff=LARGE_BUFF)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(tx_wf_bez),
+                    Uncreate(range_eqn_bez),
+                    Uncreate(useful_bez),
+                    FadeOut(plot_group, range_eqn, useful_group),
+                ),
+                Transform(fmcw.vgroup, fmcw_copy),
+                lag_ratio=0.5,
+            )
+        )
+        self.play(GrowFromCenter(kicad))
+
+        self.wait(0.5)
+
+        fmcw.vgroup.remove(fmcw.label)
+        fmcw_centered = (
+            fmcw.vgroup.copy()
+            .move_to(ORIGIN)
+            .scale_to_fit_height(config["frame_height"] * 0.8)
+        )
+        self.play(
+            LaggedStart(
+                FadeOut(kicad),
+                AnimationGroup(
+                    FadeOut(fmcw.label),
+                    Transform(fmcw.vgroup, fmcw_centered),
+                ),
+            )
+        )
+        gears.rotate(-PI / 2).scale_to_fit_width(fmcw.rect.width * 0.8).move_to(
+            fmcw.rect
+        )
+        self.play(FadeIn(gears))
+        red_accel.set_value(PI / 12)
+
+        fmcw_w_gears = Group(fmcw.vgroup, gears)
+
+        self.wait(1)
+
+        self.play(fmcw_w_gears.animate.scale(0.5))
+
+        wanted = (
+            VGroup(sawtooth_amp_graph.scale(0.6), f_beat_eqn)
+            .arrange(DOWN, buff=LARGE_BUFF)
+            .to_edge(LEFT)
+        )
+        wanted.next_to(fmcw_w_gears, direction=LEFT, buff=LARGE_BUFF)
+        rf_blocks.next_to(fmcw_w_gears, direction=RIGHT, buff=LARGE_BUFF)
+
+        sawtooth_p0 = sawtooth_amp_graph.get_right() + [0.1, 0, 0]
+        sawtooth_p1 = fmcw_w_gears.get_left() + [-0.1, 0, 0]
+        sawtooth_bez = CubicBezier(
+            sawtooth_p0,
+            sawtooth_p0 + [1, 0, 0],
+            sawtooth_p1 + [-1, 0, 0],
+            sawtooth_p1,
+            # color=sawtooth_color,
+        )
+
+        f_beat_p0 = f_beat_eqn.get_right() + [0.1, 0, 0]
+        f_beat_p1 = fmcw_w_gears.get_left() + [-0.1, 0, 0]
+        f_beat_bez = CubicBezier(
+            f_beat_p0,
+            f_beat_p0 + [1, 0, 0],
+            f_beat_p1 + [-1, 0, 0],
+            f_beat_p1,
+            # color=f_beat_color,
+        )
+
+        rf_block_1_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_1_p1 = amp.get_left() + [-0.1, 0, 0]
+        rf_block_1_bez = CubicBezier(
+            rf_block_1_p0,
+            rf_block_1_p0 + [1, 0, 0],
+            rf_block_1_p1 + [-1, 0, 0],
+            rf_block_1_p1,
+            # color=rf_block_1_color,
+        )
+
+        rf_block_2_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_2_p1 = mixer.get_left() + [-0.1, 0, 0]
+        rf_block_2_bez = CubicBezier(
+            rf_block_2_p0,
+            rf_block_2_p0 + [1, 0, 0],
+            rf_block_2_p1 + [-1, 0, 0],
+            rf_block_2_p1,
+            # color=rf_block_2_color,
+        )
+
+        rf_block_3_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_3_p1 = phase_shifter.get_left() + [-0.1, 0, 0]
+        rf_block_3_bez = CubicBezier(
+            rf_block_3_p0,
+            rf_block_3_p0 + [1, 0, 0],
+            rf_block_3_p1 + [-1, 0, 0],
+            rf_block_3_p1,
+            # color=rf_block_3_color,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(sawtooth_amp_graph),
+                Create(f_beat_eqn),
+                lag_ratio=0.6,
+            )
+        )
+        self.play(Create(sawtooth_bez), Create(f_beat_bez))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(rf_block_1_bez),
+                GrowFromCenter(amp),
+                GrowFromCenter(lp_filter),
+                Create(rf_block_2_bez),
+                GrowFromCenter(mixer),
+                GrowFromCenter(oscillator),
+                Create(rf_block_3_bez),
+                GrowFromCenter(phase_shifter),
+                GrowFromCenter(switch),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
+
+        all_except_title = Group(*self.mobjects)
+
+        title = Tex("FMCW Radar Part 2:").scale(1.5)
+        subtitle = Tex("Implementation").scale(1.5)
+        hline = Line(LEFT, RIGHT)
+        hline.width = config["frame_width"] * 0.8
+
+        hline.next_to(
+            all_except_title.copy().scale(0.8).to_edge(DOWN, buff=MED_LARGE_BUFF),
+            direction=UP,
+            buff=MED_LARGE_BUFF,
+        )
+        subtitle.next_to(hline, direction=UP, buff=MED_SMALL_BUFF)
+        title.next_to(subtitle, direction=UP, buff=MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                all_except_title.animate.scale(0.8).to_edge(DOWN, buff=MED_LARGE_BUFF),
+                AnimationGroup(GrowFromCenter(hline), Create(title), Create(subtitle)),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(2)
 
 
 class BD(Scene):
@@ -3790,3 +4098,37 @@ class Articles(Scene):
         )
 
         self.wait(2)
+
+
+class Gears(Scene):
+    def construct(self):
+        gears = SVGMobject("../props/static/Gears.svg").scale(3)
+        (red_gear, blue_gear) = gears.shift(DOWN * 0.5 + RIGHT)
+
+        gr = 24 / 12
+
+        RA = DecimalNumber(0, 3)
+        RV = DecimalNumber(0, 2)
+        BV = DecimalNumber(0, 2)
+
+        def Driver(m, dt):
+            RV.set_value(RV.get_value() + dt * RA.get_value())
+            BV.set_value(-RV.get_value() / gr)
+            m.rotate(dt * RV.get_value())
+
+        def Driven(m, dt):
+            m.rotate(dt * BV.get_value())
+
+        self.add(gears)
+        red_gear.add_updater(Driver)
+        blue_gear.add_updater(Driven)
+
+        RA.set_value(PI / 6)
+
+        # for a, t in AccTime:
+        #     # self.add_sound("Click.wav")
+        #     self.play(Indicate(RA.set_value(a)), run_time=0.5)
+        #     corr = 2 / 60  # missed frame correction
+        #     self.wait(t + corr - 0.5)  # -0.5 for run_time=0.5
+
+        self.wait(6 + 1)
