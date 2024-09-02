@@ -3341,10 +3341,16 @@ class MixerProducts(Scene):
         ).to_edge(DOWN, buff=LARGE_BUFF)
 
         ax_x_label = ax.get_x_axis_label(Tex("$f$", font_size=DEFAULT_FONT_SIZE))
-        ax_y_label = ax.get_y_axis_label(
-            Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
-            edge=UL,
+        ax_y_label = (
+            ax.get_y_axis_label(
+                Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
+                edge=LEFT,
+                direction=LEFT,
+            )
+            .rotate(PI / 4)
+            .shift(LEFT / 4)
         )
+
         ax_x_label.save_state()
         ax_x_label_spelled = ax.get_x_axis_label(
             Tex("frequency", font_size=DEFAULT_FONT_SIZE)
@@ -3533,7 +3539,7 @@ class MixerProducts(Scene):
 
             return if_rect_updater
 
-        self.play(AnimationGroup(Create(ax), FadeIn(ax_x_label, ax_y_label)))
+        self.play(Create(ax), FadeIn(ax_x_label, ax_y_label))
 
         self.wait(0.5)
 
@@ -3689,17 +3695,17 @@ class MixerProducts(Scene):
             )
         )
 
-        self.wait(0.5)
-
         if_rect = Rectangle()
         if_rect_updater = get_rect_updater(f_if, if_loss)
         if_rect.add_updater(if_rect_updater)
 
+        self.wait(0.5)
+
+        self.play(Create(if_rect))
         self.play(
-            Create(if_rect),
             f_if_eqn.animate.next_to(if_rect, direction=UP, buff=MED_SMALL_BUFF).shift(
                 RIGHT / 4
-            ),
+            )
         )
 
         self.wait(0.5)
