@@ -28,6 +28,7 @@ TX_COLOR = BLUE
 RX_COLOR = RED
 GAIN_COLOR = GREEN
 IF_COLOR = ORANGE
+FILTER_COLOR = GREEN
 
 
 BLOCKS = get_blocks()
@@ -3341,15 +3342,11 @@ class MixerProducts(Scene):
         ).to_edge(DOWN, buff=LARGE_BUFF)
 
         ax_x_label = ax.get_x_axis_label(Tex("$f$", font_size=DEFAULT_FONT_SIZE))
-        ax_y_label = (
-            ax.get_y_axis_label(
-                Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
-                edge=LEFT,
-                direction=LEFT,
-            )
-            .rotate(PI / 4)
-            .shift(LEFT / 4)
-        )
+        ax_y_label = ax.get_y_axis_label(
+            Tex(r"$\lvert$", "$X(f)$", r"$\rvert$", font_size=DEFAULT_FONT_SIZE),
+            edge=LEFT,
+            direction=LEFT,
+        ).rotate(PI / 2)
 
         ax_x_label.save_state()
         ax_x_label_spelled = ax.get_x_axis_label(
@@ -3397,6 +3394,12 @@ class MixerProducts(Scene):
         )
         if_legend = Tex("IF", color=IF_COLOR).next_to(
             if_line_legend, direction=LEFT, buff=SMALL_BUFF
+        )
+        filter_line_legend = Line(ORIGIN, RIGHT, color=FILTER_COLOR).next_to(
+            if_line_legend, direction=DOWN, buff=MED_LARGE_BUFF
+        )
+        filter_legend = Tex("Filter", color=FILTER_COLOR).next_to(
+            filter_line_legend, direction=LEFT, buff=SMALL_BUFF
         )
 
         f_if_eqn_desired = Tex(r"$f_{LO} - f_{RF}$")
@@ -3745,13 +3748,162 @@ class MixerProducts(Scene):
 
         self.wait(0.5)
 
-        # rf_l_to_if_p1 = rf_l
+        rf_l_to_if = (
+            ArcBetweenPoints(
+                rf_l_tick_label.get_bottom() + [0, -0.1, 0],
+                if_tick_label.get_bottom() + [0, -0.1, 0],
+                angle=-TAU / 8,
+                color=RX_COLOR,
+            )
+            .add_tip()
+            .set_z_index(1)
+        )
+        rf_h_to_if = ArcBetweenPoints(
+            rf_h_tick_label.get_bottom() + [0, -0.1, 0],
+            if_tick_label.get_bottom() + [0.15, -0.25, 0],
+            angle=-TAU / 6,
+            color=RX_COLOR,
+        ).set_z_index(0)
+        lo_to_if = ArcBetweenPoints(
+            lo_tick_label.get_bottom() + [0, -0.1, 0],
+            if_tick_label.get_bottom() + [0.15, -0.25, 0],
+            angle=-TAU / 7,
+            color=TX_COLOR,
+        ).set_z_index(0)
 
-        # rf_h_rect = Rectangle()
-        # rf_h_rect_updater = get_rect_updater(f_rf_h, rf_h_loss)
-        # rf_h_rect_updater(rf_h_rect)
+        self.play(
+            LaggedStart(
+                Create(rf_l_to_if),
+                Create(rf_h_to_if),
+                Create(lo_to_if),
+                lag_ratio=0.5,
+            )
+        )
 
-        # self.play(Create(rf_h_rect))
+        self.wait(0.5)
+
+        mixer = (
+            BLOCKS.get("mixer")
+            .copy()
+            .scale(0.8)
+            .to_edge(UP, buff=LARGE_BUFF)
+            .shift(LEFT)
+        )
+
+        fs = 1000
+        step = 1 / fs
+        x_range = [0, 1, step]
+        x_range_lo = [0, 0.7, step]
+        x_len = 4
+        y_len = 2
+        tx_ax = (
+            Axes(
+                x_range=x_range_lo[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len
+            )
+            .rotate(-PI / 2)
+            .next_to(mixer, direction=UP, buff=0)
+        )
+        rx_ax = (
+            Axes(x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len)
+            .rotate(PI)
+            .next_to(mixer, direction=RIGHT, buff=0)
+        )
+        if_ax = (
+            Axes(
+                x_range=x_range[:2],
+                y_range=[-2, 2],
+                x_length=x_len,
+                y_length=y_len,
+                tips=False,
+                axis_config={"include_numbers": False},
+            )
+            .rotate(PI)
+            .next_to(mixer, direction=LEFT, buff=0)
+        )
+
+        A = 1
+        lo_signal = tx_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_lo * t), x_range=x_range_lo, color=TX_COLOR
+        )
+        rf_signal = rx_ax.plot(
+            lambda t: (A / 2) * np.sin(2 * PI * f_rf_l * t)
+            + (A / 2) * np.sin(2 * PI * f_rf_h * t),
+            x_range=x_range,
+            color=RX_COLOR,
+        )
+        # if_signal = if_ax.plot(
+        #     lambda t: A * np.sin(2 * PI * f_tx * t) * A * np.sin(2 * PI * f_rx * t),
+        #     x_range=x_range,
+        #     color=IF_COLOR,
+        # )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(rf_l_to_if),
+                    Uncreate(rf_h_to_if),
+                    Uncreate(lo_to_if),
+                ),
+                AnimationGroup(
+                    plot_group.animate.to_edge(DOWN, buff=MED_LARGE_BUFF),
+                    FadeIn(mixer, shift=DOWN * 2),
+                ),
+                Create(lo_signal),
+                Create(rf_signal),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        rf_plus = (
+            Text("+", color=YELLOW)
+            .scale(2)
+            .next_to(rf_signal, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+
+        rf_plus_to_rf_signal = Line(
+            rf_plus.get_top() + [0, 0.1, 0], rf_signal.get_bottom() + [0, -0.1, 0]
+        )
+
+        rf_l_p1 = ax.c2p(f_rf_l, -y_min - rf_l_loss.get_value(), 0) + DOWN / 4
+        rf_l_p2 = rf_plus.get_left() + [-0.1, 0, 0]
+        rf_l_to_mixer_rf_bezier = CubicBezier(
+            rf_l_p1,
+            rf_l_p1 + [0, 1, 0],
+            rf_l_p2 + [-0.5, 0, 0],
+            rf_l_p2,
+        )
+
+        rf_h_p1 = ax.c2p(f_rf_h, -y_min - rf_h_loss.get_value(), 0) + DOWN / 4
+        rf_h_p2 = rf_plus.get_bottom() + [0, -0.1, 0]
+        rf_h_to_mixer_rf_bezier = CubicBezier(
+            rf_h_p1,
+            rf_h_p1 + [0, 0.5, 0],
+            rf_h_p2 + [0, -1, 0],
+            rf_h_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(rf_h_to_mixer_rf_bezier),
+                Create(rf_l_to_mixer_rf_bezier),
+                Create(rf_plus),
+                Create(rf_plus_to_rf_signal),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(rf_h_to_mixer_rf_bezier),
+            Uncreate(rf_l_to_mixer_rf_bezier),
+            Uncreate(rf_plus),
+            Uncreate(rf_plus_to_rf_signal),
+        )
+
+        self.wait(0.5)
 
         self.wait(2)
 
@@ -4138,3 +4290,12 @@ class Gears(Scene):
         #     self.wait(t + corr - 0.5)  # -0.5 for run_time=0.5
 
         self.wait(6 + 1)
+
+
+class TexTest(Scene):
+    def construct(self):
+        tex = MathTex(r"\frac{f_{beat}}{a^2}")
+        indexs = index_labels(tex[0], color=RED)
+        tex[0][3].set_color(YELLOW)
+        tex[0][6].set_color(RED)
+        self.add(tex, indexs)
