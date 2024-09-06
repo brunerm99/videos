@@ -3,6 +3,7 @@
 from manim import *
 import numpy as np
 from scipy import signal, constants
+from skrf import Network, Frequency
 import math
 import sys
 import warnings
@@ -3307,6 +3308,8 @@ class Mixer(MovingCameraScene):
 
 class MixerProducts(Scene):
     def construct(self):
+        self.next_section(skip_animations=True)
+
         f_lo = 12
         f_if = 2
         f_rf_l = f_lo - f_if
@@ -3529,25 +3532,28 @@ class MixerProducts(Scene):
             f_if_eqn_desired,
         )
 
-        def get_rect_updater(f, loss_tracker):
-            def get_f_rect():
-                top = ax.c2p(f, -y_min - loss_tracker.get_value(), 0)
-                bot = ax.c2p(f, 0, 0)
-                mid = ax.c2p(f, (-y_min - loss_tracker.get_value()) / 2, 0)
-                return top, bot, mid
+        def get_f_rect(f, loss_tracker):
+            top = ax.c2p(f, -y_min - loss_tracker.get_value(), 0)
+            bot = ax.c2p(f, 0, 0)
+            mid = ax.c2p(f, (-y_min - loss_tracker.get_value()) / 2, 0)
+            return top, bot, mid
 
+        def get_rect_updater(f, loss_tracker):
             def if_rect_updater(m: Mobject):
-                top, bot, mid = get_f_rect()
+                top, bot, mid = get_f_rect(f, loss_tracker)
                 m.become(Rectangle(width=1, height=Line(bot, top).height).move_to(mid))
 
             return if_rect_updater
 
         self.play(Create(ax), FadeIn(ax_x_label, ax_y_label))
 
+        self.next_section(skip_animations=True)
+
         self.wait(0.5)
 
         self.play(Transform(ax_x_label, ax_x_label_spelled))
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         self.play(Indicate(ax_y_label))
@@ -3556,12 +3562,14 @@ class MixerProducts(Scene):
 
         self.play(Restore(ax_x_label))
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         self.play(
             Create(lo_plot), Create(rf_l_plot), Create(rf_h_plot), Create(if_plot)
         )
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         if_plot.add_updater(
@@ -3618,6 +3626,7 @@ class MixerProducts(Scene):
             FadeIn(if_tick, if_tick_label),
         )
 
+        self.next_section(skip_animations=True)
         self.wait(1)
 
         f_if_eqn_desired.next_to(
@@ -3625,6 +3634,7 @@ class MixerProducts(Scene):
         ).shift(RIGHT / 4)
         self.play(FadeIn(f_if_eqn_desired))
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         f_if_eqn_desired_copy = f_if_eqn_desired.copy()
@@ -3644,6 +3654,7 @@ class MixerProducts(Scene):
         plot_group.remove(f_if_eqn_desired)
         plot_group.add(f_if_eqn)
 
+        self.next_section(skip_animations=True)
         self.wait(1)
 
         self.play(FadeIn(rf_h_tick, rf_h_tick_label))
@@ -3652,6 +3663,7 @@ class MixerProducts(Scene):
 
         self.play(plot_group.animate.to_edge(DOWN, buff=MED_SMALL_BUFF))
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         rf_l_p1 = ax.c2p(f_rf_l, -y_min - rf_l_loss.get_value(), 0) + DOWN / 4
@@ -3673,6 +3685,7 @@ class MixerProducts(Scene):
             )
         )
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         self.play(rf_h_loss.animate.set_value(rf_l_loss.get_value() + 10))
@@ -3702,6 +3715,7 @@ class MixerProducts(Scene):
         if_rect_updater = get_rect_updater(f_if, if_loss)
         if_rect.add_updater(if_rect_updater)
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         self.play(Create(if_rect))
@@ -3746,6 +3760,7 @@ class MixerProducts(Scene):
         )
         self.play(plot_group.animate.move_to(ORIGIN))
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         rf_l_to_if = (
@@ -3780,30 +3795,53 @@ class MixerProducts(Scene):
             )
         )
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
+        block_scale = 0.8
         mixer = (
             BLOCKS.get("mixer")
             .copy()
-            .scale(0.8)
+            .scale(block_scale)
             .to_edge(UP, buff=LARGE_BUFF)
             .shift(LEFT)
         )
 
+        lo_port = (
+            Tex("LO")
+            .scale(0.6)
+            .next_to(mixer.get_top(), direction=DOWN, buff=SMALL_BUFF)
+        )
+        rf_port = (
+            Tex("RF")
+            .scale(0.6)
+            .next_to(mixer.get_right(), direction=LEFT, buff=SMALL_BUFF)
+        )
+        if_port = (
+            Tex("IF")
+            .scale(0.6)
+            .next_to(mixer.get_left(), direction=RIGHT, buff=SMALL_BUFF)
+        )
+
+        mixer_group = VGroup(mixer, lo_port, rf_port, if_port)
+
         fs = 1000
         step = 1 / fs
-        x_range = [0, 1, step]
+        x_range = [0, 0.75, step]
         x_range_lo = [0, 0.7, step]
-        x_len = 4
+        x_len = 2.5
         y_len = 2
-        tx_ax = (
+        lo_ax = (
             Axes(
                 x_range=x_range_lo[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len
             )
             .rotate(-PI / 2)
             .next_to(mixer, direction=UP, buff=0)
         )
-        rx_ax = (
+        rf_filt_ax = Axes(
+            x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len
+        ).rotate(PI)
+        rf_ax = (
             Axes(x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len)
             .rotate(PI)
             .next_to(mixer, direction=RIGHT, buff=0)
@@ -3822,20 +3860,32 @@ class MixerProducts(Scene):
         )
 
         A = 1
-        lo_signal = tx_ax.plot(
+        lo_signal = lo_ax.plot(
             lambda t: A * np.sin(2 * PI * f_lo * t), x_range=x_range_lo, color=TX_COLOR
         )
-        rf_signal = rx_ax.plot(
-            lambda t: (A / 2) * np.sin(2 * PI * f_rf_l * t)
-            + (A / 2) * np.sin(2 * PI * f_rf_h * t),
+        rf_l_A = 0.8
+        rf_h_A = 1 - rf_l_A
+        rf_filt_signal = rf_ax.plot(
+            lambda t: np.sin(2 * PI * f_rf_l * t),
             x_range=x_range,
             color=RX_COLOR,
         )
-        # if_signal = if_ax.plot(
-        #     lambda t: A * np.sin(2 * PI * f_tx * t) * A * np.sin(2 * PI * f_rx * t),
-        #     x_range=x_range,
-        #     color=IF_COLOR,
-        # )
+        rf_signal = rf_ax.plot(
+            lambda t: rf_l_A * np.sin(2 * PI * f_rf_l * t)
+            + rf_h_A * np.sin(2 * PI * f_rf_h * t),
+            x_range=x_range,
+            color=RX_COLOR,
+        )
+        if_signal = if_ax.plot(
+            lambda t: A
+            * np.sin(2 * PI * f_lo * t)
+            * (
+                rf_l_A * np.sin(2 * PI * f_rf_l * t)
+                + rf_h_A * np.sin(2 * PI * f_rf_h * t)
+            ),
+            x_range=x_range,
+            color=IF_COLOR,
+        )
 
         self.play(
             LaggedStart(
@@ -3846,14 +3896,16 @@ class MixerProducts(Scene):
                 ),
                 AnimationGroup(
                     plot_group.animate.to_edge(DOWN, buff=MED_LARGE_BUFF),
-                    FadeIn(mixer, shift=DOWN * 2),
+                    FadeIn(mixer_group, shift=DOWN * 2),
                 ),
                 Create(lo_signal),
                 Create(rf_signal),
+                Create(if_signal),
                 lag_ratio=0.7,
             )
         )
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         rf_plus = (
@@ -3889,21 +3941,128 @@ class MixerProducts(Scene):
                 Create(rf_h_to_mixer_rf_bezier),
                 Create(rf_l_to_mixer_rf_bezier),
                 Create(rf_plus),
-                Create(rf_plus_to_rf_signal),
+                GrowFromCenter(rf_plus_to_rf_signal),
                 lag_ratio=0.5,
             )
         )
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         self.play(
             Uncreate(rf_h_to_mixer_rf_bezier),
             Uncreate(rf_l_to_mixer_rf_bezier),
             Uncreate(rf_plus),
-            Uncreate(rf_plus_to_rf_signal),
+            ShrinkToCenter(rf_plus_to_rf_signal),
         )
 
+        self.next_section(skip_animations=True)
         self.wait(0.5)
+
+        rf_signal_copy = rf_signal.copy()
+        lo_signal_copy = lo_signal.copy()
+        if_signal_copy = if_signal.copy()
+
+        rf_filt_ax_group = VGroup(rf_filt_ax, rf_filt_signal)
+        rf_ax_group = VGroup(rf_ax, rf_signal_copy)
+        if_ax_group = VGroup(if_ax, if_signal_copy)
+        lo_ax_group = VGroup(lo_ax, lo_signal_copy)
+        mixer_group_copy = mixer_group.copy()
+
+        VGroup(if_ax_group, lo_ax_group, mixer_group_copy).to_edge(
+            LEFT, buff=MED_LARGE_BUFF
+        )
+
+        rf_filt_signal.next_to(mixer_group_copy, direction=RIGHT, buff=0)
+        lp_filter_ntwk = Network("./data/LFCW-1062+_Plus25DegC_Unit1.s2p")
+        lp_filter_plot = ax.plot_line_graph(
+            lp_filter_ntwk.f / 1e9,
+            lp_filter_ntwk.s_db[:, 1, 0] - y_min,
+            add_vertex_dots=False,
+            line_color=FILTER_COLOR,
+        )
+        lp_filter = (
+            BLOCKS.get("lp_filter")
+            .copy()
+            .scale(block_scale)
+            .next_to(rf_filt_signal, direction=RIGHT, buff=0)
+        )
+        bp_filter = BLOCKS.get("filter").copy().scale(block_scale).move_to(lp_filter)
+        rf_ax_group_copy = rf_ax_group.next_to(lp_filter, direction=RIGHT, buff=0)
+
+        # So let's add this filter
+        self.play(
+            Transform(if_signal, if_signal_copy),
+            Transform(lo_signal, lo_signal_copy),
+            Transform(mixer_group, mixer_group_copy),
+            Transform(rf_signal, rf_signal_copy),
+        )
+        self.play(GrowFromCenter(bp_filter))
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        rf_l_top, rf_l_bot, rf_l_mid = get_f_rect(f_rf_l, rf_l_loss)
+        rf_l_rect = Rectangle(
+            width=1, height=Line(rf_l_bot, rf_l_top).height, color=FILTER_COLOR
+        ).move_to(rf_l_mid)
+
+        self.play(
+            FadeIn(filter_line_legend, filter_legend, shift=LEFT),
+            Create(rf_l_rect),
+            rf_h_loss.animate.increment_value(3),
+        )
+        self.play(Create(rf_filt_signal))
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(rf_l_rect),
+            Uncreate(rf_filt_signal),
+            rf_h_loss.animate.increment_value(-3),
+        )
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(bp_filter),
+                GrowFromCenter(lp_filter),
+                lag_ratio=0.8,
+            )
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        lp_filter_shift = DOWN * 5
+        lp_filter_datasheet = (
+            ImageMobject("../props/static/LFCW-1062+_datasheet.png")
+            .scale(1.5)
+            .to_edge(DOWN, buff=0)
+            .shift(DOWN + lp_filter_shift)
+        )
+        lp_filter_label = (
+            Tex("LFCW-1062+")
+            .scale(0.8)
+            .next_to(lp_filter_datasheet, direction=UP, buff=SMALL_BUFF)
+        )
+        lp_filter_datasheet_group = Group(lp_filter_datasheet, lp_filter_label)
+
+        self.play(lp_filter_datasheet_group.animate.shift(-lp_filter_shift))
+
+        self.wait(1)
+
+        self.play(
+            lp_filter_label.animate.next_to(lp_filter, direction=UP, buff=SMALL_BUFF),
+            lp_filter_datasheet.animate.shift(lp_filter_shift),
+        )
+        self.remove(lp_filter_datasheet)
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(FadeOut(f_if_eqn))
+        self.play(Create(lp_filter_plot))
+        self.play(rf_h_loss.animate.increment_value(3))
 
         self.wait(2)
 
