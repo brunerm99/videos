@@ -487,6 +487,17 @@ class Intro(Scene):
         self.wait(2)
 
 
+class Part2Series(MovingCameraScene):
+    def construct(self):
+        nl = NumberLine(x_range=[0, 5, 1], length=config["frame_width"] * 1.5)
+        part_1_thumbnail = ImageMobject(
+            "../01_fmcw/media/images/fmcw/thumbnails/comparison.png"
+        ).next_to(nl.p2n(0), direction=UP)
+        part_2_thumbnail = ImageMobject(
+            "../01_fmcw/media/images/fmcw/thumbnails/comparison.png"
+        ).next_to(nl.p2n(1), direction=UP)
+
+
 class BD(Scene):
     def construct(self):
         (
@@ -3306,7 +3317,7 @@ class Mixer(MovingCameraScene):
         self.wait(2)
 
 
-class MixerProducts(Scene):
+class MixerProducts(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=True)
 
@@ -3865,8 +3876,11 @@ class MixerProducts(Scene):
         )
         rf_l_A = 0.8
         rf_h_A = 1 - rf_l_A
+        rf_l_A_filt = 0.9
+        rf_h_A_filt = 1 - rf_l_A_filt
         rf_filt_signal = rf_ax.plot(
-            lambda t: np.sin(2 * PI * f_rf_l * t),
+            lambda t: rf_l_A_filt * np.sin(2 * PI * f_rf_l * t)
+            + rf_h_A_filt * np.sin(2 * PI * f_rf_h * t),
             x_range=x_range,
             color=RX_COLOR,
         )
@@ -3974,6 +3988,7 @@ class MixerProducts(Scene):
         )
 
         rf_filt_signal.next_to(mixer_group_copy, direction=RIGHT, buff=0)
+        rf_filt_signal_copy = rf_filt_signal.copy()
         lp_filter_ntwk = Network("./data/LFCW-1062+_Plus25DegC_Unit1.s2p")
         lp_filter_plot = ax.plot_line_graph(
             lp_filter_ntwk.f / 1e9,
@@ -3999,7 +4014,7 @@ class MixerProducts(Scene):
         )
         self.play(GrowFromCenter(bp_filter))
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         rf_l_top, rf_l_bot, rf_l_mid = get_f_rect(f_rf_l, rf_l_loss)
@@ -4014,7 +4029,7 @@ class MixerProducts(Scene):
         )
         self.play(Create(rf_filt_signal))
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=True)
         self.wait(0.5)
 
         self.play(
@@ -4023,11 +4038,8 @@ class MixerProducts(Scene):
             rf_h_loss.animate.increment_value(-3),
         )
         self.play(
-            LaggedStart(
-                ShrinkToCenter(bp_filter),
-                GrowFromCenter(lp_filter),
-                lag_ratio=0.8,
-            )
+            FadeOut(bp_filter, shift=DOWN),
+            FadeIn(lp_filter, shift=DOWN),
         )
 
         self.next_section(skip_animations=False)
@@ -4063,6 +4075,47 @@ class MixerProducts(Scene):
         self.play(FadeOut(f_if_eqn))
         self.play(Create(lp_filter_plot))
         self.play(rf_h_loss.animate.increment_value(3))
+        self.play(Create(rf_filt_signal_copy))
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        filter_section = Group(
+            lp_filter, rf_filt_signal_copy, rf_signal_copy, lp_filter_label, rf_signal
+        )
+        all_except_filter_section = Group(*self.mobjects).remove(
+            *filter_section, mixer_group_copy, mixer, lo_signal, if_signal
+        )
+
+        self.play(
+            *[m.animate.set_opacity(0) for m in all_except_filter_section],
+            self.camera.frame.animate.move_to(lp_filter)
+            .shift(DOWN / 2)
+            .scale_to_fit_width(filter_section.width * 1.2),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        ideal_rf_input = rf_ax.plot(
+            lambda t: np.sin(2 * PI * f_rf_l * t),
+            x_range=x_range,
+            color=RX_COLOR,
+        ).next_to(rf_filt_signal_copy.get_midpoint(), direction=DOWN, buff=LARGE_BUFF)
+
+        ideal_rf_input_label = Tex("ideal RF input").next_to(
+            ideal_rf_input, buff=LARGE_BUFF
+        )
+        ideal_rf_input_arrow = Arrow(
+            ideal_rf_input_label.get_left(),
+            ideal_rf_input.get_right(),
+        )
+
+        self.play(
+            TransformFromCopy(rf_filt_signal, ideal_rf_input),
+            FadeIn(ideal_rf_input_label),
+            GrowArrow(ideal_rf_input_arrow),
+        )
 
         self.wait(2)
 
