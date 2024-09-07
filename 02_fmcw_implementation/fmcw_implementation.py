@@ -188,6 +188,7 @@ def get_bd():
 
 class Intro(Scene):
     def construct(self):
+        self.next_section(skip_animations=True)
         fmcw = FMCWRadarCartoon()
 
         carrier_freq = 10
@@ -484,18 +485,166 @@ class Intro(Scene):
             )
         )
 
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            all_except_title.animate(run_time=1.5).shift(DOWN * 5),
+            ShrinkToCenter(hline),
+        )
+
         self.wait(2)
 
 
 class Part2Series(MovingCameraScene):
     def construct(self):
-        nl = NumberLine(x_range=[0, 5, 1], length=config["frame_width"] * 1.5)
-        part_1_thumbnail = ImageMobject(
-            "../01_fmcw/media/images/fmcw/thumbnails/comparison.png"
-        ).next_to(nl.p2n(0), direction=UP)
-        part_2_thumbnail = ImageMobject(
-            "../01_fmcw/media/images/fmcw/thumbnails/comparison.png"
-        ).next_to(nl.p2n(1), direction=UP)
+        self.next_section(skip_animations=False)
+        title = Tex("FMCW Radar Part 2:").scale(1.5)
+        subtitle = (
+            Tex("Implementation")
+            .scale(1.5)
+            .next_to(title, direction=DOWN, buff=MED_SMALL_BUFF)
+        )
+        titles = VGroup(title, subtitle).move_to([-3.61670042e-1, 2.13766246, 0])
+
+        nl = (
+            NumberLine(
+                x_range=[0, 4, 1], length=config["frame_width"] * 1.8, tick_size=0.3
+            )
+            .move_to(ORIGIN, aligned_edge=LEFT)
+            .shift(DOWN * 2)
+        )
+        part_1_thumbnail = (
+            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            .scale(0.4)
+            .next_to(nl.n2p(0), direction=UP, buff=LARGE_BUFF)
+        )
+        part_1_thumbnail_box = SurroundingRectangle(part_1_thumbnail, buff=0)
+        part_1_label = Tex("Intro to FMCW Radar").next_to(
+            part_1_thumbnail, direction=UP, buff=SMALL_BUFF
+        )
+        part_2_thumbnail = (
+            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            .scale(0.4)
+            .next_to(nl.n2p(1), direction=UP, buff=LARGE_BUFF)
+        )
+        part_2_thumbnail_box = SurroundingRectangle(part_2_thumbnail, buff=0)
+        part_2_label = Tex("Implementation").next_to(
+            part_2_thumbnail, direction=UP, buff=SMALL_BUFF
+        )
+        this_video = Tex("This video", color=GREEN).next_to(
+            nl.n2p(1), direction=DOWN, buff=MED_LARGE_BUFF
+        )
+        part_3_thumbnail = (
+            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            .scale(0.4)
+            .next_to(nl.n2p(2), direction=UP, buff=LARGE_BUFF)
+        )
+        part_3_thumbnail_box = SurroundingRectangle(part_3_thumbnail, buff=0)
+        part_3_label = Tex(r"Velocity Calculation and\\the Radar Cube").next_to(
+            part_3_thumbnail, direction=UP, buff=SMALL_BUFF
+        )
+        part_4_thumbnail = (
+            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            .scale(0.4)
+            .next_to(nl.n2p(3), direction=UP, buff=LARGE_BUFF)
+        )
+        part_4_thumbnail_box = SurroundingRectangle(part_4_thumbnail, buff=0)
+        part_4_qmark = Tex("?").scale(3).move_to(part_4_thumbnail)
+        part_4_label = Tex(r"To be announced").next_to(
+            part_4_thumbnail, direction=UP, buff=SMALL_BUFF
+        )
+
+        self.add(titles)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(nl, run_time=2),
+                FadeIn(
+                    part_1_thumbnail, part_1_thumbnail_box, part_1_label, shift=DOWN
+                ),
+                AnimationGroup(
+                    FadeIn(part_2_thumbnail, part_2_thumbnail_box, shift=DOWN),
+                    FadeIn(this_video, shift=UP),
+                    Transform(titles, part_2_label),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.add(
+            part_3_thumbnail,
+            part_3_thumbnail_box,
+            part_3_label,
+            part_4_qmark,
+            part_4_thumbnail_box,
+            part_4_label,
+        )
+
+        part_3_arrow = Arrow(
+            part_3_thumbnail_box.get_bottom() + [1, -2, 0],
+            part_3_thumbnail_box.get_bottom(),
+        )
+        part_4_arrow = Arrow(
+            part_4_thumbnail_box.get_bottom() + [-1, -2, 0],
+            part_4_thumbnail_box.get_bottom(),
+        )
+        part_1_arrow = Arrow(
+            part_1_thumbnail_box.get_corner(DL) + [-2, -2, 0],
+            part_1_thumbnail_box.get_corner(DL),
+        )
+
+        self.wait(0.5)
+
+        self.play(GrowArrow(part_1_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(part_1_arrow),
+            self.camera.frame.animate.move_to([nl.n2p(2.5)[0], 0, 0]),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(GrowArrow(part_3_arrow), GrowArrow(part_4_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(part_3_arrow, part_4_arrow),
+            self.camera.frame.animate.move_to([nl.n2p(1)[0], 0, 0]),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(nl),
+            FadeOut(
+                part_1_thumbnail,
+                part_1_thumbnail_box,
+                part_1_label,
+                part_3_label,
+                part_3_thumbnail,
+                part_3_thumbnail_box,
+                # part_4_thumbnail,
+                part_4_thumbnail_box,
+                part_4_qmark,
+                part_4_label,
+                shift=UP,
+            ),
+            FadeOut(this_video, shift=DOWN),
+        )
+
+        self.play(self.camera.frame.animate.scale(0.1), FadeOut(*self.mobjects))
+
+        # self.play(self.camera.frame.animate(run_time=6).shift(RIGHT * nl.n2p(3)))
+
+        self.wait(2)
 
 
 class BD(Scene):
