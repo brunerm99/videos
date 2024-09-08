@@ -1,11 +1,16 @@
 # fmcw_implementation.py
 
+
+import sys
+
+# sys.path.insert(0, "../..")  # need to make into package
+# from manim_mods import *
+
 from manim import *
 import numpy as np
 from scipy import signal, constants
 from skrf import Network, Frequency
 import math
-import sys
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -3732,42 +3737,27 @@ class MixerProducts(MovingCameraScene):
         self.next_section(skip_animations=True)
         self.wait(0.5)
 
-        if_plot.add_updater(
-            lambda m: m.become(
-                ax.plot_line_graph(
-                    **get_plot_values(ports=["if"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=IF_COLOR,
+        def get_plot_updater(ports, color):
+            def updater(m: Mobject):
+                m.become(
+                    ax.plot_line_graph(
+                        **get_plot_values(ports=ports, y_min=y_min),
+                        add_vertex_dots=False,
+                        line_color=color,
+                    )
                 )
-            )
-        )
-        rf_l_plot.add_updater(
-            lambda m: m.become(
-                ax.plot_line_graph(
-                    **get_plot_values(ports=["rf_l"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=RX_COLOR,
-                )
-            )
-        )
-        rf_h_plot.add_updater(
-            lambda m: m.become(
-                ax.plot_line_graph(
-                    **get_plot_values(ports=["rf_h"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=RX_COLOR,
-                )
-            )
-        )
-        lo_plot.add_updater(
-            lambda m: m.become(
-                ax.plot_line_graph(
-                    **get_plot_values(ports=["lo"], y_min=y_min),
-                    add_vertex_dots=False,
-                    line_color=TX_COLOR,
-                )
-            )
-        )
+
+            return updater
+
+        if_plot_updater = get_plot_updater(ports=["if"], color=IF_COLOR)
+        rf_l_plot_updater = get_plot_updater(ports=["rf_l"], color=RX_COLOR)
+        rf_h_plot_updater = get_plot_updater(ports=["rf_h"], color=RX_COLOR)
+        lo_plot_updater = get_plot_updater(ports=["lo"], color=TX_COLOR)
+
+        if_plot.add_updater(if_plot_updater)
+        rf_l_plot.add_updater(rf_l_plot_updater)
+        rf_h_plot.add_updater(rf_h_plot_updater)
+        lo_plot.add_updater(lo_plot_updater)
 
         self.play(
             lo_loss.animate(run_time=1.5).set_value(0),
@@ -4132,9 +4122,9 @@ class MixerProducts(MovingCameraScene):
         lo_ax_group = VGroup(lo_ax, lo_signal_copy)
         mixer_group_copy = mixer_group.copy()
 
-        VGroup(if_ax_group, lo_ax_group, mixer_group_copy).to_edge(
-            LEFT, buff=MED_LARGE_BUFF
-        )
+        bd_left = VGroup(if_ax_group, lo_ax_group, mixer_group_copy)
+        bd_left.save_state()
+        bd_left.to_edge(LEFT, buff=MED_LARGE_BUFF)
 
         rf_filt_signal.next_to(mixer_group_copy, direction=RIGHT, buff=0)
         rf_filt_signal_copy = rf_filt_signal.copy()
@@ -4229,12 +4219,19 @@ class MixerProducts(MovingCameraScene):
         self.next_section(skip_animations=False)
         self.wait(0.5)
 
+        if_plot.remove_updater(if_plot_updater)
+        rf_l_plot.remove_updater(rf_l_plot_updater)
+        rf_h_plot.remove_updater(rf_h_plot_updater)
+        lo_plot.remove_updater(lo_plot_updater)
+
         filter_section = Group(
             lp_filter, rf_filt_signal_copy, rf_signal_copy, lp_filter_label, rf_signal
         )
-        all_except_filter_section = Group(*self.mobjects).remove(
-            *filter_section, mixer_group_copy, mixer, lo_signal, if_signal
+        bd_section = Group(
+            *filter_section, mixer_group_copy, mixer_group, mixer, lo_signal, if_signal
         )
+        all_except_filter_section = Group(*self.mobjects).remove(*bd_section)
+        # all_except_filter_section.save_state()
 
         self.play(
             *[m.animate.set_opacity(0) for m in all_except_filter_section],
@@ -4250,20 +4247,95 @@ class MixerProducts(MovingCameraScene):
             lambda t: np.sin(2 * PI * f_rf_l * t),
             x_range=x_range,
             color=RX_COLOR,
-        ).next_to(rf_filt_signal_copy.get_midpoint(), direction=DOWN, buff=LARGE_BUFF)
-
+        ).next_to(
+            rf_filt_signal_copy.get_midpoint(), direction=DOWN, buff=LARGE_BUFF * 1.5
+        )
         ideal_rf_input_label = Tex("ideal RF input").next_to(
-            ideal_rf_input, buff=LARGE_BUFF
+            ideal_rf_input, direction=DOWN, buff=MED_SMALL_BUFF
         )
         ideal_rf_input_arrow = Arrow(
             ideal_rf_input_label.get_left(),
             ideal_rf_input.get_right(),
         )
 
+        ideal_if_signal = (
+            if_ax.plot(
+                lambda t: A * np.sin(2 * PI * f_lo * t) * (np.sin(2 * PI * f_rf_l * t)),
+                x_range=x_range,
+                color=IF_COLOR,
+            )
+            .next_to(if_signal.get_midpoint(), direction=DOWN, buff=LARGE_BUFF * 1.5)
+            .set_y(ideal_rf_input.get_y())
+        )
+
+        ideal_if_label = Tex("ideal IF signal").next_to(
+            ideal_if_signal, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        ideal_if_arrow = Arrow(
+            ideal_if_label.get_left(),
+            ideal_if_signal.get_right(),
+        )
+
         self.play(
             TransformFromCopy(rf_filt_signal, ideal_rf_input),
             FadeIn(ideal_rf_input_label),
-            GrowArrow(ideal_rf_input_arrow),
+            # GrowArrow(ideal_rf_input_arrow),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.move_to(
+                bd_section.remove(lo_signal)
+            ).scale_to_fit_width(bd_section.width * 1.2),
+        )
+
+        self.play(
+            TransformFromCopy(if_signal, ideal_if_signal),
+            # GrowArrow(ideal_if_arrow),
+            FadeIn(ideal_if_label),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        # self.remove(lp_filter_plot)
+        # all_except_filter_section.remove(lp_filter_plot)
+        # TODO: Figure out how to fade these back in without filling plots
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(
+                        ideal_if_label,
+                        # ideal_if_arrow,
+                        ideal_rf_input_label,
+                        # ideal_rf_input_arrow,
+                        # filter_legend,
+                        # filter_line_legend,
+                    ),
+                    Uncreate(ideal_if_signal),
+                    Uncreate(ideal_rf_input),
+                    self.camera.frame.animate.move_to(ORIGIN).scale_to_fit_width(
+                        config["frame_width"]
+                    ),
+                ),
+                # all_except_filter_section.animate.restore(),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        bd_section
+        self.play(
+            FadeOut(filter_legend, filter_line_legend),
+            Uncreate(lp_filter_plot, run_time=2),
+            rf_h_loss.animate.increment_value(-3),
+            ShrinkToCenter(lp_filter),
+            Uncreate(rf_filt_signal_copy),
+            # bd_left.animate.restore(),
         )
 
         self.wait(2)
