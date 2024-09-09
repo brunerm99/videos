@@ -44,6 +44,12 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
+SKIP_ANIMATIONS_OVERRIDE = True
+
+
+def skip_animations(b):
+    return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
 
 def get_splitter_ports(splitter):
     splitter_p1 = splitter.get_right() + (UP * splitter.height / 4)
@@ -189,6 +195,16 @@ def get_bd():
         adc_to_signal_proc,
         signal_proc,
     )
+
+
+def get_fade_group(group, opacity, **animate_kwargs) -> List[Animation]:
+    animations = []
+    for m in group:
+        if type(m) == VDict:
+            animations.append(m.animate(**animate_kwargs).set_stroke(opacity=opacity))
+        else:
+            animations.append(m.animate(**animate_kwargs).set_opacity(opacity))
+    return animations
 
 
 class Intro(Scene):
@@ -3473,7 +3489,7 @@ class Mixer(MovingCameraScene):
 
 class MixerProducts(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
 
         f_lo = 12
         f_if = 2
@@ -3712,13 +3728,13 @@ class MixerProducts(MovingCameraScene):
 
         self.play(Create(ax), FadeIn(ax_x_label, ax_y_label))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.wait(0.5)
 
         self.play(Transform(ax_x_label, ax_x_label_spelled))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(Indicate(ax_y_label))
@@ -3727,14 +3743,14 @@ class MixerProducts(MovingCameraScene):
 
         self.play(Restore(ax_x_label))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
             Create(lo_plot), Create(rf_l_plot), Create(rf_h_plot), Create(if_plot)
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         def get_plot_updater(ports, color):
@@ -3776,7 +3792,7 @@ class MixerProducts(MovingCameraScene):
             FadeIn(if_tick, if_tick_label),
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(1)
 
         f_if_eqn_desired.next_to(
@@ -3784,7 +3800,7 @@ class MixerProducts(MovingCameraScene):
         ).shift(RIGHT / 4)
         self.play(FadeIn(f_if_eqn_desired))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         f_if_eqn_desired_copy = f_if_eqn_desired.copy()
@@ -3804,7 +3820,7 @@ class MixerProducts(MovingCameraScene):
         plot_group.remove(f_if_eqn_desired)
         plot_group.add(f_if_eqn)
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(1)
 
         self.play(FadeIn(rf_h_tick, rf_h_tick_label))
@@ -3813,7 +3829,7 @@ class MixerProducts(MovingCameraScene):
 
         self.play(plot_group.animate.to_edge(DOWN, buff=MED_SMALL_BUFF))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         rf_l_p1 = ax.c2p(f_rf_l, -y_min - rf_l_loss.get_value(), 0) + DOWN / 4
@@ -3835,7 +3851,7 @@ class MixerProducts(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(rf_h_loss.animate.set_value(rf_l_loss.get_value() + 10))
@@ -3865,7 +3881,7 @@ class MixerProducts(MovingCameraScene):
         if_rect_updater = get_rect_updater(f_if, if_loss)
         if_rect.add_updater(if_rect_updater)
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(Create(if_rect))
@@ -3910,7 +3926,7 @@ class MixerProducts(MovingCameraScene):
         )
         self.play(plot_group.animate.move_to(ORIGIN))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         rf_l_to_if = (
@@ -3945,7 +3961,7 @@ class MixerProducts(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         block_scale = 0.8
@@ -4058,7 +4074,7 @@ class MixerProducts(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         rf_plus = (
@@ -4075,17 +4091,17 @@ class MixerProducts(MovingCameraScene):
         rf_l_p2 = rf_plus.get_left() + [-0.1, 0, 0]
         rf_l_to_mixer_rf_bezier = CubicBezier(
             rf_l_p1,
-            rf_l_p1 + [0, 1, 0],
+            rf_l_p1 + [0.5, 1, 0],
             rf_l_p2 + [-0.5, 0, 0],
             rf_l_p2,
         )
 
         rf_h_p1 = ax.c2p(f_rf_h, -y_min - rf_h_loss.get_value(), 0) + DOWN / 4
-        rf_h_p2 = rf_plus.get_bottom() + [0, -0.1, 0]
+        rf_h_p2 = rf_plus.get_right() + [0.1, 0, 0]
         rf_h_to_mixer_rf_bezier = CubicBezier(
             rf_h_p1,
-            rf_h_p1 + [0, 0.5, 0],
-            rf_h_p2 + [0, -1, 0],
+            rf_h_p1 + [0.5, 1, 0],
+            rf_h_p2 + [0.5, 0, 0],
             rf_h_p2,
         )
 
@@ -4093,23 +4109,23 @@ class MixerProducts(MovingCameraScene):
             LaggedStart(
                 Create(rf_h_to_mixer_rf_bezier),
                 Create(rf_l_to_mixer_rf_bezier),
-                Create(rf_plus),
+                FadeIn(rf_plus),
                 GrowFromCenter(rf_plus_to_rf_signal),
                 lag_ratio=0.5,
             )
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
             Uncreate(rf_h_to_mixer_rf_bezier),
             Uncreate(rf_l_to_mixer_rf_bezier),
-            Uncreate(rf_plus),
+            FadeOut(rf_plus),
             ShrinkToCenter(rf_plus_to_rf_signal),
         )
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         rf_signal_copy = rf_signal.copy()
@@ -4153,7 +4169,7 @@ class MixerProducts(MovingCameraScene):
         )
         self.play(GrowFromCenter(bp_filter))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         rf_l_top, rf_l_bot, rf_l_mid = get_f_rect(f_rf_l, rf_l_loss)
@@ -4168,7 +4184,7 @@ class MixerProducts(MovingCameraScene):
         )
         self.play(Create(rf_filt_signal))
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -4181,7 +4197,7 @@ class MixerProducts(MovingCameraScene):
             FadeIn(lp_filter, shift=DOWN),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         lp_filter_shift = DOWN * 5
@@ -4208,7 +4224,7 @@ class MixerProducts(MovingCameraScene):
         )
         self.remove(lp_filter_datasheet)
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(FadeOut(f_if_eqn))
@@ -4216,7 +4232,7 @@ class MixerProducts(MovingCameraScene):
         self.play(rf_h_loss.animate.increment_value(3))
         self.play(Create(rf_filt_signal_copy))
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         if_plot.remove_updater(if_plot_updater)
@@ -4234,13 +4250,13 @@ class MixerProducts(MovingCameraScene):
         # all_except_filter_section.save_state()
 
         self.play(
-            *[m.animate.set_opacity(0) for m in all_except_filter_section],
+            *get_fade_group(all_except_filter_section, opacity=0.2),
             self.camera.frame.animate.move_to(lp_filter)
             .shift(DOWN / 2)
             .scale_to_fit_width(filter_section.width * 1.2),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         ideal_rf_input = rf_ax.plot(
@@ -4248,7 +4264,7 @@ class MixerProducts(MovingCameraScene):
             x_range=x_range,
             color=RX_COLOR,
         ).next_to(
-            rf_filt_signal_copy.get_midpoint(), direction=DOWN, buff=LARGE_BUFF * 1.5
+            rf_filt_signal_copy.get_midpoint(), direction=DOWN, buff=LARGE_BUFF * 1.2
         )
         ideal_rf_input_label = Tex("ideal RF input").next_to(
             ideal_rf_input, direction=DOWN, buff=MED_SMALL_BUFF
@@ -4264,7 +4280,7 @@ class MixerProducts(MovingCameraScene):
                 x_range=x_range,
                 color=IF_COLOR,
             )
-            .next_to(if_signal.get_midpoint(), direction=DOWN, buff=LARGE_BUFF * 1.5)
+            .next_to(if_signal.get_midpoint(), direction=DOWN, buff=LARGE_BUFF * 1.2)
             .set_y(ideal_rf_input.get_y())
         )
 
@@ -4282,7 +4298,7 @@ class MixerProducts(MovingCameraScene):
             # GrowArrow(ideal_rf_input_arrow),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -4297,7 +4313,7 @@ class MixerProducts(MovingCameraScene):
             FadeIn(ideal_if_label),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         # self.remove(lp_filter_plot)
@@ -4320,23 +4336,308 @@ class MixerProducts(MovingCameraScene):
                         config["frame_width"]
                     ),
                 ),
-                # all_except_filter_section.animate.restore(),
+                AnimationGroup(*get_fade_group(all_except_filter_section, opacity=1)),
                 lag_ratio=0.6,
             )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        rf_l_plot.add_updater(rf_l_plot_updater)
+        rf_h_plot.add_updater(rf_h_plot_updater)
+        self.play(
+            # FadeOut(filter_legend, filter_line_legend),
+            Uncreate(lp_filter_plot, run_time=2),
+            rf_h_loss.animate.increment_value(-3),
+            # ShrinkToCenter(lp_filter),
+            # Uncreate(rf_filt_signal_copy),
+            # bd_left.animate.restore(),
         )
 
         self.next_section(skip_animations=False)
         self.wait(0.5)
 
-        bd_section
-        self.play(
-            FadeOut(filter_legend, filter_line_legend),
-            Uncreate(lp_filter_plot, run_time=2),
-            rf_h_loss.animate.increment_value(-3),
-            ShrinkToCenter(lp_filter),
-            Uncreate(rf_filt_signal_copy),
-            # bd_left.animate.restore(),
+        ssb_label = (
+            Tex(r"Single Sideband\\Mixer").scale(0.8).next_to(mixer, direction=DOWN)
         )
+        self.play(FadeIn(ssb_label, shift=UP))
+
+        rf_l_top, rf_l_bot, rf_l_mid = get_f_rect(f_rf_l, rf_l_loss)
+        rf_l_rect = Rectangle(
+            width=1, height=Line(rf_l_bot, rf_l_top).height, color=FILTER_COLOR
+        ).move_to(rf_l_mid)
+        rf_h_top, rf_h_bot, rf_h_mid = get_f_rect(f_rf_h, rf_h_loss)
+        rf_h_rect = Rectangle(
+            width=1, height=Line(rf_h_bot, rf_h_top).height, color=FILTER_COLOR
+        ).move_to(rf_h_mid)
+
+        rf_h_rect.save_state()
+
+        self.play(Create(rf_h_rect), rf_l_loss.animate.increment_value(5))
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(rf_h_rect, rf_l_rect),
+            rf_l_loss.animate.increment_value(-5),
+            rf_h_loss.animate.increment_value(5),
+        )
+
+        high_side_eqn = Tex(r"High side\\$f_{LO} > f_{RF}$").to_edge(RIGHT)
+        low_side_eqn = Tex(r"Low side \\ $f_{LO} < f_{RF}$").to_edge(RIGHT)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(high_side_eqn, shift=LEFT))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeIn(low_side_eqn, shift=UP),
+            FadeOut(high_side_eqn, shift=UP),
+            rf_h_rect.animate.restore(),
+            rf_l_loss.animate.increment_value(5),
+            rf_h_loss.animate.increment_value(-5),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(low_side_eqn, shift=DOWN),
+            FadeIn(high_side_eqn, shift=DOWN),
+            Transform(rf_h_rect, rf_l_rect),
+            rf_l_loss.animate.increment_value(-5),
+            rf_h_loss.animate.increment_value(5),
+        )
+
+        self.wait(0.3)
+
+        self.play(Indicate(lo_tick_label))
+
+        self.wait(0.3)
+
+        self.play(Indicate(rf_l_tick_label))
+
+        self.wait(0.5)
+
+        rf_l_plot.remove_updater(rf_l_plot_updater)
+        rf_h_plot.remove_updater(rf_h_plot_updater)
+        all_objects = Group(*self.mobjects).remove(
+            rf_l_plot,
+            rf_h_plot,
+            lo_plot,
+            if_plot,
+            ax,
+            if_signal_copy,
+            rf_filt_signal_copy,
+            rf_signal_copy,
+            lo_signal_copy,
+        )
+        self.play(
+            Uncreate(rf_l_plot),
+            Uncreate(rf_h_plot),
+            Uncreate(lo_plot),
+            Uncreate(if_plot),
+            Uncreate(ax),
+            Uncreate(if_signal_copy),
+            Uncreate(rf_filt_signal_copy),
+            Uncreate(rf_signal_copy),
+            Uncreate(lo_signal_copy),
+            FadeOut(*all_objects),
+        )
+
+        self.wait(2)
+
+
+class HardwareWrapUp(Scene):
+    def construct(self):
+        (
+            bd,
+            (
+                inp,
+                input_to_vco,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+        ) = get_bd()
+
+        phase_detector = BLOCKS.get("phase_detector").copy()
+        to_phase_detector = Line(
+            phase_detector.get_left() + (LEFT * BLOCK_BUFF),
+            phase_detector.get_left(),
+        )
+        loop_filter = (
+            BLOCKS.get("lp_filter").copy().next_to(phase_detector, buff=BLOCK_BUFF)
+        )
+        phase_detector_to_loop_filter = Line(
+            phase_detector.get_right(), loop_filter.get_left()
+        )
+        vco = BLOCKS.get("oscillator").copy().next_to(loop_filter, buff=BLOCK_BUFF)
+        loop_filter_to_vco = Line(loop_filter.get_right(), vco.get_left())
+        from_vco = Line(
+            vco.get_right() + (RIGHT * BLOCK_BUFF),
+            vco.get_right(),
+        )
+        n_div_label = Tex(r"$\frac{1}{N}$")
+        n_div_label_n2 = Tex(r"$\frac{1}{2}$")
+        n_div_box = SurroundingRectangle(
+            n_div_label, buff=MED_SMALL_BUFF, color=WHITE, fill_opacity=0
+        )
+        ndiv = (
+            VGroup(n_div_label, n_div_box)
+            .next_to(loop_filter, direction=DOWN, buff=BLOCK_BUFF)
+            .scale(1 / BD_SCALE)
+        )
+        vco_output_conn = Dot(from_vco.get_midpoint(), radius=DEFAULT_DOT_RADIUS * 2)
+        vco_to_ndiv_1 = Line(
+            vco_output_conn.get_center(),
+            [vco_output_conn.get_center()[0], ndiv.get_right()[1], 0],
+        )
+        vco_to_ndiv_2 = Line(
+            [vco_output_conn.get_center()[0], ndiv.get_right()[1], 0],
+            ndiv.get_right(),
+        )
+        vco_to_ndiv = VGroup(vco_to_ndiv_1, vco_to_ndiv_2)
+
+        ndiv_to_phase_detector_1 = Line(
+            ndiv.get_left(), [phase_detector.get_bottom()[0], ndiv.get_left()[1], 0]
+        )
+        ndiv_to_phase_detector_2 = Line(
+            [phase_detector.get_bottom()[0], ndiv.get_left()[1], 0],
+            phase_detector.get_bottom(),
+        )
+        ndiv_to_phase_detector = VGroup(
+            ndiv_to_phase_detector_1, ndiv_to_phase_detector_2
+        )
+
+        pll = (
+            VGroup(
+                to_phase_detector,
+                phase_detector,
+                phase_detector_to_loop_filter,
+                loop_filter,
+                loop_filter_to_vco,
+                vco,
+                from_vco,
+                vco_output_conn,
+                vco_to_ndiv_1,
+                vco_to_ndiv_2,
+                ndiv,
+                ndiv_to_phase_detector_1,
+                ndiv_to_phase_detector_2,
+            )
+            .scale(BD_SCALE)
+            .move_to(ORIGIN)
+        )
+
+        self.play(
+            Create(to_phase_detector),
+            Create(phase_detector_to_loop_filter),
+            Create(loop_filter_to_vco),
+            Create(from_vco),
+            Create(vco_to_ndiv_1),
+            Create(vco_to_ndiv_2),
+            Create(ndiv_to_phase_detector_1),
+            Create(ndiv_to_phase_detector_2),
+            Create(vco_output_conn),
+            GrowFromCenter(phase_detector),
+            GrowFromCenter(loop_filter),
+            GrowFromCenter(vco),
+            GrowFromCenter(ndiv),
+            run_time=1.5,
+        )
+
+        input_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=3,
+            y_length=1.5,
+        ).next_to(to_phase_detector, direction=LEFT)
+        sine_plot = input_ax.plot(lambda t: np.sin(2 * PI * 3 * t), color=TX_COLOR)
+
+        fm_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=3,
+            y_length=1.5,
+        ).next_to(from_vco, direction=RIGHT)
+
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        fs = 5000
+        A = 1
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+        sawtooth_amp = lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+
+        sine_plot = input_ax.plot(lambda t: np.sin(2 * PI * 3 * t), color=TX_COLOR)
+        sine_plot_arrow = Arrow(
+            ORIGIN, RIGHT * sine_plot.width, color=TX_COLOR
+        ).next_to(sine_plot, direction=DOWN)
+        fm_plot = fm_ax.plot(
+            sawtooth_amp,
+            x_range=[0, 1, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+        fm_plot_arrow = Arrow(ORIGIN, RIGHT * fm_plot.width, color=TX_COLOR).next_to(
+            fm_plot, direction=DOWN
+        )
+
+        self.play(Create(sine_plot), GrowArrow(sine_plot_arrow))
+        self.play(Create(fm_plot), GrowArrow(fm_plot_arrow))
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(sine_plot),
+            Uncreate(fm_plot),
+            FadeOut(sine_plot_arrow, fm_plot_arrow),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        pa.next_to(from_vco, buff=0)
+        pa_to_splitter.next_to(pa, buff=0)
+        splitter.next_to(pa_to_splitter, buff=0)
+        splitter_to_tx_antenna
+        new_bd = Group(pll, pa, pa_to_splitter)
+        self.play(GrowFromCenter(pa), Create(pa_to_splitter))
+        self.play(new_bd.animate.move_to(ORIGIN))
 
         self.wait(2)
 
@@ -4732,3 +5033,8 @@ class TexTest(Scene):
         tex[0][3].set_color(YELLOW)
         tex[0][6].set_color(RED)
         self.add(tex, indexs)
+
+        ssb_label = (
+            Tex(r"Single Sideband\\Mixer").scale(0.8).next_to(tex, direction=DOWN)
+        )
+        self.play(FadeIn(ssb_label, shift=UP))
