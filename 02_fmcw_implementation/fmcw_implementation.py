@@ -12,6 +12,7 @@ from scipy import signal, constants
 from skrf import Network, Frequency
 import math
 import warnings
+from random import random
 
 warnings.filterwarnings("ignore")
 
@@ -4616,10 +4617,10 @@ class HardwareWrapUp(Scene):
                 ndiv_to_phase_detector_1,
                 ndiv_to_phase_detector_2,
             ),
-        ) = get_bd(True, rx_section_gap=BLOCK_BUFF * 6)
+        ) = get_bd(True, rx_section_gap=BLOCK_BUFF * 5)
         bd.scale_to_fit_width(config["frame_width"] * 0.8).to_corner(
             UL, buff=LARGE_BUFF
-        ).shift(UP / 2)
+        )  # .shift(UP / 2)
 
         pll_block.save_state()
         pll_block.scale_to_fit_width(config["frame_width"] * 0.5).move_to(ORIGIN)
@@ -4717,13 +4718,13 @@ class HardwareWrapUp(Scene):
         self.wait(0.3)
 
         tx_arrow = Arrow(
-            tx_antenna.get_corner(UR) + [0.1, 0.1, 0],
+            tx_antenna.get_corner(UR),
             tx_antenna.get_corner(UR) + [3, 2, 0],
             color=TX_COLOR,
         )
         rx_arrow = Arrow(
             rx_antenna.get_corner(UR) + [3, 2, 0],
-            rx_antenna.get_corner(UR) + [0.1, 0.1, 0],
+            rx_antenna.get_corner(UR),
             color=RX_COLOR,
         )
 
@@ -4844,12 +4845,159 @@ class HardwareWrapUp(Scene):
 
         self.wait(0.5)
 
+        f_beat_plot_parts = VGroup(f_beat_plot_1, f_beat_plot_2, f_beat_plot_3)
         self.play(
-            Transform(
-                VGroup(f_beat_plot_1, f_beat_plot_2, f_beat_plot_3), f_beat_plot_sum
-            ),
+            Transform(f_beat_plot_parts, f_beat_plot_sum),
             Uncreate(f_beat_2_bez),
             Uncreate(f_beat_3_bez),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(input_to_pll),
+            Uncreate(phase_detector_to_loop_filter),
+            Uncreate(loop_filter_to_vco),
+            Uncreate(pll_block_to_pa),
+            Uncreate(vco_to_ndiv_1),
+            Uncreate(vco_to_ndiv_2),
+            Uncreate(ndiv_to_phase_detector_1),
+            Uncreate(ndiv_to_phase_detector_2),
+            Uncreate(vco_output_conn),
+            Uncreate(pa_to_splitter),
+            Uncreate(splitter_to_tx_antenna),
+            Uncreate(splitter_to_mixer),
+            Uncreate(rx_antenna_to_lna),
+            Uncreate(lna_to_mixer),
+            Uncreate(mixer_to_lp_filter),
+            Uncreate(lp_filter_to_adc),
+            Uncreate(f_beat_dot),
+            Uncreate(f_beat_1_line),
+            ShrinkToCenter(phase_detector),
+            ShrinkToCenter(loop_filter),
+            ShrinkToCenter(vco),
+            ShrinkToCenter(ndiv),
+            ShrinkToCenter(splitter),
+            ShrinkToCenter(pa),
+            ShrinkToCenter(mixer),
+            ShrinkToCenter(lna),
+            ShrinkToCenter(lp_filter),
+            ShrinkToCenter(tx_antenna),
+            ShrinkToCenter(rx_antenna),
+            FadeOut(tx_arrow, rx_arrow, f_beat, f_beat_arrow),
+        )
+
+        radar_plot = PolarPlane(
+            azimuth_step=4,
+            size=config["frame_width"] / 4,
+            radius_config={
+                "stroke_color": WHITE,
+                "include_tip": False,
+            },
+            azimuth_direction="CW",
+        ).next_to(ORIGIN, direction=RIGHT, buff=LARGE_BUFF)
+
+        rmax = radar_plot.get_y_range().max()
+
+        radar_scan_vel = ValueTracker(0)
+        radar_scan_angle = ValueTracker(-PI)
+
+        scan_line = Line(
+            radar_plot.pr2pt(0, 0),
+            radar_plot.pr2pt(rmax, radar_scan_angle.get_value()),
+            color=RED,
+        )
+
+        def scan_updater(m: Mobject, dt):
+            radar_scan_angle.set_value(
+                radar_scan_angle.get_value() + radar_scan_vel.get_value() * dt
+            )
+            m.become(
+                Line(
+                    radar_plot.pr2pt(0, 0),
+                    radar_plot.pr2pt(rmax, radar_scan_angle.get_value()),
+                    color=RED,
+                )
+            )
+
+        def show_dot_updater(m: Mobject):
+            dot_angle = radar_plot.pt2pr([m.get_x(), m.get_y(), 0])[1]
+            if radar_scan_angle.get_value() >= dot_angle:
+                m.set_opacity(1)
+            else:
+                m.set_opacity(0)
+
+        targets = VGroup()
+        for r, theta in [
+            [rmax * random(), 30 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 54 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 92 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 100 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 140 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 200 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 230 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 305 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 290 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 350 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 300 * DEGREES + random() * 6 * DEGREES],
+        ]:
+            dot = Dot(radar_plot.pr2pt(r, theta))
+            dot.add_updater(show_dot_updater)
+            targets.add(dot)
+
+        self.add(targets)
+        self.play(
+            Create(radar_plot),
+            Create(scan_line),
+            f_beat_plot_parts.animate.next_to(ORIGIN, direction=LEFT, buff=LARGE_BUFF),
+        )
+
+        radar_scan_vel.set_value(1)
+        scan_line.add_updater(scan_updater)
+
+        self.wait(4)
+
+        block_buff_scale = 0.6
+
+        computer = (
+            BLOCKS.get("computer")
+            .copy()
+            .next_to(ORIGIN, buff=BLOCK_BUFF * block_buff_scale / 2)
+        )
+        mystery_block = Square().next_to(
+            computer, direction=LEFT, buff=BLOCK_BUFF * block_buff_scale
+        )
+        mystery_qmark = Tex("?", color=WHITE).scale(1.5).move_to(mystery_block)
+
+        radar_plot_group = VGroup(scan_line, radar_plot, targets)
+        self.play(
+            GrowFromCenter(computer),
+            LaggedStart(
+                DrawBorderThenFill(mystery_block),
+                FadeIn(mystery_qmark),
+            ),
+            f_beat_plot_parts.animate.next_to(
+                mystery_block, direction=LEFT, buff=BLOCK_BUFF * block_buff_scale
+            ),
+            radar_plot_group.animate.scale_to_fit_width(
+                f_beat_plot_parts.width
+            ).next_to(computer, direction=RIGHT, buff=BLOCK_BUFF * block_buff_scale),
+        )
+
+        f_beat_to_mystery = Arrow(
+            f_beat_plot_parts.get_right(), mystery_block.get_left()
+        )
+        mystery_to_computer = Arrow(mystery_block.get_right(), computer.get_left())
+        out_of_computer = Arrow(computer.get_right(), radar_plot_group.get_left())
+
+        self.play(
+            LaggedStart(
+                GrowArrow(f_beat_to_mystery),
+                GrowArrow(mystery_to_computer),
+                GrowArrow(out_of_computer),
+                lag_ratio=0.6,
+            )
         )
 
         self.wait(2)
@@ -5282,3 +5430,70 @@ class TestBD(Scene):
             ),
         ) = get_bd(True)
         self.add(bd.scale_to_fit_width(config["frame_width"] * 0.8))
+
+
+class RadarPlot(Scene):
+    def construct(self):
+        radar_plot = PolarPlane(
+            azimuth_step=4,
+            size=config["frame_width"] / 4,
+            radius_config={
+                "stroke_color": WHITE,
+                "include_tip": False,
+            },
+            azimuth_direction="CW",
+        )
+
+        rmax = radar_plot.get_y_range().max()
+
+        radar_scan_vel = ValueTracker(1)
+        radar_scan_angle = ValueTracker(-PI)
+
+        scan_line = Line(
+            radar_plot.pr2pt(0, 0),
+            radar_plot.pr2pt(rmax, radar_scan_angle.get_value()),
+            color=RED,
+        )
+
+        def scan_updater(m: Mobject, dt):
+            radar_scan_angle.set_value(
+                radar_scan_angle.get_value() + radar_scan_vel.get_value() * dt
+            )
+            m.become(
+                Line(
+                    radar_plot.pr2pt(0, 0),
+                    radar_plot.pr2pt(rmax, radar_scan_angle.get_value()),
+                    color=RED,
+                )
+            )
+
+        def show_dot_updater(m: Mobject):
+            dot_angle = radar_plot.pt2pr([m.get_x(), m.get_y(), 0])[1]
+            if radar_scan_angle.get_value() >= dot_angle:
+                m.set_opacity(1)
+            else:
+                m.set_opacity(0)
+
+        scan_line.add_updater(scan_updater)
+
+        targets = VGroup()
+        for r, theta in [
+            [rmax * random(), 30 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 54 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 92 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 100 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 140 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 200 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 230 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 305 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 290 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 350 * DEGREES + random() * 6 * DEGREES],
+            [rmax * random(), 300 * DEGREES + random() * 6 * DEGREES],
+        ]:
+            dot = Dot(radar_plot.pr2pt(r, theta))
+            dot.add_updater(show_dot_updater)
+            targets.add(dot)
+
+        self.add(radar_plot, targets, scan_line)
+
+        self.wait(8)
