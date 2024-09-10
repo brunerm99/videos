@@ -57,32 +57,109 @@ def get_splitter_ports(splitter):
     return splitter_p1, splitter_p2
 
 
-def get_bd():
+# I should make this into an object
+def get_bd(full_pll: bool = False, rx_section_gap=BLOCK_BUFF * 3):
     input_circle = Circle(radius=0.2)
     input_label = Tex(r"$V_{tune}$ Input").next_to(
         input_circle, direction=UP, buff=SMALL_BUFF
     )
     inp = VGroup(input_circle, input_label)
-    pll_block = (
-        BLOCKS.get("oscillator")
-        .copy()
-        .next_to(input_circle, direction=RIGHT, buff=BLOCK_BUFF)
-    )
-    input_to_vco = Line(input_circle.get_right(), pll_block.get_left())
-    pa = (
-        BLOCKS.get("amp")
-        .copy()
-        .next_to(pll_block, direction=RIGHT, buff=BLOCK_BUFF)
-        .set_fill(GAIN_COLOR)
-    )
-    pll_block_to_pa = Line(pll_block.get_right(), pa.get_left())
+    if full_pll:
+        phase_detector = (
+            BLOCKS.get("phase_detector").copy().next_to(input_circle, buff=BLOCK_BUFF)
+        )
+        input_to_pll = Line(
+            input_circle.get_right(),
+            phase_detector.get_left(),
+        )
+        loop_filter = (
+            BLOCKS.get("lp_filter").copy().next_to(phase_detector, buff=BLOCK_BUFF)
+        )
+        phase_detector_to_loop_filter = Line(
+            phase_detector.get_right(), loop_filter.get_left()
+        )
+        vco = BLOCKS.get("oscillator").copy().next_to(loop_filter, buff=BLOCK_BUFF)
+        loop_filter_to_vco = Line(loop_filter.get_right(), vco.get_left())
+        pll_block_to_pa = Line(
+            vco.get_right() + (RIGHT * BLOCK_BUFF),
+            vco.get_right(),
+        )
+        n_div_label = Tex(r"$\frac{1}{N}$")
+        n_div_label_n2 = Tex(r"$\frac{1}{2}$")
+        n_div_box = SurroundingRectangle(
+            n_div_label, buff=MED_SMALL_BUFF, color=WHITE, fill_opacity=0
+        )
+        ndiv = (
+            VGroup(n_div_label, n_div_box)
+            .next_to(loop_filter, direction=DOWN, buff=BLOCK_BUFF)
+            .scale(1 / BD_SCALE)
+        )
+        vco_output_conn = Dot(
+            pll_block_to_pa.get_midpoint(), radius=DEFAULT_DOT_RADIUS * 2
+        )
+        vco_to_ndiv_1 = Line(
+            vco_output_conn.get_center(),
+            [vco_output_conn.get_center()[0], ndiv.get_right()[1], 0],
+        )
+        vco_to_ndiv_2 = Line(
+            [vco_output_conn.get_center()[0], ndiv.get_right()[1], 0],
+            ndiv.get_right(),
+        )
+        vco_to_ndiv = VGroup(vco_to_ndiv_1, vco_to_ndiv_2)
+
+        ndiv_to_phase_detector_1 = Line(
+            ndiv.get_left(), [phase_detector.get_bottom()[0], ndiv.get_left()[1], 0]
+        )
+        ndiv_to_phase_detector_2 = Line(
+            [phase_detector.get_bottom()[0], ndiv.get_left()[1], 0],
+            phase_detector.get_bottom(),
+        )
+        ndiv_to_phase_detector = VGroup(
+            ndiv_to_phase_detector_1, ndiv_to_phase_detector_2
+        )
+
+        pll_block = VGroup(
+            input_to_pll,
+            phase_detector,
+            phase_detector_to_loop_filter,
+            loop_filter,
+            loop_filter_to_vco,
+            vco,
+            pll_block_to_pa,
+            vco_output_conn,
+            vco_to_ndiv_1,
+            vco_to_ndiv_2,
+            ndiv,
+            ndiv_to_phase_detector_1,
+            ndiv_to_phase_detector_2,
+        )
+        pa = (
+            BLOCKS.get("amp")
+            .copy()
+            .next_to(pll_block_to_pa, direction=RIGHT, buff=0)
+            .set_fill(GAIN_COLOR)
+        )
+    else:
+        pll_block = (
+            BLOCKS.get("oscillator")
+            .copy()
+            .next_to(input_circle, direction=RIGHT, buff=BLOCK_BUFF)
+        )
+        input_to_pll = Line(input_circle.get_right(), pll_block.get_left())
+        pa = (
+            BLOCKS.get("amp")
+            .copy()
+            .next_to(pll_block, direction=RIGHT, buff=BLOCK_BUFF)
+            .set_fill(GAIN_COLOR)
+        )
+        pll_block_to_pa = Line(pll_block.get_right(), pa.get_left())
     splitter = BLOCKS.get("splitter").copy().next_to(pa, buff=BLOCK_BUFF)
     pa_to_splitter = Line(pa.get_right(), splitter.get_left())
     mixer = (
         BLOCKS.get("mixer")
         .copy()
         .next_to(splitter, direction=RIGHT, buff=BLOCK_BUFF / 2)
-        .shift(DOWN * BLOCK_BUFF * 3)
+        .shift(DOWN * rx_section_gap)
     )
 
     splitter_p1 = splitter.get_right() + (UP * splitter.height / 4)
@@ -148,7 +225,7 @@ def get_bd():
     bd = (
         Group(
             inp,
-            input_to_vco,
+            input_to_pll,
             pll_block,
             pll_block_to_pa,
             pa,
@@ -172,29 +249,76 @@ def get_bd():
         .scale(BD_SCALE)
         .move_to(ORIGIN)
     )
-    return bd, (
-        inp,
-        input_to_vco,
-        pll_block,
-        pll_block_to_pa,
-        pa,
-        pa_to_splitter,
-        splitter,
-        splitter_to_mixer,
-        mixer,
-        splitter_to_tx_antenna,
-        tx_antenna,
-        lna,
-        lna_to_mixer,
-        rx_antenna,
-        rx_antenna_to_lna,
-        mixer_to_lp_filter,
-        lp_filter,
-        lp_filter_to_adc,
-        adc,
-        adc_to_signal_proc,
-        signal_proc,
-    )
+    # This is atrocious...
+    if full_pll:
+        return (
+            bd,
+            (
+                inp,
+                input_to_pll,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+            (
+                input_to_pll,
+                phase_detector,
+                phase_detector_to_loop_filter,
+                loop_filter,
+                loop_filter_to_vco,
+                vco,
+                pll_block_to_pa,
+                vco_output_conn,
+                vco_to_ndiv_1,
+                vco_to_ndiv_2,
+                ndiv,
+                ndiv_to_phase_detector_1,
+                ndiv_to_phase_detector_2,
+            ),
+        )
+    else:
+        return (
+            bd,
+            (
+                inp,
+                input_to_pll,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+        )
 
 
 def get_fade_group(group, opacity, **animate_kwargs) -> List[Animation]:
@@ -4477,82 +4601,34 @@ class HardwareWrapUp(Scene):
                 adc_to_signal_proc,
                 signal_proc,
             ),
-        ) = get_bd()
-
-        phase_detector = BLOCKS.get("phase_detector").copy()
-        to_phase_detector = Line(
-            phase_detector.get_left() + (LEFT * BLOCK_BUFF),
-            phase_detector.get_left(),
-        )
-        loop_filter = (
-            BLOCKS.get("lp_filter").copy().next_to(phase_detector, buff=BLOCK_BUFF)
-        )
-        phase_detector_to_loop_filter = Line(
-            phase_detector.get_right(), loop_filter.get_left()
-        )
-        vco = BLOCKS.get("oscillator").copy().next_to(loop_filter, buff=BLOCK_BUFF)
-        loop_filter_to_vco = Line(loop_filter.get_right(), vco.get_left())
-        from_vco = Line(
-            vco.get_right() + (RIGHT * BLOCK_BUFF),
-            vco.get_right(),
-        )
-        n_div_label = Tex(r"$\frac{1}{N}$")
-        n_div_label_n2 = Tex(r"$\frac{1}{2}$")
-        n_div_box = SurroundingRectangle(
-            n_div_label, buff=MED_SMALL_BUFF, color=WHITE, fill_opacity=0
-        )
-        ndiv = (
-            VGroup(n_div_label, n_div_box)
-            .next_to(loop_filter, direction=DOWN, buff=BLOCK_BUFF)
-            .scale(1 / BD_SCALE)
-        )
-        vco_output_conn = Dot(from_vco.get_midpoint(), radius=DEFAULT_DOT_RADIUS * 2)
-        vco_to_ndiv_1 = Line(
-            vco_output_conn.get_center(),
-            [vco_output_conn.get_center()[0], ndiv.get_right()[1], 0],
-        )
-        vco_to_ndiv_2 = Line(
-            [vco_output_conn.get_center()[0], ndiv.get_right()[1], 0],
-            ndiv.get_right(),
-        )
-        vco_to_ndiv = VGroup(vco_to_ndiv_1, vco_to_ndiv_2)
-
-        ndiv_to_phase_detector_1 = Line(
-            ndiv.get_left(), [phase_detector.get_bottom()[0], ndiv.get_left()[1], 0]
-        )
-        ndiv_to_phase_detector_2 = Line(
-            [phase_detector.get_bottom()[0], ndiv.get_left()[1], 0],
-            phase_detector.get_bottom(),
-        )
-        ndiv_to_phase_detector = VGroup(
-            ndiv_to_phase_detector_1, ndiv_to_phase_detector_2
-        )
-
-        pll = (
-            VGroup(
-                to_phase_detector,
+            (
+                input_to_pll,
                 phase_detector,
                 phase_detector_to_loop_filter,
                 loop_filter,
                 loop_filter_to_vco,
                 vco,
-                from_vco,
+                pll_block_to_pa,
                 vco_output_conn,
                 vco_to_ndiv_1,
                 vco_to_ndiv_2,
                 ndiv,
                 ndiv_to_phase_detector_1,
                 ndiv_to_phase_detector_2,
-            )
-            .scale(BD_SCALE)
-            .move_to(ORIGIN)
-        )
+            ),
+        ) = get_bd(True, rx_section_gap=BLOCK_BUFF * 6)
+        bd.scale_to_fit_width(config["frame_width"] * 0.8).to_corner(
+            UL, buff=LARGE_BUFF
+        ).shift(UP / 2)
+
+        pll_block.save_state()
+        pll_block.scale_to_fit_width(config["frame_width"] * 0.5).move_to(ORIGIN)
 
         self.play(
-            Create(to_phase_detector),
+            Create(input_to_pll),
             Create(phase_detector_to_loop_filter),
             Create(loop_filter_to_vco),
-            Create(from_vco),
+            Create(pll_block_to_pa),
             Create(vco_to_ndiv_1),
             Create(vco_to_ndiv_2),
             Create(ndiv_to_phase_detector_1),
@@ -4572,7 +4648,7 @@ class HardwareWrapUp(Scene):
             axis_config={"include_numbers": False},
             x_length=3,
             y_length=1.5,
-        ).next_to(to_phase_detector, direction=LEFT)
+        ).next_to(input_to_pll, direction=LEFT)
         sine_plot = input_ax.plot(lambda t: np.sin(2 * PI * 3 * t), color=TX_COLOR)
 
         fm_ax = Axes(
@@ -4582,7 +4658,7 @@ class HardwareWrapUp(Scene):
             axis_config={"include_numbers": False},
             x_length=3,
             y_length=1.5,
-        ).next_to(from_vco, direction=RIGHT)
+        ).next_to(pll_block_to_pa, direction=RIGHT)
 
         carrier_freq = 10
         sawtooth_carrier_freq = 14
@@ -4631,13 +4707,150 @@ class HardwareWrapUp(Scene):
         self.next_section(skip_animations=False)
         self.wait(0.5)
 
-        pa.next_to(from_vco, buff=0)
-        pa_to_splitter.next_to(pa, buff=0)
-        splitter.next_to(pa_to_splitter, buff=0)
-        splitter_to_tx_antenna
-        new_bd = Group(pll, pa, pa_to_splitter)
+        self.play(pll_block.animate.restore())
         self.play(GrowFromCenter(pa), Create(pa_to_splitter))
-        self.play(new_bd.animate.move_to(ORIGIN))
+        self.play(
+            GrowFromCenter(splitter),
+            Create(splitter_to_tx_antenna),
+        )
+
+        self.wait(0.3)
+
+        tx_arrow = Arrow(
+            tx_antenna.get_corner(UR) + [0.1, 0.1, 0],
+            tx_antenna.get_corner(UR) + [3, 2, 0],
+            color=TX_COLOR,
+        )
+        rx_arrow = Arrow(
+            rx_antenna.get_corner(UR) + [3, 2, 0],
+            rx_antenna.get_corner(UR) + [0.1, 0.1, 0],
+            color=RX_COLOR,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(tx_antenna),
+                GrowArrow(tx_arrow),
+                GrowArrow(rx_arrow),
+                GrowFromCenter(rx_antenna),
+                Create(rx_antenna_to_lna),
+                GrowFromCenter(lna),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(splitter_to_mixer),
+                    Create(lna_to_mixer),
+                ),
+                GrowFromCenter(mixer),
+                Create(mixer_to_lp_filter),
+                GrowFromCenter(lp_filter),
+                Create(lp_filter_to_adc),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.2)
+
+        f_beat_dot = Dot(lp_filter_to_adc.get_end())
+        f_beat = MathTex(r"f_{beat}").next_to(
+            f_beat_dot, direction=LEFT, buff=LARGE_BUFF
+        )
+        f_beat_arrow = Arrow(f_beat_dot.get_center(), f_beat.get_right())
+
+        self.play(
+            LaggedStart(
+                Create(f_beat_dot),
+                GrowArrow(f_beat_arrow),
+                FadeIn(f_beat),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        duration = 1
+        x_len = 3
+        y_len = 1
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        f1 = 3
+        f2 = 3.2
+        f3 = 2.8
+        p1 = 0
+        p2 = PI / 3
+        p3 = PI / 6
+        f_beat_plot_1 = amp_ax.plot(
+            lambda t: np.sin(2 * PI * f1 * t + p1), color=IF_COLOR
+        ).next_to(f_beat, direction=LEFT, buff=LARGE_BUFF)
+        f_beat_plot_2 = amp_ax.plot(
+            lambda t: np.sin(2 * PI * f2 * t + p2), color=IF_COLOR
+        ).next_to(f_beat_plot_1, direction=UP)
+        f_beat_plot_3 = amp_ax.plot(
+            lambda t: np.sin(2 * PI * f3 * t + p3), color=IF_COLOR
+        ).next_to(f_beat_plot_1, direction=DOWN)
+
+        f_beat_plot_sum = amp_ax.plot(
+            lambda t: np.sin(2 * PI * f1 * t + p1)
+            + np.sin(2 * PI * f2 * t + p2)
+            + np.sin(2 * PI * f3 * t + p3),
+            color=IF_COLOR,
+        ).move_to(f_beat_plot_1)
+
+        f_beat_1_line = Line(
+            f_beat.get_left() + [-0.2, 0, 0], f_beat_plot_1.get_right() + [0.2, 0, 0]
+        )
+
+        f_beat_2_line_p1 = f_beat.get_left() + [-0.2, 0, 0]
+        f_beat_2_line_p2 = f_beat_plot_2.get_right() + [0.2, 0, 0]
+        f_beat_2_bez = CubicBezier(
+            f_beat_2_line_p1,
+            f_beat_2_line_p1 + [-0.5, 0, 0],
+            f_beat_2_line_p2 + [0.5, 0, 0],
+            f_beat_2_line_p2,
+        )
+
+        f_beat_3_line_p1 = f_beat.get_left() + [-0.2, 0, 0]
+        f_beat_3_line_p2 = f_beat_plot_3.get_right() + [0.2, 0, 0]
+        f_beat_3_bez = CubicBezier(
+            f_beat_3_line_p1,
+            f_beat_3_line_p1 + [-0.5, 0, 0],
+            f_beat_3_line_p2 + [0.5, 0, 0],
+            f_beat_3_line_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Create(f_beat_1_line), Create(f_beat_plot_1), lag_ratio=0.3
+                ),
+                LaggedStart(Create(f_beat_2_bez), Create(f_beat_plot_2), lag_ratio=0.3),
+                LaggedStart(Create(f_beat_3_bez), Create(f_beat_plot_3), lag_ratio=0.3),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(
+                VGroup(f_beat_plot_1, f_beat_plot_2, f_beat_plot_3), f_beat_plot_sum
+            ),
+            Uncreate(f_beat_2_bez),
+            Uncreate(f_beat_3_bez),
+        )
 
         self.wait(2)
 
@@ -5038,3 +5251,34 @@ class TexTest(Scene):
             Tex(r"Single Sideband\\Mixer").scale(0.8).next_to(tex, direction=DOWN)
         )
         self.play(FadeIn(ssb_label, shift=UP))
+
+
+class TestBD(Scene):
+    def construct(self):
+        (
+            bd,
+            (
+                inp,
+                input_to_vco,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+        ) = get_bd(True)
+        self.add(bd.scale_to_fit_width(config["frame_width"] * 0.8))
