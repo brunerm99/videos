@@ -1,31 +1,28 @@
 # fmcw_implementation.py
 
 
-import sys
-
-# sys.path.insert(0, "../..")  # need to make into package
-# from manim_mods import *
-
-from manim import *
-import numpy as np
-from scipy import signal, constants
-from skrf import Network, Frequency
 import math
+import sys
 import warnings
 from random import random
+from typing import Iterable, Union
+
+import numpy as np
+from manim import *
+from scipy import constants, signal
+from skrf import Frequency, Network
 
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, "..")
 from props import (
-    get_blocks,
-    get_bd_animation,
-    get_resistor,
-    get_diode,
     FMCWRadarCartoon,
     VideoMobject,
+    get_bd_animation,
+    get_blocks,
+    get_diode,
+    get_resistor,
 )
-
 
 BACKGROUND_COLOR = ManimColor.from_hex("#183340")
 config.background_color = BACKGROUND_COLOR
@@ -330,6 +327,42 @@ def get_fade_group(group, opacity, **animate_kwargs) -> List[Animation]:
         else:
             animations.append(m.animate(**animate_kwargs).set_opacity(opacity))
     return animations
+
+
+# Copy/pasted from abul4fia's package b/c not in conda...
+def play_timeline(scene: Scene, timeline):
+    """
+    Plays a timeline of animations on a given scene.
+    Args:
+        scene (Scene): The scene to play the animations on.
+        timeline (dict): A dictionary where the keys are the times at which the animations should start,
+            and the values are the animations to play at that time. The values can be a single animation
+            or an iterable of animations.
+
+    Notes:
+        Each animation in the timeline can have a different duration, so several animations can be
+        running in parallel. If the value for a given time is an iterable, all the animations
+        in the iterable are started at once (although they can end at different times depending
+        on their run_time)
+        The method returns when all animations have finished playing.
+    Returns:
+        None
+    """
+    previous_t = 0
+    ending_time = 0
+    for t, anims in sorted(timeline.items()):
+        to_wait = t - previous_t
+        if to_wait > 0:
+            scene.wait(to_wait)
+        previous_t = t
+        if not isinstance(anims, Iterable):
+            anims = [anims]
+        for anim in anims:
+            turn_animation_into_updater(anim)
+            scene.add(anim.mobject)
+            ending_time = max(ending_time, t + anim.run_time)
+    if ending_time > t:
+        scene.wait(ending_time - t)
 
 
 class Intro(Scene):
@@ -4969,6 +5002,7 @@ class HardwareWrapUp(Scene):
             computer, direction=LEFT, buff=BLOCK_BUFF * block_buff_scale
         )
         mystery_qmark = Tex("?", color=WHITE).scale(1.5).move_to(mystery_block)
+        mystery_block_group = Group(mystery_block, mystery_qmark)
 
         radar_plot_group = VGroup(scan_line, radar_plot, targets)
         self.play(
@@ -4997,6 +5031,181 @@ class HardwareWrapUp(Scene):
                 GrowArrow(mystery_to_computer),
                 GrowArrow(out_of_computer),
                 lag_ratio=0.6,
+            )
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(Group(*self.mobjects).animate.shift(UP * 1.5))
+
+        python_computer = (
+            BLOCKS.get("computer")
+            .set_fill(GREEN)
+            .copy()
+            .scale(0.8)
+            .next_to(computer, direction=DOWN, buff=LARGE_BUFF * 1.5)
+        )
+        python_logo = (
+            ImageMobject("../props/static/python-logo-only.png")
+            .scale_to_fit_height(python_computer.height * 0.65)
+            .move_to(python_computer)
+            # .shift(UP / 6)
+        )
+        python_computer_group = Group(python_computer, python_logo)
+        mcu = (
+            ImageMobject("../props/static/microcontroller.png")
+            .scale_to_fit_width(computer.width)
+            .next_to(python_computer_group, direction=LEFT, buff=MED_SMALL_BUFF)
+        )
+        mcu_label = Tex(r"$\mu$ Controller").next_to(
+            mcu, direction=DOWN, buff=SMALL_BUFF
+        )
+        mcu_group = Group(mcu, mcu_label)
+        fpga = (
+            ImageMobject("../props/static/mcu.png")
+            .scale_to_fit_width(computer.width)
+            .next_to(python_computer_group, direction=RIGHT, buff=MED_SMALL_BUFF)
+        )
+        fpga_label = Tex(r"FPGA").next_to(fpga, direction=DOWN, buff=SMALL_BUFF)
+        fpga_group = Group(fpga, fpga_label)
+
+        computer_bottom = computer.get_bottom() + [0, -0.1, 0]
+        python_computer_p1 = python_computer_group.get_top() + [0, 0.1, 0]
+        python_bez = CubicBezier(
+            computer_bottom,
+            computer_bottom + [0, -0.5, 0],
+            python_computer_p1 + [0, 0.5, 0],
+            python_computer_p1,
+        )
+
+        fpga_p1 = fpga_group.get_top() + [0, 0.1, 0]
+        fpga_bez = CubicBezier(
+            computer_bottom,
+            computer_bottom + [0, -0.5, 0],
+            fpga_p1 + [0, 0.5, 0],
+            fpga_p1,
+        )
+
+        mcu_p1 = mcu_group.get_top() + [0, 0.1, 0]
+        mcu_bez = CubicBezier(
+            computer_bottom,
+            computer_bottom + [0, -0.5, 0],
+            mcu_p1 + [0, 0.5, 0],
+            mcu_p1,
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(Create(python_bez), GrowFromCenter(python_computer_group)),
+                LaggedStart(Create(fpga_bez), GrowFromCenter(fpga_group)),
+                LaggedStart(Create(mcu_bez), GrowFromCenter(mcu_group)),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        analog_label = (
+            Tex("Analog")
+            .next_to(f_beat_to_mystery, direction=UP, buff=LARGE_BUFF * 1.5)
+            .shift(LEFT / 2)
+        )
+        digital_label = (
+            Tex("Digital")
+            .next_to(mystery_to_computer, direction=UP, buff=LARGE_BUFF * 1.5)
+            .shift(RIGHT / 2)
+        )
+
+        analog_p1 = f_beat_to_mystery.get_top() + [0, 0.1, 0]
+        analog_p2 = analog_label.get_bottom() + [0, -0.1, 0]
+        analog_bez = CubicBezier(
+            analog_p1,
+            analog_p1 + [0, 0.5, 0],
+            analog_p2 + [0, -0.5, 0],
+            analog_p2,
+        )
+
+        digital_p1 = mystery_to_computer.get_top() + [0, 0.1, 0]
+        digital_p2 = digital_label.get_bottom() + [0, -0.1, 0]
+        digital_bez = CubicBezier(
+            digital_p1,
+            digital_p1 + [0, 0.5, 0],
+            digital_p2 + [0, -0.5, 0],
+            digital_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(Create(analog_bez), FadeIn(analog_label), lag_ratio=0.4),
+                LaggedStart(Create(digital_bez), FadeIn(digital_label), lag_ratio=0.4),
+                lag_ratio=0.8,
+            )
+        )
+
+        self.wait(0.5)
+
+        adc = (
+            BLOCKS.get("adc")
+            .copy()
+            .scale_to_fit_width(mystery_block.width)
+            .move_to(mystery_block_group)
+        )
+        adc_label = Tex("ADC").move_to(adc)
+        adc_group = Group(adc, adc_label)
+
+        self.play(
+            FadeOut(mystery_block_group, shift=DOWN),
+            FadeIn(adc_group, shift=DOWN),
+        )
+
+        self.wait(0.5)
+
+        remove_group = Group(*self.mobjects)
+
+        sequence = VGroup(
+            *[
+                Text(
+                    "".join([f"{n}" for n in list(np.random.randint(0, 2, 40))]),
+                    disable_ligatures=True,
+                    font="FiraCode Nerd Font Mono",
+                    color=GREEN,
+                    stroke_opacity=1,
+                    # fill_color=BACKGROUND_COLOR,
+                    # fill_opacity=1,
+                ).set_z_index(2)
+                for _ in range(13)
+            ]
+        ).arrange(direction=DOWN, buff=MED_SMALL_BUFF)
+        sequence.next_to(
+            LEFT * self.camera.frame_width / 2, direction=LEFT, buff=SMALL_BUFF
+        )
+        for s in sequence:
+            s.shift(random() * 2 * LEFT)
+        sequence_backgrounds = VGroup(
+            *[
+                BackgroundRectangle(
+                    m, fill_color=BACKGROUND_COLOR, fill_opacity=1, buff=0
+                )
+                .stretch((m.height + SMALL_BUFF * 2.6) / m.height, dim=1)
+                .set_z_index(1)
+                for m in sequence
+            ]
+        )
+        sequence_group = VGroup(sequence_backgrounds, sequence)
+
+        part_3 = Tex("Part 3: Signal Processing").scale(2)
+
+        self.add(sequence_group)
+
+        self.play(
+            LaggedStart(
+                sequence_group.animate(
+                    rate_func=rate_functions.linear, run_time=3.5
+                ).shift(config["frame_width"] * RIGHT * 2.3),
+                FadeOut(remove_group),
+                Create(part_3),
+                lag_ratio=0.4,
             )
         )
 
@@ -5497,3 +5706,58 @@ class RadarPlot(Scene):
         self.add(radar_plot, targets, scan_line)
 
         self.wait(8)
+
+
+class ProcessorBlock(Scene):
+    def construct(self):
+        mcu = ImageMobject("../props/static/microcontroller.png")
+        mcu2 = ImageMobject("../props/static/mcu.png")
+
+        self.add(Group(mcu, mcu2).arrange())
+
+
+class BinaryScreenWipe(Scene):
+    def construct(self):
+        sequence = VGroup(
+            *[
+                Text(
+                    "".join([f"{n}" for n in list(np.random.randint(0, 2, 40))]),
+                    disable_ligatures=True,
+                    font="FiraCode Nerd Font Mono",
+                    color=GREEN,
+                    stroke_opacity=1,
+                    # fill_color=BACKGROUND_COLOR,
+                    # fill_opacity=1,
+                )
+                for _ in range(13)
+            ]
+        ).arrange(direction=DOWN, buff=MED_SMALL_BUFF)
+        sequence.next_to(
+            LEFT * self.camera.frame_width / 2, direction=LEFT, buff=SMALL_BUFF
+        )
+        for s in sequence:
+            s.shift(random() * 2 * LEFT)
+        sequence_backgrounds = VGroup(
+            *[
+                BackgroundRectangle(
+                    m, fill_color=BACKGROUND_COLOR, fill_opacity=1, buff=0
+                ).stretch((m.height + SMALL_BUFF * 2.6) / m.height, dim=1)
+                for m in sequence
+            ]
+        )
+        # for sb in sequence_backgrounds:
+        #     sb.stretch()
+        sequence_group = VGroup(sequence_backgrounds, sequence)
+
+        part_3 = Tex("Part 3: Signal Processing").scale(2)
+
+        self.add(part_3)
+        self.add(sequence_group)
+
+        self.play(
+            sequence_group.animate(rate_func=rate_functions.linear, run_time=3.5).shift(
+                config["frame_width"] * RIGHT * 2.3
+            ),
+        )
+
+        self.wait(2)
