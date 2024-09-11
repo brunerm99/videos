@@ -5209,7 +5209,249 @@ class HardwareWrapUp(Scene):
             )
         )
 
+        self.wait(1)
+
+        self.play(FadeOut(part_3))
+
         self.wait(2)
+
+
+class Digitization(MovingCameraScene):
+    def construct(self):
+        x_len = 4.5
+        y_len = 3
+        duration = 1
+        time_ax = Axes(
+            x_range=[0, duration, duration / 4],
+            y_range=[-1.2, 1.2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        time_ax_label = time_ax.get_axis_labels(Tex("$t$"), Tex(""))
+
+        stop_time = 4
+        fs = 1000
+        N = fs * stop_time
+        f_if = 4
+        t = np.linspace(0, stop_time, N)
+        if_loss = 10
+        f_max = 20
+        y_min = -28
+
+        f_ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -y_min, -y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+                # "include_ticks": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax_label = f_ax.get_axis_labels(Tex("$f$"), Tex(r"$\lvert X(f) \rvert$"))
+
+        def get_plot_values(y_min=None):
+            if_signal = np.sin(2 * PI * f_if * t) / (10 ** (if_loss / 10))
+
+            blackman_window = signal.windows.blackman(N)
+            if_signal *= blackman_window
+
+            fft_len = 2**20
+            summed_fft = np.fft.fft(if_signal, fft_len) / (N / 2)
+            # summed_fft /= summed_fft.max()
+            summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft))
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+            indices = np.where((freq > 0) & (freq < f_max))
+            x_values = freq[indices]
+            y_values = summed_fft_log[indices]
+
+            if y_min is not None:
+                y_values[y_values < y_min] = y_min
+                y_values -= y_min
+
+            return dict(x_values=x_values, y_values=y_values)
+
+        f = 1.5
+        if_signal = time_ax.plot(lambda t: np.sin(2 * PI * f * t), color=IF_COLOR)
+
+        if_freq = f_ax.plot_line_graph(
+            **get_plot_values(y_min=y_min),
+            add_vertex_dots=False,
+            line_color=IF_COLOR,
+        )
+
+        time_ax_group = VGroup(time_ax, time_ax_label, if_signal)
+        f_ax_group = VGroup(f_ax, f_ax_label, if_freq)
+        VGroup(time_ax_group, f_ax_group).arrange(buff=LARGE_BUFF * 1.5).to_edge(
+            DOWN, buff=MED_LARGE_BUFF
+        )
+
+        beat_signal_label = (
+            Tex("Beat Signal").scale(1.2).to_edge(UP, buff=MED_LARGE_BUFF)
+        )
+
+        beat_signal_p1 = beat_signal_label.get_bottom() + [0, -0.1, 0]
+        time_ax_p2 = time_ax_group.get_top() + [0, 0.1, 0]
+        f_ax_p2 = f_ax_group.get_top() + [0, 0.1, 0]
+        time_ax_bez = CubicBezier(
+            beat_signal_p1,
+            beat_signal_p1 + [0, -1, 0],
+            time_ax_p2 + [0, 1, 0],
+            time_ax_p2,
+        )
+        f_ax_bez = CubicBezier(
+            beat_signal_p1,
+            beat_signal_p1 + [0, -1, 0],
+            f_ax_p2 + [0, 1, 0],
+            f_ax_p2,
+        )
+
+        # self.play(Create(time_ax), Create(signal))
+
+        self.next_section(skip_animations=False)
+
+        self.play(Create(beat_signal_label))
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Create(time_ax_bez),
+                    AnimationGroup(Create(time_ax), FadeIn(time_ax_label)),
+                    Create(if_signal),
+                    lag_ratio=0.4,
+                ),
+                LaggedStart(
+                    Create(f_ax_bez),
+                    AnimationGroup(Create(f_ax), FadeIn(f_ax_label)),
+                    Create(if_freq),
+                    lag_ratio=0.4,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(time_ax_bez),
+                    Uncreate(f_ax_bez),
+                    Uncreate(f_ax),
+                    FadeOut(f_ax_label),
+                    Uncreate(if_freq),
+                ),
+                time_ax_group.animate.move_to(ORIGIN),
+                lag_ratio=0.5,
+            )
+        )
+
+        adc = BLOCKS.get("adc").copy()
+        adc_label = Tex("ADC").move_to(adc)
+        adc_group = Group(adc, adc_label)
+
+        self.camera.frame.save_state()
+
+        self.play(
+            time_ax_group.animate.to_edge(LEFT, buff=SMALL_BUFF),
+            GrowFromCenter(adc_group),
+        )
+        self.play(self.camera.frame.animate.scale(0.8).move_to(time_ax_group))
+
+        self.wait(0.5)
+
+        samples = time_ax.get_vertical_lines_to_graph(
+            if_signal, x_range=[0, duration], num_lines=15, color=BLUE
+        )
+
+        v_readings = VGroup(
+            *[
+                Tex(f"$v_{{{idx}}}$")
+                .next_to(time_ax_group, direction=UP, buff=MED_SMALL_BUFF)
+                .set_x(sample.get_end()[0])
+                .shift(UP / 2 if idx % 2 == 0 else 0)
+                for idx, sample in enumerate(samples[:5])
+            ]
+        )
+        v_readings.add(
+            *[
+                Tex(".")
+                .next_to(time_ax_group, direction=UP, buff=MED_SMALL_BUFF)
+                .set_x(sample.get_end()[0])
+                for idx, sample in enumerate(samples[8:11])
+            ]
+        )
+        v_readings.add(
+            Tex(f"$v_{{N}}$")
+            .next_to(time_ax_group, direction=UP, buff=MED_SMALL_BUFF)
+            .set_x(samples[-1].get_end()[0])
+        )
+
+        sample_1 = samples[7].get_end()
+        sample_2 = samples[8].get_end()
+
+        sample_1_p2 = sample_1 + [-1, -1, 0]
+        sample_1_bez = CubicBezier(
+            sample_1,
+            sample_1 + [0, -0.5, 0],
+            sample_1_p2 + [0, 0.5, 0],
+            sample_1_p2,
+        )
+
+        sample_period = MathTex(r"T_s = \frac{1}{f_s}").next_to(
+            sample_1_p2, buff=MED_SMALL_BUFF
+        )
+        sample_2_p2 = Dot().next_to(sample_period, buff=MED_SMALL_BUFF).get_center()
+        sample_2_bez = CubicBezier(
+            sample_2,
+            sample_2 + [0, -0.5, 0],
+            sample_2_p2 + [0, 0.5, 0],
+            sample_2_p2,
+        )
+
+        n_ax = time_ax.copy()
+        n_ax_label = n_ax.get_axis_labels(Tex("$n$"), Tex(""))
+        if_signal_n_ax = n_ax.plot(lambda t: np.sin(2 * PI * f * t), color=IF_COLOR)
+        n_ax_group = VGroup(n_ax, n_ax_label, if_signal_n_ax).to_edge(
+            RIGHT, buff=SMALL_BUFF
+        )
+        samples_n_ax = n_ax.get_vertical_lines_to_graph(
+            if_signal_n_ax, x_range=[0, duration], num_lines=15, color=BLUE
+        )
+
+        self.play(Create(samples), Create(v_readings), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(Create(sample_1_bez), Create(sample_2_bez), FadeIn(sample_period))
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(sample_1_bez),
+            Uncreate(sample_2_bez),
+            sample_period.animate.next_to(
+                adc_group, direction=DOWN, buff=MED_SMALL_BUFF
+            ),
+            Uncreate(v_readings),
+            self.camera.frame.animate.restore(),
+        )
+
+        self.wait(0.2)
+
+        self.play(
+            Create(n_ax),
+            FadeIn(n_ax_label),
+            samples.animate.move_to(n_ax),
+        )
+
+        self.wait(2)
+
+        # self.add(time_ax, f_ax, if_plot, time_ax_labels, f_ax_labels, if_signal)
 
 
 """ Testing """
