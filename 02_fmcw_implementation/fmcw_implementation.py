@@ -5292,6 +5292,9 @@ class Digitization(MovingCameraScene):
         beat_signal_label = (
             Tex("Beat Signal").scale(1.2).to_edge(UP, buff=MED_LARGE_BUFF)
         )
+        digitized_beat_signal_label = (
+            Tex("Digitized ", "Beat Signal").scale(1.2).move_to(beat_signal_label)
+        )
 
         beat_signal_p1 = beat_signal_label.get_bottom() + [0, -0.1, 0]
         time_ax_p2 = time_ax_group.get_top() + [0, 0.1, 0]
@@ -5351,7 +5354,7 @@ class Digitization(MovingCameraScene):
 
         adc = BLOCKS.get("adc").copy()
         adc_label = Tex("ADC").move_to(adc)
-        adc_group = Group(adc, adc_label)
+        adc_group = Group(adc, adc_label).scale(0.8)
 
         self.camera.frame.save_state()
 
@@ -5418,9 +5421,6 @@ class Digitization(MovingCameraScene):
         n_ax_group = VGroup(n_ax, n_ax_label, if_signal_n_ax).to_edge(
             RIGHT, buff=SMALL_BUFF
         )
-        samples_n_ax = n_ax.get_vertical_lines_to_graph(
-            if_signal_n_ax, x_range=[0, duration], num_lines=15, color=BLUE
-        )
 
         self.play(Create(samples), Create(v_readings), run_time=2)
 
@@ -5443,15 +5443,306 @@ class Digitization(MovingCameraScene):
 
         self.wait(0.2)
 
+        to_adc = Arrow(time_ax_group.get_right(), adc_group.get_left())
+        from_adc = Arrow(adc_group.get_right(), n_ax_group.get_left())
+
+        samples_n_ax = n_ax.get_vertical_lines_to_graph(
+            if_signal_n_ax, x_range=[0, duration], num_lines=15, color=BLUE
+        )
+
         self.play(
             Create(n_ax),
             FadeIn(n_ax_label),
-            samples.animate.move_to(n_ax),
+            samples.animate.move_to(samples_n_ax),
+            LaggedStart(GrowArrow(to_adc), GrowArrow(from_adc), lag_ratio=0.5),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        time_signal_label = MathTex("x(", "t", ")").next_to(
+            time_ax_group, direction=UP, buff=MED_SMALL_BUFF
+        )
+        n_signal_label = MathTex("x[", "n", "]").next_to(
+            n_ax_group, direction=UP, buff=MED_SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(time_signal_label[0]),
+                TransformFromCopy(time_ax_label[0], time_signal_label[1]),
+                FadeIn(time_signal_label[2]),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(n_signal_label[0]),
+                TransformFromCopy(n_ax_label[0], n_signal_label[1]),
+                FadeIn(n_signal_label[2]),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(if_signal_n_ax))
+
+        self.wait(0.5)
+
+        n_ax_group_all = Group(
+            n_ax_group,
+            samples,
+            n_signal_label,
+        )
+
+        self.play(
+            FadeOut(time_ax_group, adc_group, to_adc, from_adc, time_signal_label),
+            n_ax_group_all.animate.move_to(ORIGIN),
+            sample_period.animate.to_edge(DOWN, buff=MED_LARGE_BUFF),
+            FadeIn(digitized_beat_signal_label[0]),
+            Transform(beat_signal_label, digitized_beat_signal_label[1]),
+        )
+
+        self.wait(0.3)
+
+        self.play(
+            FadeOut(sample_period, shift=DOWN),
+            FadeOut(beat_signal_label, digitized_beat_signal_label[0], shift=UP),
+        )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        computer = BLOCKS.get("computer").copy()
+        computer_eyes = VGroup(Dot(), Dot()).arrange().move_to(computer).shift(UP * 0.4)
+        computer_smile = Arc(start_angle=-3 * TAU / 8).move_to(computer).scale(0.7)
+        computer_group = Group(computer, computer_eyes, computer_smile).to_edge(
+            RIGHT, buff=LARGE_BUFF * 1.5
+        )
+
+        self.play(
+            FadeIn(computer, shift=LEFT * 2),
+            n_ax_group_all.animate.to_edge(LEFT, buff=LARGE_BUFF * 1.5),
+        )
+
+        to_computer = Arrow(n_ax_group.get_right(), computer.get_left())
+
+        self.play(
+            GrowArrow(to_computer),
+            Create(computer_eyes),
+            Create(computer_smile),
+        )
+
+        self.wait(0.5)
+
+        disclaimer = Tex(r"\textit{disclaimer}").scale(2)
+
+        self.play(
+            LaggedStart(FadeOut(*self.mobjects), Create(disclaimer), lag_ratio=0.7)
         )
 
         self.wait(2)
 
-        # self.add(time_ax, f_ax, if_plot, time_ax_labels, f_ax_labels, if_signal)
+
+class Disclaimer(Scene):
+    def construct(self):
+        disclaimer = Tex(r"\textit{disclaimer}").scale(2)
+        disclaimer_corner = (
+            disclaimer.copy().scale(0.7).to_corner(UL, buff=MED_SMALL_BUFF)
+        )
+        disclaimer_box = SurroundingRectangle(
+            disclaimer_corner, buff=MED_SMALL_BUFF * 1.2
+        )
+
+        self.add(disclaimer)
+
+        self.play(
+            LaggedStart(
+                Transform(disclaimer, disclaimer_corner),
+                Create(disclaimer_box),
+                lag_ratio=0.8,
+            )
+        )
+
+        self.wait(0.5)
+
+        in_this_video = (
+            Tex("In this video:").to_edge(LEFT, buff=LARGE_BUFF).shift(UP * 2)
+        )
+        in_this_video_bar = Line(
+            in_this_video.get_corner(DL), in_this_video.get_corner(DR)
+        ).next_to(in_this_video, direction=DOWN, buff=SMALL_BUFF)
+        range_calc = BulletedList(
+            r"Range calculation \\ $\left( R = \frac{c T_{c} f_{beat}}{2 B} \right)$"
+        ).next_to(
+            in_this_video_bar, direction=DOWN, aligned_edge=LEFT, buff=MED_LARGE_BUFF
+        )
+
+        not_in_this_video = (
+            Tex("NOT", " in this video:").to_edge(RIGHT, buff=LARGE_BUFF).shift(UP * 2)
+        ).set_color_by_tex("NOT", RED)
+        not_in_this_video_bar = Line(
+            not_in_this_video.get_corner(DL), not_in_this_video.get_corner(DR)
+        ).next_to(not_in_this_video, direction=DOWN, buff=SMALL_BUFF)
+        not_in_this_video_list = BulletedList(
+            "Velocity calculation",
+            "Clutter filtering",
+            "CFAR",
+            "Monopulse tracking",
+            "...",
+        ).next_to(
+            not_in_this_video_bar,
+            direction=DOWN,
+            aligned_edge=LEFT,
+            buff=MED_LARGE_BUFF,
+        )
+
+        gloss_over = Tex("I'll gloss over:").shift(UP * 2 + LEFT * 2)
+        gloss_over_bar = Line(
+            gloss_over.get_corner(DL), gloss_over.get_corner(DR)
+        ).next_to(gloss_over, direction=DOWN, buff=SMALL_BUFF)
+        gloss_over_list = BulletedList(
+            "Sampling theory", "Fourier transform", "..."
+        ).next_to(
+            gloss_over_bar,
+            direction=DOWN,
+            aligned_edge=LEFT,
+            buff=MED_LARGE_BUFF,
+        )
+
+        fft_video = (
+            ImageMobject("../props/static/fourier_transform_video_3b1b.jpg")
+            .scale_to_fit_width(4)
+            .next_to(gloss_over_list, direction=RIGHT, buff=LARGE_BUFF * 0.9)
+            .shift(DOWN * 2.5)
+        )
+        fft_video_label = (
+            Tex(
+                r"But what is the Fourier Transform?\\A visual introduction.\\- 3blue1brown"
+            )
+            .scale(0.4)
+            .next_to(fft_video, direction=UP, buff=SMALL_BUFF)
+        )
+        sampling_video = (
+            ImageMobject("../props/static/sampling_signals_video.jpg")
+            .scale_to_fit_width(4)
+            .next_to(gloss_over_list, direction=RIGHT, buff=LARGE_BUFF * 1.5)
+            .shift(UP * 1.5)
+        )
+        sampling_video_label = (
+            Tex(
+                r"Sampling Signals:\\Introduction Lecture\\Iain Explains Signals, Systems, and Digital Comms"
+            )
+            .scale(0.4)
+            .next_to(sampling_video, direction=UP, buff=SMALL_BUFF)
+        )
+
+        fft_video_p1 = gloss_over_list[1].get_right() + [0.1, 0, 0]
+        fft_video_p2 = fft_video.get_left() + [-0.1, 0, 0]
+        fft_video_bez = CubicBezier(
+            fft_video_p1,
+            fft_video_p1 + [0.5, 0, 0],
+            fft_video_p2 + [-0.5, 0, 0],
+            fft_video_p2,
+        )
+
+        sampling_video_p1 = gloss_over_list[0].get_right() + [0.1, 0, 0]
+        sampling_video_p2 = sampling_video.get_left() + [-0.1, 0, 0]
+        sampling_video_bez = CubicBezier(
+            sampling_video_p1,
+            sampling_video_p1 + [0.5, 0, 0],
+            sampling_video_p2 + [-0.5, 0, 0],
+            sampling_video_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(in_this_video), Create(in_this_video_bar)),
+                Create(range_calc),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(not_in_this_video), Create(not_in_this_video_bar)
+                ),
+                Create(not_in_this_video_list, run_time=2),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                in_this_video,
+                in_this_video_bar,
+                range_calc,
+                shift=LEFT,
+            ),
+            FadeOut(
+                not_in_this_video,
+                not_in_this_video_bar,
+                not_in_this_video_list,
+                shift=RIGHT,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(gloss_over), Create(gloss_over_bar)),
+                Create(gloss_over_list, run_time=2),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    AnimationGroup(Create(fft_video_bez), FadeIn(fft_video_label)),
+                    GrowFromCenter(fft_video),
+                    lag_ratio=0.5,
+                ),
+                LaggedStart(
+                    AnimationGroup(
+                        Create(sampling_video_bez), FadeIn(sampling_video_label)
+                    ),
+                    GrowFromCenter(sampling_video),
+                    lag_ratio=0.5,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(disclaimer),
+            Uncreate(disclaimer_box),
+            Uncreate(fft_video_bez),
+            Uncreate(sampling_video_bez),
+            ShrinkToCenter(fft_video),
+            ShrinkToCenter(sampling_video),
+            FadeOut(
+                gloss_over,
+                gloss_over_bar,
+                gloss_over_list,
+                fft_video_label,
+                sampling_video_label,
+            ),
+        )
+
+        self.wait(2)
 
 
 """ Testing """
@@ -5844,12 +6135,28 @@ class TexTest(Scene):
         indexs = index_labels(tex[0], color=RED)
         tex[0][3].set_color(YELLOW)
         tex[0][6].set_color(RED)
-        self.add(tex, indexs)
+        # self.add(tex, indexs)
 
-        ssb_label = (
-            Tex(r"Single Sideband\\Mixer").scale(0.8).next_to(tex, direction=DOWN)
+        # ssb_label = (
+        #     Tex(r"Single Sideband\\Mixer").scale(0.8).next_to(tex, direction=DOWN)
+        # )
+        # self.play(FadeIn(ssb_label, shift=UP))
+        myTemplate = TexTemplate()
+        myTemplate.add_to_preamble(r"\usepackage[at]{easylist}")
+        l = Tex(
+            r"\begin{easylist}"
+            r"\ListProperties(Style1*=\bfseries,Numbers2=l,Mark1={},Mark2={},Indent2=1em)"
+            r"@ Something"
+            r"@@ apple"
+            r"@@ pear"
+            r"@@ banana"
+            r"@ Something"
+            r"@@ Frogs"
+            r"\end{easylist}",
+            tex_template=myTemplate,
         )
-        self.play(FadeIn(ssb_label, shift=UP))
+
+        self.add(l)
 
 
 class TestBD(Scene):
@@ -6003,3 +6310,18 @@ class BinaryScreenWipe(Scene):
         )
 
         self.wait(2)
+
+
+class SmilingComputer(Scene):
+    def construct(self):
+        computer = BLOCKS.get("computer").copy()
+        computer_eyes = VGroup(Dot(), Dot()).arrange().move_to(computer).shift(UP * 0.4)
+        computer_smile = (
+            Arc(start_angle=-TAU / 8 - TAU / 4).move_to(computer).scale(0.7)
+        )
+
+        self.add(
+            computer,
+            computer_eyes,
+            computer_smile,
+        )
