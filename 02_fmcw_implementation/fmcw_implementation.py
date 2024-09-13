@@ -4,7 +4,7 @@
 import math
 import sys
 import warnings
-from random import random
+from random import random, normalvariate, seed
 from typing import Iterable, Union
 
 import numpy as np
@@ -5606,7 +5606,7 @@ class Disclaimer(Scene):
             gloss_over.get_corner(DL), gloss_over.get_corner(DR)
         ).next_to(gloss_over, direction=DOWN, buff=SMALL_BUFF)
         gloss_over_list = BulletedList(
-            "Sampling theory", "Fourier transform", "..."
+            "Sampling theory", "Fourier transform", "Window functions", "..."
         ).next_to(
             gloss_over_bar,
             direction=DOWN,
@@ -5743,6 +5743,319 @@ class Disclaimer(Scene):
         )
 
         self.wait(2)
+
+
+class RangeEquation(Scene):
+    def construct(self):
+        seed(1)
+
+        range_eqn = Tex(r"$R = \frac{c T_{c} f_{beat}}{2 B}$").scale(1.8)
+        f_beat = MathTex(r"f_{beat}").scale(1.8).to_corner(UR)
+        # tex_labels = index_labels(range_eqn[0])
+
+        radar = FMCWRadarCartoon()
+        target_2 = Square(side_length=0.7).to_corner(UR, buff=MED_SMALL_BUFF)
+        target_1 = (
+            Square(side_length=0.8)
+            .next_to(target_2, direction=DOWN, buff=SMALL_BUFF)
+            .shift(LEFT / 3)
+        )
+        target_1_label = Tex("1").move_to(target_1)
+        target_2_label = Tex("2").move_to(target_2)
+        radar.vgroup.scale(0.4).next_to(
+            Group(target_1, target_2), direction=LEFT, buff=LARGE_BUFF * 2
+        )
+        radar_beam_l = Line(
+            radar.antenna_tx.get_right(),
+            target_1.get_corner(DL) + [0, -0.1, 0],
+            color=TX_COLOR,
+        )
+        radar_beam_r = Line(
+            radar.antenna_tx.get_right(),
+            [target_1.get_corner(DL)[0], target_2.get_corner(UL)[1] + 0.1, 0],
+            color=TX_COLOR,
+        )
+        target_1_reflection = Arrow(
+            target_1.get_left(), radar.antenna_rx.get_right(), color=RX_COLOR
+        )
+        target_2_reflection = Arrow(
+            target_2.get_left(), radar.antenna_rx.get_right(), color=RX_COLOR
+        )
+        ground_clutter = Line(
+            [
+                radar.antenna_rx.get_center()[0],
+                (target_1.get_corner(DR) + [0.2, -0.1, 0])[1],
+                0,
+            ],
+            target_1.get_corner(DR) + [0.2, -0.1, 0],
+        )
+        ground_clutter_reflection = Arrow(
+            ground_clutter.get_midpoint(), radar.antenna_rx.get_right(), color=RX_COLOR
+        )
+
+        # self.add(
+        #     radar.vgroup,
+        #     radar_beam_l,
+        #     radar_beam_r,
+        #     target_1_label,
+        #     target_2_label,
+        #     target_1,
+        #     target_2,
+        #     target_1_reflection,
+        #     target_2_reflection,
+        #     ground_clutter,
+        #     ground_clutter_reflection,
+        # )
+
+        x_len = 4.5
+        y_len = 2.5
+        duration = 1
+        time_ax = (
+            Axes(
+                x_range=[0, duration, duration / 4],
+                y_range=[-1.2, 1.2, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=x_len,
+                y_length=y_len,
+            )
+            .to_corner(DL, buff=MED_LARGE_BUFF)
+            .shift(UP)
+        )
+        time_ax_label = time_ax.get_axis_labels(Tex("$t$"), Tex(""))
+
+        stop_time = 4
+        fs = 1000
+        N = fs * stop_time
+        f_if = 4
+        t = np.linspace(0, stop_time, N)
+        if_loss = 10
+        f_max = 20
+        y_min = -28
+
+        f_ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -y_min, -y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+                # "include_ticks": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax_label = f_ax.get_axis_labels(Tex("$f$"), Tex(r"$\lvert X(f) \rvert$"))
+
+        def get_plot_values(y_min=None):
+            if_signal = np.sin(2 * PI * f_if * t) / (10 ** (if_loss / 10))
+
+            blackman_window = signal.windows.blackman(N)
+            if_signal *= blackman_window
+
+            fft_len = 2**20
+            summed_fft = np.fft.fft(if_signal, fft_len) / (N / 2)
+            # summed_fft /= summed_fft.max()
+            summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft))
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+            indices = np.where((freq > 0) & (freq < f_max))
+            x_values = freq[indices]
+            y_values = summed_fft_log[indices]
+
+            if y_min is not None:
+                y_values[y_values < y_min] = y_min
+                y_values -= y_min
+
+            return dict(x_values=x_values, y_values=y_values)
+
+        f1 = 1.5
+        f2 = 2.7
+        beat_signal_1 = time_ax.plot(lambda t: np.sin(2 * PI * f1 * t), color=IF_COLOR)
+        beat_signal_2 = time_ax.plot(
+            lambda t: np.sin(2 * PI * f2 * t), color=IF_COLOR
+        ).next_to(beat_signal_1, direction=UP, buff=MED_LARGE_BUFF)
+        beat_signal_group = VGroup(beat_signal_1, beat_signal_2)
+        beat_signals = time_ax.plot(
+            lambda t: 0.5 * np.sin(2 * PI * f1 * t) + 0.5 * np.sin(2 * PI * f2 * t),
+            color=IF_COLOR,
+        )
+
+        noise_sigma = 0.2
+        noise = time_ax.plot(
+            lambda t: normalvariate(mu=0, sigma=noise_sigma), color=IF_COLOR
+        ).next_to(beat_signal_1, direction=UP, buff=MED_LARGE_BUFF)
+        beat_signals_w_noise_group = VGroup(beat_signal_group, noise)
+        beat_signals_w_noise = time_ax.plot(
+            lambda t: (
+                np.sin(2 * PI * f1 * t)
+                + np.sin(2 * PI * f2 * t)
+                + normalvariate(mu=0, sigma=noise_sigma)
+            )
+            / 2.2,
+            color=IF_COLOR,
+        )
+
+        f_clutter = 3.7
+        beat_signal_clutter = time_ax.plot(
+            lambda t: np.sin(2 * PI * f_clutter * t), color=IF_COLOR
+        ).next_to(beat_signal_1, direction=UP, buff=MED_LARGE_BUFF)
+        beat_signals_w_noise_clutter_group = VGroup(
+            beat_signals_w_noise_group, beat_signal_clutter
+        )
+        beat_signals_w_noise_clutter = time_ax.plot(
+            lambda t: (
+                np.sin(2 * PI * f1 * t)
+                + np.sin(2 * PI * f2 * t)
+                + normalvariate(mu=0, sigma=noise_sigma)
+                + np.sin(2 * PI * f_clutter * t)
+            )
+            / 3.2,
+            color=IF_COLOR,
+        )
+        samples = time_ax.get_vertical_lines_to_graph(
+            beat_signals_w_noise_clutter,
+            x_range=[0, duration],
+            num_lines=15,
+            color=BLUE,
+        )
+
+        signal_plus = MathTex("+")
+        signal_eqn = Tex(r"Signal = ", r"$\sin{(2 \pi f_{beat,1} t)}$").next_to(
+            beat_signal_1, direction=RIGHT, buff=LARGE_BUFF
+        )
+        beat_signal_2_eqn = MathTex(r"\sin{(2 \pi f_{beat,2} t)}")
+        noise_eqn = Tex(r"\textit{noise}")
+        beat_signal_clutter_eqn = MathTex(r"\sin{(2 \pi f_{beat,\text{clutter}} t)}")
+
+        self.next_section(skip_animations=True)
+
+        self.play(Create(range_eqn), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(Indicate(range_eqn[0][0]))
+
+        self.wait(0.2)
+
+        self.play(Indicate(range_eqn[0][5:10]))
+
+        self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         FadeOut(range_eqn[0][0:5], range_eqn[0][10:]),
+        #         Transform(range_eqn[0][5:10], f_beat),
+        #         lag_ratio=0.5,
+        #     )
+        # )
+
+        self.play(FadeOut(range_eqn))
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(time_ax), FadeIn(time_ax_label), radar.get_animation()
+                ),
+                AnimationGroup(
+                    Create(beat_signal_1), Create(target_1), FadeIn(target_1_label)
+                ),
+                AnimationGroup(
+                    FadeIn(signal_eqn), Create(radar_beam_l), Create(radar_beam_r)
+                ),
+                GrowArrow(target_1_reflection),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(beat_signal_2), Create(target_2), FadeIn(target_2_label)
+                ),
+                AnimationGroup(
+                    FadeIn(
+                        beat_signal_2_eqn.next_to(
+                            beat_signal_2, direction=RIGHT, buff=LARGE_BUFF
+                        ),
+                    ),
+                    GrowArrow(target_2_reflection),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(beat_signal_group, beat_signals),
+            beat_signal_2_eqn.animate.next_to(
+                signal_eqn[1], direction=DOWN, aligned_edge=LEFT, buff=SMALL_BUFF
+            ),
+            FadeIn(signal_plus.copy().next_to(signal_eqn, buff=SMALL_BUFF)),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(noise),
+                FadeIn(noise_eqn.next_to(noise, direction=RIGHT, buff=LARGE_BUFF)),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(beat_signals_w_noise_group, beat_signals_w_noise),
+            FadeIn(signal_plus.copy().next_to(beat_signal_2_eqn, buff=SMALL_BUFF)),
+            noise_eqn.animate.next_to(
+                beat_signal_2_eqn, direction=DOWN, aligned_edge=LEFT, buff=SMALL_BUFF
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(beat_signal_clutter), Create(ground_clutter)),
+                AnimationGroup(
+                    FadeIn(
+                        beat_signal_clutter_eqn.next_to(
+                            beat_signal_clutter, direction=RIGHT, buff=LARGE_BUFF
+                        )
+                    ),
+                    GrowArrow(ground_clutter_reflection),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(beat_signals_w_noise_clutter_group, beat_signals_w_noise_clutter),
+            FadeIn(signal_plus.copy().next_to(noise_eqn, buff=SMALL_BUFF)),
+            beat_signal_clutter_eqn.animate.next_to(
+                noise_eqn, direction=DOWN, aligned_edge=LEFT, buff=SMALL_BUFF
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(samples))
+
+        self.wait(2)
+
+        # self.add(
+        #     range_eqn,
+        #     tex_labels,
+        #     range_eqn.copy().next_to(range_eqn, direction=DOWN, buff=LARGE_BUFF),
+        # )
 
 
 """ Testing """
