@@ -4,11 +4,12 @@
 import math
 import sys
 import warnings
-from random import random, normalvariate, seed
+from random import normalvariate, random, seed
 from typing import Iterable, Union
 
 import numpy as np
 from manim import *
+from numpy.fft import fft, fftshift
 from scipy import constants, signal
 from skrf import Frequency, Network
 
@@ -5745,7 +5746,7 @@ class Disclaimer(Scene):
         self.wait(2)
 
 
-class RangeEquation(Scene):
+class IFSignalComponents(Scene):
     def construct(self):
         seed(1)
 
@@ -5824,14 +5825,14 @@ class RangeEquation(Scene):
         )
         time_ax_label = time_ax.get_axis_labels(Tex("$t$"), Tex(""))
 
-        stop_time = 4
+        stop_time = 16
         fs = 1000
         N = fs * stop_time
         f_if = 4
         t = np.linspace(0, stop_time, N)
         if_loss = 10
-        f_max = 20
-        y_min = -28
+        f_max = 8
+        y_min = -40
 
         f_ax = Axes(
             x_range=[0, f_max, f_max / 4],
@@ -5839,33 +5840,30 @@ class RangeEquation(Scene):
             tips=False,
             axis_config={
                 "include_numbers": False,
-                # "include_ticks": False,
             },
             x_length=x_len,
             y_length=y_len,
         )
         f_ax_label = f_ax.get_axis_labels(Tex("$f$"), Tex(r"$\lvert X(f) \rvert$"))
 
-        def get_plot_values(y_min=None):
-            if_signal = np.sin(2 * PI * f_if * t) / (10 ** (if_loss / 10))
+        def get_fft_values(x_n, fs, stop_time, fft_len=2**18, f_max=20, y_min=None):
+            N = stop_time * fs
 
-            blackman_window = signal.windows.blackman(N)
-            if_signal *= blackman_window
+            X_k = fft(x_n, fft_len) / (N / 2)
+            X_k = 10 * np.log10(fftshift(X_k))
+            X_k -= X_k.max()
 
-            fft_len = 2**20
-            summed_fft = np.fft.fft(if_signal, fft_len) / (N / 2)
-            # summed_fft /= summed_fft.max()
-            summed_fft_log = 10 * np.log10(np.fft.fftshift(summed_fft))
             freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
             indices = np.where((freq > 0) & (freq < f_max))
             x_values = freq[indices]
-            y_values = summed_fft_log[indices]
+            y_values = X_k[indices]
 
             if y_min is not None:
-                y_values[y_values < y_min] = y_min
-                y_values -= y_min
+                y_values += -y_min
+                y_values[y_values < 0] = 0
 
-            return dict(x_values=x_values, y_values=y_values)
+            return x_values, y_values
 
         f1 = 1.5
         f2 = 2.7
@@ -5911,14 +5909,10 @@ class RangeEquation(Scene):
             / 3.2,
             color=IF_COLOR,
         )
-        samples = time_ax.get_vertical_lines_to_graph(
-            beat_signals_w_noise_clutter,
-            x_range=[0, duration],
-            num_lines=15,
-            color=BLUE,
-        )
 
-        signal_plus = MathTex("+")
+        signal_plus_beat_1 = MathTex("+")
+        signal_plus_beat_2 = MathTex("+")
+        signal_plus_noise = MathTex("+")
         signal_eqn = Tex(r"Signal = ", r"$\sin{(2 \pi f_{beat,1} t)}$").next_to(
             beat_signal_1, direction=RIGHT, buff=LARGE_BUFF
         )
@@ -5926,7 +5920,7 @@ class RangeEquation(Scene):
         noise_eqn = Tex(r"\textit{noise}")
         beat_signal_clutter_eqn = MathTex(r"\sin{(2 \pi f_{beat,\text{clutter}} t)}")
 
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(Create(range_eqn), run_time=2)
 
@@ -5950,7 +5944,7 @@ class RangeEquation(Scene):
 
         self.play(FadeOut(range_eqn))
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -5995,7 +5989,7 @@ class RangeEquation(Scene):
             beat_signal_2_eqn.animate.next_to(
                 signal_eqn[1], direction=DOWN, aligned_edge=LEFT, buff=SMALL_BUFF
             ),
-            FadeIn(signal_plus.copy().next_to(signal_eqn, buff=SMALL_BUFF)),
+            FadeIn(signal_plus_beat_1.next_to(signal_eqn, buff=SMALL_BUFF)),
         )
 
         self.wait(0.5)
@@ -6012,7 +6006,7 @@ class RangeEquation(Scene):
 
         self.play(
             Transform(beat_signals_w_noise_group, beat_signals_w_noise),
-            FadeIn(signal_plus.copy().next_to(beat_signal_2_eqn, buff=SMALL_BUFF)),
+            FadeIn(signal_plus_beat_2.next_to(beat_signal_2_eqn, buff=SMALL_BUFF)),
             noise_eqn.animate.next_to(
                 beat_signal_2_eqn, direction=DOWN, aligned_edge=LEFT, buff=SMALL_BUFF
             ),
@@ -6039,15 +6033,200 @@ class RangeEquation(Scene):
 
         self.play(
             Transform(beat_signals_w_noise_clutter_group, beat_signals_w_noise_clutter),
-            FadeIn(signal_plus.copy().next_to(noise_eqn, buff=SMALL_BUFF)),
+            FadeIn(signal_plus_noise.next_to(noise_eqn, buff=SMALL_BUFF)),
             beat_signal_clutter_eqn.animate.next_to(
                 noise_eqn, direction=DOWN, aligned_edge=LEFT, buff=SMALL_BUFF
             ),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        self.play(Create(samples))
+        signal_eqn_group = VGroup(
+            signal_eqn,
+            signal_plus_beat_1,
+            beat_signal_2_eqn,
+            signal_plus_beat_2,
+            beat_signal_clutter_eqn,
+            signal_plus_noise,
+            noise_eqn,
+        )
+
+        ax_group_scale = 1
+        time_ax_group = VGroup(time_ax, beat_signal_1, time_ax_label)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    radar.vgroup,
+                    radar_beam_l,
+                    radar_beam_r,
+                    target_2_reflection,
+                    target_1_reflection,
+                    ground_clutter_reflection,
+                    ground_clutter,
+                    target_1,
+                    target_1_label,
+                    target_2,
+                    target_2_label,
+                    shift=UP,
+                ),
+                signal_eqn_group.animate.arrange(buff=SMALL_BUFF)
+                .scale(0.8)
+                .to_edge(UP, buff=MED_SMALL_BUFF),
+                time_ax_group.animate.scale(ax_group_scale)
+                .move_to(ORIGIN)
+                .to_edge(LEFT, buff=MED_LARGE_BUFF),
+                lag_ratio=0.5,
+            )
+        )
+
+        power_norm_1 = -6
+        power_norm_2 = -9
+        power_norm_clutter = 0
+        A_1 = 10 ** (power_norm_1 / 10)
+        A_2 = 10 ** (power_norm_2 / 10)
+        A_clutter = 10 ** (power_norm_clutter / 10)
+
+        noise_mu = 0
+        noise_sigma_db = -10
+        noise_sigma = 10 ** (noise_sigma_db / 10)
+
+        np.random.seed(0)
+        noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
+        x_n = (
+            A_1 * np.sin(2 * PI * f1 * t)
+            + A_2 * np.sin(2 * PI * f2 * t)
+            + A_clutter * np.sin(2 * PI * f_clutter * t)
+            + noise_npi
+        ) / (A_1 + A_2 + A_clutter + noise_sigma)
+
+        blackman_window = signal.windows.blackman(N)
+        x_n_windowed = x_n * blackman_window
+
+        freq, X_k = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_max=f_max,
+            y_min=y_min,
+        )
+
+        X_k_plot = f_ax.plot_line_graph(
+            freq, X_k, line_color=TX_COLOR, add_vertex_dots=False
+        )
+
+        f_ax_group = (
+            Group(f_ax, f_ax_label, X_k_plot)
+            .scale(ax_group_scale)
+            .to_edge(RIGHT, buff=MED_LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Create(f_ax), FadeIn(f_ax_label), Create(X_k_plot), lag_ratio=0.5
+            )
+        )
+
+        self.wait(0.5)
+
+        samples = time_ax.get_vertical_lines_to_graph(
+            beat_signals_w_noise_clutter,
+            x_range=[0, duration],
+            num_lines=30,
+            color=BLUE,
+        )
+
+        n_ax_label = time_ax.get_x_axis_label(Tex("$n$"))
+        x_n_label = Tex("x[n]").next_to(time_ax, direction=UP, buff=MED_SMALL_BUFF)
+
+        self.play(
+            Create(samples),
+            FadeOut(time_ax_label[0], shift=DOWN),
+            FadeIn(n_ax_label, shift=DOWN),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        fft_label = Tex("Fourier Transform").scale(1.2).to_edge(DOWN, buff=LARGE_BUFF)
+
+        fft_mystery_label = Tex("?").scale(1.6).move_to(fft_label)
+        fft_mystery_box = SurroundingRectangle(
+            fft_mystery_label, color=WHITE, buff=MED_SMALL_BUFF
+        )
+        fft_mystery_box.stretch(
+            fft_mystery_label.width * 2.5 / fft_mystery_box.width, dim=0
+        )
+        fft_box = fft_mystery_box.copy().stretch(
+            fft_label.width * 1.2 / fft_mystery_box.width, dim=0
+        )
+
+        fft_box_width_tracker = ValueTracker(fft_mystery_box.width)
+
+        to_fft_mystery_box_p1 = time_ax.get_bottom() + [0, -0.1, 0]
+        to_fft_mystery_box_p2 = fft_mystery_box.get_left() + [-0.1, 0, 0]
+        to_fft_mystery_box_bez = CubicBezier(
+            to_fft_mystery_box_p1,
+            to_fft_mystery_box_p1 + [0, -1.5, 0],
+            to_fft_mystery_box_p2 + [-1.5, 0, 0],
+            to_fft_mystery_box_p2,
+        )
+
+        from_fft_mystery_box_p2 = f_ax.get_bottom() + [0, -0.1, 0]
+        from_fft_mystery_box_p1 = fft_mystery_box.get_right() + [0.1, 0, 0]
+        from_fft_mystery_box_bez = CubicBezier(
+            from_fft_mystery_box_p1,
+            from_fft_mystery_box_p1 + [1.5, 0, 0],
+            from_fft_mystery_box_p2 + [0, -1.5, 0],
+            from_fft_mystery_box_p2,
+        )
+
+        to_fft_box_p1 = time_ax.get_bottom() + [0, -0.1, 0]
+        to_fft_box_p2 = fft_box.get_left() + [-0.1, 0, 0]
+        to_fft_box_bez = CubicBezier(
+            to_fft_box_p1,
+            to_fft_box_p1 + [0, -0.5, 0],
+            to_fft_box_p2 + [-0.5, 0, 0],
+            to_fft_box_p2,
+        )
+
+        from_fft_box_p2 = f_ax.get_bottom() + [0, -0.1, 0]
+        from_fft_box_p1 = fft_box.get_right() + [0.1, 0, 0]
+        from_fft_box_bez = CubicBezier(
+            from_fft_box_p1,
+            from_fft_box_p1 + [0.5, 0, 0],
+            from_fft_box_p2 + [0, -0.5, 0],
+            from_fft_box_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(to_fft_mystery_box_bez),
+                AnimationGroup(
+                    Create(fft_mystery_box),
+                    FadeIn(fft_mystery_label),
+                ),
+                Create(from_fft_mystery_box_bez),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.add(to_fft_mystery_box_bez, from_fft_mystery_box_bez)
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(fft_mystery_label, fft_label),
+            Transform(fft_mystery_box, fft_box),
+            Transform(to_fft_mystery_box_bez, to_fft_box_bez),
+            Transform(from_fft_mystery_box_bez, from_fft_box_bez),
+            FadeIn(x_n_label),
+        )
+
+        self.wait(0.5)
 
         self.wait(2)
 
@@ -6056,6 +6235,10 @@ class RangeEquation(Scene):
         #     tex_labels,
         #     range_eqn.copy().next_to(range_eqn, direction=DOWN, buff=LARGE_BUFF),
         # )
+
+
+class FFT(Scene):
+    def construct(self): ...
 
 
 """ Testing """
