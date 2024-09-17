@@ -24,6 +24,7 @@ from props import (
     get_diode,
     get_resistor,
 )
+from props.style import AUREOLIN, CITRINE, PIGMENT_GREEN
 
 BACKGROUND_COLOR = ManimColor.from_hex("#183340")
 config.background_color = BACKGROUND_COLOR
@@ -43,7 +44,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -6039,7 +6040,7 @@ class IFSignalComponents(Scene):
             ),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         signal_eqn_group = VGroup(
@@ -6127,6 +6128,56 @@ class IFSignalComponents(Scene):
         self.play(
             LaggedStart(
                 Create(f_ax), FadeIn(f_ax_label), Create(X_k_plot), lag_ratio=0.5
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        beat_signal_1_vline = f_ax.get_vertical_line(
+            f_ax.c2p(f1, -y_min + power_norm_1),
+            color=CITRINE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.4,
+        )
+        beat_signal_2_vline = f_ax.get_vertical_line(
+            f_ax.c2p(f2, -y_min + power_norm_2),
+            color=PIGMENT_GREEN,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.4,
+        )
+        clutter_vline = f_ax.get_vertical_line(
+            f_ax.c2p(f_clutter, -y_min + power_norm_clutter),
+            color=RED,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.4,
+        )
+
+        # beat_signal_1_graph_label = MathTex(r"f_{beat,1}", color=CITRINE).next_to(
+        #     beat_signal_1_vline, direction=DOWN, buff=MED_SMALL_BUFF
+        # )
+        # beat_signal_2_graph_label = MathTex(r"f_{beat,2}", color=PIGMENT_GREEN).next_to(
+        #     beat_signal_2_vline, direction=DOWN, buff=MED_SMALL_BUFF
+        # )
+        # clutter_graph_label = MathTex(r"f_{beat,clutter}", color=RED).next_to(
+        #     clutter_vline, direction=DOWN, buff=MED_SMALL_BUFF
+        # )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    signal_eqn[1].animate.set_color(CITRINE),
+                    Create(beat_signal_1_vline),
+                    rate_func=rate_functions.ease_in_out_quart,
+                ),
+                AnimationGroup(
+                    beat_signal_2_eqn.animate.set_color(PIGMENT_GREEN),
+                    Create(beat_signal_2_vline),
+                    rate_func=rate_functions.ease_in_out_quart,
+                ),
+                AnimationGroup(
+                    beat_signal_clutter_eqn.animate.set_color(RED),
+                    Create(clutter_vline),
+                    rate_func=rate_functions.ease_in_out_quart,
+                ),
+                lag_ratio=0.8,
             )
         )
 
@@ -6235,6 +6286,26 @@ class IFSignalComponents(Scene):
         #     tex_labels,
         #     range_eqn.copy().next_to(range_eqn, direction=DOWN, buff=LARGE_BUFF),
         # )
+
+
+class FFTImplementations(Scene):
+    def construct(self):
+        language_logos = Group(
+            *[
+                ImageMobject(f"../props/static/{fname}").scale_to_fit_width(1)
+                for fname in [
+                    "c_logo.webp",
+                    "cpp_logo.png",
+                    # "fortran_logo.svg",
+                    # "matlab_logo.svg",
+                    # "r_logo.svg",
+                    "rustacean.png",
+                    "verilog_logo.png",
+                    "python-logo-only.png",
+                ]
+            ]
+        )
+        self.add(language_logos.arrange_in_grid(4, 4))
 
 
 class FFT(Scene):
