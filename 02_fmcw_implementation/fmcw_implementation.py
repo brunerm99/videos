@@ -44,7 +44,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -1109,12 +1109,12 @@ class BlockSections(Scene):
             .shift(RIGHT * 2)
         )
 
-        pll_box = DashedVMobject(SurroundingRectangle(pll, color=DARK_GRAY))
+        pll_box = DashedVMobject(SurroundingRectangle(pll, color=BLUE_D))
         pll_box_bound_l = Line(
-            pll_block.get_corner(UL), pll_box.get_corner(DL), color=DARK_GRAY
+            pll_block.get_corner(UL), pll_box.get_corner(DL), color=BLUE_D
         )
         pll_box_bound_r = Line(
-            pll_block.get_corner(UR), pll_box.get_corner(DR), color=DARK_GRAY
+            pll_block.get_corner(UR), pll_box.get_corner(DR), color=BLUE_D
         )
 
         pll_label_specific = Tex("Phase-locked Loop")
@@ -1183,6 +1183,17 @@ class BlockSections(Scene):
         self.wait(0.5)
 
         self.play(FadeIn(pll_label_specific.to_edge(UP, buff=LARGE_BUFF), shift=DOWN))
+
+        self.wait(0.5)
+
+        part_1 = Tex("Part 1: Signal Generation").scale(2)
+
+        self.play(FadeOut(pll, pll_label_specific))
+        self.play(Create(part_1), run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(part_1))
 
         self.wait(2)
 
@@ -1512,7 +1523,9 @@ class PLL(MovingCameraScene):
 
         """ Animations """
 
-        self.add(pll)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(FadeIn(pll, shift=UP))
 
         self.wait(0.5)
 
@@ -1912,13 +1925,30 @@ class PLL(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         pfd_out_f = 0.5
         pfd_out_length = 1 / pfd_out_f
         _tracker = ValueTracker(0)
+        pfd_out_x_len = 2
+        pfd_out_y_len = 2
+        pfd_out_ax = Axes(
+            x_range=[0, pfd_out_length],
+            y_range=[-1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=pfd_out_x_len,
+            y_length=pfd_out_y_len,
+        ).set_opacity(0)
+        loop_filter_out_ax = pfd_out_ax.copy()
+        Group(pfd_out_ax, loop_filter_out_ax).arrange(
+            RIGHT, buff=LARGE_BUFF * 2
+        ).next_to(
+            self.camera.frame.get_bottom(), direction=UP, buff=MED_LARGE_BUFF
+        ).shift(LEFT)
         pfd_out = always_redraw(
-            lambda: FunctionGraph(
+            lambda: pfd_out_ax.plot(
                 lambda t: ((signal.square(2 * PI * pfd_out_f * t - PI / 2) + 1) / 2)
                 + np.random.normal(0, 0.05, 1)[0],
                 x_range=[
@@ -1927,33 +1957,39 @@ class PLL(MovingCameraScene):
                     step,
                 ],
                 use_smoothing=False,
-            ).shift(LEFT * 4 + DOWN * 3.5)
+                color=YELLOW,
+            )
         )
         pfd_out_label = (
             Tex(r"PFD Output\\(Dirty)").scale(0.6).next_to(pfd_out, direction=UP)
         )
 
         loop_filter_phase_tracker = ValueTracker(0)  # 0 -> PI
-        loop_filter_out = FunctionGraph(
-            lambda t: (
-                (
-                    signal.square(
-                        2 * PI * pfd_out_f * t
-                        - PI / 2
-                        + loop_filter_phase_tracker.get_value(),
-                        duty=0.5,
+        # .shift(DOWN * 3.5)
+        loop_filter_out = always_redraw(
+            lambda: loop_filter_out_ax.plot(
+                lambda t: (
+                    (
+                        signal.square(
+                            2 * PI * pfd_out_f * t
+                            - PI / 2
+                            + loop_filter_phase_tracker.get_value(),
+                            duty=0.5,
+                        )
+                        + 1
                     )
-                    + 1
+                    / 2
                 )
-                / 2
+                * signal.square(
+                    2 * PI * pfd_out_f / 2 * t
+                    + loop_filter_phase_tracker.get_value() / 2,
+                    duty=0.5,
+                ),
+                x_range=[0, pfd_out_length - step, step],
+                use_smoothing=False,
+                color=YELLOW,
             )
-            * signal.square(
-                2 * PI * pfd_out_f / 2 * t + loop_filter_phase_tracker.get_value() / 2,
-                duty=0.5,
-            ),
-            x_range=[0, pfd_out_length - step, step],
-            use_smoothing=False,
-        ).shift(DOWN * 3.5)
+        )
         loop_filter_out_label = (
             Tex(r"Loop Filter\\Output (Clean)")
             .scale(0.6)
@@ -1992,6 +2028,7 @@ class PLL(MovingCameraScene):
         vco_signal = vco_ax.plot(
             lambda t: A * np.sin(2 * PI * f_vco_tracker.get_value() * t),
             x_range=[0, 1, step],
+            color=TX_COLOR,
         )
 
         self.play(Create(pfd_out), FadeIn(pfd_out_label))
@@ -2001,14 +2038,11 @@ class PLL(MovingCameraScene):
             ).increment_value(1)
         )
         self.play(
-            _tracker.animate(
-                run_time=6, rate_func=rate_functions.linear
-            ).increment_value(1),
-            LaggedStart(
-                GrowArrow(pfd_out_to_loop_filter_out),
-                AnimationGroup(Create(loop_filter_out), FadeIn(loop_filter_out_label)),
-                lag_ratio=0.5,
-            ),
+            GrowArrow(pfd_out_to_loop_filter_out),
+        )
+        self.play(
+            Create(loop_filter_out),
+            FadeIn(loop_filter_out_label),
         )
 
         self.play(
@@ -2027,15 +2061,15 @@ class PLL(MovingCameraScene):
         )
         loop_filter_shift = loop_filter_shifted_copy.get_corner(DL)
         loop_filter_base_shift = UP
+        loop_filter_out_label_copy = (
+            loop_filter_out_label.copy()
+            .next_to(vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF)
+            .shift(UP)
+        )
         self.play(
-            loop_filter_out_label.animate.next_to(
-                vco_ax_group, direction=RIGHT, buff=MED_SMALL_BUFF
-            ).shift(loop_filter_base_shift),
-            loop_filter_out.animate.shift(
-                -(
-                    loop_filter_out.get_corner(DL)
-                    - (loop_filter_shift + loop_filter_base_shift)
-                )
+            Transform(loop_filter_out_label, loop_filter_out_label_copy),
+            loop_filter_out_ax.animate.next_to(
+                loop_filter_out_label_copy, direction=DOWN, buff=SMALL_BUFF
             ),
             Create(vco_ax),
             Create(vco_labels),
@@ -2043,6 +2077,7 @@ class PLL(MovingCameraScene):
             Create(vco_signal),
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(vco.animate.set_opacity(1), from_vco.animate.set_opacity(1))
@@ -2110,7 +2145,7 @@ class PLL(MovingCameraScene):
                 .shift(RIGHT)
             )
 
-        loop_filter_out.add_updater(loop_filter_out_updater)
+        # loop_filter_out.add_updater(loop_filter_out_updater)
         vco_f_label.add_updater(vco_f_label_updater)
         vco_signal.add_updater(vco_signal_updater)
 
@@ -2134,6 +2169,7 @@ class PLL(MovingCameraScene):
             ).increment_value(6)
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(f_vco_tracker.animate(run_time=1).increment_value(-6))
@@ -2231,7 +2267,7 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
-        n_loops = 10
+        n_loops = 11
         current_loop = int(loop_count_tracker.get_value())
         step_direction = -1
 
@@ -2248,16 +2284,22 @@ class PLL(MovingCameraScene):
             )
             step_direction *= -1
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(1)
 
-        loop_filter_out.remove_updater(loop_filter_out_updater)
+        # loop_filter_out.remove_updater(loop_filter_out_updater)
         vco_f_label.remove_updater(vco_f_label_updater)
         vco_signal.remove_updater(vco_signal_updater)
+
+        pll_copy = pll.copy()
+        vco_ax_group_copy = vco_ax_group.copy().add(vco_signal.copy())
+        Group(pll_copy, vco_ax_group_copy).arrange(buff=LARGE_BUFF).next_to(
+            self.camera.frame.get_edge_center(UP), direction=DOWN, buff=LARGE_BUFF
+        )
 
         self.play(
             LaggedStart(
                 AnimationGroup(
-                    Uncreate(vco_signal),
                     Uncreate(lo_signal),
                     Uncreate(fb_signal),
                     Uncreate(loop_filter_out),
@@ -2266,7 +2308,6 @@ class PLL(MovingCameraScene):
                     Uncreate(fb_f_bezier_group),
                     Uncreate(lo_ax_group),
                     Uncreate(fb_ax_group),
-                    Uncreate(vco_ax_group),
                     FadeOut(
                         loop_counter,
                         loop_filter_out_label,
@@ -2276,10 +2317,71 @@ class PLL(MovingCameraScene):
                         locked_label,
                     ),
                 ),
-                pll.animate.move_to(ORIGIN).to_edge(UP, buff=MED_SMALL_BUFF),
+                AnimationGroup(
+                    Transform(pll, pll_copy, path_arc=90 * DEGREES),
+                    Transform(
+                        vco_ax_group.add(vco_signal),
+                        vco_ax_group_copy,
+                        path_arc=30 * DEGREES,
+                    ),
+                ),
                 lag_ratio=0.7,
             )
         )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        spi_clk_p1 = ndiv.get_corner(DR) + [-ndiv.width / 4, 0, 0]
+        spi_in_p1 = ndiv.get_bottom() + [0, 0, 0]
+        spi_out_p1 = ndiv.get_corner(DL) + [ndiv.width / 4, 0, 0]
+
+        spi_clk_label = Text("CLK", font="FiraCode Nerd Font Mono")
+        spi_in_label = Text("DATA IN", font="FiraCode Nerd Font Mono")
+        spi_out_label = Text("DATA OUT", font="FiraCode Nerd Font Mono")
+        Group(spi_clk_label, spi_in_label, spi_out_label).arrange(
+            DOWN, buff=SMALL_BUFF, aligned_edge=LEFT
+        ).move_to(ndiv).shift(DOWN * 2 + RIGHT * 3.5)
+
+        spi_clk_p2 = spi_clk_label.get_left() + [-0.1, 0, 0]
+        spi_in_p2 = spi_in_label.get_left() + [-0.1, 0, 0]
+        spi_out_p2 = spi_out_label.get_left() + [-0.1, 0, 0]
+
+        spi_clk_bez = CubicBezier(
+            spi_clk_p1,
+            spi_clk_p1 + [0, -1, 0],
+            spi_clk_p2 + [-1, 0, 0],
+            spi_clk_p2,
+        )
+        spi_in_bez = CubicBezier(
+            spi_in_p1,
+            spi_in_p1 + [0, -1, 0],
+            spi_in_p2 + [-1, 0, 0],
+            spi_in_p2,
+        )
+        spi_out_bez = CubicBezier(
+            spi_out_p1,
+            spi_out_p1 + [0, -1, 0],
+            spi_out_p2 + [-1, 0, 0],
+            spi_out_p2,
+        )
+
+        self.play(FadeOut(ndiv_label_below))
+        self.play(
+            Create(spi_clk_bez),
+            FadeIn(spi_clk_label),
+            Create(spi_in_bez),
+            FadeIn(spi_in_label),
+            Create(spi_out_bez),
+            FadeIn(spi_out_label),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        # Add axes for N steps and frequency
+        # Make plots BLUE
+        # self.play()
 
         self.wait(2)
 
@@ -6199,7 +6301,7 @@ class IFSignalComponents(Scene):
             FadeIn(n_ax_label, shift=DOWN),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         fft_label = Tex("Fourier Transform").scale(1.2).to_edge(DOWN, buff=LARGE_BUFF)
@@ -6279,6 +6381,8 @@ class IFSignalComponents(Scene):
 
         self.wait(0.5)
 
+        # self.play(Uncreate())
+
         self.wait(2)
 
         # self.add(
@@ -6290,25 +6394,51 @@ class IFSignalComponents(Scene):
 
 class FFTImplementations(Scene):
     def construct(self):
-        language_logos = Group(
-            *[
-                ImageMobject(f"../props/static/{fname}").scale_to_fit_width(1)
-                for fname in [
-                    "c_logo.webp",
-                    "cpp_logo.png",
-                    # "fortran_logo.svg",
-                    # "matlab_logo.svg",
-                    # "r_logo.svg",
-                    "rustacean.png",
-                    "verilog_logo.png",
-                    "python-logo-only.png",
+        language_logos = (
+            Group(
+                *[
+                    SVGMobject(f"../props/static/{fname}").scale_to_fit_width(1)
+                    if "svg" in fname
+                    else ImageMobject(f"../props/static/{fname}").scale_to_fit_width(1)
+                    for fname in [
+                        "c_logo.png",
+                        "cpp_logo.png",
+                        "fortran_logo.svg",
+                        "Matlab_Logo.png",
+                        "r_logo.svg",
+                        "rustacean.png",
+                        "verilog_logo.png",
+                        "python-logo-only.png",
+                    ]
                 ]
-            ]
+            )
+            .arrange_in_grid(4, 2, buff=MED_LARGE_BUFF)
+            .next_to(ORIGIN, direction=LEFT, buff=LARGE_BUFF)
         )
-        self.add(language_logos.arrange_in_grid(4, 4))
+
+        fft_label = Tex("Fourier Transform").scale(1.2).next_to(ORIGIN, buff=LARGE_BUFF)
+        self.add(fft_label)
+
+        self.play(
+            LaggedStart(*[FadeIn(logo) for logo in language_logos], lag_ratio=0.2)
+        )
+
+        self.wait(2)
 
 
 class FFT(Scene):
+    def construct(self):
+        fft_code = Code(
+            "./fft_code.py",
+            font="FiraCode Nerd Font Mono",
+            background="window",
+            language="Python",
+            fill_color=BACKGROUND_COLOR,
+        )
+        self.add(fft_code)
+
+
+class PulsedMinRange(Scene):
     def construct(self): ...
 
 
@@ -6892,3 +7022,49 @@ class SmilingComputer(Scene):
             computer_eyes,
             computer_smile,
         )
+
+
+class AxesShifting(Scene):
+    def construct(self):
+        ax = Axes(
+            x_range=[0, 1],
+            y_range=[-1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=5,
+            y_length=3,
+            stroke_opacity=0,
+            fill_opacity=0,
+        ).set_opacity(0)
+
+        f = ValueTracker(2)
+        plot = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f.get_value() * t),
+                x_range=(0, 1, 1 / 1000),
+            ),
+        )
+        box = Square().to_corner(UL)
+
+        self.play(
+            # Create(ax),
+            Create(plot),
+        )
+
+        self.play(f.animate.increment_value(2))
+
+        self.play(f.animate.increment_value(-2))
+
+        self.wait(0.5)
+
+        self.play(ax.animate.next_to(box))
+
+        self.wait(0.5)
+
+        self.play(f.animate.increment_value(2))
+
+        self.play(f.animate.increment_value(-2))
+
+        self.wait(0.5)
+
+        self.wait(2)
