@@ -16,6 +16,8 @@ from skrf import Frequency, Network
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, "..")
+from utils import find_in_code
+
 from props import (
     FMCWRadarCartoon,
     VideoMobject,
@@ -6427,28 +6429,52 @@ class FFTImplementations(Scene):
         language_logos = (
             Group(
                 c_logo,
-                matlab_logo,
                 cpp_logo,
                 fortran_logo,
                 r_logo,
                 rust_logo,
+                matlab_logo,
                 verilog_logo,
                 python_logo,
             )
             .arrange_in_grid(4, 2, buff=MED_LARGE_BUFF)
-            .next_to(ORIGIN, direction=LEFT, buff=LARGE_BUFF)
+            .to_edge(LEFT, buff=MED_SMALL_BUFF)
         )
 
         fft_label = Tex("Fourier Transform").scale(1.2).next_to(ORIGIN, buff=LARGE_BUFF)
         # self.add(fft_label)
 
-        c_fft_code = Code(
-            "fft_implementations/c_fft_code.c",
-            font="FiraCode Nerd Font Mono",
-            background="window",
-            language="C",
-            fill_color=BACKGROUND_COLOR,
-        ).next_to(ORIGIN)
+        c_fft_code = (
+            Code(
+                "fft_implementations/c_fft_code.c",
+                font="FiraCode Nerd Font Mono",
+                background="window",
+                language="C",
+            )
+            .scale_to_fit_width(config["frame_width"] * 0.6)
+            .to_edge(RIGHT, buff=MED_SMALL_BUFF)
+        )
+        matlab_fft_code = (
+            Code(
+                "fft_implementations/matlab_fft_code.m",
+                font="FiraCode Nerd Font Mono",
+                background="window",
+                language="Matlab",
+            )
+            .scale_to_fit_width(config["frame_width"] * 0.6)
+            .move_to(c_fft_code)
+        )
+        # rust_fft_code = (
+        #     Code(
+        #         "fft_implementations/rust_fft_code.rs",
+        #         font="FiraCode Nerd Font Mono",
+        #         background="window",
+        #         language="Rust",
+        #         fill_color=BACKGROUND_COLOR,
+        #     )
+        #     .scale_to_fit_width(config["frame_width"] * 0.6)
+        #     .move_to(c_fft_code)
+        # )
 
         lang_box = SurroundingRectangle(c_logo)
 
@@ -6460,19 +6486,266 @@ class FFTImplementations(Scene):
 
         self.play(Create(lang_box), FadeIn(c_fft_code))
 
+        self.wait(0.5)
+
+        self.play(
+            Transform(lang_box, SurroundingRectangle(matlab_logo)),
+            FadeOut(c_fft_code, shift=UP * 2),
+            FadeIn(matlab_fft_code, shift=UP * 2),
+        )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     Transform(lang_box, SurroundingRectangle(rust_logo)),
+        #     FadeOut(matlab_fft_code, shift=UP * 2),
+        #     FadeIn(rust_fft_code, shift=UP * 2),
+        # )
+
+        self.wait(0.5)
+
+        to_fade = Group(*self.mobjects).remove(python_logo)
+        self.play(FadeOut(to_fade), python_logo.animate.move_to(ORIGIN).scale(2))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(python_logo))
+
         self.wait(2)
 
 
 class FFT(Scene):
     def construct(self):
+        x_len = 4.5
+        y_len = 2.5
+        duration = 1
+        time_ax = (
+            Axes(
+                x_range=[0, duration, duration / 4],
+                y_range=[-1.2, 1.2, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=x_len,
+                y_length=y_len,
+            )
+            .to_corner(DL, buff=MED_LARGE_BUFF)
+            .shift(UP)
+        )
+        time_ax_label = time_ax.get_axis_labels(Tex("$n$"), Tex(""))
+        x_n_label = MathTex("x[n]").next_to(time_ax, direction=UP, buff=MED_SMALL_BUFF)
+
+        stop_time = 16
+        fs = 1000
+        N = fs * stop_time
+        t = np.linspace(0, stop_time, N)
+        f_max = 8
+        y_min = -40
+
+        f_ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -y_min, -y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax_label = f_ax.get_axis_labels(Tex("$f$"), Tex(""))
+        X_k_label = MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
+
+        f1 = 1.5
+        f2 = 2.7
+        noise_mu = 0
+        noise_sigma = 0.2
+        f_clutter = 3.7
+        x_n_plot = time_ax.plot(
+            lambda t: (
+                np.sin(2 * PI * f1 * t)
+                + np.sin(2 * PI * f2 * t)
+                + normalvariate(mu=0, sigma=noise_sigma)
+                + np.sin(2 * PI * f_clutter * t)
+            )
+            / 3.2,
+            use_smoothing=True,
+            color=IF_COLOR,
+        )
+        num_samples = 20
+        n_samples = time_ax.get_vertical_lines_to_graph(
+            x_n_plot,
+            x_range=[0, duration],
+            num_lines=num_samples,
+            color=BLUE,
+        )
+
+        def get_fft_values(x_n, fs, stop_time, fft_len=2**18, f_max=20, y_min=None):
+            N = stop_time * fs
+
+            X_k = fft(x_n, fft_len) / (N / 2)
+            X_k = 10 * np.log10(fftshift(X_k))
+            X_k -= X_k.max()
+
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+            indices = np.where((freq > 0) & (freq < f_max))
+            x_values = freq[indices]
+            y_values = X_k[indices]
+
+            if y_min is not None:
+                y_values += -y_min
+                y_values[y_values < 0] = 0
+
+            return x_values, y_values
+
+        np.random.seed(0)
+        noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
+        power_norm_1 = -6
+        power_norm_2 = -9
+        power_norm_clutter = 0
+        A_1 = 10 ** (power_norm_1 / 10)
+        A_2 = 10 ** (power_norm_2 / 10)
+        A_clutter = 10 ** (power_norm_clutter / 10)
+
+        x_n = (
+            A_1 * np.sin(2 * PI * f1 * t)
+            + A_2 * np.sin(2 * PI * f2 * t)
+            + A_clutter * np.sin(2 * PI * f_clutter * t)
+            + noise_npi
+        ) / (A_1 + A_2 + A_clutter + noise_sigma)
+
+        blackman_window = signal.windows.blackman(N)
+        x_n_windowed = x_n * blackman_window
+
+        freq, X_k = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_max=f_max,
+            y_min=y_min,
+        )
+
+        X_k_plot = f_ax.plot_line_graph(
+            freq, X_k, line_color=IF_COLOR, add_vertex_dots=False
+        )
+        freq_samples = freq[:: freq.size // num_samples]
+        X_k_samples = X_k[:: freq.size // num_samples]
+        f_samples = VGroup()
+        for x, y in zip(freq_samples, X_k_samples):
+            f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
+
+        time_ax_group = (
+            Group(time_ax, time_ax_label, x_n_plot, n_samples, x_n_label)
+            .move_to(ORIGIN)
+            .to_edge(LEFT, buff=LARGE_BUFF)
+        )
+        f_ax_group = (
+            Group(f_ax, f_ax_label, X_k_plot, f_samples, X_k_label)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
         fft_code = Code(
             "fft_implementations/fft_code.py",
             font="FiraCode Nerd Font Mono",
             background="window",
             language="Python",
-            fill_color=BACKGROUND_COLOR,
+            style="paraiso-dark",
         )
-        self.add(fft_code)
+
+        blank_code = """
+def f():
+    ...
+"""
+        fft_code = """
+import numpy as np
+from numpy.fft import fft, fftshift
+from scipy import signal
+
+stop_time = 4
+fs = 1000
+N = fs * stop_time
+"""
+        blank_code = Code(
+            code=fft_code,
+            # font="FiraCode Nerd Font Mono",
+            background="window",
+            background_stroke_color=WHITE,
+            language="Python",
+            insert_line_no=True,
+            style="paraiso-dark",
+            margin=(0.3, 0.4),
+        )
+        for ln in blank_code.line_numbers:
+            ln.set_color(WHITE)
+        # blank_code.height = blank_code.height * 1.5 blank_code.width = blank_code.width * 1.5
+        # blank_code.background_mobject.shift(DOWN)
+        VGroup(blank_code.code, blank_code.line_numbers).move_to(
+            blank_code.background_mobject
+        )
+        blank_code.to_edge(DOWN, buff=MED_SMALL_BUFF)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(time_ax),
+                    Create(f_ax),
+                    FadeIn(time_ax_label, f_ax_label),
+                    FadeIn(x_n_label, X_k_label, shift=DOWN),
+                ),
+                AnimationGroup(
+                    Create(x_n_plot),
+                    Create(X_k_plot),
+                    Create(n_samples),
+                    Create(f_samples),
+                ),
+                lag_ratio=0.5,
+            ),
+            run_time=2,
+        )
+
+        self.wait(1)
+
+        self.play(
+            Group(*self.mobjects).animate.to_edge(UP, buff=MED_LARGE_BUFF),
+            GrowFromCenter(blank_code.background_mobject),
+        )
+
+        self.wait(0.5)
+
+        code_copy = blank_code.code.copy()
+        self.play(
+            Write(code_copy[4].move_to(blank_code.code[0], aligned_edge=LEFT)),
+            FadeIn(blank_code.line_numbers[0]),
+        )
+        self.play(
+            Write(code_copy[5].copy().move_to(blank_code.code[1], aligned_edge=LEFT)),
+            FadeIn(blank_code.line_numbers[1]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    code_copy[4:5].animate.move_to(
+                        blank_code.code[4:5], aligned_edge=LEFT
+                    ),
+                    # code_copy[5].animate.move_to(blank_code.code[5], aligned_edge=LEFT),
+                    FadeIn(blank_code.line_numbers[2:5]),
+                ),
+                AnimationGroup(
+                    Write(blank_code.code[0]),
+                    Write(blank_code.code[1]),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(2)
 
 
 class PulsedMinRange(Scene):
