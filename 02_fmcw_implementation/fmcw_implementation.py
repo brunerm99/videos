@@ -44,7 +44,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -6379,9 +6379,23 @@ class IFSignalComponents(Scene):
             FadeIn(x_n_label),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        # self.play(Uncreate())
+        self.play(
+            Uncreate(fft_mystery_box),
+            Uncreate(to_fft_mystery_box_bez),
+            Uncreate(from_fft_mystery_box_bez),
+            Uncreate(samples),
+            *[Uncreate(m) for m in time_ax_group.remove(time_ax_label)],
+            *[Uncreate(m) for m in f_ax_group],
+            Uncreate(beat_signal_1_vline),
+            Uncreate(beat_signal_2_vline),
+            Uncreate(clutter_vline),
+            FadeOut(x_n_label, signal_eqn_group, n_ax_label),
+            fft_mystery_label.animate.next_to(ORIGIN, direction=RIGHT, buff=LARGE_BUFF),
+            run_time=1.5,
+        )
 
         self.wait(2)
 
@@ -6394,34 +6408,57 @@ class IFSignalComponents(Scene):
 
 class FFTImplementations(Scene):
     def construct(self):
+        c_logo = ImageMobject(f"../props/static/c_logo.png").scale_to_fit_width(1)
+        matlab_logo = ImageMobject(
+            "../props/static/Matlab_Logo.png"
+        ).scale_to_fit_width(1)
+        cpp_logo = ImageMobject("../props/static/cpp_logo.png").scale_to_fit_width(1)
+        fortran_logo = SVGMobject(
+            "../props/static/fortran_logo.svg"
+        ).scale_to_fit_width(1)
+        r_logo = SVGMobject("../props/static/r_logo.svg").scale_to_fit_width(1)
+        rust_logo = ImageMobject("../props/static/rustacean.png").scale_to_fit_width(1)
+        verilog_logo = ImageMobject(
+            "../props/static/verilog_logo.png"
+        ).scale_to_fit_width(1)
+        python_logo = ImageMobject(
+            "../props/static/python-logo-only.png"
+        ).scale_to_fit_width(1)
         language_logos = (
             Group(
-                *[
-                    SVGMobject(f"../props/static/{fname}").scale_to_fit_width(1)
-                    if "svg" in fname
-                    else ImageMobject(f"../props/static/{fname}").scale_to_fit_width(1)
-                    for fname in [
-                        "c_logo.png",
-                        "cpp_logo.png",
-                        "fortran_logo.svg",
-                        "Matlab_Logo.png",
-                        "r_logo.svg",
-                        "rustacean.png",
-                        "verilog_logo.png",
-                        "python-logo-only.png",
-                    ]
-                ]
+                c_logo,
+                matlab_logo,
+                cpp_logo,
+                fortran_logo,
+                r_logo,
+                rust_logo,
+                verilog_logo,
+                python_logo,
             )
             .arrange_in_grid(4, 2, buff=MED_LARGE_BUFF)
             .next_to(ORIGIN, direction=LEFT, buff=LARGE_BUFF)
         )
 
         fft_label = Tex("Fourier Transform").scale(1.2).next_to(ORIGIN, buff=LARGE_BUFF)
-        self.add(fft_label)
+        # self.add(fft_label)
+
+        c_fft_code = Code(
+            "fft_implementations/c_fft_code.c",
+            font="FiraCode Nerd Font Mono",
+            background="window",
+            language="C",
+            fill_color=BACKGROUND_COLOR,
+        ).next_to(ORIGIN)
+
+        lang_box = SurroundingRectangle(c_logo)
 
         self.play(
             LaggedStart(*[FadeIn(logo) for logo in language_logos], lag_ratio=0.2)
         )
+
+        self.wait(0.5)
+
+        self.play(Create(lang_box), FadeIn(c_fft_code))
 
         self.wait(2)
 
@@ -6429,7 +6466,7 @@ class FFTImplementations(Scene):
 class FFT(Scene):
     def construct(self):
         fft_code = Code(
-            "./fft_code.py",
+            "fft_implementations/fft_code.py",
             font="FiraCode Nerd Font Mono",
             background="window",
             language="Python",
