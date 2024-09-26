@@ -6686,6 +6686,17 @@ N = fs * stop_time
         )
         blank_code.to_edge(DOWN, buff=MED_SMALL_BUFF)
 
+        fft_file_label = Tex("FFT.ipynb")
+        fft_file_box = SurroundingRectangle(
+            fft_file_label,
+            buff=MED_LARGE_BUFF,
+            corner_radius=0.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            stroke_color=BLUE,
+        )
+        fft_file_popup = VGroup(fft_file_box, fft_file_label).to_corner(DR)
+
         self.next_section(skip_animations=skip_animations(False))
 
         self.play(
@@ -6709,41 +6720,117 @@ N = fs * stop_time
 
         self.wait(1)
 
+        time_ax_copy = Group(time_ax, x_n_label).copy().to_edge(UP, buff=MED_LARGE_BUFF)
+        to_code_p1 = time_ax_copy.get_corner(DL) + [0, -0.1, 0]
+        to_code_p2 = blank_code.get_left() + [-0.1, 0, 0]
+        to_code_bez = CubicBezier(
+            to_code_p1,
+            to_code_p1 + [-0.5, -1, 0],
+            to_code_p2 + [-1, 0, 0],
+            to_code_p2,
+        )
+
+        f_ax_copy = Group(f_ax, X_k_label).copy().to_edge(UP, buff=MED_LARGE_BUFF)
+        from_code_p2 = f_ax_copy.get_corner(DR) + [0, -0.1, 0]
+        from_code_p1 = blank_code.get_right() + [0.1, 0, 0]
+        from_code_bez = CubicBezier(
+            from_code_p1,
+            from_code_p1 + [1, 0, 0],
+            from_code_p2 + [0.5, -1, 0],
+            from_code_p2,
+        )
+
         self.play(
-            Group(*self.mobjects).animate.to_edge(UP, buff=MED_LARGE_BUFF),
-            GrowFromCenter(blank_code.background_mobject),
+            LaggedStart(
+                AnimationGroup(
+                    Group(*self.mobjects).animate.to_edge(UP, buff=MED_LARGE_BUFF),
+                    GrowFromCenter(blank_code.background_mobject),
+                ),
+                Create(to_code_bez),
+                Create(from_code_bez),
+                lag_ratio=0.5,
+            ),
         )
 
         self.wait(0.5)
 
-        code_copy = blank_code.code.copy()
-        self.play(
-            Write(code_copy[4].move_to(blank_code.code[0], aligned_edge=LEFT)),
-            FadeIn(blank_code.line_numbers[0]),
+        time_labels = [Tex(tt).move_to(time_ax.c2p(tt / 4, 0)) for tt in [1, 2, 3, 4]]
+
+        line_4 = (
+            blank_code.code[4].copy().move_to(blank_code.code[0], aligned_edge=LEFT)
+        )
+        line_5 = (
+            blank_code.code[5].copy().move_to(blank_code.code[1], aligned_edge=LEFT)
+        )
+        line_6 = (
+            blank_code.code[6].copy().move_to(blank_code.code[2], aligned_edge=LEFT)
         )
         self.play(
-            Write(code_copy[5].copy().move_to(blank_code.code[1], aligned_edge=LEFT)),
+            LaggedStart(
+                *[
+                    Succession(GrowFromCenter(tl), tl.animate.shift(DOWN))
+                    for tl in time_labels
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.2)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Write(line_4[:-1]),
+                    FadeIn(blank_code.line_numbers[0]),
+                ),
+                TransformFromCopy(time_labels[-1], line_4[-1]),
+                lag_ratio=0.5,
+            ),
+        )
+
+        self.wait(0.2)
+
+        self.play(
+            Write(line_5),
             FadeIn(blank_code.line_numbers[1]),
         )
 
         self.wait(0.5)
 
         self.play(
+            Write(line_6),
+            FadeIn(blank_code.line_numbers[2]),
+        )
+
+        self.wait(0.2)
+        self.play(Indicate(n_samples))
+
+        self.wait(0.5)
+
+        self.play(
             LaggedStart(
                 AnimationGroup(
-                    code_copy[4:5].animate.move_to(
-                        blank_code.code[4:5], aligned_edge=LEFT
-                    ),
-                    # code_copy[5].animate.move_to(blank_code.code[5], aligned_edge=LEFT),
-                    FadeIn(blank_code.line_numbers[2:5]),
+                    line_4.animate.move_to(blank_code.code[4], aligned_edge=LEFT),
+                    line_5.animate.move_to(blank_code.code[5], aligned_edge=LEFT),
+                    line_6.animate.move_to(blank_code.code[6], aligned_edge=LEFT),
+                    FadeIn(blank_code.line_numbers[2:7]),
                 ),
                 AnimationGroup(
                     Write(blank_code.code[0]),
                     Write(blank_code.code[1]),
+                    Write(blank_code.code[2]),
                 ),
                 lag_ratio=0.5,
             )
         )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(fft_file_popup, shift=UP))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(fft_file_popup, shift=DOWN))
 
         self.wait(2)
 

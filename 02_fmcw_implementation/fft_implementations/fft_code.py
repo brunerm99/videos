@@ -6,8 +6,8 @@ stop_time = 4
 fs = 1000
 N = fs * stop_time
 
-blackman_window = signal.windows.blackman(N)
-x_n_windowed = x_n * blackman_window
+window = signal.windows.blackman(N)
+x_n_windowed = x_n * window
 
 fft_len = 1024 * 10
 
