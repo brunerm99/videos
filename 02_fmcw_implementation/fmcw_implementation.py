@@ -6653,38 +6653,87 @@ class FFT(Scene):
             language="Python",
             style="paraiso-dark",
         )
-
-        blank_code = """
-def f():
-    ...
-"""
-        fft_code = """
-import numpy as np
-from numpy.fft import fft, fftshift
-from scipy import signal
-
-stop_time = 4
-fs = 1000
-N = fs * stop_time
-"""
-        blank_code = Code(
-            code=fft_code,
-            # font="FiraCode Nerd Font Mono",
+        full_code = Code(
+            "./fft_implementations/full_fft_code.py",
             background="window",
             background_stroke_color=WHITE,
             language="Python",
             insert_line_no=True,
             style="paraiso-dark",
             margin=(0.3, 0.4),
+            fill_opacity=0,
         )
-        for ln in blank_code.line_numbers:
+        code = Code(
+            "./fft_implementations/fft_code.py",
+            background="window",
+            background_stroke_color=WHITE,
+            language="Python",
+            insert_line_no=True,
+            style="paraiso-dark",
+            margin=(0.3, 0.4),
+            fill_opacity=0,
+        )
+        for ln in full_code.line_numbers:
             ln.set_color(WHITE)
-        # blank_code.height = blank_code.height * 1.5 blank_code.width = blank_code.width * 1.5
-        # blank_code.background_mobject.shift(DOWN)
-        VGroup(blank_code.code, blank_code.line_numbers).move_to(
-            blank_code.background_mobject
+
+        code.to_edge(DOWN, buff=MED_SMALL_BUFF)
+        code_group = VGroup(code.code, code.line_numbers)
+        code_group.move_to(code.background_mobject)
+        full_code_group = (
+            VGroup(full_code.code, full_code.line_numbers).move_to(
+                code_group, aligned_edge=UL
+            )
+            # .shift(LEFT / 2)
         )
-        blank_code.to_edge(DOWN, buff=MED_SMALL_BUFF)
+
+        code_rect = Rectangle(
+            height=config["frame_height"],
+            width=config["frame_width"],
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+            stroke_color=BACKGROUND_COLOR,
+        )
+        cutout = Cutout(
+            code_rect,
+            Rectangle(width=config["frame_width"], height=code_group.height)
+            .move_to(code_group)
+            .set_x(0),
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+            stroke_color=BACKGROUND_COLOR,
+        )
+
+        # code.background_mobject.set_z_index(0)
+        full_code_group.set_z_index(-2)
+        cutout.set_z_index(-1)
+
+        # self.add(
+        #     code.background_mobject,
+        #     cutout,
+        # )
+
+        full_code.code.set_opacity(0)
+        full_code.line_numbers.set_opacity(0)
+        # full_code.code[:7].set_opacity(1)
+        # full_code.line_numbers[:7].set_opacity(1)
+
+        # self.play(
+        #     *[Write(m) for m in full_code.code[:7]],
+        #     FadeIn(full_code.line_numbers[:7]),
+        # )
+
+        # self.wait(0.5)
+
+        # # # self.play(code.background_mobject.animate.set_color(WHITE))
+        # line_shift = full_code.code[0].get_y() - full_code.code[4].get_y()
+        # self.play(full_code_group.animate.shift(UP * line_shift))
+
+        # full_code.code[8:10].set_opacity(1)
+        # full_code.line_numbers[7:10].set_opacity(1)
+        # self.play(
+        #     *[Write(m) for m in full_code.code[8:10]],
+        #     FadeIn(full_code.line_numbers[7:10]),
+        # )
 
         fft_file_label = Tex("FFT.ipynb")
         fft_file_box = SurroundingRectangle(
@@ -6722,7 +6771,7 @@ N = fs * stop_time
 
         time_ax_copy = Group(time_ax, x_n_label).copy().to_edge(UP, buff=MED_LARGE_BUFF)
         to_code_p1 = time_ax_copy.get_corner(DL) + [0, -0.1, 0]
-        to_code_p2 = blank_code.get_left() + [-0.1, 0, 0]
+        to_code_p2 = full_code.get_left() + [-0.1, 0, 0]
         to_code_bez = CubicBezier(
             to_code_p1,
             to_code_p1 + [-0.5, -1, 0],
@@ -6732,7 +6781,7 @@ N = fs * stop_time
 
         f_ax_copy = Group(f_ax, X_k_label).copy().to_edge(UP, buff=MED_LARGE_BUFF)
         from_code_p2 = f_ax_copy.get_corner(DR) + [0, -0.1, 0]
-        from_code_p1 = blank_code.get_right() + [0.1, 0, 0]
+        from_code_p1 = full_code.get_right() + [0.1, 0, 0]
         from_code_bez = CubicBezier(
             from_code_p1,
             from_code_p1 + [1, 0, 0],
@@ -6744,7 +6793,7 @@ N = fs * stop_time
             LaggedStart(
                 AnimationGroup(
                     Group(*self.mobjects).animate.to_edge(UP, buff=MED_LARGE_BUFF),
-                    GrowFromCenter(blank_code.background_mobject),
+                    GrowFromCenter(code.background_mobject),
                 ),
                 Create(to_code_bez),
                 Create(from_code_bez),
@@ -6754,24 +6803,24 @@ N = fs * stop_time
 
         self.wait(0.5)
 
+        self.play(Uncreate(X_k_plot), Uncreate(f_samples), FadeOut(X_k_label, shift=UP))
+
+        self.wait(0.5)
+
         time_labels = [Tex(tt).move_to(time_ax.c2p(tt / 4, 0)) for tt in [1, 2, 3, 4]]
 
-        line_4 = (
-            blank_code.code[4].copy().move_to(blank_code.code[0], aligned_edge=LEFT)
-        )
-        line_5 = (
-            blank_code.code[5].copy().move_to(blank_code.code[1], aligned_edge=LEFT)
-        )
-        line_6 = (
-            blank_code.code[6].copy().move_to(blank_code.code[2], aligned_edge=LEFT)
-        )
+        full_code.code[:7].set_opacity(1)
+        full_code.line_numbers[:7].set_opacity(1)
+        line_4 = full_code.code[4].copy().move_to(full_code.code[0], aligned_edge=LEFT)
+        line_5 = full_code.code[5].copy().move_to(full_code.code[1], aligned_edge=LEFT)
+        line_6 = full_code.code[6].copy().move_to(full_code.code[2], aligned_edge=LEFT)
         self.play(
             LaggedStart(
                 *[
                     Succession(GrowFromCenter(tl), tl.animate.shift(DOWN))
                     for tl in time_labels
                 ],
-                lag_ratio=0.3,
+                lag_ratio=0.2,
             )
         )
 
@@ -6781,7 +6830,7 @@ N = fs * stop_time
             LaggedStart(
                 AnimationGroup(
                     Write(line_4[:-1]),
-                    FadeIn(blank_code.line_numbers[0]),
+                    FadeIn(full_code.line_numbers[0]),
                 ),
                 TransformFromCopy(time_labels[-1], line_4[-1]),
                 lag_ratio=0.5,
@@ -6792,14 +6841,14 @@ N = fs * stop_time
 
         self.play(
             Write(line_5),
-            FadeIn(blank_code.line_numbers[1]),
+            FadeIn(full_code.line_numbers[1]),
         )
 
         self.wait(0.5)
 
         self.play(
             Write(line_6),
-            FadeIn(blank_code.line_numbers[2]),
+            FadeIn(full_code.line_numbers[2]),
         )
 
         self.wait(0.2)
@@ -6810,15 +6859,15 @@ N = fs * stop_time
         self.play(
             LaggedStart(
                 AnimationGroup(
-                    line_4.animate.move_to(blank_code.code[4], aligned_edge=LEFT),
-                    line_5.animate.move_to(blank_code.code[5], aligned_edge=LEFT),
-                    line_6.animate.move_to(blank_code.code[6], aligned_edge=LEFT),
-                    FadeIn(blank_code.line_numbers[2:7]),
+                    line_4.animate.move_to(full_code.code[4], aligned_edge=LEFT),
+                    line_5.animate.move_to(full_code.code[5], aligned_edge=LEFT),
+                    line_6.animate.move_to(full_code.code[6], aligned_edge=LEFT),
+                    FadeIn(full_code.line_numbers[3:7]),
                 ),
                 AnimationGroup(
-                    Write(blank_code.code[0]),
-                    Write(blank_code.code[1]),
-                    Write(blank_code.code[2]),
+                    Write(full_code.code[0]),
+                    Write(full_code.code[1]),
+                    Write(full_code.code[2]),
                 ),
                 lag_ratio=0.5,
             )
@@ -6831,6 +6880,55 @@ N = fs * stop_time
         self.wait(0.5)
 
         self.play(FadeOut(fft_file_popup, shift=DOWN))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        line_shift = full_code.code[0].get_y() - full_code.code[4].get_y()
+        self.play(full_code_group.animate.shift(UP * line_shift))
+
+        full_code.code[8:10].set_opacity(1)
+        full_code.line_numbers[7:10].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[8:10]],
+            FadeIn(full_code.line_numbers[7:10]),
+        )
+
+        self.wait(0.5)
+
+        code_output_time_ax = Axes(
+            x_range=[0, stop_time, stop_time / 4],
+            y_range=[0, 1, 0.25],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).move_to(f_ax)
+        code_output_time_ax_label = code_output_time_ax.get_axis_labels(
+            Tex("$t$"), Tex("")
+        )
+        window_label = Text(
+            "window", font="monospace", font_size=DEFAULT_FONT_SIZE * 0.7
+        ).next_to(code_output_time_ax, direction=UP, buff=MED_SMALL_BUFF)
+        comma = Text(",", font="monospace", font_size=DEFAULT_FONT_SIZE * 0.7).next_to(
+            code_output_time_ax, direction=UP, buff=MED_SMALL_BUFF
+        )
+        x_n_windowed_label = Text(
+            "x_n_windowed", font="monospace", font_size=DEFAULT_FONT_SIZE * 0.7
+        ).next_to(code_output_time_ax, direction=UP, buff=MED_SMALL_BUFF)
+
+        blackman_window = signal.windows.blackman(N)
+        window_plot = code_output_time_ax.plot_line_graph(
+            t, blackman_window, line_color=PURPLE_B, add_vertex_dots=False
+        )
+
+        self.play(
+            ReplacementTransform(f_ax, code_output_time_ax),
+            ReplacementTransform(f_ax_label, code_output_time_ax_label),
+        )
+        self.play(FadeIn(window_label, shift=DOWN), Create(window_plot))
 
         self.wait(2)
 
@@ -7463,5 +7561,93 @@ class AxesShifting(Scene):
         self.play(f.animate.increment_value(-2))
 
         self.wait(0.5)
+
+        self.wait(2)
+
+
+class ScrollCode(Scene):
+    def construct(self):
+        full_code = Code(
+            "./fft_implementations/full_fft_code.py",
+            background="window",
+            background_stroke_color=WHITE,
+            language="Python",
+            insert_line_no=True,
+            style="paraiso-dark",
+            margin=(0.3, 0.4),
+            fill_opacity=0,
+        )
+        code = Code(
+            "./fft_implementations/fft_code.py",
+            background="window",
+            background_stroke_color=WHITE,
+            language="Python",
+            insert_line_no=True,
+            style="paraiso-dark",
+            margin=(0.3, 0.4),
+            fill_opacity=0,
+        )
+        for ln in full_code.line_numbers:
+            ln.set_color(WHITE)
+
+        code_group = VGroup(code.code, code.line_numbers)
+        code_group.move_to(code.background_mobject)
+        full_code_group = (
+            VGroup(full_code.code, full_code.line_numbers).move_to(
+                code_group, aligned_edge=UL
+            )
+            # .shift(LEFT / 2)
+        )
+
+        rect = Rectangle(
+            height=config["frame_height"],
+            width=config["frame_width"],
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+            stroke_color=BACKGROUND_COLOR,
+        )
+        cutout = Cutout(
+            rect,
+            # SurroundingRectangle(code_group),
+            Rectangle(width=config["frame_width"], height=code_group.height)
+            .move_to(code_group)
+            .set_x(0),
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+            stroke_color=BACKGROUND_COLOR,
+        )
+
+        code.background_mobject.set_z_index(2)
+        full_code_group.set_z_index(0)
+        cutout.set_z_index(1)
+
+        self.add(
+            code.background_mobject,
+            # full_code_group,
+            cutout,
+        )
+
+        full_code.code.set_opacity(0)
+        full_code.line_numbers.set_opacity(0)
+        full_code.code[:7].set_opacity(1)
+        full_code.line_numbers[:7].set_opacity(1)
+
+        self.play(
+            *[Write(m) for m in full_code.code[:7]],
+            FadeIn(full_code.line_numbers[:7]),
+        )
+
+        self.wait(0.5)
+
+        # # self.play(code.background_mobject.animate.set_color(WHITE))
+        line_shift = full_code.code[0].get_y() - full_code.code[4].get_y()
+        self.play(full_code_group.animate.shift(UP * line_shift))
+
+        full_code.code[8:10].set_opacity(1)
+        full_code.line_numbers[7:10].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[8:10]],
+            FadeIn(full_code.line_numbers[7:10]),
+        )
 
         self.wait(2)
