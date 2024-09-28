@@ -10,7 +10,7 @@ from typing import Iterable, Union
 import numpy as np
 from manim import *
 from numpy.fft import fft, fftshift
-from scipy import constants, signal
+from scipy import constants, signal, interpolate
 from skrf import Frequency, Network
 
 warnings.filterwarnings("ignore")
@@ -26,7 +26,7 @@ from props import (
     get_diode,
     get_resistor,
 )
-from props.style import AUREOLIN, CITRINE, PIGMENT_GREEN
+from props.style import AUREOLIN, CITRINE, PIGMENT_GREEN, LIGHT_GREEN
 
 BACKGROUND_COLOR = ManimColor.from_hex("#183340")
 config.background_color = BACKGROUND_COLOR
@@ -46,7 +46,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -371,7 +371,7 @@ def play_timeline(scene: Scene, timeline):
 
 class Intro(Scene):
     def construct(self):
-        self.next_section(skip_animations=True)
+        self.next_section(skip_animations=skip_animations(True))
         fmcw = FMCWRadarCartoon()
 
         carrier_freq = 10
@@ -6695,7 +6695,10 @@ class FFT(Scene):
         )
         cutout = Cutout(
             code_rect,
-            Rectangle(width=config["frame_width"], height=code_group.height)
+            Rectangle(
+                width=config["frame_width"],
+                height=(code.code[0].get_top() - code.code[-1].get_bottom())[1] * 1.05,
+            )
             .move_to(code_group)
             .set_x(0),
             fill_opacity=1,
@@ -6703,37 +6706,11 @@ class FFT(Scene):
             stroke_color=BACKGROUND_COLOR,
         )
 
-        # code.background_mobject.set_z_index(0)
         full_code_group.set_z_index(-2)
         cutout.set_z_index(-1)
 
-        # self.add(
-        #     code.background_mobject,
-        #     cutout,
-        # )
-
         full_code.code.set_opacity(0)
         full_code.line_numbers.set_opacity(0)
-        # full_code.code[:7].set_opacity(1)
-        # full_code.line_numbers[:7].set_opacity(1)
-
-        # self.play(
-        #     *[Write(m) for m in full_code.code[:7]],
-        #     FadeIn(full_code.line_numbers[:7]),
-        # )
-
-        # self.wait(0.5)
-
-        # # # self.play(code.background_mobject.animate.set_color(WHITE))
-        # line_shift = full_code.code[0].get_y() - full_code.code[4].get_y()
-        # self.play(full_code_group.animate.shift(UP * line_shift))
-
-        # full_code.code[8:10].set_opacity(1)
-        # full_code.line_numbers[7:10].set_opacity(1)
-        # self.play(
-        #     *[Write(m) for m in full_code.code[8:10]],
-        #     FadeIn(full_code.line_numbers[7:10]),
-        # )
 
         fft_file_label = Tex("FFT.ipynb")
         fft_file_box = SurroundingRectangle(
@@ -6746,7 +6723,7 @@ class FFT(Scene):
         )
         fft_file_popup = VGroup(fft_file_box, fft_file_label).to_corner(DR)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -6771,7 +6748,7 @@ class FFT(Scene):
 
         time_ax_copy = Group(time_ax, x_n_label).copy().to_edge(UP, buff=MED_LARGE_BUFF)
         to_code_p1 = time_ax_copy.get_corner(DL) + [0, -0.1, 0]
-        to_code_p2 = full_code.get_left() + [-0.1, 0, 0]
+        to_code_p2 = code.get_left() + [-0.1, 0, 0]
         to_code_bez = CubicBezier(
             to_code_p1,
             to_code_p1 + [-0.5, -1, 0],
@@ -6781,7 +6758,7 @@ class FFT(Scene):
 
         f_ax_copy = Group(f_ax, X_k_label).copy().to_edge(UP, buff=MED_LARGE_BUFF)
         from_code_p2 = f_ax_copy.get_corner(DR) + [0, -0.1, 0]
-        from_code_p1 = full_code.get_right() + [0.1, 0, 0]
+        from_code_p1 = code.get_right() + [0.1, 0, 0]
         from_code_bez = CubicBezier(
             from_code_p1,
             from_code_p1 + [1, 0, 0],
@@ -6800,12 +6777,19 @@ class FFT(Scene):
                 lag_ratio=0.5,
             ),
         )
+        self.add(cutout)
 
         self.wait(0.5)
 
         self.play(Uncreate(X_k_plot), Uncreate(f_samples), FadeOut(X_k_label, shift=UP))
 
         self.wait(0.5)
+
+        full_code_group.set_z_index(-2)
+        cutout.set_z_index(-1)
+
+        full_code.code.set_opacity(0)
+        full_code.line_numbers.set_opacity(0)
 
         time_labels = [Tex(tt).move_to(time_ax.c2p(tt / 4, 0)) for tt in [1, 2, 3, 4]]
 
@@ -6827,14 +6811,9 @@ class FFT(Scene):
         self.wait(0.2)
 
         self.play(
-            LaggedStart(
-                AnimationGroup(
-                    Write(line_4[:-1]),
-                    FadeIn(full_code.line_numbers[0]),
-                ),
-                TransformFromCopy(time_labels[-1], line_4[-1]),
-                lag_ratio=0.5,
-            ),
+            Write(line_4[:-1]),
+            FadeIn(full_code.line_numbers[0]),
+            TransformFromCopy(time_labels[-1], line_4[-1]),
         )
 
         self.wait(0.2)
@@ -6854,23 +6833,22 @@ class FFT(Scene):
         self.wait(0.2)
         self.play(Indicate(n_samples))
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
-            LaggedStart(
-                AnimationGroup(
-                    line_4.animate.move_to(full_code.code[4], aligned_edge=LEFT),
-                    line_5.animate.move_to(full_code.code[5], aligned_edge=LEFT),
-                    line_6.animate.move_to(full_code.code[6], aligned_edge=LEFT),
-                    FadeIn(full_code.line_numbers[3:7]),
-                ),
-                AnimationGroup(
-                    Write(full_code.code[0]),
-                    Write(full_code.code[1]),
-                    Write(full_code.code[2]),
-                ),
-                lag_ratio=0.5,
-            )
+            ReplacementTransform(line_4, full_code.code[4]),
+            ReplacementTransform(line_5, full_code.code[5]),
+            ReplacementTransform(line_6, full_code.code[6]),
+            # line_4.animate.move_to(full_code.code[4], aligned_edge=LEFT),
+            # line_5.animate.move_to(full_code.code[5], aligned_edge=LEFT),
+            # line_6.animate.move_to(full_code.code[6], aligned_edge=LEFT),
+            FadeIn(full_code.line_numbers[3:7]),
+        )
+        self.play(
+            Write(full_code.code[0]),
+            Write(full_code.code[1]),
+            Write(full_code.code[2]),
         )
 
         self.wait(0.5)
@@ -6897,8 +6875,8 @@ class FFT(Scene):
         self.wait(0.5)
 
         code_output_time_ax = Axes(
-            x_range=[0, stop_time, stop_time / 4],
-            y_range=[0, 1, 0.25],
+            x_range=[0, duration, duration / 4],
+            y_range=[-1.2, 1.2, 0.5],
             tips=False,
             axis_config={
                 "include_numbers": False,
@@ -6907,21 +6885,40 @@ class FFT(Scene):
             y_length=y_len,
         ).move_to(f_ax)
         code_output_time_ax_label = code_output_time_ax.get_axis_labels(
-            Tex("$t$"), Tex("")
+            Tex("$n$"), Tex("")
         )
-        window_label = Text(
-            "window", font="monospace", font_size=DEFAULT_FONT_SIZE * 0.7
-        ).next_to(code_output_time_ax, direction=UP, buff=MED_SMALL_BUFF)
-        comma = Text(",", font="monospace", font_size=DEFAULT_FONT_SIZE * 0.7).next_to(
+        window_color = LIGHT_GREEN
+        window_label = Tex("window", color=window_color).next_to(
             code_output_time_ax, direction=UP, buff=MED_SMALL_BUFF
         )
-        x_n_windowed_label = Text(
-            "x_n_windowed", font="monospace", font_size=DEFAULT_FONT_SIZE * 0.7
+        x_n_windowed_label = Tex(
+            "window",
+            ", ",
+            r"$x[n]_{\text{windowed}}$",
         ).next_to(code_output_time_ax, direction=UP, buff=MED_SMALL_BUFF)
+        x_n_windowed_label[0].set_color(window_color)
+        x_n_windowed_label[2].set_color(IF_COLOR)
 
-        blackman_window = signal.windows.blackman(N)
-        window_plot = code_output_time_ax.plot_line_graph(
-            t, blackman_window, line_color=PURPLE_B, add_vertex_dots=False
+        t_vis = np.linspace(0, 1, fs)
+        computed_window = signal.windows.blackman(t_vis.size)
+        f_window = interpolate.interp1d(t_vis, computed_window)
+
+        blackman_window = signal.windows.blackman(t_vis.size)
+        window_plot = code_output_time_ax.plot(
+            f_window, color=window_color, use_smoothing=False
+        )
+
+        x_n_windowed_plot = code_output_time_ax.plot(
+            lambda t: (
+                np.sin(2 * PI * f1 * t)
+                + np.sin(2 * PI * f2 * t)
+                + normalvariate(mu=0, sigma=noise_sigma)
+                + np.sin(2 * PI * f_clutter * t)
+            )
+            * f_window(t)
+            / 3.2,
+            use_smoothing=True,
+            color=IF_COLOR,
         )
 
         self.play(
@@ -6929,6 +6926,14 @@ class FFT(Scene):
             ReplacementTransform(f_ax_label, code_output_time_ax_label),
         )
         self.play(FadeIn(window_label, shift=DOWN), Create(window_plot))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformFromCopy(x_n_plot, x_n_windowed_plot),
+            ReplacementTransform(window_label, x_n_windowed_label[0]),
+            Write(x_n_windowed_label[1:]),
+        )
 
         self.wait(2)
 
@@ -7617,9 +7622,9 @@ class ScrollCode(Scene):
             stroke_color=BACKGROUND_COLOR,
         )
 
-        code.background_mobject.set_z_index(2)
-        full_code_group.set_z_index(0)
-        cutout.set_z_index(1)
+        # code.background_mobject.set_z_index(2)
+        full_code_group.set_z_index(-2)
+        cutout.set_z_index(-1)
 
         self.add(
             code.background_mobject,
