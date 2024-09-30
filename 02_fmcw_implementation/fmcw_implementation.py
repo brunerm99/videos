@@ -2778,7 +2778,7 @@ class MixerIntro(MovingCameraScene):
 
         f_beat = MathTex(r"f_{beat}").next_to(reference_tx_label, buff=MED_LARGE_BUFF)
         qmark = Tex("?", color=YELLOW).next_to(f_beat, buff=SMALL_BUFF)
-        f_beat_eqn = MathTex(r"f_{beat}", r"= f_{RX} - f_{TX}").next_to(
+        f_beat_eqn = MathTex(r"f_{beat}", r"= f_{TX} - f_{RX}").next_to(
             reference_tx_label, buff=MED_LARGE_BUFF
         )
 
@@ -4582,7 +4582,6 @@ class MixerProducts(MovingCameraScene):
 
         # self.remove(lp_filter_plot)
         # all_except_filter_section.remove(lp_filter_plot)
-        # TODO: Figure out how to fade these back in without filling plots
         self.play(
             LaggedStart(
                 AnimationGroup(
@@ -5851,6 +5850,8 @@ class Disclaimer(Scene):
         self.wait(2)
 
 
+# TODO:
+#   - Interleave the animations of the cartoon reflections and showing the plots
 class IFSignalComponents(Scene):
     def construct(self):
         seed(1)
@@ -6054,38 +6055,66 @@ class IFSignalComponents(Scene):
 
         self.play(
             LaggedStart(
+                radar.get_animation(),
                 AnimationGroup(
-                    Create(time_ax), FadeIn(time_ax_label), radar.get_animation()
+                    Create(time_ax),
+                    FadeIn(time_ax_label),
                 ),
                 AnimationGroup(
-                    Create(beat_signal_1), Create(target_1), FadeIn(target_1_label)
+                    Create(radar_beam_l),
+                    Create(radar_beam_r),
                 ),
-                AnimationGroup(
-                    FadeIn(signal_eqn), Create(radar_beam_l), Create(radar_beam_r)
-                ),
-                GrowArrow(target_1_reflection),
                 lag_ratio=0.5,
             )
         )
+        self.play(Create(target_1), FadeIn(target_1_label))
+        self.play(GrowArrow(target_1_reflection))
+        self.play(Create(beat_signal_1), FadeIn(signal_eqn))
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(
+        #             Create(time_ax), FadeIn(time_ax_label), radar.get_animation()
+        #         ),
+        #         AnimationGroup(
+        #             Create(beat_signal_1), Create(target_1), FadeIn(target_1_label)
+        #         ),
+        #         AnimationGroup(
+        #             FadeIn(signal_eqn), Create(radar_beam_l), Create(radar_beam_r)
+        #         ),
+        #         GrowArrow(target_1_reflection),
+        #         lag_ratio=0.5,
+        #     )
+        # )
 
         self.wait(0.5)
 
+        self.play(Create(target_2), FadeIn(target_2_label))
+        self.play(GrowArrow(target_2_reflection))
         self.play(
-            LaggedStart(
-                AnimationGroup(
-                    Create(beat_signal_2), Create(target_2), FadeIn(target_2_label)
+            Create(beat_signal_2),
+            FadeIn(
+                beat_signal_2_eqn.next_to(
+                    beat_signal_2, direction=RIGHT, buff=LARGE_BUFF
                 ),
-                AnimationGroup(
-                    FadeIn(
-                        beat_signal_2_eqn.next_to(
-                            beat_signal_2, direction=RIGHT, buff=LARGE_BUFF
-                        ),
-                    ),
-                    GrowArrow(target_2_reflection),
-                ),
-                lag_ratio=0.5,
-            )
+            ),
         )
+
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(
+        #             Create(beat_signal_2), Create(target_2), FadeIn(target_2_label)
+        #         ),
+        #         AnimationGroup(
+        #             FadeIn(
+        #                 beat_signal_2_eqn.next_to(
+        #                     beat_signal_2, direction=RIGHT, buff=LARGE_BUFF
+        #                 ),
+        #             ),
+        #             GrowArrow(target_2_reflection),
+        #         ),
+        #         lag_ratio=0.5,
+        #     )
+        # )
 
         self.wait(0.5)
 
@@ -6119,20 +6148,31 @@ class IFSignalComponents(Scene):
 
         self.wait(0.5)
 
+        self.play(Create(ground_clutter))
+        self.play(GrowArrow(ground_clutter_reflection))
         self.play(
-            LaggedStart(
-                AnimationGroup(Create(beat_signal_clutter), Create(ground_clutter)),
-                AnimationGroup(
-                    FadeIn(
-                        beat_signal_clutter_eqn.next_to(
-                            beat_signal_clutter, direction=RIGHT, buff=LARGE_BUFF
-                        )
-                    ),
-                    GrowArrow(ground_clutter_reflection),
+            Create(beat_signal_clutter),
+            FadeIn(
+                beat_signal_clutter_eqn.next_to(
+                    beat_signal_clutter, direction=RIGHT, buff=LARGE_BUFF
                 ),
-                lag_ratio=0.5,
-            )
+            ),
         )
+
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(Create(beat_signal_clutter), Create(ground_clutter)),
+        #         AnimationGroup(
+        #             FadeIn(
+        #                 beat_signal_clutter_eqn.next_to(
+        #                     beat_signal_clutter, direction=RIGHT, buff=LARGE_BUFF
+        #                 )
+        #             ),
+        #             GrowArrow(ground_clutter_reflection),
+        #         ),
+        #         lag_ratio=0.5,
+        #     )
+        # )
 
         self.wait(0.5)
 
@@ -6220,7 +6260,7 @@ class IFSignalComponents(Scene):
         )
 
         X_k_plot = f_ax.plot_line_graph(
-            freq, X_k, line_color=TX_COLOR, add_vertex_dots=False
+            freq, X_k, line_color=IF_COLOR, add_vertex_dots=False
         )
 
         f_ax_group = (
@@ -6287,10 +6327,11 @@ class IFSignalComponents(Scene):
 
         self.wait(0.5)
 
+        num_samples = 20
         samples = time_ax.get_vertical_lines_to_graph(
             beat_signals_w_noise_clutter,
             x_range=[0, duration],
-            num_lines=30,
+            num_lines=num_samples,
             color=BLUE,
         )
 
@@ -6373,12 +6414,43 @@ class IFSignalComponents(Scene):
 
         self.wait(0.5)
 
+        # TODO: Add X[k] samples and label, switch t->n
         self.play(
             Transform(fft_mystery_label, fft_label),
             Transform(fft_mystery_box, fft_box),
             Transform(to_fft_mystery_box_bez, to_fft_box_bez),
             Transform(from_fft_mystery_box_bez, from_fft_box_bez),
-            FadeIn(x_n_label),
+            FadeIn(x_n_label, shift=DOWN),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            signal_eqn[1].animate.set_color(WHITE),
+            Uncreate(beat_signal_1_vline),
+            beat_signal_2_eqn.animate.set_color(WHITE),
+            Uncreate(beat_signal_2_vline),
+            beat_signal_clutter_eqn.animate.set_color(WHITE),
+            Uncreate(clutter_vline),
+        )
+
+        self.wait(0.5)
+
+        freq_samples = freq[:: freq.size // num_samples]
+        X_k_samples = X_k[:: freq.size // num_samples]
+        f_samples = VGroup()
+        for x, y in zip(freq_samples, X_k_samples):
+            f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
+
+        X_k_label = MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
+        f_ax_k_label = f_ax.get_axis_labels(Tex("$k$"), Tex(""))
+
+        self.play(
+            FadeIn(X_k_label, shift=DOWN),
+            Create(f_samples),
+            FadeOut(f_ax_label[1]),
+            FadeOut(f_ax_label[0], shift=DOWN),
+            FadeIn(f_ax_k_label[0], shift=DOWN),
         )
 
         self.next_section(skip_animations=skip_animations(False))
@@ -6390,22 +6462,20 @@ class IFSignalComponents(Scene):
             Uncreate(from_fft_mystery_box_bez),
             Uncreate(samples),
             *[Uncreate(m) for m in time_ax_group.remove(time_ax_label)],
-            *[Uncreate(m) for m in f_ax_group],
-            Uncreate(beat_signal_1_vline),
-            Uncreate(beat_signal_2_vline),
-            Uncreate(clutter_vline),
-            FadeOut(x_n_label, signal_eqn_group, n_ax_label),
-            fft_mystery_label.animate.next_to(ORIGIN, direction=RIGHT, buff=LARGE_BUFF),
+            *[Uncreate(m) for m in f_ax_group.remove(f_ax_label)],
+            FadeOut(
+                x_n_label,
+                signal_eqn_group,
+                n_ax_label,
+                fft_mystery_label,
+                X_k_label,
+                f_ax_k_label,
+            ),
+            Uncreate(f_samples),
             run_time=1.5,
         )
 
         self.wait(2)
-
-        # self.add(
-        #     range_eqn,
-        #     tex_labels,
-        #     range_eqn.copy().next_to(range_eqn, direction=DOWN, buff=LARGE_BUFF),
-        # )
 
 
 class FFTImplementations(Scene):
@@ -6551,7 +6621,7 @@ class FFT(Scene):
             x_length=x_len,
             y_length=y_len,
         )
-        f_ax_label = f_ax.get_axis_labels(Tex("$f$"), Tex(""))
+        f_ax_label = f_ax.get_axis_labels(Tex("$k$"), Tex(""))
         X_k_label = MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
 
         f1 = 1.5
@@ -6578,12 +6648,22 @@ class FFT(Scene):
             color=BLUE,
         )
 
-        def get_fft_values(x_n, fs, stop_time, fft_len=2**18, f_max=20, y_min=None):
+        def get_fft_values(
+            x_n, fs, stop_time, fft_len=2**18, f_max=20, y_min=None, stage=4
+        ):
             N = stop_time * fs
 
-            X_k = fft(x_n, fft_len) / (N / 2)
-            X_k = 10 * np.log10(fftshift(X_k))
-            X_k -= X_k.max()
+            X_k = fftshift(fft(x_n, fft_len))
+            if stage > 1:
+                X_k /= N / 2
+            if stage > 2:
+                X_k = np.abs(X_k)
+            if stage > 3:
+                X_k = 10 * np.log10(X_k)
+
+            # X_k = fft(x_n, fft_len) / (N / 2)
+            # X_k = 10 * np.log10(fftshift(X_k))
+            # X_k -= X_k.max()
 
             freq = np.linspace(-fs / 2, fs / 2, fft_len)
 
@@ -6670,7 +6750,7 @@ class FFT(Scene):
             language="Python",
             insert_line_no=True,
             style="paraiso-dark",
-            margin=(0.3, 0.4),
+            margin=(1.2, 0.4),
             fill_opacity=0,
         )
         for ln in full_code.line_numbers:
@@ -6678,7 +6758,7 @@ class FFT(Scene):
 
         code.to_edge(DOWN, buff=MED_SMALL_BUFF)
         code_group = VGroup(code.code, code.line_numbers)
-        code_group.move_to(code.background_mobject)
+        code_group.move_to(code.background_mobject).shift(LEFT * 0.8)
         full_code_group = (
             VGroup(full_code.code, full_code.line_numbers).move_to(
                 code_group, aligned_edge=UL
@@ -6859,7 +6939,7 @@ class FFT(Scene):
 
         self.play(FadeOut(fft_file_popup, shift=DOWN))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         line_shift = full_code.code[0].get_y() - full_code.code[4].get_y()
@@ -6921,9 +7001,11 @@ class FFT(Scene):
             color=IF_COLOR,
         )
 
+        f_ax.save_state()
+        f_ax_label.save_state()
         self.play(
-            ReplacementTransform(f_ax, code_output_time_ax),
-            ReplacementTransform(f_ax_label, code_output_time_ax_label),
+            Transform(f_ax, code_output_time_ax),
+            Transform(f_ax_label, code_output_time_ax_label),
         )
         self.play(FadeIn(window_label, shift=DOWN), Create(window_plot))
 
@@ -6934,6 +7016,177 @@ class FFT(Scene):
             ReplacementTransform(window_label, x_n_windowed_label[0]),
             Write(x_n_windowed_label[1:]),
         )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        line_shift = UP * (full_code.code[0].get_y() - full_code.code[1].get_y()) * 7
+        self.play(full_code_group.animate.shift(line_shift))
+        # self.play(FadeOut(full_code.code[:9], full_code.line_numbers[:9]))
+
+        full_code.code[11:13].set_opacity(1)
+        full_code.line_numbers[11:13].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[11:13]],
+            FadeIn(full_code.line_numbers[10:13]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(window_plot),
+            Uncreate(x_n_windowed_plot),
+            FadeOut(x_n_windowed_label, shift=UP),
+        )
+
+        freq, X_k_1 = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_max=f_max,
+            y_min=y_min,
+            stage=1,
+        )
+        freq, X_k_2 = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_max=f_max,
+            y_min=y_min,
+            stage=2,
+        )
+        freq, X_k_3 = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_max=f_max,
+            y_min=y_min,
+            stage=3,
+        )
+        freq, X_k_4 = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_max=f_max,
+            y_min=y_min,
+            stage=4,
+        )
+        f_ax_1 = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[X_k_1.min(), X_k_1.max(), (X_k_1.max() - X_k_1.min()) / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).move_to(f_ax)
+        X_k_1_plot = f_ax_1.plot_line_graph(
+            freq, X_k_1, line_color=IF_COLOR, add_vertex_dots=False
+        )
+        f_ax_2 = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[X_k_2.min(), X_k_2.max(), (X_k_2.max() - X_k_2.min()) / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).move_to(f_ax)
+        X_k_2_plot = f_ax_2.plot_line_graph(
+            freq, X_k_2, line_color=IF_COLOR, add_vertex_dots=False
+        )
+        f_ax_3 = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[X_k_3.min(), X_k_3.max(), (X_k_3.max() - X_k_3.min()) / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).move_to(f_ax)
+        X_k_3_plot = f_ax_3.plot_line_graph(
+            freq, X_k_3, line_color=IF_COLOR, add_vertex_dots=False
+        )
+        f_ax_4 = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[X_k_4.min(), X_k_4.max(), (X_k_4.max() - X_k_4.min()) / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).move_to(f_ax)
+        X_k_4_plot = f_ax_4.plot_line_graph(
+            freq, X_k_4, line_color=IF_COLOR, add_vertex_dots=False
+        )
+
+        self.play(Transform(f_ax, f_ax_1), f_ax_label.animate.restore())
+        self.play(Create(X_k_1_plot))
+
+        self.wait(0.5)
+
+        full_code.code[13:14].set_opacity(1)
+        full_code.line_numbers[13:14].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[13:14]],
+            FadeIn(full_code.line_numbers[13:14]),
+        )
+        self.play(
+            Transform(X_k_1_plot, X_k_2_plot),
+            Transform(f_ax, f_ax_2),
+        )
+
+        self.wait(0.5)
+
+        full_code.code[14:15].set_opacity(1)
+        full_code.line_numbers[14:15].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[14:15]],
+            FadeIn(full_code.line_numbers[14:15]),
+        )
+        self.play(
+            Transform(X_k_1_plot, X_k_3_plot),
+            Transform(f_ax, f_ax_3),
+        )
+
+        self.wait(0.5)
+
+        full_code.code[15:16].set_opacity(1)
+        full_code.line_numbers[15:16].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[15:16]],
+            FadeIn(full_code.line_numbers[15:16]),
+        )
+        self.play(
+            Transform(X_k_1_plot, X_k_4_plot),
+            Transform(f_ax, f_ax_4),
+        )
+
+        self.wait(0.5)
+
+        full_code.code[17:18].set_opacity(1)
+        full_code.line_numbers[16:18].set_opacity(1)
+        self.play(
+            *[Write(m) for m in full_code.code[17:18]],
+            FadeIn(full_code.line_numbers[16:18]),
+        )
+
+        self.wait(0.5)
+
+        self.play(Indicate(x_n_label))
+
+        self.wait(0.5)
+
+        X_k_label = MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
+        self.play(FadeIn(X_k_label, shift=DOWN))
 
         self.wait(2)
 
@@ -7656,3 +7909,10 @@ class ScrollCode(Scene):
         )
 
         self.wait(2)
+
+
+""" Thumbnail """
+
+
+class Thumbnail(Scene):
+    def construct(self): ...

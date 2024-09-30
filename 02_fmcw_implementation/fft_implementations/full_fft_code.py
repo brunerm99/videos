@@ -10,8 +10,9 @@ window = signal.windows.blackman(N)
 x_n_windowed = x_n * window
 
 fft_len = 1024 * 10
-
-X_k = np.abs(fft(x_n_windowed, fft_len) / (N / 2))
-X_k = 10 * np.log10(fftshift(X_k))
+X_k = fftshift(fft(x_n_windowed, fft_len))
+X_k /= N / 2
+X_k = np.abs(X_k)
+X_k = 10 * np.log10(X_k)
 
 freq = np.linspace(-fs / 2, fs / 2, fft_len)
