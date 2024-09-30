@@ -46,11 +46,44 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+def get_fft_values(
+    x_n,
+    fs,
+    stop_time,
+    fft_len=2**18,
+    f_min=0,
+    f_max=20,
+    y_min=None,
+    stage=4,
+):
+    N = stop_time * fs
+
+    X_k = fftshift(fft(x_n, fft_len))
+    if stage > 1:
+        X_k /= N / 2
+    if stage > 2:
+        X_k = np.abs(X_k)
+    if stage > 3:
+        X_k = 10 * np.log10(X_k)
+
+    freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+    indices = np.where((freq > f_min) & (freq < f_max))
+    x_values = freq[indices]
+    y_values = X_k[indices]
+
+    if y_min is not None:
+        y_values += -y_min
+        y_values[y_values < 0] = 0
+
+    return x_values, y_values
 
 
 def get_splitter_ports(splitter):
@@ -5952,25 +5985,6 @@ class IFSignalComponents(Scene):
         )
         f_ax_label = f_ax.get_axis_labels(Tex("$f$"), Tex(r"$\lvert X(f) \rvert$"))
 
-        def get_fft_values(x_n, fs, stop_time, fft_len=2**18, f_max=20, y_min=None):
-            N = stop_time * fs
-
-            X_k = fft(x_n, fft_len) / (N / 2)
-            X_k = 10 * np.log10(fftshift(X_k))
-            X_k -= X_k.max()
-
-            freq = np.linspace(-fs / 2, fs / 2, fft_len)
-
-            indices = np.where((freq > 0) & (freq < f_max))
-            x_values = freq[indices]
-            y_values = X_k[indices]
-
-            if y_min is not None:
-                y_values += -y_min
-                y_values[y_values < 0] = 0
-
-            return x_values, y_values
-
         f1 = 1.5
         f2 = 2.7
         beat_signal_1 = time_ax.plot(lambda t: np.sin(2 * PI * f1 * t), color=IF_COLOR)
@@ -6648,35 +6662,6 @@ class FFT(Scene):
             color=BLUE,
         )
 
-        def get_fft_values(
-            x_n, fs, stop_time, fft_len=2**18, f_max=20, y_min=None, stage=4
-        ):
-            N = stop_time * fs
-
-            X_k = fftshift(fft(x_n, fft_len))
-            if stage > 1:
-                X_k /= N / 2
-            if stage > 2:
-                X_k = np.abs(X_k)
-            if stage > 3:
-                X_k = 10 * np.log10(X_k)
-
-            # X_k = fft(x_n, fft_len) / (N / 2)
-            # X_k = 10 * np.log10(fftshift(X_k))
-            # X_k -= X_k.max()
-
-            freq = np.linspace(-fs / 2, fs / 2, fft_len)
-
-            indices = np.where((freq > 0) & (freq < f_max))
-            x_values = freq[indices]
-            y_values = X_k[indices]
-
-            if y_min is not None:
-                y_values += -y_min
-                y_values[y_values < 0] = 0
-
-            return x_values, y_values
-
         np.random.seed(0)
         noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
 
@@ -6857,7 +6842,6 @@ class FFT(Scene):
                 lag_ratio=0.5,
             ),
         )
-        self.add(cutout)
 
         self.wait(0.5)
 
@@ -6895,6 +6879,8 @@ class FFT(Scene):
             FadeIn(full_code.line_numbers[0]),
             TransformFromCopy(time_labels[-1], line_4[-1]),
         )
+
+        self.add(cutout)
 
         self.wait(0.2)
 
@@ -7017,7 +7003,7 @@ class FFT(Scene):
             Write(x_n_windowed_label[1:]),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         line_shift = UP * (full_code.code[0].get_y() - full_code.code[1].get_y()) * 7
@@ -7183,10 +7169,156 @@ class FFT(Scene):
 
         self.play(Indicate(x_n_label))
 
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        freq_samples = freq[:: freq.size // num_samples]
+        X_k_samples = X_k[:: freq.size // num_samples]
+        f_samples = VGroup()
+        for x, y in zip(freq_samples, X_k_samples):
+            f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
+
+        self.play(Create(f_samples))
+
         self.wait(0.5)
 
         X_k_label = MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
         self.play(FadeIn(X_k_label, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(x_n_label, time_ax_label, *time_labels, f_samples),
+                    Uncreate(time_ax),
+                    Uncreate(x_n_plot),
+                    Uncreate(to_code_bez),
+                    Uncreate(from_code_bez),
+                    Uncreate(n_samples),
+                    Group(
+                        full_code.code.set_z_index(-10),
+                        full_code.line_numbers.set_z_index(-10),
+                        cutout.set_z_index(-5),
+                        code.background_mobject,
+                    ).animate.shift(DOWN * 6),
+                ),
+                Group(X_k_label, f_ax_label, f_ax, X_k_1_plot, f_samples)
+                # .animate.scale_to_fit_width(config["frame_width"] * 0.7)
+                .move_to(ORIGIN),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(2)
+
+
+class Sampling(Scene):
+    def construct(self):
+        f1 = 1.5
+        f2 = 2.7
+        noise_mu = 0
+        noise_sigma = 0.2
+        f_clutter = 3.7
+
+        stop_time = 16
+        fs = 1000
+        N = fs * stop_time
+        t = np.linspace(0, stop_time, N)
+        y_min = -40
+
+        f_min = ValueTracker(0)
+        f_max = ValueTracker(8)
+        x_len = ValueTracker(4.5)
+        y_len = ValueTracker(2.5)
+
+        np.random.seed(0)
+        noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
+        power_norm_1 = -6
+        power_norm_2 = -9
+        power_norm_clutter = 0
+        A_1 = 10 ** (power_norm_1 / 10)
+        A_2 = 10 ** (power_norm_2 / 10)
+        A_clutter = 10 ** (power_norm_clutter / 10)
+
+        x_n = (
+            A_1 * np.sin(2 * PI * f1 * t)
+            + A_2 * np.sin(2 * PI * f2 * t)
+            + A_clutter * np.sin(2 * PI * f_clutter * t)
+            + noise_npi
+        ) / (A_1 + A_2 + A_clutter + noise_sigma)
+
+        blackman_window = signal.windows.blackman(N)
+        x_n_windowed = x_n * blackman_window
+
+        freq, X_k = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_min=f_min.get_value(),
+            f_max=f_max.get_value(),
+            y_min=y_min,
+            stage=4,
+        )
+        f_ax = always_redraw(
+            lambda: Axes(
+                x_range=[
+                    f_min.get_value(),
+                    f_max.get_value(),
+                    (f_max.get_value() - f_min.get_value()) / 4,
+                ],
+                y_range=[X_k.min(), X_k.max(), (X_k.max() - X_k.min()) / 4],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len.get_value(),
+                y_length=y_len.get_value(),
+            )
+        )
+        f_ax_label = always_redraw(lambda: f_ax.get_axis_labels(Tex("$k$"), Tex("")))
+        X_k_label = always_redraw(
+            lambda: MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
+        )
+
+        X_k_plot = always_redraw(
+            lambda: f_ax.plot_line_graph(
+                **dict(
+                    zip(
+                        ("x_values", "y_values"),
+                        get_fft_values(
+                            x_n_windowed,
+                            fs=fs,
+                            stop_time=stop_time,
+                            fft_len=2**18,
+                            f_min=f_min.get_value(),
+                            f_max=f_max.get_value(),
+                            y_min=y_min,
+                            stage=4,
+                        ),
+                    )
+                ),
+                line_color=IF_COLOR,
+                add_vertex_dots=False,
+            )
+        )
+
+        # num_samples = 20
+        # freq_samples = freq[:: freq.size // num_samples]
+        # X_k_samples = X_k[:: freq.size // num_samples]
+        # f_samples = VGroup()
+        # for x, y in zip(freq_samples, X_k_samples):
+        #     f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
+
+        self.add(f_ax, f_ax_label, X_k_label, X_k_plot)
+
+        self.play(x_len.animate.set_value(9.5), y_len.animate.set_value(3.5))
+
+        self.wait(0.5)
+
+        self.play(f_min.animate.set_value(-f_max.get_value()))
 
         self.wait(2)
 
@@ -7907,6 +8039,63 @@ class ScrollCode(Scene):
             *[Write(m) for m in full_code.code[8:10]],
             FadeIn(full_code.line_numbers[7:10]),
         )
+
+        self.wait(2)
+
+
+class XRangeProblem(Scene):
+    def construct(self):
+        f1 = 1.5
+        noise_mu = 0
+        noise_sigma = 0.1
+
+        stop_time = 16
+        fs = 1000
+        N = fs * stop_time
+
+        t_min = ValueTracker(-1)
+        t_max = ValueTracker(1)
+        x_len = ValueTracker(4.5)
+        y_len = ValueTracker(2.5)
+
+        def get_values():
+            t = np.linspace(t_min.get_value(), t_max.get_value(), N)
+            noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+            x_n = (np.sin(2 * PI * f1 * t) + noise_npi) / (1 + noise_sigma)
+            return t, x_n
+
+        ax = always_redraw(
+            lambda: Axes(
+                x_range=[
+                    t_min.get_value(),
+                    t_max.get_value(),
+                    (t_max.get_value() - t_min.get_value()) / 4,
+                ],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len.get_value(),
+                y_length=y_len.get_value(),
+            )
+        )
+
+        plot = always_redraw(
+            lambda: ax.plot_line_graph(
+                **dict(zip(("x_values", "y_values"), get_values())),
+                line_color=ORANGE,
+                add_vertex_dots=False,
+            )
+        )
+
+        self.add(ax, plot)
+
+        self.play(x_len.animate.set_value(9.5), y_len.animate.set_value(3.5))
+
+        # self.wait(0.5)
+
+        # self.play(t_min.animate.set_value(-t_max.get_value()))
 
         self.wait(2)
 
