@@ -7215,11 +7215,14 @@ class FFT(Scene):
 
 class Sampling(Scene):
     def construct(self):
-        f1 = 1.5
-        f2 = 2.7
+        # yes, all of this is very hacky...
+        # but it was taking hours to render on low quality so out with realistic numbers
+        f_scale = 1
+        f1 = 1.5 * f_scale
+        f2 = 2.7 * f_scale
         noise_mu = 0
         noise_sigma = 0.2
-        f_clutter = 3.7
+        f_clutter = 3.7 * f_scale
 
         stop_time = 16
         fs = 1000
@@ -7228,7 +7231,7 @@ class Sampling(Scene):
         y_min = -40
 
         f_min = ValueTracker(0)
-        f_max = ValueTracker(8)
+        f_max = ValueTracker(8 * f_scale)
         x_len = ValueTracker(4.5)
         y_len = ValueTracker(2.5)
 
@@ -7257,17 +7260,35 @@ class Sampling(Scene):
             fs=fs,
             stop_time=stop_time,
             fft_len=2**18,
-            f_min=f_min.get_value(),
-            f_max=f_max.get_value(),
+            f_min=-fs / 2,
+            f_max=fs / 2,
             y_min=y_min,
             stage=4,
         )
-        f_ax = always_redraw(
-            lambda: Axes(
+
+        f_ax = Axes(
+            x_range=[
+                f_min.get_value(),
+                f_max.get_value(),
+                2,
+            ],
+            y_range=[X_k.min(), X_k.max(), (X_k.max() - X_k.min()) / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len.get_value(),
+            y_length=y_len.get_value(),
+        )
+
+        def f_ax_updater(m: Mobject):
+            fmin = f_min.get_value()
+            fmax = f_max.get_value()
+            new_ax = Axes(
                 x_range=[
-                    f_min.get_value(),
-                    f_max.get_value(),
-                    (f_max.get_value() - f_min.get_value()) / 4,
+                    fmin,
+                    fmax,
+                    2,
                 ],
                 y_range=[X_k.min(), X_k.max(), (X_k.max() - X_k.min()) / 4],
                 tips=False,
@@ -7277,32 +7298,24 @@ class Sampling(Scene):
                 x_length=x_len.get_value(),
                 y_length=y_len.get_value(),
             )
-        )
+            ind = (freq > fmin) & (freq < fmax)
+            new_freq = freq[ind]
+            new_X_k = X_k[ind]
+            new_ax.add(
+                new_ax.plot_line_graph(
+                    new_freq,
+                    new_X_k,
+                    line_color=IF_COLOR,
+                    add_vertex_dots=False,
+                )
+            )
+            m.become(new_ax)
+
+        f_ax.add_updater(f_ax_updater)
+
         f_ax_label = always_redraw(lambda: f_ax.get_axis_labels(Tex("$k$"), Tex("")))
         X_k_label = always_redraw(
             lambda: MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
-        )
-
-        X_k_plot = always_redraw(
-            lambda: f_ax.plot_line_graph(
-                **dict(
-                    zip(
-                        ("x_values", "y_values"),
-                        get_fft_values(
-                            x_n_windowed,
-                            fs=fs,
-                            stop_time=stop_time,
-                            fft_len=2**18,
-                            f_min=f_min.get_value(),
-                            f_max=f_max.get_value(),
-                            y_min=y_min,
-                            stage=4,
-                        ),
-                    )
-                ),
-                line_color=IF_COLOR,
-                add_vertex_dots=False,
-            )
         )
 
         # num_samples = 20
@@ -7312,13 +7325,42 @@ class Sampling(Scene):
         # for x, y in zip(freq_samples, X_k_samples):
         #     f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
 
-        self.add(f_ax, f_ax_label, X_k_label, X_k_plot)
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(f_ax, f_ax_label, X_k_label)
 
         self.play(x_len.animate.set_value(9.5), y_len.animate.set_value(3.5))
 
         self.wait(0.5)
 
-        self.play(f_min.animate.set_value(-f_max.get_value()))
+        f_min_disp = -16
+        f_max_disp = 16
+        self.play(
+            f_min.animate.set_value(f_min_disp), f_max.animate.set_value(f_max_disp)
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        tick_labels_x = [f_min_disp, f_min_disp / 2, 0, f_max_disp / 2, f_max_disp]
+        tick_labels_rad = [
+            MathTex(r"-\pi"),
+            MathTex(r"\frac{-\pi}{2}"),
+            MathTex(r"0"),
+            MathTex(r"\pi"),
+            MathTex(r"\frac{\pi}{2}"),
+        ]
+        x_labels = VGroup(
+            *[
+                val.next_to(f_ax.c2p(x, 0), direction=DOWN)
+                for x, val in zip(tick_labels_x, tick_labels_rad)
+            ]
+        )
+
+        self.play(
+            LaggedStart(
+                *[FadeIn(label, shift=UP) for label in x_labels], lag_ratio=0.15
+            )
+        )
 
         self.wait(2)
 
