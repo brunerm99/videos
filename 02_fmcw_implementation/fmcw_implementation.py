@@ -7266,6 +7266,8 @@ class Sampling(Scene):
             stage=4,
         )
 
+        f_X_k = interpolate.interp1d(freq, X_k)
+
         f_ax = Axes(
             x_range=[
                 f_min.get_value(),
@@ -7288,7 +7290,7 @@ class Sampling(Scene):
                 x_range=[
                     fmin,
                     fmax,
-                    2,
+                    2 * f_scale,
                 ],
                 y_range=[X_k.min(), X_k.max(), (X_k.max() - X_k.min()) / 4],
                 tips=False,
@@ -7302,11 +7304,8 @@ class Sampling(Scene):
             new_freq = freq[ind]
             new_X_k = X_k[ind]
             new_ax.add(
-                new_ax.plot_line_graph(
-                    new_freq,
-                    new_X_k,
-                    line_color=IF_COLOR,
-                    add_vertex_dots=False,
+                new_ax.plot(
+                    f_X_k, x_range=[fmin, fmax, (fmax - fmin) / 1000], color=IF_COLOR
                 )
             )
             m.become(new_ax)
@@ -7325,7 +7324,7 @@ class Sampling(Scene):
         # for x, y in zip(freq_samples, X_k_samples):
         #     f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.add(f_ax, f_ax_label, X_k_label)
 
         self.play(x_len.animate.set_value(9.5), y_len.animate.set_value(3.5))
@@ -7341,24 +7340,31 @@ class Sampling(Scene):
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        tick_labels_x = [f_min_disp, f_min_disp / 2, 0, f_max_disp / 2, f_max_disp]
-        tick_labels_rad = [
-            MathTex(r"-\pi"),
-            MathTex(r"\frac{-\pi}{2}"),
-            MathTex(r"0"),
-            MathTex(r"\pi"),
-            MathTex(r"\frac{\pi}{2}"),
-        ]
-        x_labels = VGroup(
-            *[
-                val.next_to(f_ax.c2p(x, 0), direction=DOWN)
-                for x, val in zip(tick_labels_x, tick_labels_rad)
-            ]
+        npi = (
+            MathTex(r"-\pi").scale(1.5).move_to(f_ax.get_corner(DL)).shift(DOWN * 0.75)
         )
+        ppi = MathTex(r"\pi").scale(1.5).move_to(f_ax.get_corner(DR)).shift(DOWN * 0.75)
+        npi_to_ppi = Arrow(npi.get_right(), ppi.get_left())
+
+        nhfs = MathTex(r"-\frac{f_s}{2}").scale(1.2).move_to(npi)
+        phfs = MathTex(r"\frac{f_s}{2}").scale(1.2).move_to(ppi)
 
         self.play(
             LaggedStart(
-                *[FadeIn(label, shift=UP) for label in x_labels], lag_ratio=0.15
+                FadeIn(npi, shift=UP),
+                GrowArrow(npi_to_ppi),
+                FadeIn(ppi, shift=UP),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(npi, nhfs),
+                ReplacementTransform(ppi, phfs),
+                lag_ratio=0.4,
             )
         )
 
@@ -8095,7 +8101,7 @@ class XRangeProblem(Scene):
         fs = 1000
         N = fs * stop_time
 
-        t_min = ValueTracker(-1)
+        t_min = ValueTracker(0)
         t_max = ValueTracker(1)
         x_len = ValueTracker(4.5)
         y_len = ValueTracker(2.5)
@@ -8105,6 +8111,10 @@ class XRangeProblem(Scene):
             noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
             x_n = (np.sin(2 * PI * f1 * t) + noise_npi) / (1 + noise_sigma)
             return t, x_n
+
+        t, x_n = get_values()
+
+        f_x_n = interpolate.interp1d(t, x_n)
 
         ax = always_redraw(
             lambda: Axes(
@@ -8124,10 +8134,9 @@ class XRangeProblem(Scene):
         )
 
         plot = always_redraw(
-            lambda: ax.plot_line_graph(
-                **dict(zip(("x_values", "y_values"), get_values())),
-                line_color=ORANGE,
-                add_vertex_dots=False,
+            lambda: ax.plot(
+                lambda x: np.sin(2 * PI * 2 * x),
+                color=ORANGE,
             )
         )
 
@@ -8135,9 +8144,9 @@ class XRangeProblem(Scene):
 
         self.play(x_len.animate.set_value(9.5), y_len.animate.set_value(3.5))
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(t_min.animate.set_value(-t_max.get_value()))
+        self.play(t_min.animate.set_value(-t_max.get_value()))
 
         self.wait(2)
 
