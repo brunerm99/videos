@@ -13,6 +13,8 @@ from numpy.fft import fft, fftshift
 from scipy import constants, signal, interpolate
 from skrf import Frequency, Network
 
+from MF_Tools import TransformByGlyphMap, VT
+
 warnings.filterwarnings("ignore")
 
 sys.path.insert(0, "..")
@@ -46,7 +48,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -7300,9 +7302,6 @@ class Sampling(Scene):
                 x_length=x_len.get_value(),
                 y_length=y_len.get_value(),
             )
-            ind = (freq > fmin) & (freq < fmax)
-            new_freq = freq[ind]
-            new_X_k = X_k[ind]
             new_ax.add(
                 new_ax.plot(
                     f_X_k, x_range=[fmin, fmax, (fmax - fmin) / 1000], color=IF_COLOR
@@ -7324,7 +7323,7 @@ class Sampling(Scene):
         # for x, y in zip(freq_samples, X_k_samples):
         #     f_samples.add(f_ax.get_vertical_line(f_ax.c2p(x, y), color=BLUE))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.add(f_ax, f_ax_label, X_k_label)
 
         self.play(x_len.animate.set_value(9.5), y_len.animate.set_value(3.5))
@@ -7340,21 +7339,38 @@ class Sampling(Scene):
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        npi = (
-            MathTex(r"-\pi").scale(1.5).move_to(f_ax.get_corner(DL)).shift(DOWN * 0.75)
-        )
-        ppi = MathTex(r"\pi").scale(1.5).move_to(f_ax.get_corner(DR)).shift(DOWN * 0.75)
-        npi_to_ppi = Arrow(npi.get_right(), ppi.get_left())
+        nl_labels_x = [f_min_disp, f_min_disp / 2, 0, f_max_disp / 2, f_max_disp]
+        nl_labels_rad = [
+            MathTex(r"-\pi"),
+            MathTex(r"-\frac{\pi}{2}"),
+            MathTex(r"0"),
+            MathTex(r"\frac{\pi}{2}"),
+            MathTex(r"\pi"),
+        ]
+        nl_labels_fs = [
+            MathTex(r"-\frac{f_s}{2}"),
+            MathTex(r"-\frac{f_s}{4}"),
+            MathTex(r"0"),
+            MathTex(r"\frac{f_s}{4}"),
+            MathTex(r"\frac{f_s}{2}"),
+        ]
+        nl = NumberLine(
+            x_range=[f_min.get_value(), f_max.get_value(), 2],
+            numbers_with_elongated_ticks=nl_labels_x,
+            length=x_len.get_value(),
+        ).to_edge(DOWN, buff=LARGE_BUFF)
 
-        nhfs = MathTex(r"-\frac{f_s}{2}").scale(1.2).move_to(npi)
-        phfs = MathTex(r"\frac{f_s}{2}").scale(1.2).move_to(ppi)
+        rad_labels = nl.copy().add_labels(dict(zip(nl_labels_x, nl_labels_rad))).labels
+        fs_labels = nl.copy().add_labels(dict(zip(nl_labels_x, nl_labels_fs))).labels
+
+        self.play(TransformFromCopy(f_ax.x_axis, nl))
+
+        self.wait(0.5)
 
         self.play(
             LaggedStart(
-                FadeIn(npi, shift=UP),
-                GrowArrow(npi_to_ppi),
-                FadeIn(ppi, shift=UP),
-                lag_ratio=0.4,
+                *[FadeIn(label, shift=UP) for label in rad_labels],
+                lag_ratio=0.2,
             )
         )
 
@@ -7362,11 +7378,103 @@ class Sampling(Scene):
 
         self.play(
             LaggedStart(
-                ReplacementTransform(npi, nhfs),
-                ReplacementTransform(ppi, phfs),
-                lag_ratio=0.4,
+                *[
+                    ReplacementTransform(rad_label, fs_label)
+                    for rad_label, fs_label in zip(rad_labels, fs_labels)
+                ],
+                lag_ratio=0.2,
             )
         )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        pos_box = SurroundingRectangle(
+            Line(nl.n2p(0) + DOWN / 2, nl.n2p(f_max_disp) + UP / 2),
+            color=BLUE,
+            fill_color=GREEN,
+            fill_opacity=0.3,
+        )
+        all_box = SurroundingRectangle(
+            Line(nl.n2p(f_min_disp) + DOWN / 2, nl.n2p(f_max_disp) + UP / 2),
+            color=BLUE,
+            fill_color=GREEN,
+            fill_opacity=0.3,
+        )
+        some_box = SurroundingRectangle(
+            Line(nl.n2p(0) + DOWN / 2, nl.n2p(8) + UP / 2),
+            color=BLUE,
+            fill_color=GREEN,
+            fill_opacity=0.3,
+        )
+
+        self.play(DrawBorderThenFill(all_box))
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(all_box, pos_box),
+            f_min.animate.set_value(0),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pos_box, some_box),
+            f_max.animate.set_value(8 * f_scale),
+        )
+
+        self.wait(0.5)
+
+        f_ax.remove_updater(f_ax_updater)
+        f_ax.become(
+            Axes(
+                x_range=[
+                    f_min.get_value(),
+                    f_max.get_value(),
+                    2 * f_scale,
+                ],
+                y_range=[X_k.min(), X_k.max(), (X_k.max() - X_k.min()) / 4],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len.get_value(),
+                y_length=y_len.get_value(),
+            )
+        )
+        X_k_plot = f_ax.plot(
+            f_X_k,
+            x_range=[
+                f_min.get_value(),
+                f_max.get_value(),
+                (f_max.get_value() - f_min.get_value()) / 1000,
+            ],
+            color=IF_COLOR,
+        )
+        self.add(X_k_plot)
+
+        range_eqn = MathTex(r"R = \frac{c T_{c} f_{beat}}{2 B}")
+        range_eqn_filled = MathTex(
+            r"R = \frac{c T_{c} \left[ -\frac{f_s}{2}, \dotsc , \frac{f_s}{2} \right] }{2 B}"
+        ).move_to(range_eqn)
+        range_eqn_box = SurroundingRectangle(
+            range_eqn_filled,
+            buff=LARGE_BUFF,
+            color=BLUE,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            corner_radius=0.2,
+        )
+        range_eqn_group = VGroup(range_eqn_box, range_eqn)
+
+        self.play(GrowFromCenter(range_eqn_group))
+
+        # TODO: Figure out TransformByGlyphMap
+
+        self.wait(0.5)
+
+        self.play(Transform(range_eqn, range_eqn_filled))
 
         self.wait(2)
 
@@ -8148,6 +8256,17 @@ class XRangeProblem(Scene):
 
         self.play(t_min.animate.set_value(-t_max.get_value()))
 
+        self.wait(2)
+
+
+class RangeEqnTransform(Scene):
+    def construct(self):
+        range_eqn = MathTex(r"R = \frac{c T_{c} f_{beat}}{2 B}")
+        range_eqn_filled = MathTex(
+            r"R = \frac{c T_{c} \left[ -\frac{f_s}{2}, \dotsc , \frac{f_s}{2} \right] }{2 B}"
+        ).move_to(range_eqn)
+        self.add(range_eqn)
+        self.play(TransformByGlyphMap(range_eqn, range_eqn_filled))
         self.wait(2)
 
 
