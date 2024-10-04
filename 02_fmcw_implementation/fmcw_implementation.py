@@ -7312,9 +7312,12 @@ class Sampling(Scene):
         f_ax.add_updater(f_ax_updater)
 
         f_ax_label = always_redraw(lambda: f_ax.get_axis_labels(Tex("$k$"), Tex("")))
+        f_ax_range_label = f_ax.get_axis_labels(Tex("$R$"), Tex(""))
+
         X_k_label = always_redraw(
             lambda: MathTex("X[k]").next_to(f_ax, direction=UP, buff=MED_SMALL_BUFF)
         )
+        X_k_label_shifted = MathTex("X[k]")
 
         # num_samples = 20
         # freq_samples = freq[:: freq.size // num_samples]
@@ -7336,7 +7339,7 @@ class Sampling(Scene):
             f_min.animate.set_value(f_min_disp), f_max.animate.set_value(f_max_disp)
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         nl_labels_x = [f_min_disp, f_min_disp / 2, 0, f_max_disp / 2, f_max_disp]
@@ -7354,6 +7357,13 @@ class Sampling(Scene):
             MathTex(r"\frac{f_s}{4}"),
             MathTex(r"\frac{f_s}{2}"),
         ]
+        nl_labels_range = [
+            MathTex(r"-R_K"),
+            MathTex(r"-R_{K/2}"),
+            MathTex(r"0"),
+            MathTex(r"R_{K/2}"),
+            MathTex(r"R_K"),
+        ]
         nl = NumberLine(
             x_range=[f_min.get_value(), f_max.get_value(), 2],
             numbers_with_elongated_ticks=nl_labels_x,
@@ -7361,6 +7371,9 @@ class Sampling(Scene):
         ).to_edge(DOWN, buff=LARGE_BUFF)
 
         rad_labels = nl.copy().add_labels(dict(zip(nl_labels_x, nl_labels_rad))).labels
+        range_labels = (
+            nl.copy().add_labels(dict(zip(nl_labels_x, nl_labels_range))).labels
+        )
         fs_labels = nl.copy().add_labels(dict(zip(nl_labels_x, nl_labels_fs))).labels
 
         self.play(TransformFromCopy(f_ax.x_axis, nl))
@@ -7386,23 +7399,23 @@ class Sampling(Scene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         pos_box = SurroundingRectangle(
-            Line(nl.n2p(0) + DOWN / 2, nl.n2p(f_max_disp) + UP / 2),
+            Line(nl.n2p(0) + DOWN / 8, nl.n2p(f_max_disp) + UP / 8),
             color=BLUE,
             fill_color=GREEN,
             fill_opacity=0.3,
         )
         all_box = SurroundingRectangle(
-            Line(nl.n2p(f_min_disp) + DOWN / 2, nl.n2p(f_max_disp) + UP / 2),
+            Line(nl.n2p(f_min_disp) + DOWN / 8, nl.n2p(f_max_disp) + UP / 8),
             color=BLUE,
             fill_color=GREEN,
             fill_opacity=0.3,
         )
         some_box = SurroundingRectangle(
-            Line(nl.n2p(0) + DOWN / 2, nl.n2p(8) + UP / 2),
+            Line(nl.n2p(0) + DOWN / 8, nl.n2p(8) + UP / 8),
             color=BLUE,
             fill_color=GREEN,
             fill_opacity=0.3,
@@ -7470,11 +7483,164 @@ class Sampling(Scene):
 
         self.play(GrowFromCenter(range_eqn_group))
 
-        # TODO: Figure out TransformByGlyphMap
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        def get_transform_func(from_var, func=TransformFromCopy):
+            def transform_func(m, **kwargs):
+                return func(from_var, m, **kwargs)
+
+            return transform_func
+
+        self.play(
+            TransformByGlyphMap(
+                range_eqn,
+                range_eqn_filled,
+                ([0, 1], [0, 1]),
+                ([2, 3, 4], [2, 3, 4]),
+                (GrowFromCenter, [5, 20]),
+                ([5, 6, 7, 8, 9], []),
+                (
+                    [],
+                    [11, 12, 13, 14, 15],
+                    {"delay": 0.5},
+                ),
+                (get_transform_func(fs_labels[0]), [6, 7, 8, 9, 10]),
+                (get_transform_func(fs_labels[-1]), [16, 17, 18, 19]),
+                ([10], [21]),
+                ([11, 12], [22, 23]),
+                show_indices=False,
+                run_time=2,
+            ),
+        )
 
         self.wait(0.5)
 
-        self.play(Transform(range_eqn, range_eqn_filled))
+        range_eqn_filled_copy = range_eqn_filled.copy().to_corner(
+            UR, buff=MED_SMALL_BUFF
+        )
+        range_eqn_new_box = SurroundingRectangle(
+            range_eqn_filled_copy, buff=MED_LARGE_BUFF
+        )
+        self.play(
+            ShrinkToCenter(range_eqn_box),
+            Transform(range_eqn_filled, range_eqn_filled_copy),
+        )
+        self.play(Create(range_eqn_new_box))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        f_ax_range_label[0].move_to(f_ax_label[0])
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(f_ax_label[0], shift=UP),
+                    FadeIn(f_ax_range_label[0], shift=UP),
+                ),
+                *[
+                    Transform(fs_label, range_label)
+                    for fs_label, range_label in zip(fs_labels, range_labels)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        peak_1 = Dot(f_ax.c2p(f1, X_k.max() + power_norm_1))
+        peak_2 = Dot(f_ax.c2p(f2, X_k.max() + power_norm_2))
+        peak_clutter = Dot(f_ax.c2p(f_clutter, X_k.max() + power_norm_clutter))
+
+        range_1 = MathTex("R_1").next_to(peak_1, direction=UP)
+        range_2 = MathTex("R_2").next_to(peak_2, direction=UP)
+        range_clutter = MathTex(r"R_{\text{clutter}}").next_to(
+            peak_clutter, direction=UP
+        )
+
+        X_k_label_shifted.next_to(f_ax, direction=UL)  # .move_to(X_k_label).shift(UP)
+        self.play(
+            LaggedStart(
+                Create(peak_1),
+                Create(peak_2),
+                Create(peak_clutter),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(X_k_label, X_k_label_shifted),
+                FadeIn(range_1),
+                FadeIn(range_2),
+                FadeIn(range_clutter),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(FadeOut(range_eqn_new_box, range_eqn_filled, shift=UP))
+
+        range_fft_label = Tex("Range-FFT Spectrum").scale(1.5).to_edge(UP)
+        self.play(Write(range_fft_label))
+
+        self.wait(0.5)
+
+        zero_m_arrow = Arrow(f_ax.get_corner(DL) + DOWN + LEFT, f_ax.get_corner(DL))
+        zero_m_label = Tex("0", " m").next_to(f_ax, direction=DL)
+
+        self.play(GrowArrow(zero_m_arrow))
+
+        self.wait(0.5)
+        self.play(
+            FadeOut(zero_m_arrow),
+            TransformFromCopy(range_labels[2], zero_m_label[0]),
+            FadeIn(zero_m_label[1]),
+        )
+
+        self.wait(0.5)
+
+        big_deal = Tex(r"really\\big\\deal!").to_edge(LEFT)
+        zero_m_p1 = zero_m_label.get_left() + [-0.1, 0, 0]
+        zero_m_p2 = big_deal.get_bottom() + [0, -0.1, 0]
+        zero_m_bez = CubicBezier(
+            zero_m_p1,
+            zero_m_p1 + [-1, 0, 0],
+            zero_m_p2 + [0, -1, 0],
+            zero_m_p2,
+        )
+
+        self.play(LaggedStart(Create(zero_m_bez), Create(big_deal), lag_ratio=0.4))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                big_deal,
+                X_k_label_shifted,
+                range_1,
+                range_2,
+                range_clutter,
+                range_fft_label,
+                f_ax_range_label,
+                fs_labels,
+                zero_m_label,
+            ),
+            Uncreate(f_ax),
+            Uncreate(nl),
+            Uncreate(some_box),
+            Uncreate(X_k_plot),
+            Uncreate(peak_1),
+            Uncreate(peak_2),
+            Uncreate(peak_clutter),
+            Uncreate(zero_m_bez),
+        )
 
         self.wait(2)
 
