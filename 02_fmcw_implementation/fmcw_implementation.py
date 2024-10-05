@@ -21,6 +21,7 @@ sys.path.insert(0, "..")
 from utils import find_in_code
 
 from props import (
+    WeatherRadarTower,
     FMCWRadarCartoon,
     VideoMobject,
     get_bd_animation,
@@ -7645,8 +7646,500 @@ class Sampling(Scene):
         self.wait(2)
 
 
+class PulsedMinRangeV1(Scene):
+    def construct(self):
+        radar = WeatherRadarTower()
+        building = (
+            SVGMobject(
+                "../props/static/Icon 12.svg",
+            )
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(UP)
+            .shift(LEFT * 1 + DOWN * 1)
+        )
+        cloud = (
+            SVGMobject(
+                "../props/static/clouds.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            .scale(0.7)
+            .to_edge(UP, buff=SMALL_BUFF)
+            .shift(RIGHT)
+        )
+
+        duration = 4
+        step = 1 / 1000
+        ax = (
+            Axes(
+                x_range=[-0.1, duration, duration / 4],
+                y_range=[0, 1, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=3,
+                y_length=1,
+            )
+            .scale_to_fit_width(config["frame_width"] * 0.6)
+            .to_edge(RIGHT)
+        )
+
+        f = 4
+        pulsed_plot = ax.plot(
+            lambda t: (
+                ((np.sin(2 * PI * f * t) + 1) / 2)
+                * ((signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2)
+            ),
+            x_range=[0, duration - step, step],
+            color=TX_COLOR,
+            use_smoothing=False,
+        )
+        sq = ax.plot(
+            lambda t: (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2,
+            x_range=[0, duration - step, step],
+            color=YELLOW,
+            use_smoothing=False,
+        )
+
+        plot_group = VGroup(ax, pulsed_plot, sq)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(radar.get_animation())
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                radar.vgroup.animate.scale(0.7).to_edge(LEFT),
+                Create(ax),
+                lag_ratio=0.5,
+            )
+        )
+        self.play(Create(pulsed_plot), Create(sq), run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(
+            plot_group.animate.to_edge(DOWN),
+            radar.vgroup.animate.to_edge(UP, buff=LARGE_BUFF),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        txing = Tex("Transmitting", color=TX_COLOR).next_to(ax, LEFT, MED_LARGE_BUFF)
+
+        tx_brace = Brace(Line(ax.x_axis.n2p(0), ax.x_axis.n2p(0.3)))
+        tx_brace_p1 = tx_brace.get_bottom()
+        tx_brace_p2 = txing.get_bottom() + [0, -0.1, 0]
+        tx_brace_bez = CubicBezier(
+            tx_brace_p1,
+            tx_brace_p1 + [-0.5, -0.5, 0],
+            tx_brace_p2 + [0, -1, 0],
+            tx_brace_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(tx_brace, shift=UP),
+                Create(tx_brace_bez),
+                FadeIn(txing),
+                lag_ratio=0.4,
+            ),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(building, shift=UP),
+                FadeIn(cloud, shift=DOWN),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        radar_bw_top = Line(
+            radar.radome.get_right() + [0.1, 0, 0],
+            radar.radome.get_right() + [12, 2, 0],
+            color=TX_COLOR,
+        )
+        radar_bw_bot = Line(
+            radar.radome.get_right() + [0.1, 0, 0],
+            radar.radome.get_right() + [12, -2, 0],
+            color=TX_COLOR,
+        )
+
+        rx_building = Arrow(
+            building.get_left(), radar.radome.get_right(), color=RX_COLOR
+        )
+        rx_cloud = Arrow(cloud.get_left(), radar.radome.get_right(), color=RX_COLOR)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(radar_bw_top), Create(radar_bw_bot)),
+                GrowArrow(rx_building),
+                GrowArrow(rx_cloud),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        # self.play()
+
+        self.wait(2)
+
+
 class PulsedMinRange(Scene):
-    def construct(self): ...
+    def construct(self):
+        radar = WeatherRadarTower()
+        building = (
+            SVGMobject(
+                "../props/static/Icon 12.svg",
+            )
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(UP)
+            .shift(LEFT * 1 + DOWN * 1)
+        )
+        cloud = (
+            SVGMobject(
+                "../props/static/clouds.svg",
+                stroke_color=WHITE,
+                color=WHITE,
+                fill_color=WHITE,
+                opacity=1,
+                stroke_width=0.01,
+            )
+            .scale(0.7)
+            .to_edge(UP, buff=SMALL_BUFF)
+            .shift(RIGHT)
+        )
+
+        duration = 4
+        step = 1 / 1000
+        ax = (
+            Axes(
+                x_range=[-0.1, duration, duration / 4],
+                y_range=[0, 1, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=3,
+                y_length=1,
+            )
+            .scale_to_fit_width(config["frame_width"] * 0.6)
+            .to_edge(RIGHT)
+        )
+
+        f = 4
+        pulsed_plot = ax.plot(
+            lambda t: (
+                ((np.sin(2 * PI * f * t) + 1) / 2)
+                * ((signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2)
+            ),
+            x_range=[0, duration - step, step],
+            color=TX_COLOR,
+            use_smoothing=False,
+        )
+        sq = ax.plot(
+            lambda t: (signal.square(2 * PI * t / 2, duty=0.3) + 1) / 2,
+            x_range=[0, duration - step, step],
+            color=YELLOW,
+            use_smoothing=False,
+        )
+
+        plot_group = VGroup(ax, pulsed_plot, sq)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(radar.get_animation())
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                radar.vgroup.animate.scale(0.7).to_edge(LEFT),
+                Create(ax),
+                lag_ratio=0.5,
+            )
+        )
+        self.play(Create(pulsed_plot), Create(sq), run_time=1.5)
+
+        self.wait(0.5)
+
+        tau = MathTex(r"\tau").scale(1.8).next_to(ax.x_axis.n2p(0.3), DOWN, LARGE_BUFF)
+
+        tau_l_p1 = ax.x_axis.n2p(0) + [0, -0.1, 0]
+        tau_l_p2 = tau.get_left() + [-0.25, 0, 0]
+        tau_l_bez = CubicBezier(
+            tau_l_p1,
+            tau_l_p1 + [0, -0.5, 0],
+            tau_l_p2 + [-0.5, 0.5, 0],
+            tau_l_p2,
+        )
+        tau_r_p1 = ax.x_axis.n2p(0.6) + [0, -0.1, 0]
+        tau_r_p2 = tau.get_right() + [0.25, 0, 0]
+        tau_r_bez = CubicBezier(
+            tau_r_p1,
+            tau_r_p1 + [0, -0.5, 0],
+            tau_r_p2 + [0.5, 0.5, 0],
+            tau_r_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(tau_l_bez), Create(tau_r_bez)),
+                Create(tau),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        rx_ax = ax.copy()
+
+        self.play(
+            plot_group.animate.to_edge(DOWN),
+            rx_ax.animate.to_edge(UP),
+            Uncreate(tau_l_bez),
+            Uncreate(tau_r_bez),
+            tau.animate.set_y(0),
+        )
+
+        self.wait(0.5)
+
+        tx_label = Tex("Tx", color=TX_COLOR).scale(1.3).next_to(ax, LEFT)
+        rx_label = Tex("Rx", color=RX_COLOR).scale(1.3).next_to(rx_ax, LEFT)
+
+        self.play(LaggedStart(FadeIn(tx_label), FadeIn(rx_label), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        rx_sq_dc = VT(0.7)
+        rx_sq = always_redraw(
+            lambda: rx_ax.plot(
+                lambda t: (signal.square(-2 * PI * t / 2 - step, duty=~rx_sq_dc) + 1)
+                / 2,
+                x_range=[0, duration - step, step],
+                color=YELLOW,
+                use_smoothing=False,
+            )
+        )
+
+        self.play(Create(rx_sq))
+
+        self.wait(0.5)
+
+        self.play(rx_sq_dc @ 0.6)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        rx_offset = 0.15
+        rx_A = 0.5
+
+        bottom = VT(1)
+
+        rx_pulsed_plot = always_redraw(
+            lambda: rx_ax.plot(
+                lambda t: (
+                    rx_A
+                    * ((np.sin(2 * PI * f * t) + 1) / 2)
+                    * (
+                        (
+                            signal.square(2 * PI * t / 2 - 2 * PI * rx_offset, duty=0.3)
+                            + 1
+                        )
+                        / 2
+                    )
+                    * (
+                        (signal.square(-2 * np.pi * t / 2 - step, duty=~rx_sq_dc) + 1)
+                        * (0.5 * (1 - ~bottom))
+                        + ~bottom
+                    )
+                ),
+                x_range=[0, duration - step, step],
+                color=RX_COLOR,
+                use_smoothing=False,
+            ).set_z_index(-1)
+        )
+
+        self.play(Create(rx_pulsed_plot), run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(bottom @ 0, run_time=1.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        tau_eq = MathTex(r"\tau \sim 1 \mu s").scale(1.8)
+        sol = (
+            MathTex(r"c \approx 3 \cdot 10^8 \frac{m}{s}")
+            .scale(1.8)
+            .next_to(tau_eq, DOWN, aligned_edge=LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(plot_group, tx_label, shift=DOWN),
+                    FadeOut(rx_ax, rx_pulsed_plot, rx_sq, rx_label, shift=UP),
+                ),
+                TransformByGlyphMap(tau, tau_eq, ([0], [0]), ([], [1, 2, 3, 4])),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.play(Create(sol))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            VGroup(tau_eq, sol).animate.scale(1 / 1.8).to_corner(DL),
+            radar.vgroup.animate.shift(UP),
+        )
+
+        tx_duration = 4
+        slope = 1 / 3
+        radar_ax = Axes(
+            x_range=[0, tx_duration, 1],
+            y_range=[-tx_duration * slope, tx_duration * slope, 1],
+        ).next_to(radar.radome, RIGHT, SMALL_BUFF)
+
+        bw_top = radar_ax.plot(lambda t: t * slope, color=YELLOW)
+        bw_bot = radar_ax.plot(lambda t: -t * slope, color=YELLOW)
+
+        pw = 1.5
+        sine_start = VT(-pw)
+        sine_end = VT(0)
+        tx_sine = always_redraw(
+            lambda: radar_ax.plot(
+                lambda t: np.sin(2 * PI * 3 * t) * (t * slope),
+                x_range=[max(~sine_start, 0), ~sine_end, 1 / 1000],
+                color=TX_COLOR,
+            )
+        )
+
+        self.add(tx_sine)
+        self.play(
+            Create(bw_top),
+            Create(bw_bot),
+        )
+        self.play(
+            sine_start @ tx_duration,
+            sine_end @ (tx_duration + pw),
+            run_time=2,
+            rate_func=rate_functions.linear,
+        )
+        sine_start @= -pw
+        sine_end @= 0
+
+        self.wait(0.5)
+
+        blind_area = radar_ax.get_area(
+            bw_bot, [0, pw], bounded_graph=bw_top, color=RED, opacity=0.5
+        )
+
+        self.play(
+            sine_end @ pw,
+            FadeIn(blind_area),
+            rate_func=rate_functions.linear,
+        )
+
+        self.wait(0.5)
+
+        rmin_no_half = MathTex(
+            r"R_{min} = c \cdot \left (\tau + t_{\text{recovery}} \right) = 300 m"
+        ).shift(DOWN * 2 + RIGHT)
+        rmin = MathTex(
+            r"R_{min} = \frac{c \cdot \left (\tau + t_{\text{recovery}} \right)}{2} = 150 m"
+        ).move_to(rmin_no_half)
+
+        rmin_l_p1 = radar_ax.c2p(0, 0) + [0, -0.1, 0]
+        rmin_r_p1 = radar_ax.input_to_graph_point(pw, bw_bot) + [0, -0.1, 0]
+        rmin_p2 = rmin.get_top() + [0, 0.1, 0]
+
+        rmin_l_bez = CubicBezier(
+            rmin_l_p1,
+            rmin_l_p1 + [0, -1, 0],
+            rmin_p2 + [0, 1, 0],
+            rmin_p2,
+        )
+        rmin_r_bez = CubicBezier(
+            rmin_r_p1,
+            rmin_r_p1 + [0, -1, 0],
+            rmin_p2 + [0, 1, 0],
+            rmin_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(rmin_l_bez), Create(rmin_r_bez)),
+                FadeIn(rmin_no_half),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                rmin_no_half,
+                rmin,
+                ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
+                (
+                    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19],
+                ),
+                ([20], [22]),
+                ([24], [26]),
+                ([21, 22, 23], [23, 24, 25]),
+                ([], [20]),
+                ([], [21]),
+            ),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        blind_area_label = (
+            Tex("Blind range")
+            .rotate(PI * slope / tx_duration)
+            .next_to(radar_ax.input_to_graph_point(pw / 2, bw_top), UP, SMALL_BUFF)
+        )
+
+        self.play(Create(blind_area_label))
+
+        self.wait(0.5)
+
+        self.play(Indicate(tau_eq), Indicate(rmin[0][8]), run_time=2)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        fade_out = Group(*self.mobjects).remove(
+            rmin_l_bez, rmin_r_bez, bw_top, bw_bot, tx_sine, *radar.vgroup
+        )
+        self.play(
+            Uncreate(rmin_l_bez),
+            Uncreate(rmin_r_bez),
+            Uncreate(bw_top),
+            Uncreate(bw_bot),
+            Uncreate(tx_sine),
+            FadeOut(fade_out),
+        )
+
+        self.wait(2)
 
 
 """ Testing """
@@ -8427,13 +8920,43 @@ class XRangeProblem(Scene):
 
 class RangeEqnTransform(Scene):
     def construct(self):
-        range_eqn = MathTex(r"R = \frac{c T_{c} f_{beat}}{2 B}")
-        range_eqn_filled = MathTex(
-            r"R = \frac{c T_{c} \left[ -\frac{f_s}{2}, \dotsc , \frac{f_s}{2} \right] }{2 B}"
-        ).move_to(range_eqn)
-        self.add(range_eqn)
-        self.play(TransformByGlyphMap(range_eqn, range_eqn_filled))
+        # range_eqn = MathTex(r"R = \frac{c T_{c} f_{beat}}{2 B}")
+        # range_eqn_filled = MathTex(
+        #     r"R = \frac{c T_{c} \left[ -\frac{f_s}{2}, \dotsc , \frac{f_s}{2} \right] }{2 B}"
+        # ).move_to(range_eqn)
+        rmin_no_half = MathTex(
+            r"R_{min} = c \cdot \left (\tau + t_{\text{recovery}} \right) = 300 m"
+        )
+        rmin = MathTex(
+            r"R_{min} = \frac{c \cdot \left (\tau + t_{\text{recovery}} \right)}{2} = 150 m"
+        )
+        self.add(rmin_no_half)
+        self.play(TransformByGlyphMap(rmin_no_half, rmin))
         self.wait(2)
+
+
+class RadarTest(Scene):
+    def construct(self):
+        radar = WeatherRadarTower()
+
+        building = (
+            SVGMobject(
+                "../props/static/Icon 12.svg",
+            )
+            .set_color(WHITE)
+            .to_edge(UP)
+            .shift(LEFT * 2 + DOWN)
+        )
+        cloud = SVGMobject(
+            "../props/static/clouds.svg",
+            stroke_color=WHITE,
+            color=WHITE,
+            fill_color=WHITE,
+            opacity=1,
+            stroke_width=0.01,
+        ).to_edge(UP)
+
+        self.add(radar.vgroup, cloud, building)
 
 
 """ Thumbnail """
