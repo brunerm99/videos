@@ -49,7 +49,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -2322,7 +2322,7 @@ class PLL(MovingCameraScene):
             )
             step_direction *= -1
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(1)
 
         # loop_filter_out.remove_updater(loop_filter_out_updater)
@@ -2378,7 +2378,7 @@ class PLL(MovingCameraScene):
         spi_in_label = Text("DATA IN", font="FiraCode Nerd Font Mono")
         spi_out_label = Text("DATA OUT", font="FiraCode Nerd Font Mono")
         Group(spi_clk_label, spi_in_label, spi_out_label).arrange(
-            DOWN, buff=SMALL_BUFF, aligned_edge=LEFT
+            DOWN, buff=MED_SMALL_BUFF, aligned_edge=LEFT
         ).move_to(ndiv).shift(DOWN * 2 + RIGHT * 3.5)
 
         spi_clk_p2 = spi_clk_label.get_left() + [-0.1, 0, 0]
@@ -2413,6 +2413,13 @@ class PLL(MovingCameraScene):
             Create(spi_out_bez),
             FadeIn(spi_out_label),
         )
+
+        self.wait(0.5)
+
+        # def bit_path():
+        #     return Succession(GrowFromCenter(), MoveAlongPath(), ShrinkToCenter())
+
+        self.play()
 
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
@@ -8138,6 +8145,587 @@ class PulsedMinRange(Scene):
             Uncreate(tx_sine),
             FadeOut(fade_out),
         )
+
+        self.wait(2)
+
+
+class FMCWNoBlindRange(Scene):
+    def construct(self):
+        fmcw_radar = FMCWRadarCartoon()
+        fmcw_radar.vgroup.to_edge(LEFT, LARGE_BUFF)
+        fmcw_radar.vgroup.save_state()
+        fmcw_radar.vgroup.set_opacity(0).to_edge(LEFT, 0).shift(LEFT)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(fmcw_radar.vgroup.animate.restore())
+
+        t_cw_tracker = VT(0)
+
+        f = 2
+
+        # Propagation
+        wave_buff = 0.3
+        p1_cw = fmcw_radar.antenna_tx.get_edge_center(RIGHT) + RIGHT * wave_buff
+        p2_cw = (
+            Dot()
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+            .shift(fmcw_radar.rect.get_edge_center(RIGHT) * UP)
+            .get_center()
+        )
+        line_cw = Line(p1_cw, p2_cw)
+        p1_cw_rx = fmcw_radar.antenna_rx.get_edge_center(RIGHT) + RIGHT * wave_buff
+        p2_cw_rx = (
+            Dot()
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+            .shift(fmcw_radar.rect.get_edge_center(RIGHT) * UP)
+            .get_center()
+        )
+        line_cw_rx = Line(p1_cw_rx, p2_cw_rx)
+
+        x_max = math.sqrt(np.sum(np.power(p2_cw - p1_cw, 2)))
+        line_cw_angle = line_cw.get_angle()
+        tx_cw = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=np.array([-min(~t_cw_tracker, x_max), 0])
+                - max(~t_cw_tracker - x_max, 0),
+                color=TX_COLOR,
+            )
+            .shift(p1_cw)
+            .rotate(line_cw_angle, about_point=p1_cw)
+            .shift(
+                ~t_cw_tracker
+                * (RIGHT * math.cos(line_cw_angle) + UP * math.sin(line_cw_angle))
+            )
+        )
+        rx_cw = always_redraw(
+            lambda: FunctionGraph(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=np.array([x_max, x_max + max(~t_cw_tracker - x_max, 0)])
+                + [max(~t_cw_tracker - 2 * x_max, 0), 0],
+                color=RX_COLOR,
+            )
+            .shift(p1_cw_rx)
+            .rotate(line_cw_rx.get_angle(), about_point=p1_cw_rx)
+            .shift(
+                max(~t_cw_tracker - x_max, 0)
+                * (LEFT * math.cos(line_cw_angle) + UP * math.sin(line_cw_angle))
+            )
+        )
+
+        self.add(tx_cw, rx_cw)
+
+        runs = 3
+        self.play(
+            t_cw_tracker @ (x_max * runs * 2),
+            run_time=runs * 2,
+            rate_func=linear,
+        )
+
+        self.play(*[m.animate.shift(DOWN * 2).set_opacity(0) for m in self.mobjects])
+        self.remove(*self.mobjects)
+
+        car = (
+            SVGMobject("../props/static/car.svg")
+            .to_edge(LEFT, LARGE_BUFF)
+            .set_fill(WHITE)
+            .scale(0.8)
+        )
+        car.shift(LEFT * 3).set_opacity(0)
+
+        self.play(car.animate.shift(RIGHT * 3).set_opacity(1))
+
+        self.wait(0.5)
+
+        car_bw_top = Line(
+            car.get_right() + [0.1, 0, 0], car.get_right() + [8, 2, 0], color=TX_COLOR
+        )
+        car_bw_bot = Line(
+            car.get_right() + [0.1, 0, 0], car.get_right() + [8, -2, 0], color=TX_COLOR
+        )
+
+        box = (
+            Square(1.5, color=GRAY_BROWN, fill_color=GRAY, fill_opacity=1)
+            .move_to(car)
+            .shift(RIGHT * 7 + UP)
+        )
+        box_reflection = Arrow(box.get_left(), car.get_right(), color=RX_COLOR)
+        car_2 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(WHITE)
+            .scale(0.6)
+            .move_to(car)
+            .shift(RIGHT * 5 + DOWN)
+        )
+        car_2_reflection = Arrow(car_2.get_left(), car.get_right(), color=RX_COLOR)
+
+        # self.play()
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(car_bw_top), Create(car_bw_bot)),
+                FadeIn(box, shift=DOWN * 2),
+                FadeIn(car_2, shift=UP * 2),
+                GrowArrow(box_reflection),
+                GrowArrow(car_2_reflection),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class Conclusion(Scene):
+    def construct(self):
+        (
+            bd,
+            (
+                inp,
+                input_to_vco,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+            (
+                input_to_pll,
+                phase_detector,
+                phase_detector_to_loop_filter,
+                loop_filter,
+                loop_filter_to_vco,
+                vco,
+                pll_block_to_pa,
+                vco_output_conn,
+                vco_to_ndiv_1,
+                vco_to_ndiv_2,
+                ndiv,
+                ndiv_to_phase_detector_1,
+                ndiv_to_phase_detector_2,
+            ),
+        ) = get_bd(True, rx_section_gap=BLOCK_BUFF * 5)
+        bd.scale_to_fit_width(config["frame_width"] * 0.8).to_corner(
+            UL, buff=LARGE_BUFF
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(
+            *[
+                Create(m)
+                for m in [
+                    inp,
+                    input_to_vco,
+                    # pll_block_to_pa,
+                    pa_to_splitter,
+                    splitter_to_mixer,
+                    splitter_to_tx_antenna,
+                    lna_to_mixer,
+                    rx_antenna_to_lna,
+                    mixer_to_lp_filter,
+                    lp_filter_to_adc,
+                    adc_to_signal_proc,
+                    # input_to_pll,
+                    phase_detector_to_loop_filter,
+                    loop_filter_to_vco,
+                    pll_block_to_pa,
+                    vco_output_conn,
+                    vco_to_ndiv_1,
+                    vco_to_ndiv_2,
+                    ndiv_to_phase_detector_1,
+                    ndiv_to_phase_detector_2,
+                ]
+            ],
+            *[
+                GrowFromCenter(m)
+                for m in [
+                    splitter,
+                    pa,
+                    lna,
+                    adc,
+                    signal_proc,
+                    lp_filter,
+                    vco,
+                    ndiv,
+                    tx_antenna,
+                    phase_detector,
+                    loop_filter,
+                    rx_antenna,
+                    mixer,
+                ]
+            ],
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        not_done = Tex("Not done yet!", color=BLACK).scale(2)
+        not_done_box = SurroundingRectangle(
+            not_done, color=YELLOW, fill_color=YELLOW, fill_opacity=1
+        )
+        not_done_group = VGroup(not_done_box, not_done).rotate(30 * DEGREES)
+
+        self.play(GrowFromCenter(not_done_group))
+
+        self.wait(0.5)
+
+        f1 = 1.5
+        f2 = 2.7
+        noise_mu = 0
+        noise_sigma = 0.2
+        f_clutter = 3.7
+
+        stop_time = 16
+        fs = 1000
+        N = fs * stop_time
+        t = np.linspace(0, stop_time, N)
+        y_min = -40
+
+        f_min = 0
+        f_max = 8
+
+        np.random.seed(0)
+        noise_npi = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
+        power_norm_1 = -6
+        power_norm_2 = -9
+        power_norm_clutter = 0
+        A_1 = 10 ** (power_norm_1 / 10)
+        A_2 = 10 ** (power_norm_2 / 10)
+        A_clutter = 10 ** (power_norm_clutter / 10)
+
+        x_n = (
+            A_1 * np.sin(2 * PI * f1 * t)
+            + A_2 * np.sin(2 * PI * f2 * t)
+            + A_clutter * np.sin(2 * PI * f_clutter * t)
+            + noise_npi
+        ) / (A_1 + A_2 + A_clutter + noise_sigma)
+
+        blackman_window = signal.windows.blackman(N)
+        x_n_windowed = x_n * blackman_window
+
+        freq, X_k = get_fft_values(
+            x_n_windowed,
+            fs=fs,
+            stop_time=stop_time,
+            fft_len=2**18,
+            f_min=-fs / 2,
+            f_max=fs / 2,
+            y_min=y_min,
+            stage=4,
+        )
+
+        f_X_k = interpolate.interp1d(freq, X_k)
+
+        f_ax = Axes(
+            x_range=[
+                f_min,
+                f_max,
+                1,
+            ],
+            y_range=[X_k.min(), X_k.max(), (X_k.max() - X_k.min()) / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=config["frame_width"] * 0.7,
+            y_length=config["frame_height"] * 0.7,
+        ).shift(DOWN * 7)
+        f_ax_labels = f_ax.get_axis_labels(MathTex("R"), MathTex(r"\lvert X[k] \rvert"))
+        f_ax_labels[0].next_to(f_ax, DR, MED_SMALL_BUFF)
+        f_ax_labels[1].rotate(PI / 2).next_to(f_ax, LEFT, MED_SMALL_BUFF)
+
+        peak_1 = Dot(f_ax.c2p(f1, X_k.max() + power_norm_1))
+        peak_2 = Dot(f_ax.c2p(f2, X_k.max() + power_norm_2))
+        peak_clutter = Dot(f_ax.c2p(f_clutter, X_k.max() + power_norm_clutter))
+
+        range_1 = MathTex("R_1").next_to(peak_1, direction=UP)
+        range_2 = MathTex("R_2").next_to(peak_2, direction=UP)
+        range_clutter = MathTex(r"R_{\text{clutter}}").next_to(
+            peak_clutter, direction=UP
+        )
+
+        X_k_plot = f_ax.plot(
+            f_X_k,
+            x_range=[
+                f_min,
+                f_max,
+                (f_max - f_min) / 1000,
+            ],
+            color=IF_COLOR,
+        )
+        plot_group = VGroup(
+            f_ax,
+            X_k_plot,
+            f_ax_labels,
+            peak_1,
+            peak_2,
+            peak_clutter,
+            range_1,
+            range_2,
+            range_clutter,
+        )
+
+        self.add(plot_group)
+
+        self.play(
+            *[m.animate.shift(UP * 7) for m in self.mobjects],
+            plot_group.animate.shift(UP * 7),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        iceberg_up = (
+            ImageMobject("../props/static/iceberg.png")
+            .scale(0.2)
+            .next_to([0, -config["frame_height"] / 2, 0], UP, 0)
+            .shift(DOWN * 6)
+        )
+        iceberg = (
+            iceberg_up.copy()
+            .next_to([0, -config["frame_height"] / 2, 0], DOWN, 0)
+            .shift(DOWN)
+        )
+        oos_y = iceberg.get_y()
+
+        self.play(
+            plot_group.animate.scale(0.3).to_edge(UP),
+            iceberg.animate.set_y(iceberg_up.get_y()),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            plot_group.animate.scale(1 / 0.3).move_to(ORIGIN),
+            iceberg.animate.set_y(oos_y),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        num_samples = 30
+        samples = f_ax.get_vertical_lines_to_graph(
+            X_k_plot, x_range=[0, f_max], num_lines=num_samples, color=BLUE
+        )
+
+        self.play(Create(samples))
+
+        self.wait(0.5)
+
+        sample_rects = f_ax.get_riemann_rectangles(
+            X_k_plot,
+            x_range=[0, f_max],
+            dx=f_max / num_samples,
+            color=BLUE,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+
+        self.wait(0.5)
+
+        self.play(
+            *[
+                ReplacementTransform(sample, rect)
+                for sample, rect in zip(samples, sample_rects)
+            ]
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                Group(
+                    f_ax,
+                    X_k_plot,
+                    f_ax_labels,
+                    peak_1,
+                    peak_2,
+                    peak_clutter,
+                    range_1,
+                    range_2,
+                    range_clutter,
+                ).set_z_index(-1)
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    Transform(
+                        rect,
+                        Square(
+                            rect.width, color=BLACK, fill_color=BLUE, fill_opacity=0.7
+                        )
+                        .move_to(rect)
+                        .set_y(0),
+                    )
+                    for rect in sample_rects
+                ],
+                lag_ratio=0.05,
+            )
+        )
+
+        self.wait(0.5)
+
+        range_axis_label = MathTex(r"R_0, R_1, \dotsc , R_{K-1}, R_K").next_to(
+            sample_rects, DOWN, MED_SMALL_BUFF
+        )
+        self.play(FadeIn(range_axis_label))
+
+        self.wait(0.5)
+
+        self.play(
+            sample_rects.animate.arrange(DOWN, buff=0)
+            .scale_to_fit_height(config["frame_height"] * 0.8)
+            .shift(LEFT * sample_rects[0].width * num_samples / 2),
+            range_axis_label.animate.rotate(PI / 2).to_edge(LEFT, buff=LARGE_BUFF),
+        )
+
+        self.wait(0.5)
+
+        samples_square = VGroup(
+            *[sample_rects.copy() for _ in range(num_samples)]
+        ).arrange(RIGHT, 0)
+
+        slow_time = Tex("Slow time").next_to(samples_square, DOWN, MED_SMALL_BUFF)
+        fast_time = (
+            Tex("Fast time")
+            .rotate(PI / 2)
+            .next_to(samples_square, LEFT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            ReplacementTransform(sample_rects, samples_square[0]),
+            FadeIn(fast_time),
+            range_axis_label.animate.next_to(fast_time, LEFT, MED_SMALL_BUFF),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    TransformFromCopy(samples_square[0], samples_square[idx])
+                    for idx in range(1, num_samples)
+                ],
+                lag_ratio=0.05,
+            ),
+            FadeIn(slow_time),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        new_num_samples = 5
+        remaining = (
+            VGroup(
+                *[
+                    Square(color=BLACK, fill_color=BLUE, fill_opacity=0.7)
+                    for _ in range(new_num_samples**2)
+                ]
+            )
+            .arrange_in_grid(new_num_samples, new_num_samples, buff=0)
+            .scale_to_fit_height(config["frame_height"] * 0.8)
+            .move_to(ORIGIN)
+        )
+
+        self.play(Transform(samples_square, remaining))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(range_axis_label, slow_time, fast_time))
+
+        self.wait(2)
+
+
+class RadarCube(ThreeDScene):
+    def construct(self):
+        axes = ThreeDAxes()
+        labels = axes.get_axis_labels()
+
+        self.set_camera_orientation(zoom=0.7)
+
+        num_samples = 5
+
+        cubes_square = (
+            VGroup(
+                *[
+                    Cube(
+                        side_length=3,
+                        stroke_width=DEFAULT_STROKE_WIDTH,
+                        stroke_color=BLACK,
+                        fill_opacity=1,
+                        fill_color=BLUE,
+                    )
+                    for _ in range(num_samples**2)
+                ]
+            )
+            .arrange_in_grid(num_samples, num_samples, buff=0)
+            .scale_to_fit_height(config["frame_height"] * 0.8)
+        )
+        cubes_cube = (
+            VGroup(
+                cubes_square,
+                *[
+                    cubes_square.copy().set_fill(opacity=0.7, color=BLUE)
+                    for _ in range(num_samples - 1)
+                ],
+            )
+            .arrange(IN, buff=0, center=False)
+            .move_to(ORIGIN)
+        )
+
+        slow_time = Tex("Slow time").next_to(cubes_square, DOWN, MED_SMALL_BUFF)
+        fast_time = (
+            Tex("Fast time").rotate(PI / 2).next_to(cubes_square, LEFT, MED_SMALL_BUFF)
+        )
+        range_axis_label = (
+            MathTex(r"R_0, R_1, \dotsc , R_{K-1}, R_K")
+            .rotate(PI / 2)
+            .next_to(fast_time, LEFT, MED_SMALL_BUFF)
+        )
+
+        self.add(
+            # axes,
+            # labels,
+            cubes_cube,
+            # slow_time,
+            # fast_time,
+            # range_axis_label,
+        )
+
+        self.play(
+            *[cube.animate.set_fill(opacity=0.7, color=BLUE) for cube in cubes_square],
+            run_time=1.2,
+        )
+
+        self.move_camera(
+            phi=75 * DEGREES,
+            theta=-45 * DEGREES,
+            # gamma=45 * DEGREES,
+            zoom=0.7,
+        )
+        # self.set_camera_orientation(phi=75 * DEGREES, theta=-45 * DEGREES)
 
         self.wait(2)
 
