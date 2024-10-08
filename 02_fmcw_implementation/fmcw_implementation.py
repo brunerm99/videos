@@ -4,7 +4,7 @@
 import math
 import sys
 import warnings
-from random import normalvariate, random, seed
+from random import normalvariate, random, seed, randint
 from typing import Iterable, Union
 
 import numpy as np
@@ -2370,9 +2370,9 @@ class PLL(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        spi_clk_p1 = ndiv.get_corner(DR) + [-ndiv.width / 4, 0, 0]
+        spi_clk_p1 = ndiv.get_corner(DR)  # + [-ndiv.width / 4, 0, 0]
         spi_in_p1 = ndiv.get_bottom() + [0, 0, 0]
-        spi_out_p1 = ndiv.get_corner(DL) + [ndiv.width / 4, 0, 0]
+        spi_out_p1 = ndiv.get_corner(DL)  # + [ndiv.width / 4, 0, 0]
 
         spi_clk_label = Text("CLK", font="FiraCode Nerd Font Mono")
         spi_in_label = Text("DATA IN", font="FiraCode Nerd Font Mono")
@@ -2416,17 +2416,123 @@ class PLL(MovingCameraScene):
 
         self.wait(0.5)
 
-        # def bit_path():
-        #     return Succession(GrowFromCenter(), MoveAlongPath(), ShrinkToCenter())
+        def bit_path(path, bit=None):
+            if bit is None:
+                bit = randint(0, 1)
+            bit_text = Text(
+                f"{bit}",
+                disable_ligatures=True,
+                font="FiraCode Nerd Font Mono",
+                color=GREEN,
+                stroke_opacity=1,
+            ).move_to(path.get_start())
 
-        self.play()
+            return Succession(
+                GrowFromCenter(bit_text, run_time=0.5),
+                MoveAlongPath(bit_text, path, run_time=1),
+                ShrinkToCenter(bit_text, run_time=0.5),
+            )
+
+        spi_clk_bez.reverse_direction()
+        spi_in_bez.reverse_direction()
+        spi_out_bez.reverse_direction()
+
+        nbits = 10
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        bit_path(spi_clk_bez, bit=0 if idx % 2 == 0 else 1),
+                        bit_path(spi_in_bez),
+                        bit_path(spi_out_bez),
+                    )
+                    for idx in range(nbits)
+                ],
+                lag_ratio=0.15,
+            )
+        )
 
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        # Add axes for N steps and frequency
-        # Make plots BLUE
-        # self.play()
+        self.play(FadeOut(*self.mobjects, shift=UP * 5))
+
+        self.wait(2)
+
+
+# TODO:
+# - Make the sawtooth modulate from the stepped function
+# - Once done drawing, decrease the step size
+class NDivRamping(Scene):
+    def construct(self):
+        duration = 2
+
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+        A = 0.5
+
+        n_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[0, 5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=3,
+            y_length=1,
+        )
+
+        vco_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=3,
+            y_length=1,
+        )
+
+        VGroup(n_ax, vco_ax).arrange(DOWN).scale_to_fit_height(
+            config["frame_height"] * 0.8
+        )
+
+        n_ax.get_axis_labels(Tex("$t$"), Tex("$N$"))
+
+        xmax = VT(0)
+        step = 1 / 1000
+
+        n_plot = always_redraw(
+            lambda: n_ax.plot(
+                lambda t: int(t * 10) % ((duration / 2) * 10),
+                x_range=[0, ~xmax, step],
+                use_smoothing=False,
+                color=YELLOW,
+            )
+        )
+
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_plot = always_redraw(
+            lambda: vco_ax.plot(
+                lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t)),
+                x_range=[0, min(~xmax, duration - step), step],
+                use_smoothing=False,
+                color=TX_COLOR,
+            )
+        )
+
+        self.add(sawtooth_plot, n_plot)
+        self.play(Create(n_ax), Create(vco_ax))
+        self.play(xmax @ duration, run_time=6, rate_func=rate_functions.linear)
 
         self.wait(2)
 
