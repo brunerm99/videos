@@ -2500,39 +2500,68 @@ class NDivRamping(Scene):
         n_ax.get_axis_labels(Tex("$t$"), Tex("$N$"))
 
         xmax = VT(0)
-        step = 1 / 1000
+        n_step = VT(1)
+        fs = 5000
+        step = 1 / fs
+
+        def get_sawtooth_func(n_step=1):
+            sawtooth_func = (
+                lambda t: (np.array(t) * 10 * round(n_step, 1)).astype(int)
+                % ((duration / 2) * 10 * n_step)
+                / n_step
+            )
+            return sawtooth_func
 
         n_plot = always_redraw(
             lambda: n_ax.plot(
-                lambda t: int(t * 10) % ((duration / 2) * 10),
+                get_sawtooth_func(n_step=~n_step),
                 x_range=[0, ~xmax, step],
                 use_smoothing=False,
                 color=YELLOW,
             )
         )
 
-        sawtooth_modulating_signal = (
-            lambda t: sawtooth_modulation_index
-            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
-            + sawtooth_carrier_freq
-        )
-        sawtooth_modulating_cumsum = (
-            lambda t: carrier_freq
-            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
-        )
+        # sawtooth_modulating_signal = (
+        #     lambda t: sawtooth_modulation_index * get_sawtooth_func(t)
+        #     + sawtooth_carrier_freq
+        # )
+        # sawtooth_modulating_cumsum = (
+        #     lambda t: carrier_freq
+        #     + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        # )
+
+        def get_sawtooth_modulating_cumsum(t, n_step):
+            sawtooth_modulating_signal = (
+                lambda t: sawtooth_modulation_index * get_sawtooth_func(n_step)(t)
+                + sawtooth_carrier_freq
+            )
+            return (
+                carrier_freq
+                + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+            )
 
         sawtooth_plot = always_redraw(
             lambda: vco_ax.plot(
-                lambda t: A * np.sin(2 * PI * sawtooth_modulating_cumsum(t)),
+                lambda t: A
+                * np.sin(2 * PI * get_sawtooth_modulating_cumsum(t, ~n_step)),
                 x_range=[0, min(~xmax, duration - step), step],
                 use_smoothing=False,
                 color=TX_COLOR,
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.add(sawtooth_plot, n_plot)
         self.play(Create(n_ax), Create(vco_ax))
         self.play(xmax @ duration, run_time=6, rate_func=rate_functions.linear)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        while ~n_step < 4:
+            n_step += 0.1
+            self.wait(0.2, frozen_frame=False)
+        # self.play(n_step @ 4, run_time=3)
 
         self.wait(2)
 
