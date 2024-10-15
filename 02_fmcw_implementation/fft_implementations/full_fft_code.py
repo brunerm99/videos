@@ -9,7 +9,7 @@ N = fs * stop_time
 window = signal.windows.blackman(N)
 x_n_windowed = x_n * window
 
-fft_len = 1024 * 10
+fft_len = N
 X_k = fftshift(fft(x_n_windowed, fft_len))
 X_k /= N / 2
 X_k = np.abs(X_k)

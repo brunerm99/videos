@@ -49,7 +49,7 @@ BLOCK_BUFF = LARGE_BUFF * 2
 BD_SCALE = 0.5
 PLL_WIDTH = config["frame_width"] * 0.5
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -407,6 +407,214 @@ def play_timeline(scene: Scene, timeline):
 
 class Intro(Scene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(False))
+        fmcw = FMCWRadarCartoon("")
+
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+
+        x_len = 6
+        y_len = 2.2
+
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).scale(1.1)
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp = lambda t: np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[0, duration, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        plot_group = VGroup(amp_ax, sawtooth_amp_graph)
+
+        gears = SVGMobject("../props/static/Gears.svg").scale(3)
+        (red_gear, blue_gear) = gears.shift(DOWN * 0.5 + RIGHT)
+
+        gr = 24 / 12
+
+        red_accel = ValueTracker(0)
+        red_vel = ValueTracker(0)
+        blue_vel = ValueTracker(0)
+
+        def driver_updater(m, dt):
+            red_vel.set_value(red_vel.get_value() + dt * red_accel.get_value())
+            blue_vel.set_value(-red_vel.get_value() / gr)
+            m.rotate(dt * red_vel.get_value())
+
+        def driven_updater(m, dt):
+            m.rotate(dt * blue_vel.get_value())
+
+        red_gear.add_updater(driver_updater)
+        blue_gear.add_updater(driven_updater)
+
+        f_beat_eqn = MathTex(r"f_{beat} = f_{TX} - f_{RX}")
+
+        amp, lp_filter, mixer, oscillator, phase_shifter, switch = (
+            BLOCKS.get("amp").copy().scale(0.7),
+            BLOCKS.get("lp_filter").copy().scale(0.7),
+            BLOCKS.get("mixer").copy().scale(0.7),
+            BLOCKS.get("oscillator").copy().scale(0.7),
+            BLOCKS.get("phase_shifter").copy().scale(0.7),
+            BLOCKS.get("spdt_switch").copy().scale(0.7),
+        )
+        rf_blocks = Group(
+            amp, lp_filter, mixer, oscillator, phase_shifter, switch
+        ).arrange_in_grid(rows=3, cols=2, buff=(MED_LARGE_BUFF, MED_LARGE_BUFF))
+
+        self.play(fmcw.get_animation())
+
+        gears.rotate(-PI / 2).scale_to_fit_width(fmcw.rect.width * 0.8).move_to(
+            fmcw.rect
+        )
+        self.play(FadeIn(gears))
+        red_accel.set_value(PI / 12)
+
+        fmcw_w_gears = Group(fmcw.vgroup, gears)
+
+        wanted = (
+            VGroup(sawtooth_amp_graph.scale(0.6), f_beat_eqn)
+            .arrange(DOWN, buff=LARGE_BUFF)
+            .to_edge(LEFT)
+        )
+        wanted.next_to(fmcw_w_gears, direction=LEFT, buff=LARGE_BUFF)
+        rf_blocks.next_to(fmcw_w_gears, direction=RIGHT, buff=LARGE_BUFF)
+
+        sawtooth_p0 = sawtooth_amp_graph.get_right() + [0.1, 0, 0]
+        sawtooth_p1 = fmcw_w_gears.get_left() + [-0.1, 0, 0]
+        sawtooth_bez = CubicBezier(
+            sawtooth_p0,
+            sawtooth_p0 + [1, 0, 0],
+            sawtooth_p1 + [-1, 0, 0],
+            sawtooth_p1,
+            # color=sawtooth_color,
+        )
+
+        f_beat_p0 = f_beat_eqn.get_right() + [0.1, 0, 0]
+        f_beat_p1 = fmcw_w_gears.get_left() + [-0.1, 0, 0]
+        f_beat_bez = CubicBezier(
+            f_beat_p0,
+            f_beat_p0 + [1, 0, 0],
+            f_beat_p1 + [-1, 0, 0],
+            f_beat_p1,
+            # color=f_beat_color,
+        )
+
+        rf_block_1_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_1_p1 = amp.get_left() + [-0.1, 0, 0]
+        rf_block_1_bez = CubicBezier(
+            rf_block_1_p0,
+            rf_block_1_p0 + [1, 0, 0],
+            rf_block_1_p1 + [-1, 0, 0],
+            rf_block_1_p1,
+            # color=rf_block_1_color,
+        )
+
+        rf_block_2_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_2_p1 = mixer.get_left() + [-0.1, 0, 0]
+        rf_block_2_bez = CubicBezier(
+            rf_block_2_p0,
+            rf_block_2_p0 + [1, 0, 0],
+            rf_block_2_p1 + [-1, 0, 0],
+            rf_block_2_p1,
+            # color=rf_block_2_color,
+        )
+
+        rf_block_3_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_3_p1 = phase_shifter.get_left() + [-0.1, 0, 0]
+        rf_block_3_bez = CubicBezier(
+            rf_block_3_p0,
+            rf_block_3_p0 + [1, 0, 0],
+            rf_block_3_p1 + [-1, 0, 0],
+            rf_block_3_p1,
+            # color=rf_block_3_color,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(sawtooth_amp_graph),
+                Create(f_beat_eqn),
+                lag_ratio=0.6,
+            )
+        )
+        self.play(Create(sawtooth_bez), Create(f_beat_bez))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(rf_block_1_bez),
+                GrowFromCenter(amp),
+                GrowFromCenter(lp_filter),
+                Create(rf_block_2_bez),
+                GrowFromCenter(mixer),
+                GrowFromCenter(oscillator),
+                Create(rf_block_3_bez),
+                GrowFromCenter(phase_shifter),
+                GrowFromCenter(switch),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
+
+        all_except_title = Group(*self.mobjects)
+
+        title = Tex("FMCW Radar Part 2:").scale(1.5)
+        subtitle = Tex("Implementation").scale(1.5)
+        hline = Line(LEFT, RIGHT)
+        hline.width = config["frame_width"] * 0.8
+
+        hline.next_to(
+            all_except_title.copy().scale(0.8).to_edge(DOWN, buff=MED_LARGE_BUFF),
+            direction=UP,
+            buff=MED_LARGE_BUFF,
+        )
+        subtitle.next_to(hline, direction=UP, buff=MED_SMALL_BUFF)
+        title.next_to(subtitle, direction=UP, buff=MED_SMALL_BUFF)
+
+        # self.play(
+        #     LaggedStart(
+        #         all_except_title.animate.scale(0.8).to_edge(DOWN, buff=MED_LARGE_BUFF),
+        #         AnimationGroup(GrowFromCenter(hline), Create(title), Create(subtitle)),
+        #         lag_ratio=0.5,
+        #     )
+        # )
+
+        self.next_section(skip_animations=False)
+        self.wait(0.5, frozen_frame=False)
+
+        self.play(
+            all_except_title.animate(run_time=1.5).shift(DOWN * 8),
+            # ShrinkToCenter(hline),
+        )
+
+        self.wait(2)
+
+
+class IntroV1(Scene):
+    def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         fmcw = FMCWRadarCartoon()
 
@@ -718,13 +926,6 @@ class Intro(Scene):
 class Part2Series(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=False)
-        title = Tex("FMCW Radar Part 2:").scale(1.5)
-        subtitle = (
-            Tex("Implementation")
-            .scale(1.5)
-            .next_to(title, direction=DOWN, buff=MED_SMALL_BUFF)
-        )
-        titles = VGroup(title, subtitle).move_to([-3.61670042e-1, 2.13766246, 0])
 
         nl = (
             NumberLine(
@@ -743,7 +944,9 @@ class Part2Series(MovingCameraScene):
             part_1_thumbnail, direction=UP, buff=SMALL_BUFF
         )
         part_2_thumbnail = (
-            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            ImageMobject(
+                "../02_fmcw_implementation/media/images/fmcw_implementation/Thumbnail_Option_2.png"
+            )
             .scale(0.4)
             .next_to(nl.n2p(1), direction=UP, buff=LARGE_BUFF)
         )
@@ -755,7 +958,7 @@ class Part2Series(MovingCameraScene):
             nl.n2p(1), direction=DOWN, buff=MED_LARGE_BUFF
         )
         part_3_thumbnail = (
-            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            ImageMobject("./media/images/fmcw_implementation/RadarCube.png")
             .scale(0.4)
             .next_to(nl.n2p(2), direction=UP, buff=LARGE_BUFF)
         )
@@ -774,8 +977,6 @@ class Part2Series(MovingCameraScene):
             part_4_thumbnail, direction=UP, buff=SMALL_BUFF
         )
 
-        self.add(titles)
-
         self.wait(0.5)
 
         self.play(
@@ -785,9 +986,10 @@ class Part2Series(MovingCameraScene):
                     part_1_thumbnail, part_1_thumbnail_box, part_1_label, shift=DOWN
                 ),
                 AnimationGroup(
-                    FadeIn(part_2_thumbnail, part_2_thumbnail_box, shift=DOWN),
+                    FadeIn(
+                        part_2_thumbnail, part_2_thumbnail_box, part_2_label, shift=DOWN
+                    ),
                     FadeIn(this_video, shift=UP),
-                    Transform(titles, part_2_label),
                 ),
                 lag_ratio=0.5,
             )
@@ -859,7 +1061,7 @@ class Part2Series(MovingCameraScene):
             FadeOut(this_video, shift=DOWN),
         )
 
-        self.play(self.camera.frame.animate.scale(0.1), FadeOut(*self.mobjects))
+        self.play(FadeOut(*self.mobjects))
 
         # self.play(self.camera.frame.animate(run_time=6).shift(RIGHT * nl.n2p(3)))
 
@@ -919,11 +1121,26 @@ class BD(Scene):
 
         self.play(get_bd_animation(bd, lagged=True, lag_ratio=0.5), run_time=5)
         self.play(
-            Create(rx_section_box),
-            Create(tx_section_box),
-            Create(rx_section_box_label),
-            Create(tx_section_box_label),
+            LaggedStart(
+                AnimationGroup(
+                    Create(tx_section_box),
+                    Create(tx_section_box_label),
+                ),
+                AnimationGroup(
+                    Create(rx_section_box),
+                    Create(rx_section_box_label),
+                ),
+                lag_ratio=0.3,
+            )
         )
+
+        self.wait(1)
+
+        self.play(Indicate(tx_section_box_label))
+
+        self.wait(1)
+
+        self.play(Indicate(rx_section_box_label))
 
         self.wait(1)
 
@@ -1155,7 +1372,7 @@ class BlockSections(Scene):
             pll_block.get_corner(UR), pll_box.get_corner(DR), color=BLUE_D
         )
 
-        pll_label_specific = Tex("Phase-locked Loop")
+        pll_label_specific = Tex("Phase-locked Loop (PLL)")
 
         self.play(
             pll_label.animate.set_opacity(1),
@@ -1177,28 +1394,28 @@ class BlockSections(Scene):
 
         self.wait(0.5)
 
-        self.play(
-            Indicate(pa),
-            pa_label.animate.set_opacity(1),
-            Indicate(lna),
-            lna_label.animate.set_opacity(1),
-        )
+        self.play(pa_label.animate.set_opacity(1), lna_label.animate.set_opacity(1))
+        self.play(Indicate(pa), Indicate(lna))
 
         self.wait(0.5)
 
-        self.play(Indicate(lp_filter), lp_filter_label.animate.set_opacity(1))
+        self.play(lp_filter_label.animate.set_opacity(1))
+        self.play(Indicate(lp_filter))
 
         self.wait(0.5)
 
-        self.play(Indicate(splitter), splitter_label.animate.set_opacity(1))
+        self.play(splitter_label.animate.set_opacity(1))
+        self.play(Indicate(splitter))
 
         self.wait(0.5)
 
-        self.play(Indicate(mixer), mixer_label.animate.set_opacity(1))
+        self.play(mixer_label.animate.set_opacity(1))
+        self.play(Indicate(mixer))
 
         self.wait(0.5)
 
-        self.play(Indicate(adc), adc_label.animate.set_opacity(1))
+        self.play(adc_label.animate.set_opacity(1))
+        self.play(Indicate(adc))
 
         self.wait(0.5)
 
@@ -1669,14 +1886,15 @@ class PLL(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            self.camera.frame.animate.scale(1.2).move_to(
-                VGroup(ndiv, vco_to_ndiv_2, ndiv_to_phase_detector_1)
+            self.camera.frame.animate.scale(1.4).move_to(
+                pll
+                # VGroup(ndiv, vco_to_ndiv_2, ndiv_to_phase_detector_1)
             )
         )
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.scale(1 / 1.2).move_to(ndiv))
+        self.play(self.camera.frame.animate.scale(1 / 1.4).move_to(ndiv))
         self.play(
             FadeIn(
                 ndiv_label_below.next_to(ndiv, direction=DOWN, buff=SMALL_BUFF),
@@ -1704,6 +1922,8 @@ class PLL(MovingCameraScene):
             ).animate.set_opacity(0.2),
             n_div_box.animate.set_stroke(color=WHITE, opacity=0.2).set_fill(opacity=0),
         )
+
+        self.wait(0.5)
 
         lo.scale_to_fit_width(vco.width).next_to(
             to_phase_detector, direction=LEFT, buff=0
@@ -1953,16 +2173,6 @@ class PLL(MovingCameraScene):
         pfd_piecewise_top.set_color(GREEN)
         self.play(Indicate(pfd_piecewise_top, color=GREEN))
 
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                loop_filter.animate.set_opacity(1),
-                loop_filter_to_vco.animate.set_opacity(1),
-                lag_ratio=0.5,
-            )
-        )
-
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
@@ -2075,6 +2285,23 @@ class PLL(MovingCameraScene):
                 run_time=3, rate_func=rate_functions.linear
             ).increment_value(1)
         )
+
+        self.wait(0.5, frozen_frame=False)
+
+        self.play(
+            loop_filter.animate(rate_func=rate_functions.ease_in_sine, run_time=0.5)
+            .set_opacity(1)
+            .scale(1.2)
+        )
+        self.play(
+            loop_filter.animate(
+                rate_func=rate_functions.ease_out_sine, run_time=0.5
+            ).scale(1 / 1.2),
+            loop_filter_to_vco.animate.set_opacity(1),
+        )
+
+        self.wait(0.5, frozen_frame=False)
+
         self.play(
             GrowArrow(pfd_out_to_loop_filter_out),
         )
@@ -2082,6 +2309,8 @@ class PLL(MovingCameraScene):
             Create(loop_filter_out),
             FadeIn(loop_filter_out_label),
         )
+
+        self.wait(5, frozen_frame=False)
 
         self.play(
             FadeOut(
@@ -2118,7 +2347,17 @@ class PLL(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        self.play(vco.animate.set_opacity(1), from_vco.animate.set_opacity(1))
+        self.play(
+            vco.animate(rate_func=rate_functions.ease_in_sine, run_time=0.5)
+            .set_opacity(1)
+            .scale(1.2)
+        )
+        self.play(
+            vco.animate(rate_func=rate_functions.ease_out_sine, run_time=0.5).scale(
+                1 / 1.2
+            ),
+            from_vco.animate.set_opacity(1),
+        )
 
         self.wait(0.5)
 
@@ -2152,6 +2391,7 @@ class PLL(MovingCameraScene):
                 vco_ax.plot(
                     lambda t: A * np.sin(2 * PI * f_vco_tracker.get_value() * t),
                     x_range=[0, 1, step],
+                    color=TX_COLOR,
                 )
             )
 
@@ -2215,10 +2455,21 @@ class PLL(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            # ndiv.animate.set_opacity(1),
+            n_div_label.animate(rate_func=rate_functions.ease_in_sine, run_time=0.5)
+            .set_opacity(1)
+            .scale(1.2),
+            n_div_box.animate(rate_func=rate_functions.ease_in_sine, run_time=0.5)
+            .set_stroke(color=WHITE, opacity=1)
+            .scale(1.2),
+        )
+        self.play(
+            n_div_box.animate(
+                rate_func=rate_functions.ease_out_sine, run_time=0.5
+            ).scale(1 / 1.2),
+            n_div_label.animate(
+                rate_func=rate_functions.ease_out_sine, run_time=0.5
+            ).scale(1 / 1.2),
             ndiv_to_phase_detector.animate.set_opacity(1),
-            n_div_label.animate.set_opacity(1),
-            n_div_box.animate.set_stroke(color=WHITE, opacity=1).set_fill(opacity=0),
             vco_to_ndiv.animate.set_opacity(1),
             vco_output_conn.animate.set_opacity(1),
         )
@@ -2226,6 +2477,10 @@ class PLL(MovingCameraScene):
         self.wait(0.5)
 
         self.play(Transform(n_div_label, n_div_label_n2.move_to(n_div_label)))
+
+        self.wait(0.5)
+
+        self.play(Indicate(n_div_label))
 
         self.wait(0.5)
 
@@ -2251,6 +2506,7 @@ class PLL(MovingCameraScene):
 
         self.play(Indicate(lo_signal))
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         fb_signal.remove_updater(fb_signal_updater)
@@ -2261,7 +2517,8 @@ class PLL(MovingCameraScene):
 
         loop_count_start = 1
         n_loops = 10
-        loop_f_step = (f_lo - f_fb_tracker.get_value()) / n_loops
+        loop_f_step = 0.15
+        # loop_f_step = (f_lo - f_fb_tracker.get_value()) / n_loops
 
         loop_count_tracker = ValueTracker(loop_count_start)
         loop_counter = always_redraw(
@@ -2286,6 +2543,7 @@ class PLL(MovingCameraScene):
                 f_fb_tracker.animate.increment_value(loop_f_step),
                 run_time=0.5,
             )
+            self.wait(0.2, frozen_frame=False)
 
         self.wait(0.5)
 
@@ -2367,8 +2625,20 @@ class PLL(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
+
+        where_fm = Tex(
+            r"Where does the ", "frequency-modulated", r"\\in ", "FM", "CW come from?"
+        ).to_edge(DOWN, LARGE_BUFF)
+        where_fm[1].set_color(BLUE)
+        where_fm[3].set_color(BLUE)
+
+        self.play(Create(where_fm))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(where_fm, shift=DOWN))
 
         spi_clk_p1 = ndiv.get_corner(DR)  # + [-ndiv.width / 4, 0, 0]
         spi_in_p1 = ndiv.get_bottom() + [0, 0, 0]
@@ -2455,14 +2725,64 @@ class PLL(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        self.play(FadeOut(*self.mobjects, shift=UP * 5))
+        n_ax_new = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[0, 5, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=config["frame_width"] * 0.7,
+            y_length=config["frame_height"] * 0.4,
+        )
+
+        vco_ax_new = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=config["frame_width"] * 0.7,
+            y_length=config["frame_height"] * 0.4,
+        )
+
+        VGroup(n_ax_new, vco_ax_new).arrange(DOWN, MED_LARGE_BUFF)
+
+        n_ax_labels = n_ax_new.get_axis_labels(Tex(""), Tex("$N$"))
+        vco_ax_labels_new = vco_ax_new.get_axis_labels(Tex("$t$"), Tex("$A$"))
+
+        vco_ax_group_new = VGroup(vco_ax_new, vco_ax_labels_new)
+
+        self.play(
+            FadeOut(
+                pll.remove(ndiv_label_below),
+                spi_in_bez,
+                spi_in_label,
+                spi_out_bez,
+                spi_out_label,
+                spi_clk_bez,
+                spi_clk_label,
+                vco_f_label,
+                shift=UP * 5,
+            ),
+            Uncreate(vco_signal),
+        )
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(config["frame_width"]),
+                Transform(vco_ax_group.remove(vco_f_label), vco_ax_group_new),
+                Create(n_ax_new),
+                FadeIn(n_ax_labels),
+                lag_ratio=0.5,
+            )
+        )
 
         self.wait(2)
 
 
 # TODO:
-# - Make the sawtooth modulate from the stepped function
-# - Once done drawing, decrease the step size
+# - Add the ndiv block somewhere and show N changing
+# - Label axes
+# - Set up PLL animation to transition into this
 class NDivRamping(Scene):
     def construct(self):
         duration = 2
@@ -2480,8 +2800,8 @@ class NDivRamping(Scene):
             y_range=[0, 5, 1],
             tips=False,
             axis_config={"include_numbers": False},
-            x_length=3,
-            y_length=1,
+            x_length=config["frame_width"] * 0.7,
+            y_length=config["frame_height"] * 0.4,
         )
 
         vco_ax = Axes(
@@ -2489,15 +2809,14 @@ class NDivRamping(Scene):
             y_range=[-1, 1, 0.5],
             tips=False,
             axis_config={"include_numbers": False},
-            x_length=3,
-            y_length=1,
+            x_length=config["frame_width"] * 0.7,
+            y_length=config["frame_height"] * 0.4,
         )
 
-        VGroup(n_ax, vco_ax).arrange(DOWN).scale_to_fit_height(
-            config["frame_height"] * 0.8
-        )
+        VGroup(n_ax, vco_ax).arrange(DOWN, MED_LARGE_BUFF)
 
-        n_ax.get_axis_labels(Tex("$t$"), Tex("$N$"))
+        n_ax_labels = n_ax.get_axis_labels(Tex(""), Tex("$N$"))
+        vco_ax_labels = vco_ax.get_axis_labels(Tex("$t$"), Tex("$A$"))
 
         xmax = VT(0)
         n_step = VT(1)
@@ -2515,7 +2834,7 @@ class NDivRamping(Scene):
         n_plot = always_redraw(
             lambda: n_ax.plot(
                 get_sawtooth_func(n_step=~n_step),
-                x_range=[0, ~xmax, step],
+                x_range=[0, min(~xmax, duration - step), step],
                 use_smoothing=False,
                 color=YELLOW,
             )
@@ -2551,17 +2870,21 @@ class NDivRamping(Scene):
         )
 
         self.next_section(skip_animations=skip_animations(True))
-        self.add(sawtooth_plot, n_plot)
-        self.play(Create(n_ax), Create(vco_ax))
+        self.add(sawtooth_plot, n_plot, n_ax, vco_ax, n_ax_labels, vco_ax_labels)
+        # self.play(Create(n_ax), Create(vco_ax))
         self.play(xmax @ duration, run_time=6, rate_func=rate_functions.linear)
 
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        while ~n_step < 4:
-            n_step += 0.1
-            self.wait(0.2, frozen_frame=False)
-        # self.play(n_step @ 4, run_time=3)
+        self.play(n_step @ 4, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(sawtooth_plot, vco_ax, vco_ax_labels, shift=RIGHT * 2),
+            FadeOut(n_plot, n_ax, n_ax_labels, shift=LEFT * 2),
+        )
 
         self.wait(2)
 
@@ -2696,7 +3019,18 @@ class MixerIntro(MovingCameraScene):
             UL, buff=SMALL_BUFF
         )
 
-        self.add(bd)
+        self.camera.frame.save_state()
+        self.camera.frame.scale(0.4).move_to(pll_block)
+
+        self.add(bd.shift(DOWN * 8))
+
+        self.play(bd.animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
 
         self.play(bd.animate.to_edge(DOWN))
 
@@ -3787,9 +4121,12 @@ class Mixer(MovingCameraScene):
             if_sub_f_beat_label.get_corner(UL), if_sub_box.get_corner(DR) + UP / 2
         )
 
+        self.play(Create(if_sub_box))
+
+        self.wait(0.5)
+
         self.play(
             LaggedStart(
-                Create(if_sub_box),
                 FadeIn(if_sub_f_beat_label),
                 GrowArrow(if_sub_f_beat_to_box_arrow),
                 lag_ratio=0.5,
@@ -4030,12 +4367,26 @@ class MixerProducts(MovingCameraScene):
 
         f_if_eqn_desired = Tex(r"$f_{LO} - f_{RF}$")
         f_if_eqn_and = Tex("and")
-        f_if_eqn_flipped = Tex(r"$f_{RF} - f_{IF}$")
+        f_if_eqn_flipped = Tex(r"$f_{RF} - f_{LO}$")
         f_if_eqn = VGroup(f_if_eqn_desired, f_if_eqn_and, f_if_eqn_flipped)
 
         if_plot = ax.plot_line_graph([0], [0], add_vertex_dots=False)
 
-        def get_plot_values(ports=["lo", "rf_l", "rf_h", "if"], y_min=None):
+        filt_fmax_disp = VT(0)
+
+        def get_plot_values(
+            ports=["lo", "rf_l", "rf_h", "if"],
+            y_min=None,
+            noise_power=-20,
+            filt: Network = None,
+        ):
+            noise_mu = 0
+            noise_sigma_db = noise_power
+            noise_sigma = 10 ** (noise_sigma_db / 10)
+
+            np.random.seed(2)
+            noise = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
             lo_signal = np.sin(2 * PI * f_lo * t) / (10 ** (lo_loss.get_value() / 10))
             if_signal = np.sin(2 * PI * f_if * t) / (10 ** (if_loss.get_value() / 10))
             rf_l_signal = np.sin(2 * PI * f_rf_l * t) / (
@@ -4050,6 +4401,7 @@ class MixerProducts(MovingCameraScene):
                 "rf_l": rf_l_signal,
                 "rf_h": rf_h_signal,
                 "if": if_signal,
+                "noise": noise,
             }
             summed_signals = sum([signals.get(port) for port in ports])
 
@@ -4065,11 +4417,34 @@ class MixerProducts(MovingCameraScene):
             x_values = freq[indices]
             y_values = summed_fft_log[indices]
 
+            if filt is not None:
+                filt_mirror = np.concatenate(
+                    [filt.s_db[:, 1, 0][::-1], filt.s_db[:, 1, 0]]
+                )
+                f_mirror = np.concatenate([-filt.f[::-1], filt.f]) / 1e9
+
+                filt_mirror[
+                    (f_mirror > ~filt_fmax_disp) | (f_mirror < -~filt_fmax_disp)
+                ] = 0
+
+                f_filter = interpolate.interp1d(
+                    f_mirror,
+                    filt_mirror,
+                    fill_value=(filt_mirror[0], filt_mirror[-1]),
+                    bounds_error=False,
+                )
+
+                filter_interp = f_filter(x_values)
+                filter_fudge_factor = 5
+                y_values += filter_interp / filter_fudge_factor
+
             if y_min is not None:
                 y_values[y_values < y_min] = y_min
                 y_values -= y_min
 
             return dict(x_values=x_values, y_values=y_values)
+
+        lp_filter_ntwk = Network("./data/LFCW-1062+_Plus25DegC_Unit1.s2p")
 
         if_plot = ax.plot_line_graph(
             **get_plot_values(ports=["if"], y_min=y_min),
@@ -4077,7 +4452,9 @@ class MixerProducts(MovingCameraScene):
             line_color=IF_COLOR,
         )
         rf_l_plot = ax.plot_line_graph(
-            **get_plot_values(ports=["rf_l"], y_min=y_min),
+            **get_plot_values(
+                ports=["rf_l", "noise"], y_min=y_min, filt=lp_filter_ntwk
+            ),
             add_vertex_dots=False,
             line_color=RX_COLOR,
         )
@@ -4141,7 +4518,7 @@ class MixerProducts(MovingCameraScene):
             ax_y_label,
             lo_plot,
             rf_l_plot,
-            rf_h_plot,
+            # rf_h_plot,
             if_plot,
             if_tick,
             if_tick_label,
@@ -4189,17 +4566,27 @@ class MixerProducts(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            Create(lo_plot), Create(rf_l_plot), Create(rf_h_plot), Create(if_plot)
+            Create(lo_plot),
+            Create(rf_l_plot),
+            # Create(rf_h_plot),
+            Create(if_plot),
         )
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        def get_plot_updater(ports, color):
+        noise_power_vt = VT(-30)
+
+        def get_plot_updater(ports, color, filt: Network = None):
             def updater(m: Mobject):
                 m.become(
                     ax.plot_line_graph(
-                        **get_plot_values(ports=ports, y_min=y_min),
+                        **get_plot_values(
+                            ports=ports,
+                            y_min=y_min,
+                            noise_power=~noise_power_vt,
+                            filt=filt,
+                        ),
                         add_vertex_dots=False,
                         line_color=color,
                     )
@@ -4208,7 +4595,9 @@ class MixerProducts(MovingCameraScene):
             return updater
 
         if_plot_updater = get_plot_updater(ports=["if"], color=IF_COLOR)
-        rf_l_plot_updater = get_plot_updater(ports=["rf_l"], color=RX_COLOR)
+        rf_l_plot_updater = get_plot_updater(
+            ports=["rf_l", "noise"], color=RX_COLOR, filt=lp_filter_ntwk
+        )
         rf_h_plot_updater = get_plot_updater(ports=["rf_h"], color=RX_COLOR)
         lo_plot_updater = get_plot_updater(ports=["lo"], color=TX_COLOR)
 
@@ -4269,7 +4658,54 @@ class MixerProducts(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(plot_group.animate.to_edge(DOWN, buff=MED_SMALL_BUFF))
+        f_gap_total_line = Line(
+            ax.c2p(f_rf_l, -y_min - lo_loss.get_value() + 2),
+            ax.c2p(f_rf_h, -y_min - lo_loss.get_value() + 2),
+        )
+        f_gap_left = Line(
+            ax.c2p(f_rf_l, -y_min - lo_loss.get_value() + 2) + DOWN / 4,
+            ax.c2p(f_rf_l, -y_min - lo_loss.get_value() + 2) + UP / 4,
+        )
+        f_gap_mid = Line(
+            ax.c2p(f_lo, -y_min - lo_loss.get_value() + 2) + DOWN / 4,
+            ax.c2p(f_lo, -y_min - lo_loss.get_value() + 2) + UP / 4,
+        )
+        f_gap_right = Line(
+            ax.c2p(f_rf_h, -y_min - lo_loss.get_value() + 2) + DOWN / 4,
+            ax.c2p(f_rf_h, -y_min - lo_loss.get_value() + 2) + UP / 4,
+        )
+
+        f_gap_left_line = Line(
+            f_gap_total_line.get_midpoint(), f_gap_total_line.get_left()
+        )
+        f_gap_right_line = Line(
+            f_gap_total_line.get_midpoint(), f_gap_total_line.get_right()
+        )
+
+        f_gap_label_l = Tex("2GHz").scale(0.7).next_to(f_gap_left_line, UP)
+        f_gap_label_r = f_gap_label_l.copy().next_to(f_gap_right_line, UP)
+
+        self.play(
+            LaggedStart(
+                Create(f_gap_mid),
+                AnimationGroup(Create(f_gap_left_line), Create(f_gap_right_line)),
+                AnimationGroup(Create(f_gap_left), Create(f_gap_right)),
+                FadeIn(f_gap_label_l, f_gap_label_r),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            plot_group.animate.to_edge(DOWN, buff=MED_SMALL_BUFF),
+            Uncreate(f_gap_mid),
+            Uncreate(f_gap_left_line),
+            Uncreate(f_gap_right_line),
+            Uncreate(f_gap_left),
+            Uncreate(f_gap_right),
+            FadeOut(f_gap_label_l, f_gap_label_r),
+        )
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
@@ -4296,7 +4732,9 @@ class MixerProducts(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        self.play(rf_h_loss.animate.set_value(rf_l_loss.get_value() + 10))
+        # self.play(rf_h_loss.animate.set_value(rf_l_loss.get_value() + 10))
+        rf_h_loss.set_value(rf_l_loss.get_value() + 10)
+        self.play(noise_power_vt @ -5)
 
         rf_h_p1 = ax.c2p(f_rf_h, -y_min - rf_h_loss.get_value(), 0) + DOWN / 4
         rf_h_plot_group.next_to(
@@ -4586,12 +5024,20 @@ class MixerProducts(MovingCameraScene):
 
         rf_filt_signal.next_to(mixer_group_copy, direction=RIGHT, buff=0)
         rf_filt_signal_copy = rf_filt_signal.copy()
-        lp_filter_ntwk = Network("./data/LFCW-1062+_Plus25DegC_Unit1.s2p")
-        lp_filter_plot = ax.plot_line_graph(
-            lp_filter_ntwk.f / 1e9,
-            lp_filter_ntwk.s_db[:, 1, 0] - y_min,
-            add_vertex_dots=False,
-            line_color=FILTER_COLOR,
+        lp_filter_plot_opacity = VT(1)
+        lp_filter_plot = always_redraw(
+            lambda: ax.plot_line_graph(
+                (lp_filter_ntwk.f / 1e9)[lp_filter_ntwk.f / 1e9 < ~filt_fmax_disp]
+                if ~filt_fmax_disp > (lp_filter_ntwk.f / 1e9)[0]
+                else [0],
+                (lp_filter_ntwk.s_db[:, 1, 0] - y_min)[
+                    lp_filter_ntwk.f / 1e9 < ~filt_fmax_disp
+                ]
+                if ~filt_fmax_disp > (lp_filter_ntwk.f / 1e9)[0]
+                else [0],
+                add_vertex_dots=False,
+                line_color=FILTER_COLOR,
+            ).set_stroke(color=FILTER_COLOR, opacity=~lp_filter_plot_opacity)
         )
         lp_filter = (
             BLOCKS.get("lp_filter")
@@ -4622,7 +5068,8 @@ class MixerProducts(MovingCameraScene):
         self.play(
             FadeIn(filter_line_legend, filter_legend, shift=LEFT),
             Create(rf_l_rect),
-            rf_h_loss.animate.increment_value(3),
+            # rf_h_loss.animate.increment_value(3),
+            noise_power_vt - 5,
         )
         self.play(Create(rf_filt_signal))
 
@@ -4632,7 +5079,8 @@ class MixerProducts(MovingCameraScene):
         self.play(
             Uncreate(rf_l_rect),
             Uncreate(rf_filt_signal),
-            rf_h_loss.animate.increment_value(-3),
+            # rf_h_loss.animate.increment_value(-3),
+            noise_power_vt + 5,
         )
         self.play(
             FadeOut(bp_filter, shift=DOWN),
@@ -4666,11 +5114,17 @@ class MixerProducts(MovingCameraScene):
         )
         self.remove(lp_filter_datasheet)
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(FadeOut(f_if_eqn))
-        self.play(Create(lp_filter_plot))
+        self.add(lp_filter_plot)
+        self.play(
+            # Create(lp_filter_plot),
+            filt_fmax_disp @ f_max,
+            run_time=5,
+            rate_func=rate_functions.linear,
+        )
         self.play(rf_h_loss.animate.increment_value(3))
         self.play(Create(rf_filt_signal_copy))
 
@@ -4688,11 +5142,14 @@ class MixerProducts(MovingCameraScene):
         bd_section = Group(
             *filter_section, mixer_group_copy, mixer_group, mixer, lo_signal, if_signal
         )
-        all_except_filter_section = Group(*self.mobjects).remove(*bd_section)
+        all_except_filter_section = Group(*self.mobjects).remove(
+            *bd_section, lp_filter_plot
+        )
         # all_except_filter_section.save_state()
 
         self.play(
             *get_fade_group(all_except_filter_section, opacity=0.2),
+            lp_filter_plot_opacity @ 0.2,
             self.camera.frame.animate.move_to(lp_filter)
             .shift(DOWN / 2)
             .scale_to_fit_width(filter_section.width * 1.2),
@@ -4777,7 +5234,10 @@ class MixerProducts(MovingCameraScene):
                         config["frame_width"]
                     ),
                 ),
-                AnimationGroup(*get_fade_group(all_except_filter_section, opacity=1)),
+                AnimationGroup(
+                    *get_fade_group(all_except_filter_section, opacity=1),
+                    lp_filter_plot_opacity @ 1,
+                ),
                 lag_ratio=0.6,
             )
         )
@@ -4796,7 +5256,7 @@ class MixerProducts(MovingCameraScene):
             # bd_left.animate.restore(),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         ssb_label = (
@@ -4877,7 +5337,7 @@ class MixerProducts(MovingCameraScene):
         )
         self.play(
             Uncreate(rf_l_plot),
-            Uncreate(rf_h_plot),
+            # Uncreate(rf_h_plot),
             Uncreate(lo_plot),
             Uncreate(if_plot),
             Uncreate(ax),
@@ -5012,7 +5472,7 @@ class HardwareWrapUp(Scene):
         self.play(Create(sine_plot), GrowArrow(sine_plot_arrow))
         self.play(Create(fm_plot), GrowArrow(fm_plot_arrow))
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -5021,7 +5481,7 @@ class HardwareWrapUp(Scene):
             FadeOut(sine_plot_arrow, fm_plot_arrow),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(pll_block.animate.restore())
@@ -5168,7 +5628,7 @@ class HardwareWrapUp(Scene):
             Uncreate(f_beat_3_bez),
         )
 
-        self.next_section(skip_animations=False)
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -7348,9 +7808,7 @@ class FFT(Scene):
                         code.background_mobject,
                     ).animate.shift(DOWN * 6),
                 ),
-                Group(X_k_label, f_ax_label, f_ax, X_k_1_plot, f_samples)
-                # .animate.scale_to_fit_width(config["frame_width"] * 0.7)
-                .move_to(ORIGIN),
+                Group(X_k_label, f_ax_label, f_ax, X_k_1_plot).animate.move_to(ORIGIN),
                 lag_ratio=0.6,
             )
         )
@@ -8775,7 +9233,7 @@ class Conclusion(Scene):
         remaining = (
             VGroup(
                 *[
-                    Square(color=BLACK, fill_color=BLUE, fill_opacity=0.7)
+                    Square(color=BLACK, fill_color=BLUE, fill_opacity=1)
                     for _ in range(new_num_samples**2)
                 ]
             )
@@ -8798,7 +9256,7 @@ class RadarCube(ThreeDScene):
         axes = ThreeDAxes()
         labels = axes.get_axis_labels()
 
-        self.set_camera_orientation(zoom=0.7)
+        # self.set_camera_orientation(zoom=0.7)
 
         num_samples = 5
 
@@ -8822,12 +9280,15 @@ class RadarCube(ThreeDScene):
             VGroup(
                 cubes_square,
                 *[
-                    cubes_square.copy().set_fill(opacity=0.7, color=BLUE)
-                    for _ in range(num_samples - 1)
+                    cubes_square.copy()
+                    .set_fill(opacity=0.7, color=BLUE)
+                    .shift((idx + 1) * cubes_square.depth * IN)
+                    for idx in range(num_samples - 1)
                 ],
             )
-            .arrange(IN, buff=0, center=False)
-            .move_to(ORIGIN)
+            # .arrange(IN, buff=0, center=False)
+            # .scale_to_fit_height(config["frame_height"] * 0.8)
+            # .move_to(ORIGIN)
         )
 
         slow_time = Tex("Slow time").next_to(cubes_square, DOWN, MED_SMALL_BUFF)
@@ -8843,6 +9304,7 @@ class RadarCube(ThreeDScene):
         self.add(
             # axes,
             # labels,
+            # cubes_square,
             cubes_cube,
             # slow_time,
             # fast_time,
@@ -8857,10 +9319,90 @@ class RadarCube(ThreeDScene):
         self.move_camera(
             phi=75 * DEGREES,
             theta=-45 * DEGREES,
-            # gamma=45 * DEGREES,
+            frame_center=[0, 0, -cubes_square.depth * num_samples / 2],
             zoom=0.7,
         )
         # self.set_camera_orientation(phi=75 * DEGREES, theta=-45 * DEGREES)
+
+        self.wait(2)
+
+
+class InTheDescription(Scene):
+    def construct(self):
+        text_scale = 0.8
+
+        thanks = Text("Thanks for watching!")
+
+        resources = Text("resources").scale(text_scale)
+        caveats = Text("caveats").scale(text_scale)
+        source_code = Text(
+            "// source code", font="FiraCode Nerd Font Mono", color=GRAY_C
+        ).scale(text_scale)
+        VGroup(resources, caveats, source_code).arrange(RIGHT, MED_LARGE_BUFF)
+
+        resources_p2 = resources.get_bottom() + [0, -0.1, 0]
+        caveats_p2 = caveats.get_bottom() + [0, -0.1, 0]
+        source_code_p2 = source_code.get_bottom() + [0, -0.1, 0]
+
+        tip = (
+            Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+            .scale(0.4)
+            .to_edge(DOWN)
+            .rotate(PI / 3)
+        )
+        tip_p1 = tip.get_top()
+
+        resources_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            resources_p2 + [0, -1, 0],
+            resources_p2,
+        )
+        caveats_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            caveats_p2 + [0, -1, 0],
+            caveats_p2,
+        )
+        source_code_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            source_code_p2 + [0, -1, 0],
+            source_code_p2,
+        )
+
+        self.play(GrowFromCenter(thanks))
+
+        self.wait(0.5)
+
+        self.play(thanks.animate.to_edge(UP))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(tip),
+                Create(resources_bez),
+                GrowFromCenter(resources),
+                lag_ratio=0.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                Create(caveats_bez),
+                GrowFromCenter(caveats),
+                lag_ratio=0.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                Create(source_code_bez),
+                GrowFromCenter(source_code),
+                lag_ratio=0.4,
+            )
+        )
 
         self.wait(2)
 
@@ -9682,8 +10224,412 @@ class RadarTest(Scene):
         self.add(radar.vgroup, cloud, building)
 
 
+class TwoDTest(Scene):
+    def construct(self):
+        new_num_samples = 5
+        remaining = (
+            VGroup(
+                *[
+                    Square(color=BLACK, fill_color=BLUE, fill_opacity=0.7)
+                    for _ in range(new_num_samples**2)
+                ]
+            )
+            .arrange_in_grid(new_num_samples, new_num_samples, buff=0)
+            .scale_to_fit_height(config["frame_height"] * 0.8)
+            .move_to(ORIGIN)
+        )
+        self.add(remaining)
+
+
+class ThreeDTest(ThreeDScene):
+    def construct(self):
+        axes = ThreeDAxes()
+        labels = axes.get_axis_labels()
+
+        # self.set_camera_orientation(zoom=0.7)
+
+        num_samples = 5
+
+        cubes_square = (
+            VGroup(
+                *[
+                    Cube(
+                        side_length=3,
+                        stroke_width=DEFAULT_STROKE_WIDTH,
+                        stroke_color=BLACK,
+                        fill_opacity=1,
+                        fill_color=BLUE,
+                    )
+                    for _ in range(num_samples**2)
+                ]
+            )
+            .arrange_in_grid(num_samples, num_samples, buff=0)
+            .scale_to_fit_height(config["frame_height"] * 0.8)
+        )
+        self.add(cubes_square)
+
+
+class FadeInIndicate(Scene):
+    def construct(self):
+        loop_filter = BLOCKS.get("lp_filter").copy().set_opacity(0.2)
+
+        self.add(loop_filter)
+
+        self.wait(0.5)
+
+        self.play(
+            loop_filter.animate(rate_func=rate_functions.ease_in_sine, run_time=0.5)
+            .set_opacity(1)
+            .scale(1.2)
+        )
+        self.play(
+            loop_filter.animate(
+                rate_func=rate_functions.ease_out_sine, run_time=0.5
+            ).scale(1 / 1.2)
+        )
+        self.wait(2)
+
+
+class LinePlotFade(Scene):
+    def construct(self):
+        ax = Axes(x_range=[0, 1, 0.5])
+        t = np.linspace(0, 1, 1000)
+        x = np.sin(2 * PI * 3 * t)
+        op = VT(1)
+        plot = always_redraw(
+            lambda: ax.plot_line_graph(
+                t, x, add_vertex_dots=False, line_color=IF_COLOR
+            ).set_stroke(color=IF_COLOR, opacity=~op)
+        )
+        self.add(ax, plot)
+        self.wait(0.5)
+        self.play(op @ 0.2)
+        self.wait(0.5)
+        self.play(op @ 1)
+        self.wait(2)
+
+
+""" End Screen """
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Tex("Stats for Nerds")
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "10,422"],
+                    ["Script word count", "3,603"],
+                    ["Days to make", "64"],
+                    ["Git commits", "55"],
+                ]
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
+        thank_you_sabrina = (
+            Tex(r"Thank you, Sabrina, for\\editing the whole video :)")
+            .next_to(stats_group, DOWN)
+            .to_edge(DOWN)
+        )
+
+        profile_pic = Circle(radius=1.2)
+        marshall_bruner = Tex("Marshall Bruner").next_to(
+            profile_pic, direction=DOWN, buff=MED_SMALL_BUFF
+        )
+        profile_group = VGroup(profile_pic, marshall_bruner).scale(0.7)
+
+        video_height = 3
+        aspect_ratio = 16 / 9
+
+        next_video = Rectangle(height=video_height, width=aspect_ratio * video_height)
+        next_video_inside = Tex(r"Next Video\\(WIP)").move_to(next_video.get_center())
+        next_video_group = VGroup(next_video, next_video_inside)
+
+        recommended_video = Rectangle(
+            height=video_height, width=aspect_ratio * video_height
+        )
+        recommended_video_inside = Tex(r"Recommended\\Video").move_to(
+            recommended_video.get_center()
+        )
+        recommended_video_group = VGroup(
+            recommended_video, recommended_video_inside
+        ).scale(0.7)
+
+        # VGroup(
+        #     profile_group,
+        #     recommended_video_group,
+        #     stats_group,
+        #     next_video_group,
+        # ).arrange_in_grid(rows=2, cols=2, buff=(LARGE_BUFF * 1.7, LARGE_BUFF)).move_to(
+        #     ORIGIN
+        # )
+
+        left = (
+            VGroup(profile_group, recommended_video_group)
+            .arrange(
+                direction=DOWN, center=True, buff=DEFAULT_MOBJECT_TO_MOBJECT_BUFFER * 2
+            )
+            .to_edge(LEFT, buff=LARGE_BUFF)
+        )
+
+        # next_video_group.scale(0.7).shift(UP)
+
+        self.play(
+            LaggedStart(
+                # AnimationGroup(Create(profile_pic),
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Create(thank_you_sabrina),
+                # AnimationGroup(
+                #     Create(recommended_video), FadeIn(recommended_video_inside)
+                # ),
+                # AnimationGroup(Create(next_video), FadeIn(next_video_inside)),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
+
+        # self.wait(1)
+
+        # self.play(Indicate(recommended_video, scale_factor=1.1))
+
+        # self.wait(1)
+
+        # self.play(Indicate(next_video, scale_factor=1.1))
+
+        self.wait(2)
+
+
 """ Thumbnail """
 
 
 class Thumbnail(Scene):
-    def construct(self): ...
+    def construct(self):
+        fmcw = FMCWRadarCartoon("")
+
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        duration = 1
+        fs = 1000
+
+        x_len = 6
+        y_len = 2.2
+
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-2, 2, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).scale(1.1)
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp = lambda t: np.sin(2 * PI * sawtooth_modulating_cumsum(t))
+
+        sawtooth_amp_graph = amp_ax.plot(
+            sawtooth_amp,
+            x_range=[0, duration, 1 / fs],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+
+        plot_group = VGroup(amp_ax, sawtooth_amp_graph)
+
+        gears = SVGMobject("../props/static/Gears.svg").scale(3)
+        (red_gear, blue_gear) = gears.shift(DOWN * 0.5 + RIGHT)
+
+        gr = 24 / 12
+
+        red_accel = ValueTracker(0)
+        red_vel = ValueTracker(0)
+        blue_vel = ValueTracker(0)
+
+        def driver_updater(m, dt):
+            red_vel.set_value(red_vel.get_value() + dt * red_accel.get_value())
+            blue_vel.set_value(-red_vel.get_value() / gr)
+            m.rotate(dt * red_vel.get_value())
+
+        def driven_updater(m, dt):
+            m.rotate(dt * blue_vel.get_value())
+
+        red_gear.add_updater(driver_updater)
+        blue_gear.add_updater(driven_updater)
+
+        f_beat_eqn = MathTex(r"f_{beat} = f_{TX} - f_{RX}")
+
+        amp, lp_filter, mixer, oscillator, phase_shifter, switch = (
+            BLOCKS.get("amp").copy().scale(0.7),
+            BLOCKS.get("lp_filter").copy().scale(0.7),
+            BLOCKS.get("mixer").copy().scale(0.7),
+            BLOCKS.get("oscillator").copy().scale(0.7),
+            BLOCKS.get("phase_shifter").copy().scale(0.7),
+            BLOCKS.get("spdt_switch").copy().scale(0.7),
+        )
+        rf_blocks = Group(
+            amp, lp_filter, mixer, oscillator, phase_shifter, switch
+        ).arrange_in_grid(rows=3, cols=2, buff=(MED_LARGE_BUFF, MED_LARGE_BUFF))
+
+        gears.rotate(-PI / 2).scale_to_fit_width(fmcw.rect.width * 0.8).move_to(
+            fmcw.rect
+        )
+        red_accel.set_value(PI / 12)
+
+        fmcw_w_gears = Group(fmcw.vgroup, gears)
+
+        wanted = (
+            VGroup(sawtooth_amp_graph.scale(0.6), f_beat_eqn)
+            .arrange(DOWN, buff=LARGE_BUFF)
+            .to_edge(LEFT)
+        )
+        wanted.next_to(fmcw_w_gears, direction=LEFT, buff=LARGE_BUFF)
+        rf_blocks.next_to(fmcw_w_gears, direction=RIGHT, buff=LARGE_BUFF)
+
+        sawtooth_p0 = sawtooth_amp_graph.get_right() + [0.1, 0, 0]
+        sawtooth_p1 = fmcw_w_gears.get_left() + [-0.1, 0, 0]
+        sawtooth_bez = CubicBezier(
+            sawtooth_p0,
+            sawtooth_p0 + [1, 0, 0],
+            sawtooth_p1 + [-1, 0, 0],
+            sawtooth_p1,
+            # color=sawtooth_color,
+        )
+
+        f_beat_p0 = f_beat_eqn.get_right() + [0.1, 0, 0]
+        f_beat_p1 = fmcw_w_gears.get_left() + [-0.1, 0, 0]
+        f_beat_bez = CubicBezier(
+            f_beat_p0,
+            f_beat_p0 + [1, 0, 0],
+            f_beat_p1 + [-1, 0, 0],
+            f_beat_p1,
+            # color=f_beat_color,
+        )
+
+        rf_block_1_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_1_p1 = amp.get_left() + [-0.1, 0, 0]
+        rf_block_1_bez = CubicBezier(
+            rf_block_1_p0,
+            rf_block_1_p0 + [1, 0, 0],
+            rf_block_1_p1 + [-1, 0, 0],
+            rf_block_1_p1,
+            # color=rf_block_1_color,
+        )
+
+        rf_block_2_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_2_p1 = mixer.get_left() + [-0.1, 0, 0]
+        rf_block_2_bez = CubicBezier(
+            rf_block_2_p0,
+            rf_block_2_p0 + [1, 0, 0],
+            rf_block_2_p1 + [-1, 0, 0],
+            rf_block_2_p1,
+            # color=rf_block_2_color,
+        )
+
+        rf_block_3_p0 = fmcw_w_gears.get_right() + [0.1, 0, 0]
+        rf_block_3_p1 = phase_shifter.get_left() + [-0.1, 0, 0]
+        rf_block_3_bez = CubicBezier(
+            rf_block_3_p0,
+            rf_block_3_p0 + [1, 0, 0],
+            rf_block_3_p1 + [-1, 0, 0],
+            rf_block_3_p1,
+            # color=rf_block_3_color,
+        )
+        self.add(
+            fmcw_w_gears,
+            sawtooth_amp_graph,
+            f_beat_eqn,
+            sawtooth_bez,
+            f_beat_bez,
+            rf_block_1_bez,
+            rf_block_2_bez,
+            rf_block_3_bez,
+            amp,
+            lp_filter,
+            mixer,
+            oscillator,
+            phase_shifter,
+            switch,
+        )
+
+        Group(*self.mobjects).scale(0.9).to_edge(DOWN)
+
+        how_to = Tex("How to build an").scale(1.3).to_edge(UP)
+        fmcw_tex = Tex("FMCW Radar").scale(2).next_to(how_to, DOWN, MED_LARGE_BUFF)
+
+        self.add(how_to, fmcw_tex)
+
+
+class ThumbnailV2(Scene):
+    def construct(self):
+        (
+            bd,
+            (
+                inp,
+                input_to_vco,
+                pll_block,
+                pll_block_to_pa,
+                pa,
+                pa_to_splitter,
+                splitter,
+                splitter_to_mixer,
+                mixer,
+                splitter_to_tx_antenna,
+                tx_antenna,
+                lna,
+                lna_to_mixer,
+                rx_antenna,
+                rx_antenna_to_lna,
+                mixer_to_lp_filter,
+                lp_filter,
+                lp_filter_to_adc,
+                adc,
+                adc_to_signal_proc,
+                signal_proc,
+            ),
+            (
+                input_to_pll,
+                phase_detector,
+                phase_detector_to_loop_filter,
+                loop_filter,
+                loop_filter_to_vco,
+                vco,
+                pll_block_to_pa,
+                vco_output_conn,
+                vco_to_ndiv_1,
+                vco_to_ndiv_2,
+                ndiv,
+                ndiv_to_phase_detector_1,
+                ndiv_to_phase_detector_2,
+            ),
+        ) = get_bd(True, rx_section_gap=BLOCK_BUFF * 5)
+        bd.scale_to_fit_width(config["frame_width"] * 0.9)
+        inp.remove(inp[1])
+        bd.move_to(ORIGIN).to_edge(DOWN, LARGE_BUFF)
+        self.add(bd)
+
+        brace_l = Brace(bd, LEFT, sharpness=0.7)
+        brace_r = Brace(bd, RIGHT, sharpness=0.7)
+
+        what = Tex("What's going on here?").scale(2).to_edge(UP, MED_LARGE_BUFF)
+
+        self.add(what, brace_l, brace_r)
