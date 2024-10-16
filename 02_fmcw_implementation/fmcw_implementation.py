@@ -10573,8 +10573,10 @@ class Thumbnail(Scene):
 
         Group(*self.mobjects).scale(0.9).to_edge(DOWN)
 
-        how_to = Tex("How to build an").scale(1.3).to_edge(UP)
-        fmcw_tex = Tex("FMCW Radar").scale(2).next_to(how_to, DOWN, MED_LARGE_BUFF)
+        how_to = Tex("FMCW Radar").scale(2).to_edge(UP)
+        fmcw_tex = (
+            Tex("The Implementation").scale(1.7).next_to(how_to, DOWN, MED_LARGE_BUFF)
+        )
 
         self.add(how_to, fmcw_tex)
 
