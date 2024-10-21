@@ -18,8 +18,11 @@ from props.style import BACKGROUND_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
+NOISE_COLOR = PURPLE
+TARGETS_COLOR = GREEN
 
-SKIP_ANIMATIONS_OVERRIDE = False
+
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -70,7 +73,7 @@ class Intro(Scene):
         f2 = 2.7
         f3 = 3.4
 
-        power_norm_1 = VT(-6)
+        power_norm_1 = VT(-3)
         power_norm_2 = VT(-9)
         power_norm_3 = VT(0)
 
@@ -101,10 +104,20 @@ class Intro(Scene):
             y_min=None,
             noise_power_db=-20,
         ):
+            fft_len = N * 4
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
             np.random.seed(int(~noise_seed))
             noise = np.random.normal(
                 loc=0, scale=10 ** (noise_power_db / 10), size=t.size
             )
+
+            freq_add = np.zeros(fft_len)
+            freq_add[(freq > 6.5) & (freq < f_max)] = 1
+            b, a = signal.butter(4, 0.01, btype="low", analog=False)
+
+            bias = 10
+            freq_add_smoothed = signal.filtfilt(b, a, freq_add) * bias
 
             sig1 = np.sin(2 * PI * f1 * t) * (10 ** (~power_norm_1 / 10))
             sig2 = np.sin(2 * PI * f2 * t) * (10 ** (~power_norm_2 / 10))
@@ -121,13 +134,15 @@ class Intro(Scene):
             blackman_window = signal.windows.blackman(N)
             summed_signals *= blackman_window
 
-            fft_len = N * 4
-            summed_fft = fft(summed_signals, fft_len) / (N / 2)
-            summed_fft_log = 10 * np.log10(fftshift(summed_fft))
-            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+            X_k = fftshift(fft(summed_signals, fft_len))
+            X_k /= N / 2
+            X_k *= 10 ** (freq_add_smoothed / 10)
+            X_k = np.abs(X_k)
+            X_k_log = 10 * np.log10(X_k)
+
             indices = np.where((freq > 0) & (freq < f_max))
             x_values = freq[indices]
-            y_values = summed_fft_log[indices]
+            y_values = X_k_log[indices]
 
             if y_min is not None:
                 y_values[y_values < y_min] = y_min
@@ -281,7 +296,7 @@ class StaticThreshold(Scene):
         f2 = 2.7
         f3 = 3.4
 
-        power_norm_1 = VT(-6)
+        power_norm_1 = VT(-3)
         power_norm_2 = VT(-9)
         power_norm_3 = VT(0)
 
@@ -322,12 +337,10 @@ class StaticThreshold(Scene):
 
             freq_add = np.zeros(fft_len)
             freq_add[(freq > 6.5) & (freq < f_max)] = 1
-            b, a = signal.butter(4, 0.001, btype="low", analog=False)
+            b, a = signal.butter(4, 0.01, btype="low", analog=False)
 
             bias = 10
-            freq_add_smoothed = (
-                freq_add * bias
-            )  # signal.filtfilt(b, a, freq_add) * bias
+            freq_add_smoothed = signal.filtfilt(b, a, freq_add) * bias
 
             sig1 = np.sin(2 * PI * f1 * t) * (10 ** (~power_norm_1 / 10))
             sig2 = np.sin(2 * PI * f2 * t) * (10 ** (~power_norm_2 / 10))
@@ -344,12 +357,15 @@ class StaticThreshold(Scene):
             blackman_window = signal.windows.blackman(N)
             summed_signals *= blackman_window
 
-            summed_fft = fft(summed_signals, fft_len) / (N / 2)
-            summed_fft_log = 10 * np.log10(fftshift(summed_fft))
-            summed_fft_log += freq_add_smoothed
+            X_k = fftshift(fft(summed_signals, fft_len))
+            X_k /= N / 2
+            X_k *= 10 ** (freq_add_smoothed / 10)
+            X_k = np.abs(X_k)
+            X_k_log = 10 * np.log10(X_k)
+
             indices = np.where((freq > 0) & (freq < f_max))
             x_values = freq[indices]
-            y_values = summed_fft_log[indices]
+            y_values = X_k_log[indices]
 
             if y_min is not None:
                 y_values[y_values < y_min] = y_min
@@ -357,16 +373,121 @@ class StaticThreshold(Scene):
 
             return dict(x_values=x_values, y_values=y_values)
 
-        return_plot = always_redraw(
-            lambda: ax.plot_line_graph(
-                **get_plot_values(
-                    ports=["1", "2", "3", "noise"],
-                    noise_power_db=~noise_sigma_db,
-                    y_min=~y_min,
-                ),
-                line_color=RX_COLOR,
-                add_vertex_dots=False,
+        freq, X_k_log = get_plot_values(
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            y_min=~y_min,
+        ).values()
+        X_k = 10 ** (X_k_log / 10)
+
+        return_plot = ax.plot_line_graph(
+            freq,
+            X_k_log,
+            line_color=RX_COLOR,
+            add_vertex_dots=False,
+        )
+
+        static_threshold = np.ones(X_k_log.shape) * 10 ** (-15 / 10)  # linear
+        targets_only = np.copy(X_k)
+        targets_only[np.where(X_k < static_threshold)] = np.ma.masked
+
+        static_threshold = VT(-10)
+        static_threshold_plot = always_redraw(
+            lambda: DashedVMobject(
+                ax.plot(lambda t: ~static_threshold - ~y_min, color=YELLOW)
             )
         )
 
-        self.add(ax, ax_label, return_plot)
+        def get_region_polygon_updater(up):
+            y_offset = -~y_min if up else 0
+            color = GREEN if up else PURPLE
+
+            def get_region_polygon():
+                dl = ax.c2p(0, ~static_threshold - ~y_min)
+                dr = ax.c2p(f_max, ~static_threshold - ~y_min)
+                ul = ax.c2p(0, 0 + y_offset)
+                ur = ax.c2p(f_max, 0 + y_offset)
+                polygon = Polygon(
+                    ur,
+                    ul,
+                    dl,
+                    dr,
+                )
+                polygon.stroke_width = 1
+                polygon.set_fill(color, opacity=0.3)
+                polygon.set_stroke(YELLOW_B, opacity=0)
+                return polygon
+
+            return get_region_polygon
+
+        targets_region = always_redraw(get_region_polygon_updater(up=True))
+        noise_region = always_redraw(get_region_polygon_updater(up=False))
+
+        targets_label = Tex("Targets", color=TARGETS_COLOR).next_to(
+            targets_region, RIGHT, SMALL_BUFF
+        )
+        noise_label = Tex("Noise", color=NOISE_COLOR).next_to(
+            noise_region, RIGHT, SMALL_BUFF
+        )
+
+        should_noise_label = (
+            Tex(r"actually\\noise").to_edge(UP, MED_SMALL_BUFF).shift(RIGHT)
+        )
+        should_targets_label = (
+            Tex(r"actually\\target").to_edge(UP, MED_SMALL_BUFF).shift(LEFT * 2)
+        )
+
+        p2 = ax.c2p(7.2, -7.2 - ~y_min)
+        should_noise_bez = CubicBezier(
+            should_noise_label.get_bottom() + [0, -0.1, 0],
+            should_noise_label.get_bottom() + [0, -1, 0],
+            p2 + [0, 1, 0],
+            p2 + [0, 0.1, 0],
+        )
+
+        p2 = ax.c2p(f2, ~power_norm_2 - ~y_min - 3)
+        should_targets_bez = CubicBezier(
+            should_targets_label.get_bottom() + [0, -0.1, 0],
+            should_targets_label.get_bottom() + [0, -1, 0],
+            p2 + [0, 1, 0],
+            p2 + [0, 0.1, 0],
+        )
+
+        self.add(
+            ax,
+            ax_label,
+            return_plot,
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(static_threshold_plot))
+
+        self.wait(0.5)
+
+        self.play(Create(targets_region), FadeIn(targets_label, shift=LEFT))
+
+        self.wait(0.5)
+
+        self.play(Create(noise_region), FadeIn(noise_label, shift=LEFT))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(should_noise_label),
+                Create(should_noise_bez),
+                FadeIn(should_targets_label),
+                Create(should_targets_bez),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(static_threshold - 15)
+
+        self.wait(0.5)
+
+        self.play(static_threshold + 15)
+
+        self.wait(2)
