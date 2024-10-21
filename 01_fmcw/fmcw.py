@@ -3232,7 +3232,7 @@ class ModulationTypes(Scene):
 
         no_mod_title = create_title("No Modulation")
         triangular_title = create_title("Triangular Modulation")
-        fsk_title = create_title("Frequency Shift Keyring Modulation")
+        fsk_title = create_title("Frequency Shift Keying Modulation")
         sawtooth_title = create_title("Sawtooth Modulation")
         lfm_title = create_title("Linear Frequency Modulation (LFM)")
         dash_title = create_title("|")
