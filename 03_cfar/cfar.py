@@ -6,7 +6,7 @@ import warnings
 from random import randint
 import numpy as np
 from manim import *
-from MF_Tools import VT
+from MF_Tools import VT, TransformByGlyphMap
 from numpy.fft import fft, fftshift
 from scipy import signal, interpolate
 
@@ -27,6 +27,71 @@ SKIP_ANIMATIONS_OVERRIDE = False
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+def get_plot_values(
+    power_norm_1,
+    power_norm_2,
+    power_norm_3,
+    fs,
+    stop_time,
+    ports=["1", "2", "3", "noise"],
+    y_min=None,
+    noise_power_db=-20,
+    noise_seed=0,
+    f_max=None,
+    f1l=None,
+    f2l=None,
+    f3l=None,
+):
+    N = fs * stop_time
+    fft_len = N * 4
+    freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+    t = np.linspace(0, stop_time, N)
+
+    f_max = fs / 2 if f_max is None else f_max
+
+    np.random.seed(int(noise_seed))
+    noise = np.random.normal(loc=0, scale=10 ** (noise_power_db / 10), size=t.size)
+
+    freq_add = np.zeros(fft_len)
+    freq_add[(freq > 6.5) & (freq < f_max)] = 1
+    b, a = signal.butter(4, 0.01, btype="low", analog=False)
+
+    bias = 10
+    freq_add_smoothed = signal.filtfilt(b, a, freq_add) * bias
+
+    sig1 = np.sin(2 * PI * f1l * t) * (10 ** (power_norm_1 / 10))
+    sig2 = np.sin(2 * PI * f2l * t) * (10 ** (power_norm_2 / 10))
+    sig3 = np.sin(2 * PI * f3l * t) * (10 ** (power_norm_3 / 10))
+
+    signals = {
+        "1": sig1,
+        "2": sig2,
+        "3": sig3,
+        "noise": noise,
+    }
+    summed_signals = sum([signals.get(port) for port in ports])
+
+    blackman_window = signal.windows.blackman(N)
+    summed_signals *= blackman_window
+
+    X_k = fftshift(fft(summed_signals, fft_len))
+    X_k /= N / 2
+    X_k *= 10 ** (freq_add_smoothed / 10)
+    X_k = np.abs(X_k)
+    X_k_log = 10 * np.log10(X_k)
+
+    indices = np.where((freq > 0) & (freq < f_max))
+    x_values = freq[indices]
+    y_values = X_k_log[indices]
+
+    if y_min is not None:
+        y_values[y_values < y_min] = y_min
+        y_values -= y_min
+
+    return dict(x_values=x_values, y_values=y_values)
 
 
 def get_fft_values(
@@ -289,8 +354,6 @@ class StaticThreshold(Scene):
     def construct(self):
         stop_time = 16
         fs = 1000
-        N = fs * stop_time
-        t = np.linspace(0, stop_time, N)
 
         f1 = 1.5
         f2 = 2.7
@@ -322,68 +385,20 @@ class StaticThreshold(Scene):
         )
         ax_label = ax.get_axis_labels(Tex("$R$"), Tex())
 
-        def get_plot_values(
-            ports=["1", "2", "3", "noise"],
-            y_min=None,
-            noise_power_db=-20,
-            f1l=None,
-            f2l=None,
-            f3l=None,
-        ):
-            fft_len = N * 4
-            freq = np.linspace(-fs / 2, fs / 2, fft_len)
-
-            np.random.seed(int(~noise_seed))
-            noise = np.random.normal(
-                loc=0, scale=10 ** (noise_power_db / 10), size=t.size
-            )
-
-            freq_add = np.zeros(fft_len)
-            freq_add[(freq > 6.5) & (freq < f_max)] = 1
-            b, a = signal.butter(4, 0.01, btype="low", analog=False)
-
-            bias = 10
-            freq_add_smoothed = signal.filtfilt(b, a, freq_add) * bias
-
-            f1l = f1 if f1l is None else f1l
-            f2l = f2 if f2l is None else f2l
-            f3l = f3 if f3l is None else f3l
-
-            sig1 = np.sin(2 * PI * f1l * t) * (10 ** (~power_norm_1 / 10))
-            sig2 = np.sin(2 * PI * f2l * t) * (10 ** (~power_norm_2 / 10))
-            sig3 = np.sin(2 * PI * f3l * t) * (10 ** (~power_norm_3 / 10))
-
-            signals = {
-                "1": sig1,
-                "2": sig2,
-                "3": sig3,
-                "noise": noise,
-            }
-            summed_signals = sum([signals.get(port) for port in ports])
-
-            blackman_window = signal.windows.blackman(N)
-            summed_signals *= blackman_window
-
-            X_k = fftshift(fft(summed_signals, fft_len))
-            X_k /= N / 2
-            X_k *= 10 ** (freq_add_smoothed / 10)
-            X_k = np.abs(X_k)
-            X_k_log = 10 * np.log10(X_k)
-
-            indices = np.where((freq > 0) & (freq < f_max))
-            x_values = freq[indices]
-            y_values = X_k_log[indices]
-
-            if y_min is not None:
-                y_values[y_values < y_min] = y_min
-                y_values -= y_min
-
-            return dict(x_values=x_values, y_values=y_values)
-
         freq, X_k_log = get_plot_values(
+            power_norm_1=~power_norm_1,
+            power_norm_2=~power_norm_2,
+            power_norm_3=~power_norm_3,
             ports=["1", "2", "3", "noise"],
             noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
             y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
         ).values()
         X_k = 10 ** (X_k_log / 10)
 
@@ -517,14 +532,17 @@ class StaticThreshold(Scene):
 
         self.wait(0.5)
 
-        power_norm_1 @= -6
-        power_norm_2 @= -9
-        power_norm_3 @= -6
-
         _, X_k_log_2 = get_plot_values(
+            power_norm_1=-6,
+            power_norm_2=-9,
+            power_norm_3=-6,
             ports=["1", "2", "3", "noise"],
-            noise_power_db=2,
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
             y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
             f1l=2.3,
             f2l=6.8,
             f3l=7.2,
@@ -630,4 +648,148 @@ class StaticThreshold(Scene):
 
 
 class CFARIntro(Scene):
-    def construct(self): ...
+    def construct(self):
+        label = Tex("CFAR").scale(2.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(FadeIn(label, shift=UP))
+
+        self.wait(0.5)
+
+        label_spelled = Tex(
+            r"\raggedright Constant\\ \vspace{2mm} False\\ \vspace{2mm} Alarm\\ \vspace{2mm} Rate"
+        ).scale(2)
+
+        self.play(
+            TransformByGlyphMap(
+                label,
+                label_spelled,
+                ([0], [0]),
+                ([1], [8], {"delay": 0.1}),
+                ([2], [13], {"delay": 0.2}),
+                ([3], [18], {"delay": 0.3}),
+                ([], [1, 2, 3, 4, 5, 6, 7], {"shift": LEFT, "delay": 0.4}),
+                ([], [9, 10, 11, 12], {"shift": LEFT, "delay": 0.5}),
+                ([], [14, 15, 16, 17, 18], {"shift": LEFT, "delay": 0.6}),
+                ([], [19, 20, 21], {"shift": LEFT, "delay": 0.7}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        stop_time = 16
+        fs = 1000
+
+        f1 = 1.5
+        f2 = 2.7
+        f3 = 3.4
+
+        power_norm_1 = VT(-3)
+        power_norm_2 = VT(-9)
+        power_norm_3 = VT(0)
+
+        noise_sigma_db = VT(3)
+
+        f_max = 8
+        y_min = VT(-30)
+
+        x_len = 9.5
+        y_len = 4.5
+
+        noise_seed = VT(2)
+
+        ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -~y_min, -~y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex())
+
+        freq, X_k_log = get_plot_values(
+            power_norm_1=~power_norm_1,
+            power_norm_2=~power_norm_2,
+            power_norm_3=~power_norm_3,
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
+            y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
+        ).values()
+        X_k = 10 ** (X_k_log / 10)
+
+        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
+
+        plot_group = VGroup(ax, ax_label, return_plot).next_to(
+            [0, -config["frame_height"] / 2, 0], DOWN
+        )
+
+        self.add(plot_group)
+
+        self.play(
+            FadeOut(label_spelled), plot_group.animate.to_edge(DOWN, MED_LARGE_BUFF)
+        )
+
+        self.wait(0.5)
+
+        range_tracker = VT(0)  # 0 -> f_max
+
+        range_arrow = always_redraw(
+            lambda: Arrow(UP, DOWN).next_to(ax, UP).set_x(ax.c2p(~range_tracker, 0)[0])
+        )
+
+        range_label = always_redraw(
+            lambda: Tex(f"R = {~range_tracker*100:.2f}m").next_to(range_arrow, UP)
+        )
+
+        self.play(GrowArrow(range_arrow), FadeIn(range_label))
+
+        self.wait(0.5)
+
+        self.play(range_tracker @ f_max, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(range_arrow, range_label))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        pfa_eqn = MathTex(
+            r"P_{FA} = \int_{T}^{+\infty} \frac{z}{\sigma^{2}_{n}} \exp{\left( - \frac{z^2}{2 \sigma^{2}_{n}} \right) dz}"
+        ).to_edge(UP, MED_SMALL_BUFF)
+
+        pfa_eqn[0][0].save_state()
+        fa = pfa_eqn[0][1:3]
+        fa.save_state()
+
+        self.play(FadeIn(pfa_eqn[0][0].set_x(0)))
+        self.play(pfa_eqn[0][0].animate.restore())
+
+        self.wait(0.5)
+
+        self.play(FadeIn(fa.set_x(0)))
+        self.play(fa.animate.restore())
+
+        self.wait(0.5)
+
+        self.play(Write(pfa_eqn[0][3:]))
+
+        # self.add(
+        #     pfa_eqn,
+        #     index_labels(pfa_eqn[0]),
+        # )
+
+        self.wait(2)
