@@ -8,7 +8,7 @@ import numpy as np
 from manim import *
 from MF_Tools import VT
 from numpy.fft import fft, fftshift
-from scipy import signal
+from scipy import signal, interpolate
 
 
 warnings.filterwarnings("ignore")
@@ -22,7 +22,7 @@ NOISE_COLOR = PURPLE
 TARGETS_COLOR = GREEN
 
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -326,6 +326,9 @@ class StaticThreshold(Scene):
             ports=["1", "2", "3", "noise"],
             y_min=None,
             noise_power_db=-20,
+            f1l=None,
+            f2l=None,
+            f3l=None,
         ):
             fft_len = N * 4
             freq = np.linspace(-fs / 2, fs / 2, fft_len)
@@ -342,9 +345,13 @@ class StaticThreshold(Scene):
             bias = 10
             freq_add_smoothed = signal.filtfilt(b, a, freq_add) * bias
 
-            sig1 = np.sin(2 * PI * f1 * t) * (10 ** (~power_norm_1 / 10))
-            sig2 = np.sin(2 * PI * f2 * t) * (10 ** (~power_norm_2 / 10))
-            sig3 = np.sin(2 * PI * f3 * t) * (10 ** (~power_norm_3 / 10))
+            f1l = f1 if f1l is None else f1l
+            f2l = f2 if f2l is None else f2l
+            f3l = f3 if f3l is None else f3l
+
+            sig1 = np.sin(2 * PI * f1l * t) * (10 ** (~power_norm_1 / 10))
+            sig2 = np.sin(2 * PI * f2l * t) * (10 ** (~power_norm_2 / 10))
+            sig3 = np.sin(2 * PI * f3l * t) * (10 ** (~power_norm_3 / 10))
 
             signals = {
                 "1": sig1,
@@ -431,11 +438,13 @@ class StaticThreshold(Scene):
         )
 
         should_noise_label = (
-            Tex(r"actually\\noise").to_edge(UP, MED_SMALL_BUFF).shift(RIGHT)
+            Tex(r"actually\\", "noise").to_edge(UP, MED_SMALL_BUFF).shift(RIGHT)
         )
         should_targets_label = (
-            Tex(r"actually\\target").to_edge(UP, MED_SMALL_BUFF).shift(LEFT * 2)
+            Tex(r"actually\\", "target").to_edge(UP, MED_SMALL_BUFF).shift(LEFT * 2)
         )
+        should_noise_label[1].set_color(NOISE_COLOR)
+        should_targets_label[1].set_color(TARGETS_COLOR)
 
         p2 = ax.c2p(7.2, -7.2 - ~y_min)
         should_noise_bez = CubicBezier(
@@ -484,10 +493,141 @@ class StaticThreshold(Scene):
 
         self.wait(0.5)
 
-        self.play(static_threshold - 15)
+        self.play(
+            FadeOut(should_noise_label, should_targets_label),
+            Uncreate(should_noise_bez),
+            Uncreate(should_targets_bez),
+        )
 
         self.wait(0.5)
 
-        self.play(static_threshold + 15)
+        self.play(static_threshold - 10, run_time=0.5)
+
+        self.wait(0.5)
+
+        self.play(static_threshold + 5, run_time=0.5)
+
+        self.wait(0.5)
+
+        self.play(static_threshold - 10, run_time=0.5)
+
+        self.wait(0.5)
+
+        self.play(static_threshold + 12, run_time=0.5)
+
+        self.wait(0.5)
+
+        power_norm_1 @= -6
+        power_norm_2 @= -9
+        power_norm_3 @= -6
+
+        _, X_k_log_2 = get_plot_values(
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=2,
+            y_min=~y_min,
+            f1l=2.3,
+            f2l=6.8,
+            f3l=7.2,
+        ).values()
+        X_k_2 = 10 ** (X_k_log / 10)
+
+        return_plot_2 = ax.plot_line_graph(
+            freq,
+            X_k_log_2,
+            line_color=RX_COLOR,
+            add_vertex_dots=False,
+        )
+
+        return_plot.save_state()
+        self.play(
+            LaggedStart(Uncreate(return_plot), Create(return_plot_2), lag_ratio=0.3)
+        )
+
+        # power_norm_1.restore()
+        # power_norm_2.restore()
+        # power_norm_3.restore()
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(return_plot_2), return_plot.animate.restore(), lag_ratio=0.3
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(targets_region),
+            Uncreate(noise_region),
+            Uncreate(static_threshold_plot),
+        )
+
+        self.wait(0.5)
+
+        b, a = signal.butter(N=2, Wn=0.02, btype="low")
+
+        X_k_smoothed = interpolate.interp1d(
+            freq, signal.filtfilt(b, a, X_k_log) + 4, fill_value="extrapolate"
+        )
+
+        dynamic_threshold_plot = ax.plot(X_k_smoothed, color=YELLOW)
+        dynamic_threshold_plot_dashed = DashedVMobject(dynamic_threshold_plot)
+
+        dynamic_noise_region = ax.get_area(
+            dynamic_threshold_plot,
+            x_range=[0, f_max],
+            color=NOISE_COLOR,
+            opacity=0.3,
+            stroke_opacity=0,
+        )
+        dynamic_targets_region = ax.get_area(
+            ax.plot(lambda t: -~y_min),
+            bounded_graph=dynamic_threshold_plot,
+            x_range=[0, f_max],
+            color=TARGETS_COLOR,
+            opacity=0.3,
+            stroke_opacity=0,
+        )
+
+        self.play(
+            Create(dynamic_threshold_plot_dashed),
+            Create(dynamic_noise_region),
+            Create(dynamic_targets_region),
+        )
+
+        # TODO: Maybe add updaters here and play with the
+        # filter inputs to show how it can be configured?
+
+        self.wait(0.5)
+
+        filter_dynamic_threshold_code = Code(
+            code="from scipy import signal\n"
+            'b, a = signal.butter(N=2, Wn=0.02, btype="low")\n'
+            "offset = 4\n"
+            "threshold = signal.filtfilt(b, a, range_spectrum) + offset",
+            font="FiraCode Nerd Font Mono",
+            background="window",
+            language="Python",
+        ).next_to([0, -config["frame_height"] / 2, 0], DOWN)
+
+        self.play(filter_dynamic_threshold_code.animate.to_edge(DOWN, MED_SMALL_BUFF))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(filter_dynamic_threshold_code, shift=DOWN * 3),
+            Uncreate(ax),
+            Uncreate(dynamic_threshold_plot_dashed),
+            Uncreate(dynamic_noise_region),
+            Uncreate(dynamic_targets_region),
+            Uncreate(return_plot),
+            FadeOut(ax_label),
+            FadeOut(targets_label, noise_label, shift=RIGHT),
+        )
 
         self.wait(2)
+
+
+class CFARIntro(Scene):
+    def construct(self): ...
