@@ -647,7 +647,7 @@ class StaticThreshold(Scene):
         self.wait(2)
 
 
-class CFARIntro(Scene):
+class CFARIntro(MovingCameraScene):
     def construct(self):
         label = Tex("CFAR").scale(2.5)
 
@@ -764,32 +764,214 @@ class CFARIntro(Scene):
 
         self.play(FadeOut(range_arrow, range_label))
 
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        pfa_eqn = Tex(
+            # r"P_{FA} = \int_{T}^{+\infty} \frac{z}{\sigma^{2}_{n}} \exp{\left( - \frac{z^2}{2 \sigma^{2}_{n}} \right) dz}"
+            r"$P_{FA}$ - constant"
+        ).to_edge(UP, MED_SMALL_BUFF)
+
+        p = pfa_eqn[0][0]
+        p.save_state()
+        fa = pfa_eqn[0][1:3]
+        fa.save_state()
+        Group(p, fa).set_x(0)
+
+        self.play(FadeIn(p))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(fa))
+
+        self.wait(0.5)
+
+        whole_range = Line()
+        whole_range.width = return_plot.width
+        whole_range.next_to(return_plot, UP, LARGE_BUFF)
+        whole_range_l = Line(whole_range.get_midpoint(), whole_range.get_left())
+        whole_range_r = Line(whole_range.get_midpoint(), whole_range.get_right())
+        whole_range_l_vert = Line(
+            whole_range.get_left() + DOWN / 4, whole_range.get_left() + UP / 4
+        )
+        whole_range_r_vert = Line(
+            whole_range.get_right() + DOWN / 4, whole_range.get_right() + UP / 4
+        )
+        whole_range_group = VGroup(
+            whole_range_l, whole_range_r, whole_range_l_vert, whole_range_r_vert
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    p.animate.restore(),
+                    fa.animate.restore(),
+                ),
+                Write(pfa_eqn[0][3:]),
+                AnimationGroup(Create(whole_range_l), Create(whole_range_r)),
+                AnimationGroup(Create(whole_range_l_vert), Create(whole_range_r_vert)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        cfar_spelled = Tex("Constant False Alarm Rate").move_to(pfa_eqn)
+
+        self.play(
+            TransformByGlyphMap(
+                pfa_eqn,
+                cfar_spelled,
+                ([0, 3], []),
+                ([4], [0]),
+                ([5, 6, 7, 8, 9, 10, 11], [1, 2, 3, 4, 5, 6, 7], {"delay": 0.3}),
+                ([1], [8], {"delay": 0.3}),
+                ([], [9, 10, 11, 12], {"delay": 0.5}),
+                ([2], [13], {"delay": 0.3}),
+                ([], [14, 15, 16, 17, 18, 19, 20, 21], {"delay": 0.5}),
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(whole_range_l),
+                    Uncreate(whole_range_r),
+                    Uncreate(whole_range_l_vert),
+                    Uncreate(whole_range_r_vert),
+                ),
+                plot_group.animate.set_y(0),
+                cfar_spelled.animate.shift(UP * 3),
+                lag_ratio=0.4,
+            ),
+        )
+        self.remove(cfar_spelled)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        num_samples = 30
+        samples = ax.get_vertical_lines_to_graph(
+            return_plot, x_range=[0, f_max], num_lines=num_samples, color=BLUE
+        )
+
+        self.play(Create(samples), run_time=2)
+
+        self.wait(0.5)
+
+        sample_rects = ax.get_riemann_rectangles(
+            return_plot,
+            input_sample_type="right",
+            x_range=[0, f_max],
+            dx=f_max / num_samples,
+            color=BLUE,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+
+        self.wait(0.5)
+
+        self.play(
+            *[
+                ReplacementTransform(sample, rect)
+                for sample, rect in zip(samples, sample_rects)
+            ]
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(plot_group.set_z_index(-1)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    Transform(
+                        rect,
+                        Square(
+                            rect.width,
+                            color=BLACK,
+                            fill_color=BLUE,
+                            fill_opacity=0.7,
+                            stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                        )
+                        .move_to(rect)
+                        .set_y(0),
+                    )
+                    for rect in sample_rects
+                ],
+                lag_ratio=0.05,
+            )
+        )
+
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        pfa_eqn = MathTex(
-            r"P_{FA} = \int_{T}^{+\infty} \frac{z}{\sigma^{2}_{n}} \exp{\left( - \frac{z^2}{2 \sigma^{2}_{n}} \right) dz}"
-        ).to_edge(UP, MED_SMALL_BUFF)
-
-        pfa_eqn[0][0].save_state()
-        fa = pfa_eqn[0][1:3]
-        fa.save_state()
-
-        self.play(FadeIn(pfa_eqn[0][0].set_x(0)))
-        self.play(pfa_eqn[0][0].animate.restore())
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                sample_rects[:7].width
+            ).move_to(sample_rects[2])
+        )
 
         self.wait(0.5)
 
-        self.play(FadeIn(fa.set_x(0)))
-        self.play(fa.animate.restore())
+        sample_labels = VGroup(
+            *[
+                MathTex(f"A_{{{idx}}}")
+                .scale_to_fit_width(rect.width * 0.7)
+                .move_to(rect)
+                for idx, rect in enumerate(sample_rects)
+            ]
+        )
+
+        self.play(LaggedStart(*[FadeIn(m) for m in sample_labels[:7]], lag_ratio=0.1))
+        self.add(sample_labels[7:])
 
         self.wait(0.5)
 
-        self.play(Write(pfa_eqn[0][3:]))
+        self.play(self.camera.frame.animate.restore())
 
-        # self.add(
-        #     pfa_eqn,
-        #     index_labels(pfa_eqn[0]),
-        # )
+        self.wait(0.5)
+
+        cut = sample_rects[num_samples // 2 + num_samples // 6]
+
+        cut_label_spelled = (
+            Tex(r"\raggedright Cell\\Under\\Test")
+            .scale_to_fit_width(sample_labels[0].width * 1.7)
+            .next_to(cut, UP)
+        )
+        cut_label = (
+            Tex("CUT")
+            .scale_to_fit_width(sample_labels[0].width * 1.5)
+            .move_to(cut_label_spelled)
+        )
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                sample_rects[:7].width
+            ).move_to(Group(cut, cut_label_spelled))
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(cut_label_spelled))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                cut_label_spelled,
+                cut_label,
+                ([1, 2, 3, 5, 6, 7, 8, 10, 11, 12], []),
+                ([0], [0], {"delay": 0.3}),
+                ([4], [1], {"delay": 0.3}),
+                ([9], [2], {"delay": 0.3}),
+            )
+        )
 
         self.wait(2)
