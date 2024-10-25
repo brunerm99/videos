@@ -22,7 +22,7 @@ NOISE_COLOR = PURPLE
 TARGETS_COLOR = GREEN
 
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -896,7 +896,7 @@ class CFARIntro(MovingCameraScene):
                             rect.width,
                             color=BLACK,
                             fill_color=BLUE,
-                            fill_opacity=0.7,
+                            fill_opacity=0,
                             stroke_width=DEFAULT_STROKE_WIDTH / 2,
                         )
                         .move_to(rect)
@@ -908,7 +908,7 @@ class CFARIntro(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.camera.frame.save_state()
@@ -938,28 +938,51 @@ class CFARIntro(MovingCameraScene):
 
         self.wait(0.5)
 
-        cut = sample_rects[num_samples // 2 + num_samples // 6]
+        cut_color = YELLOW
+        gap_color = RED
+        ref_color = BLUE
+
+        cut_index = num_samples // 2 + num_samples // 6
+
+        n_gap_cells = 3
+        gap_index_l = cut_index - n_gap_cells
+        gap_index_r = cut_index + n_gap_cells
+
+        n_ref_cells = 4
+        ref_index_l = gap_index_l - n_ref_cells
+        ref_index_r = gap_index_r + n_ref_cells
+
+        cut = sample_rects[cut_index]
+
+        gap_cells_l = sample_rects[gap_index_l:cut_index]
+        gap_cells_r = sample_rects[cut_index + 1 : gap_index_r + 2]
+
+        ref_cells_l = sample_rects[ref_index_l:gap_index_l]
+        ref_cells_r = sample_rects[gap_index_r + 1 : ref_index_r + 2]
 
         cut_label_spelled = (
-            Tex(r"\raggedright Cell\\Under\\Test")
+            Tex(r"Cell\\Under\\Test", color=cut_color)
             .scale_to_fit_width(sample_labels[0].width * 1.7)
-            .next_to(cut, UP)
+            .next_to(cut, UP, SMALL_BUFF)
         )
         cut_label = (
-            Tex("CUT")
+            Tex("CUT", color=cut_color)
             .scale_to_fit_width(sample_labels[0].width * 1.5)
-            .move_to(cut_label_spelled)
+            .next_to(cut, UP, SMALL_BUFF)
         )
 
         self.play(
             self.camera.frame.animate.scale_to_fit_width(
-                sample_rects[:7].width
+                sample_rects[:9].width
             ).move_to(Group(cut, cut_label_spelled))
         )
 
         self.wait(0.5)
 
-        self.play(FadeIn(cut_label_spelled))
+        self.play(
+            FadeIn(cut_label_spelled),
+            cut.animate.set_fill(color=cut_color, opacity=0.6),
+        )
 
         self.wait(0.5)
 
@@ -971,6 +994,212 @@ class CFARIntro(MovingCameraScene):
                 ([0], [0], {"delay": 0.3}),
                 ([4], [1], {"delay": 0.3}),
                 ([9], [2], {"delay": 0.3}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        gap_label_l = (
+            Tex("Gap", color=gap_color)
+            .scale_to_fit_width(sample_labels[0].width * 1.5)
+            .next_to(gap_cells_l, UP, SMALL_BUFF)
+        )
+        gap_label_r = gap_label_l.copy().next_to(gap_cells_r, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        cell_l.animate.set_fill(gap_color, opacity=0.5),
+                        cell_r.animate.set_fill(gap_color, opacity=0.5),
+                    )
+                    for cell_l, cell_r in zip(gap_cells_l[::-1], gap_cells_r)
+                ],
+                lag_ratio=0.15,
+            ),
+            FadeIn(gap_label_l, gap_label_r),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        ax = Axes(
+            x_range=[f3 - 1, f3 + 1, 0.5],
+            y_range=[0, -~y_min, -~y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).next_to(self.camera.frame.get_bottom(), DOWN, LARGE_BUFF * 2)
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex())
+
+        freq, X_k_log = get_plot_values(
+            power_norm_1=~power_norm_1,
+            power_norm_2=~power_norm_2,
+            power_norm_3=~power_norm_3,
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
+            y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
+        ).values()
+
+        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = ax.plot(
+            f_X_k_log, x_range=[f3 - 1, f3 + 1, 1 / fs], color=RX_COLOR
+        )
+
+        plot_group = VGroup(ax, ax_label, return_plot).next_to(
+            [0, -config["frame_height"] / 2, 0], DOWN
+        )
+
+        self.add(plot_group)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(ax.width * 1.2).move_to(ax)
+        )
+
+        self.wait(0.5)
+
+        cell_size = VT(0.05)
+
+        def get_sample_poly(idx, color):
+            def updater():
+                mid = f3 + idx * ~cell_size * 2
+                top = ax.input_to_graph_point(mid, return_plot)[1]
+                left_x = ax.input_to_graph_point(mid - ~cell_size, return_plot)[0]
+                right_x = ax.input_to_graph_point(mid + ~cell_size, return_plot)[0]
+                bot = ax.c2p(0, 0)[1]
+                box = Polygon(
+                    (left_x, top, 0),
+                    (left_x, bot, 0),
+                    (right_x, bot, 0),
+                    (right_x, top, 0),
+                    fill_color=color,
+                    fill_opacity=0.5,
+                    stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                )
+                return box
+
+            return updater
+
+        cut_vert_box = always_redraw(get_sample_poly(0, cut_color))
+
+        gap_vert_boxes_l = VGroup(
+            *[
+                always_redraw(get_sample_poly(-idx, gap_color))
+                for idx in range(1, n_gap_cells + 1)
+            ]
+        )
+        gap_vert_boxes_r = VGroup(
+            *[
+                always_redraw(get_sample_poly(idx, gap_color))
+                for idx in range(1, n_gap_cells + 1)
+            ]
+        )
+
+        self.play(FadeIn(cut_vert_box))
+        self.play(FadeIn(gap_vert_boxes_l, gap_vert_boxes_r))
+
+        self.wait(0.5)
+
+        self.play(cell_size @ 0.1, run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(cell_size @ 0.05, run_time=1.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                Group(cut_label, ref_cells_l, ref_cells_r).width * 1.2
+            )
+        )
+
+        self.wait(0.5)
+
+        ref_label_l = (
+            Tex("Ref", color=ref_color)
+            .scale_to_fit_width(sample_labels[0].width * 1.5)
+            .next_to(ref_cells_l, UP, SMALL_BUFF)
+        )
+        ref_label_r = ref_label_l.copy().next_to(ref_cells_r, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        cell_l.animate.set_fill(ref_color, opacity=0.5),
+                        cell_r.animate.set_fill(ref_color, opacity=0.5),
+                    )
+                    for cell_l, cell_r in zip(ref_cells_l[::-1], ref_cells_r)
+                ],
+                lag_ratio=0.15,
+            ),
+            FadeIn(ref_label_l, ref_label_r),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.shift(
+                DOWN
+                * (self.camera.frame.get_top()[1] - cut_label.get_y() - MED_LARGE_BUFF)
+            )
+        )
+
+        self.wait(0.5)
+
+        techniques = Tex("Techniques")
+        averaging = Tex("Averaging")
+        smallest = Tex("Smallest Averaging")
+        largest = Tex("Largest Averaging")
+        techniques_group = (
+            VGroup(averaging, smallest, largest)
+            .arrange(DOWN)
+            .scale_to_fit_width(sample_rects[:6].width)
+        )
+        techniques_brace = Brace(techniques_group, LEFT, sharpness=0.7)
+        techniques.scale_to_fit_width(sample_rects[:4].width).next_to(
+            techniques_brace, LEFT, SMALL_BUFF
+        )
+        Group(techniques, techniques_group, techniques_brace).move_to(self.camera.frame)
+
+        self.play(
+            LaggedStart(
+                FadeIn(techniques, techniques_brace, shift=RIGHT),
+                *[FadeIn(t) for t in techniques_group],
+                lag_ratio=0.25,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(averaging.animate.set_color(GREEN))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(techniques, techniques_brace, smallest, largest),
+                averaging.animate.scale(1.5).move_to(self.camera.frame),
+                lag_ratio=0.3,
             )
         )
 
