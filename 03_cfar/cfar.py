@@ -22,7 +22,7 @@ NOISE_COLOR = PURPLE
 TARGETS_COLOR = GREEN
 
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -955,10 +955,10 @@ class CFARIntro(MovingCameraScene):
         cut = sample_rects[cut_index]
 
         gap_cells_l = sample_rects[gap_index_l:cut_index]
-        gap_cells_r = sample_rects[cut_index + 1 : gap_index_r + 2]
+        gap_cells_r = sample_rects[cut_index + 1 : gap_index_r + 1]
 
         ref_cells_l = sample_rects[ref_index_l:gap_index_l]
-        ref_cells_r = sample_rects[gap_index_r + 1 : ref_index_r + 2]
+        ref_cells_r = sample_rects[gap_index_r + 1 : ref_index_r + 1]
 
         cut_label_spelled = (
             Tex(r"Cell\\Under\\Test", color=cut_color)
@@ -1073,10 +1073,24 @@ class CFARIntro(MovingCameraScene):
 
         cell_size = VT(0.05)
 
-        def get_sample_poly(idx, color):
+        def get_sample_poly(idx, color, top_coord=None, bias: VT = None):
+            # top_coord_lc = top_coord
+            # bias_lc = bias
+            # bias_lc = 0
+
             def updater():
                 mid = f3 + idx * ~cell_size * 2
-                top = ax.input_to_graph_point(mid, return_plot)[1]
+                if top_coord is None:
+                    top_coord_lc = ax.input_to_graph_coords(mid, return_plot)[1]
+                else:
+                    top_coord_lc = top_coord
+                if bias is None:
+                    bias_lc = 1
+                else:
+                    bias_lc = bias
+
+                c = ~bias_lc if type(bias_lc) is VT else bias_lc
+                top = ax.c2p(mid, top_coord_lc * c)[1]
                 left_x = ax.input_to_graph_point(mid - ~cell_size, return_plot)[0]
                 right_x = ax.input_to_graph_point(mid + ~cell_size, return_plot)[0]
                 bot = ax.c2p(0, 0)[1]
@@ -1111,6 +1125,7 @@ class CFARIntro(MovingCameraScene):
         self.play(FadeIn(cut_vert_box))
         self.play(FadeIn(gap_vert_boxes_l, gap_vert_boxes_r))
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(cell_size @ 0.1, run_time=1.5)
@@ -1119,7 +1134,7 @@ class CFARIntro(MovingCameraScene):
 
         self.play(cell_size @ 0.05, run_time=1.5)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(self.camera.frame.animate.restore())
@@ -1164,6 +1179,30 @@ class CFARIntro(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        Transform(
+                            ml,
+                            ml.copy().scale(1.2),
+                            rate_func=rate_functions.there_and_back,
+                        ),
+                        Transform(
+                            mr,
+                            mr.copy().scale(1.2),
+                            rate_func=rate_functions.there_and_back,
+                        ),
+                    )
+                    for ml, mr in zip(ref_cells_l[::-1], ref_cells_r)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
         self.wait(0.5)
 
         techniques = Tex("Techniques")
@@ -1199,6 +1238,280 @@ class CFARIntro(MovingCameraScene):
             LaggedStart(
                 FadeOut(techniques, techniques_brace, smallest, largest),
                 averaging.animate.scale(1.5).move_to(self.camera.frame),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            averaging.animate.next_to(
+                self.camera.frame.get_bottom(), UP, MED_SMALL_BUFF
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        ref_cell_labels_l = sample_labels[ref_index_l:gap_index_l]
+        ref_cell_labels_r = sample_labels[gap_index_r + 1 : ref_index_r + 1]
+
+        ref_cell_label_summed = " + ".join(
+            [
+                label.get_tex_string()
+                for label in [*ref_cell_labels_l, *ref_cell_labels_r]
+            ]
+        )
+
+        mean_eqn_full = (
+            MathTex(
+                f"\\frac{{ {ref_cell_label_summed} }}{{N}}",
+                font_size=DEFAULT_FONT_SIZE * 0.4,
+            )
+            .move_to(self.camera.frame)
+            .shift(DOWN / 2)
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(
+                        TransformFromCopy(m, mean_eqn_full[0][idx * 4 : idx * 4 + 3]),
+                        FadeIn(mean_eqn_full[0][(idx + 1) * 4 - 1]),
+                        lag_ratio=0.3,
+                    )
+                    for idx, m in enumerate([*ref_cell_labels_l, *ref_cell_labels_r])
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.play(FadeIn(mean_eqn_full[0][-1:]))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        mean_eqn = MathTex(
+            f"\\frac{{\\sum_{{i= {gap_index_l-n_ref_cells} }}^{{{gap_index_l-1}}} A_i + \\sum_{{i= {gap_index_r+1} }}^{{{gap_index_r+n_ref_cells}}} A_i}}{{N}}",
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+        ).move_to(mean_eqn_full)
+
+        self.play(
+            TransformByGlyphMap(
+                mean_eqn_full,
+                mean_eqn,
+                (
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8],
+                ),
+                ([15], [9], {"delay": 0.3}),
+                (
+                    [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+                    [10, 11, 12, 13, 14, 15, 16, 17, 18],
+                    {"delay": 0.6},
+                ),
+                ([31], [19], {"delay": 0.9}),
+                ([32], [20], {"delay": 0.9}),
+            )
+        )
+
+        self.wait(0.5)
+
+        mean_eqn_w_bias = MathTex(
+            f"\\text{{Bias}} \\cdot \\frac{{\\sum_{{i= {gap_index_l-n_ref_cells} }}^{{{gap_index_l-1}}} A_i + \\sum_{{i= {gap_index_r+1} }}^{{{gap_index_r+n_ref_cells}}} A_i}}{{N}}",
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+        ).move_to(mean_eqn)
+
+        # fmt: off
+        self.play(
+            TransformByGlyphMap(
+                mean_eqn, 
+                mean_eqn_w_bias,
+                ([], [0,1,2,3,4]),
+                ([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20], [5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25])
+            )
+        )
+        # fmt: on
+
+        self.wait(0.5)
+
+        cut_threshold = MathTex(r"T_{CUT} = ", font_size=DEFAULT_FONT_SIZE * 0.6)
+        eqn_loc = mean_eqn_w_bias.get_center()
+        mean_eqn_w_bias_copy = mean_eqn_w_bias.copy()
+        Group(cut_threshold, mean_eqn_w_bias_copy).arrange(RIGHT, SMALL_BUFF).move_to(
+            eqn_loc
+        )
+
+        self.play(
+            LaggedStart(
+                Transform(mean_eqn_w_bias, mean_eqn_w_bias_copy),
+                FadeIn(cut_threshold),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(ax.width * 1.2).move_to(ax)
+        )
+
+        self.wait(0.5)
+
+        ref_vert_boxes_l = VGroup(
+            *[
+                always_redraw(get_sample_poly(-idx, ref_color))
+                for idx in range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells)
+            ]
+        )
+        ref_vert_boxes_r = VGroup(
+            *[
+                always_redraw(get_sample_poly(idx, ref_color))
+                for idx in range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells)
+            ]
+        )
+
+        self.play(FadeIn(ref_vert_boxes_l, ref_vert_boxes_r))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        cut_plot_label = Tex(
+            "CUT", color=cut_color, font_size=DEFAULT_FONT_SIZE
+        ).next_to(ax.input_to_graph_point(f3, return_plot), UP)
+        gap_plot_label = Tex(
+            "Gap", color=gap_color, font_size=DEFAULT_FONT_SIZE
+        ).next_to(
+            ax.input_to_graph_point(f3 + ~cell_size * 2 * (n_gap_cells), return_plot),
+            UP,
+            MED_LARGE_BUFF,
+        )
+        ref_plot_label = Tex(
+            "Ref", color=ref_color, font_size=DEFAULT_FONT_SIZE
+        ).next_to(
+            ax.input_to_graph_point(
+                f3 + ~cell_size * 2 * (n_gap_cells + n_ref_cells), return_plot
+            ),
+            UP,
+            MED_LARGE_BUFF,
+        )
+        self.play(FadeIn(cut_plot_label, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(gap_plot_label, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(ref_plot_label, shift=DOWN))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        bias = VT(1)
+        threshold_top_coord = np.mean(
+            [
+                ax.input_to_graph_coords(f3 + idx * ~cell_size * 2, return_plot)[1]
+                for idx in [
+                    *range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells),
+                    *range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells),
+                ]
+            ]
+        )
+        threshold_line = DashedVMobject(
+            ax.plot(lambda t: threshold_top_coord, color=ref_color)
+        )
+
+        self.play(FadeIn(threshold_line, shift=UP))
+
+        self.wait(0.5)
+
+        threshold_vert_box = always_redraw(
+            get_sample_poly(0, ref_color, top_coord=threshold_top_coord, bias=bias)
+        )
+
+        self.play(Create(threshold_vert_box))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(threshold_line))
+
+        self.wait(0.5)
+
+        bias_label = always_redraw(
+            lambda: Tex(f"Bias = {~bias:.2f}")
+            .next_to(self.camera.frame.get_top(), DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * 3)
+        )
+
+        self.play(FadeIn(bias_label, shift=DOWN))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(bias @ 2, run_time=2)
+
+        self.wait(0.5)
+
+        cut_above_line = Line(
+            threshold_vert_box.get_top(), cut_vert_box.get_top()
+        ).shift(LEFT)
+        cut_above_line_s = Line(
+            cut_above_line.get_start() + LEFT / 6,
+            cut_above_line.get_start() + RIGHT / 6,
+        )
+        cut_above_line_e = Line(
+            cut_above_line.get_end() + LEFT / 6,
+            cut_above_line.get_end() + RIGHT / 6,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(cut_above_line_e),
+                Create(cut_above_line.reverse_direction()),
+                Create(cut_above_line_s),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        cut_gt_thresh = MathTex(r" > ", "T_{CUT}").next_to(
+            cut_plot_label, RIGHT, SMALL_BUFF
+        )
+        cut_gt_thresh[1].set_color(ref_color)
+
+        self.play(FadeIn(cut_gt_thresh))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    cut_above_line_s,
+                    cut_above_line_e,
+                    cut_above_line,
+                    plot_group,
+                    cut_gt_thresh,
+                    bias_label,
+                    cut_vert_box,
+                    gap_vert_boxes_l,
+                    gap_vert_boxes_r,
+                    ref_vert_boxes_l,
+                    ref_vert_boxes_r,
+                    cut_plot_label,
+                    gap_plot_label,
+                    ref_plot_label,
+                    threshold_vert_box,
+                    mean_eqn_w_bias,
+                    averaging,
+                    cut_threshold,
+                ),
+                self.camera.frame.animate.scale_to_fit_width(
+                    sample_rects.width * 1.2
+                ).move_to(ORIGIN),
                 lag_ratio=0.3,
             )
         )
