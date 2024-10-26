@@ -8,6 +8,7 @@ import numpy as np
 from manim import *
 from MF_Tools import VT, TransformByGlyphMap
 from numpy.fft import fft, fftshift
+from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal, interpolate
 
 
@@ -20,6 +21,10 @@ config.background_color = BACKGROUND_COLOR
 
 NOISE_COLOR = PURPLE
 TARGETS_COLOR = GREEN
+
+CUT_COLOR = YELLOW
+GAP_COLOR = RED
+REF_COLOR = BLUE
 
 
 SKIP_ANIMATIONS_OVERRIDE = True
@@ -938,10 +943,6 @@ class CFARIntro(MovingCameraScene):
 
         self.wait(0.5)
 
-        cut_color = YELLOW
-        gap_color = RED
-        ref_color = BLUE
-
         cut_index = num_samples // 2 + num_samples // 6
 
         n_gap_cells = 3
@@ -961,12 +962,12 @@ class CFARIntro(MovingCameraScene):
         ref_cells_r = sample_rects[gap_index_r + 1 : ref_index_r + 1]
 
         cut_label_spelled = (
-            Tex(r"Cell\\Under\\Test", color=cut_color)
+            Tex(r"Cell\\Under\\Test", color=CUT_COLOR)
             .scale_to_fit_width(sample_labels[0].width * 1.7)
             .next_to(cut, UP, SMALL_BUFF)
         )
         cut_label = (
-            Tex("CUT", color=cut_color)
+            Tex("CUT", color=CUT_COLOR)
             .scale_to_fit_width(sample_labels[0].width * 1.5)
             .next_to(cut, UP, SMALL_BUFF)
         )
@@ -981,7 +982,7 @@ class CFARIntro(MovingCameraScene):
 
         self.play(
             FadeIn(cut_label_spelled),
-            cut.animate.set_fill(color=cut_color, opacity=0.6),
+            cut.animate.set_fill(color=CUT_COLOR, opacity=0.6),
         )
 
         self.wait(0.5)
@@ -1001,7 +1002,7 @@ class CFARIntro(MovingCameraScene):
         self.wait(0.5)
 
         gap_label_l = (
-            Tex("Gap", color=gap_color)
+            Tex("Gap", color=GAP_COLOR)
             .scale_to_fit_width(sample_labels[0].width * 1.5)
             .next_to(gap_cells_l, UP, SMALL_BUFF)
         )
@@ -1011,8 +1012,8 @@ class CFARIntro(MovingCameraScene):
             LaggedStart(
                 *[
                     AnimationGroup(
-                        cell_l.animate.set_fill(gap_color, opacity=0.5),
-                        cell_r.animate.set_fill(gap_color, opacity=0.5),
+                        cell_l.animate.set_fill(GAP_COLOR, opacity=0.5),
+                        cell_r.animate.set_fill(GAP_COLOR, opacity=0.5),
                     )
                     for cell_l, cell_r in zip(gap_cells_l[::-1], gap_cells_r)
                 ],
@@ -1107,17 +1108,17 @@ class CFARIntro(MovingCameraScene):
 
             return updater
 
-        cut_vert_box = always_redraw(get_sample_poly(0, cut_color))
+        cut_vert_box = always_redraw(get_sample_poly(0, CUT_COLOR))
 
         gap_vert_boxes_l = VGroup(
             *[
-                always_redraw(get_sample_poly(-idx, gap_color))
+                always_redraw(get_sample_poly(-idx, GAP_COLOR))
                 for idx in range(1, n_gap_cells + 1)
             ]
         )
         gap_vert_boxes_r = VGroup(
             *[
-                always_redraw(get_sample_poly(idx, gap_color))
+                always_redraw(get_sample_poly(idx, GAP_COLOR))
                 for idx in range(1, n_gap_cells + 1)
             ]
         )
@@ -1150,7 +1151,7 @@ class CFARIntro(MovingCameraScene):
         self.wait(0.5)
 
         ref_label_l = (
-            Tex("Ref", color=ref_color)
+            Tex("Ref", color=REF_COLOR)
             .scale_to_fit_width(sample_labels[0].width * 1.5)
             .next_to(ref_cells_l, UP, SMALL_BUFF)
         )
@@ -1160,8 +1161,8 @@ class CFARIntro(MovingCameraScene):
             LaggedStart(
                 *[
                     AnimationGroup(
-                        cell_l.animate.set_fill(ref_color, opacity=0.5),
-                        cell_r.animate.set_fill(ref_color, opacity=0.5),
+                        cell_l.animate.set_fill(REF_COLOR, opacity=0.5),
+                        cell_r.animate.set_fill(REF_COLOR, opacity=0.5),
                     )
                     for cell_l, cell_r in zip(ref_cells_l[::-1], ref_cells_r)
                 ],
@@ -1362,13 +1363,13 @@ class CFARIntro(MovingCameraScene):
 
         ref_vert_boxes_l = VGroup(
             *[
-                always_redraw(get_sample_poly(-idx, ref_color))
+                always_redraw(get_sample_poly(-idx, REF_COLOR))
                 for idx in range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells)
             ]
         )
         ref_vert_boxes_r = VGroup(
             *[
-                always_redraw(get_sample_poly(idx, ref_color))
+                always_redraw(get_sample_poly(idx, REF_COLOR))
                 for idx in range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells)
             ]
         )
@@ -1379,17 +1380,17 @@ class CFARIntro(MovingCameraScene):
         self.wait(0.5)
 
         cut_plot_label = Tex(
-            "CUT", color=cut_color, font_size=DEFAULT_FONT_SIZE
+            "CUT", color=CUT_COLOR, font_size=DEFAULT_FONT_SIZE
         ).next_to(ax.input_to_graph_point(f3, return_plot), UP)
         gap_plot_label = Tex(
-            "Gap", color=gap_color, font_size=DEFAULT_FONT_SIZE
+            "Gap", color=GAP_COLOR, font_size=DEFAULT_FONT_SIZE
         ).next_to(
             ax.input_to_graph_point(f3 + ~cell_size * 2 * (n_gap_cells), return_plot),
             UP,
             MED_LARGE_BUFF,
         )
         ref_plot_label = Tex(
-            "Ref", color=ref_color, font_size=DEFAULT_FONT_SIZE
+            "Ref", color=REF_COLOR, font_size=DEFAULT_FONT_SIZE
         ).next_to(
             ax.input_to_graph_point(
                 f3 + ~cell_size * 2 * (n_gap_cells + n_ref_cells), return_plot
@@ -1421,7 +1422,7 @@ class CFARIntro(MovingCameraScene):
             ]
         )
         threshold_line = DashedVMobject(
-            ax.plot(lambda t: threshold_top_coord, color=ref_color)
+            ax.plot(lambda t: threshold_top_coord, color=REF_COLOR)
         )
 
         self.play(FadeIn(threshold_line, shift=UP))
@@ -1429,7 +1430,7 @@ class CFARIntro(MovingCameraScene):
         self.wait(0.5)
 
         threshold_vert_box = always_redraw(
-            get_sample_poly(0, ref_color, top_coord=threshold_top_coord, bias=bias)
+            get_sample_poly(0, REF_COLOR, top_coord=threshold_top_coord, bias=bias)
         )
 
         self.play(Create(threshold_vert_box))
@@ -1481,7 +1482,7 @@ class CFARIntro(MovingCameraScene):
         cut_gt_thresh = MathTex(r" > ", "T_{CUT}").next_to(
             cut_plot_label, RIGHT, SMALL_BUFF
         )
-        cut_gt_thresh[1].set_color(ref_color)
+        cut_gt_thresh[1].set_color(REF_COLOR)
 
         self.play(FadeIn(cut_gt_thresh))
 
@@ -1515,5 +1516,305 @@ class CFARIntro(MovingCameraScene):
                 lag_ratio=0.3,
             )
         )
+
+        self.wait(2)
+
+
+class Sweeping(MovingCameraScene):
+    def construct(self):
+        n_samples = 30
+        sample_rects = (
+            VGroup(
+                *[
+                    Square(
+                        color=BLACK,
+                        fill_color=BLUE,
+                        fill_opacity=0,
+                        stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                    )
+                    for _ in range(n_samples)
+                ]
+            )
+            .arrange(RIGHT, 0)
+            .scale_to_fit_width(config["frame_width"] / 1.2)
+        )
+
+        sample_labels = VGroup(
+            *[
+                MathTex(f"A_{{{idx}}}")
+                .scale_to_fit_width(rect.width * 0.7)
+                .move_to(rect)
+                for idx, rect in enumerate(sample_rects)
+            ]
+        )
+
+        self.add(sample_rects, sample_labels)
+
+
+class SweepPlot(MovingCameraScene):
+    def construct(self):
+        stop_time = 16
+        fs = 1000
+
+        f1 = 1.5
+        f2 = 2.7
+        f3 = 3.4
+
+        power_norm_1 = VT(-3)
+        power_norm_2 = VT(-9)
+        power_norm_3 = VT(0)
+
+        noise_sigma_db = VT(3)
+
+        f_max = 8
+        y_min = VT(-30)
+
+        x_len = VT(11)
+        y_len = 5.5
+
+        noise_seed = VT(2)
+
+        ax = always_redraw(
+            lambda: Axes(
+                x_range=[0, f_max, f_max / 4],
+                y_range=[0, -~y_min, -~y_min / 4],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=~x_len,
+                y_length=y_len,
+            ).to_edge(LEFT, LARGE_BUFF)
+        )
+        # ax_label = always_redraw(lambda: ax.get_axis_labels(Tex("$R$"), Tex()))
+
+        freq, X_k_log = get_plot_values(
+            power_norm_1=~power_norm_1,
+            power_norm_2=~power_norm_2,
+            power_norm_3=~power_norm_3,
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
+            y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
+        ).values()
+
+        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = always_redraw(
+            lambda: ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
+        )
+
+        def cfar_fast(
+            x: np.ndarray,
+            num_ref_cells: int,
+            num_guard_cells: int,
+            bias: float = 1,
+            method=np.mean,
+        ):
+            pad = int((num_ref_cells + num_guard_cells))
+            # fmt: off
+            window_mean = np.pad(                                                                   # Pad front/back since n_windows < n_points
+                method(                                                                             # Apply input method to remaining compute cells
+                    np.delete(                                                                      # Remove guard cells, CUT from computation
+                        sliding_window_view(x, (num_ref_cells * 2) + (num_guard_cells * 2)),        # Windows of x including CUT, guard cells, and compute cells
+                        np.arange(int(num_ref_cells), num_ref_cells + (num_guard_cells * 2) + 1),   # Get indices of guard cells, CUT
+                        axis=1), 
+                    axis=1
+                ), (pad - 1, pad),                                                               
+                "edge"                                                                              # Fill with edge values
+            ) * bias                                                                                # Multiply output by bias over which cell is not noise
+            # fmt: on
+            return window_mean
+
+        # cfar_threshold = cfar_fast(X_k_log, num_guard_cells=8, num_ref_cells=12, bias=1)
+
+        # f_cfar_threshold = interpolate.interp1d(
+        #     freq, cfar_threshold, fill_value="extrapolate"
+        # )
+
+        n_gap_cells = 3
+        n_ref_cells = 4
+
+        cell_size = VT(0.05)
+        f_0 = ~cell_size * 2 * (n_gap_cells + n_ref_cells)
+        # f_0 = 0
+        f = VT(f_0)
+        bias = VT(1)
+
+        cfar_plot = always_redraw(
+            lambda: ax.plot(
+                interpolate.interp1d(
+                    freq,
+                    cfar_fast(X_k_log, num_guard_cells=8, num_ref_cells=12, bias=~bias),
+                    fill_value="extrapolate",
+                ),
+                x_range=[f_0, ~f, 1 / fs],
+                color=REF_COLOR,
+            )
+        )
+
+        cfar_curr_dot = always_redraw(
+            lambda: Dot().move_to(ax.input_to_graph_point(~f, cfar_plot))
+        )
+
+        plot_group = VGroup(
+            ax,
+            # ax_label,
+            return_plot,
+        )
+
+        def get_sample_poly(idx, color, top_coord=None, bias: VT = None):
+            def updater():
+                mid = ~f + idx * ~cell_size * 2
+                if top_coord is None:
+                    top_coord_lc = ax.input_to_graph_coords(mid, return_plot)[1]
+                else:
+                    top_coord_lc = top_coord
+                if bias is None:
+                    bias_lc = 1
+                else:
+                    bias_lc = bias
+
+                c = ~bias_lc if type(bias_lc) is VT else bias_lc
+                top = ax.c2p(mid, top_coord_lc * c)[1]
+                left_x = ax.input_to_graph_point(mid - ~cell_size, return_plot)[0]
+                right_x = ax.input_to_graph_point(mid + ~cell_size, return_plot)[0]
+                bot = ax.c2p(0, 0)[1]
+                box = Polygon(
+                    (left_x, top, 0),
+                    (left_x, bot, 0),
+                    (right_x, bot, 0),
+                    (right_x, top, 0),
+                    fill_color=color,
+                    fill_opacity=0.5,
+                    stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                )
+                return box
+
+            return updater
+
+        cut_vert_box = always_redraw(get_sample_poly(0, CUT_COLOR))
+
+        gap_vert_boxes_l = VGroup(
+            *[
+                always_redraw(get_sample_poly(-idx, GAP_COLOR))
+                for idx in range(1, n_gap_cells + 1)
+            ]
+        )
+        gap_vert_boxes_r = VGroup(
+            *[
+                always_redraw(get_sample_poly(idx, GAP_COLOR))
+                for idx in range(1, n_gap_cells + 1)
+            ]
+        )
+
+        ref_vert_boxes_l = VGroup(
+            *[
+                always_redraw(get_sample_poly(-idx, REF_COLOR))
+                for idx in range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells)
+            ]
+        )
+        ref_vert_boxes_r = VGroup(
+            *[
+                always_redraw(get_sample_poly(idx, REF_COLOR))
+                for idx in range(1 + n_gap_cells, n_ref_cells + 1 + n_gap_cells)
+            ]
+        )
+
+        self.add(
+            plot_group,
+            cut_vert_box,
+            gap_vert_boxes_l,
+            gap_vert_boxes_r,
+            ref_vert_boxes_l,
+            ref_vert_boxes_r,
+        )
+
+        def camera_updater(m: Mobject):
+            m.set_x(cut_vert_box.get_x())
+
+        self.play(x_len @ (~x_len * 3))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.scale(0.8).set_x(cut_vert_box.get_x()))
+        self.camera.frame.add_updater(camera_updater)
+
+        self.add(cfar_plot)
+
+        self.wait(0.5, frozen_frame=False)
+
+        self.play(Create(cfar_curr_dot))
+
+        self.wait(0.5, frozen_frame=False)
+
+        self.play(f @ (8 - f_0), run_time=14, rate_func=rate_functions.ease_in_sine)
+
+        self.wait(0.5)
+
+        self.play(Uncreate(cfar_curr_dot))
+
+        self.wait(0.5)
+
+        self.camera.frame.remove_updater(camera_updater)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(ax.width * 1.1).move_to(ax)
+        )
+
+        self.wait(0.5)
+
+        self.play(bias @ 1.5)
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                cut_vert_box,
+                gap_vert_boxes_l,
+                gap_vert_boxes_r,
+                ref_vert_boxes_l,
+                ref_vert_boxes_r,
+            )
+        )
+
+        self.wait(0.5)
+
+        cfar_plot_2 = ax.plot(
+            interpolate.interp1d(
+                freq,
+                cfar_fast(X_k_log, num_guard_cells=8, num_ref_cells=12, bias=~bias),
+                fill_value="extrapolate",
+            ),
+            x_range=[f_0, ~f, 1 / fs],
+            color=REF_COLOR,
+        )
+
+        dynamic_noise_region = ax.get_area(
+            cfar_plot_2,
+            x_range=[f_0, ~f],
+            color=NOISE_COLOR,
+            opacity=0.3,
+            stroke_opacity=0,
+        )
+        dynamic_targets_region = ax.get_area(
+            ax.plot(lambda t: -~y_min + 5, x_range=[f_0, ~f, 1 / fs]),
+            bounded_graph=cfar_plot_2,
+            x_range=[f_0, ~f],
+            color=TARGETS_COLOR,
+            opacity=0.3,
+            stroke_opacity=0,
+        )
+
+        self.play(FadeIn(dynamic_targets_region))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(dynamic_noise_region))
 
         self.wait(2)
