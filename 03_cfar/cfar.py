@@ -15,7 +15,8 @@ from scipy import signal, interpolate
 warnings.filterwarnings("ignore")
 sys.path.insert(0, "..")
 
-from props.style import BACKGROUND_COLOR, RX_COLOR
+from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
+from props import WeatherRadarTower
 
 config.background_color = BACKGROUND_COLOR
 
@@ -130,6 +131,29 @@ def get_fft_values(
         y_values[y_values < 0] = 0
 
     return x_values, y_values
+
+
+def cfar_fast(
+    x: np.ndarray,
+    num_ref_cells: int,
+    num_guard_cells: int,
+    bias: float = 1,
+    method=np.mean,
+):
+    pad = int((num_ref_cells + num_guard_cells))
+    # fmt: off
+    window_mean = np.pad(                                                                   # Pad front/back since n_windows < n_points
+        method(                                                                             # Apply input method to remaining compute cells
+            np.delete(                                                                      # Remove guard cells, CUT from computation
+                sliding_window_view(x, (num_ref_cells * 2) + (num_guard_cells * 2)),        # Windows of x including CUT, guard cells, and compute cells
+                np.arange(int(num_ref_cells), num_ref_cells + (num_guard_cells * 2) + 1),   # Get indices of guard cells, CUT
+                axis=1), 
+            axis=1
+        ), (pad - 1, pad),                                                               
+        "edge"                                                                              # Fill with edge values
+    ) * bias                                                                                # Multiply output by bias over which cell is not noise
+    # fmt: on
+    return window_mean
 
 
 class Intro(Scene):
@@ -714,7 +738,7 @@ class CFARIntro(MovingCameraScene):
             x_length=x_len,
             y_length=y_len,
         )
-        ax_label = ax.get_axis_labels(Tex("$R$"), Tex())
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex("$A$"))
 
         freq, X_k_log = get_plot_values(
             power_norm_1=~power_norm_1,
@@ -978,6 +1002,55 @@ class CFARIntro(MovingCameraScene):
             ).move_to(Group(cut, cut_label_spelled))
         )
 
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        # Real quick
+
+        rq = Tex("Real quick!")
+
+        params_title = Tex("Parameters:")
+        params = BulletedList(
+            r"Gap cells", "Reference cells", "Bias", buff=MED_SMALL_BUFF
+        ).scale(0.8)
+
+        rq_group = VGroup(rq, params_title, params).arrange(
+            DOWN, aligned_edge=LEFT, buff=MED_SMALL_BUFF
+        )
+        rq.shift(LEFT)
+        rq_box = SurroundingRectangle(
+            rq_group,
+            color=RED,
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.2,
+            stroke_width=DEFAULT_STROKE_WIDTH / 4,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+        )
+        rq_group = (
+            VGroup(rq_box, *rq_group)
+            .scale_to_fit_width(sample_rects[:6].width)
+            .move_to(self.camera.frame)
+        ).set_z_index(3)
+
+        rq.save_state()
+        self.play(GrowFromCenter(Group(rq_box, rq.move_to(self.camera.frame))))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                rq.animate.restore(),
+                Create(params_title),
+                Create(params),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ShrinkToCenter(rq_group))
+
         self.wait(0.5)
 
         self.play(
@@ -985,6 +1058,7 @@ class CFARIntro(MovingCameraScene):
             cut.animate.set_fill(color=CUT_COLOR, opacity=0.6),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(
@@ -1126,7 +1200,7 @@ class CFARIntro(MovingCameraScene):
         self.play(FadeIn(cut_vert_box))
         self.play(FadeIn(gap_vert_boxes_l, gap_vert_boxes_r))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(cell_size @ 0.1, run_time=1.5)
@@ -1351,7 +1425,7 @@ class CFARIntro(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.camera.frame.save_state()
@@ -1408,7 +1482,7 @@ class CFARIntro(MovingCameraScene):
 
         self.play(FadeIn(ref_plot_label, shift=DOWN))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         bias = VT(1)
@@ -1449,7 +1523,7 @@ class CFARIntro(MovingCameraScene):
 
         self.play(FadeIn(bias_label, shift=DOWN))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(bias @ 2, run_time=2)
@@ -1486,7 +1560,12 @@ class CFARIntro(MovingCameraScene):
 
         self.play(FadeIn(cut_gt_thresh))
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
+
+        cut_label_new = Tex("CUT", color=CUT_COLOR, font_size=DEFAULT_FONT_SIZE)
+        is_a_target = Tex("is a target!", font_size=DEFAULT_FONT_SIZE)
+        VGroup(cut_label_new, is_a_target).arrange(RIGHT).move_to(self.camera.frame)
 
         self.play(
             LaggedStart(
@@ -1502,7 +1581,7 @@ class CFARIntro(MovingCameraScene):
                     gap_vert_boxes_r,
                     ref_vert_boxes_l,
                     ref_vert_boxes_r,
-                    cut_plot_label,
+                    # cut_plot_label,
                     gap_plot_label,
                     ref_plot_label,
                     threshold_vert_box,
@@ -1510,45 +1589,20 @@ class CFARIntro(MovingCameraScene):
                     averaging,
                     cut_threshold,
                 ),
-                self.camera.frame.animate.scale_to_fit_width(
-                    sample_rects.width * 1.2
-                ).move_to(ORIGIN),
+                Transform(cut_plot_label, cut_label_new),
+                FadeIn(is_a_target),
+                # self.camera.frame.animate.scale_to_fit_width(
+                #     sample_rects.width * 1.2
+                # ).move_to(ORIGIN),
                 lag_ratio=0.3,
             )
         )
 
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
         self.wait(2)
-
-
-class Sweeping(MovingCameraScene):
-    def construct(self):
-        n_samples = 30
-        sample_rects = (
-            VGroup(
-                *[
-                    Square(
-                        color=BLACK,
-                        fill_color=BLUE,
-                        fill_opacity=0,
-                        stroke_width=DEFAULT_STROKE_WIDTH / 2,
-                    )
-                    for _ in range(n_samples)
-                ]
-            )
-            .arrange(RIGHT, 0)
-            .scale_to_fit_width(config["frame_width"] / 1.2)
-        )
-
-        sample_labels = VGroup(
-            *[
-                MathTex(f"A_{{{idx}}}")
-                .scale_to_fit_width(rect.width * 0.7)
-                .move_to(rect)
-                for idx, rect in enumerate(sample_rects)
-            ]
-        )
-
-        self.add(sample_rects, sample_labels)
 
 
 class SweepPlot(MovingCameraScene):
@@ -1610,40 +1664,11 @@ class SweepPlot(MovingCameraScene):
             lambda: ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
         )
 
-        def cfar_fast(
-            x: np.ndarray,
-            num_ref_cells: int,
-            num_guard_cells: int,
-            bias: float = 1,
-            method=np.mean,
-        ):
-            pad = int((num_ref_cells + num_guard_cells))
-            # fmt: off
-            window_mean = np.pad(                                                                   # Pad front/back since n_windows < n_points
-                method(                                                                             # Apply input method to remaining compute cells
-                    np.delete(                                                                      # Remove guard cells, CUT from computation
-                        sliding_window_view(x, (num_ref_cells * 2) + (num_guard_cells * 2)),        # Windows of x including CUT, guard cells, and compute cells
-                        np.arange(int(num_ref_cells), num_ref_cells + (num_guard_cells * 2) + 1),   # Get indices of guard cells, CUT
-                        axis=1), 
-                    axis=1
-                ), (pad - 1, pad),                                                               
-                "edge"                                                                              # Fill with edge values
-            ) * bias                                                                                # Multiply output by bias over which cell is not noise
-            # fmt: on
-            return window_mean
-
-        # cfar_threshold = cfar_fast(X_k_log, num_guard_cells=8, num_ref_cells=12, bias=1)
-
-        # f_cfar_threshold = interpolate.interp1d(
-        #     freq, cfar_threshold, fill_value="extrapolate"
-        # )
-
         n_gap_cells = 3
         n_ref_cells = 4
 
         cell_size = VT(0.05)
         f_0 = ~cell_size * 2 * (n_gap_cells + n_ref_cells)
-        # f_0 = 0
         f = VT(f_0)
         bias = VT(1)
 
@@ -1727,14 +1752,25 @@ class SweepPlot(MovingCameraScene):
             ]
         )
 
-        self.add(
-            plot_group,
-            cut_vert_box,
-            gap_vert_boxes_l,
-            gap_vert_boxes_r,
-            ref_vert_boxes_l,
-            ref_vert_boxes_r,
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(FadeIn(ax), Create(return_plot))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeIn(
+                cut_vert_box,
+                gap_vert_boxes_l,
+                gap_vert_boxes_r,
+                ref_vert_boxes_l,
+                ref_vert_boxes_r,
+            )
         )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
 
         def camera_updater(m: Mobject):
             m.set_x(cut_vert_box.get_x())
@@ -1783,6 +1819,7 @@ class SweepPlot(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         cfar_plot_2 = ax.plot(
@@ -1811,10 +1848,620 @@ class SweepPlot(MovingCameraScene):
             stroke_opacity=0,
         )
 
-        self.play(FadeIn(dynamic_targets_region))
+        targets_label = Tex("Targets", color=TARGETS_COLOR).next_to(
+            dynamic_targets_region, RIGHT, SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(dynamic_targets_region),
+                # FadeIn(targets_label),
+            )
+        )
 
         self.wait(0.5)
 
-        self.play(FadeIn(dynamic_noise_region))
+        noise_label = Tex("Noise", color=NOISE_COLOR).next_to(
+            dynamic_noise_region, RIGHT, SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(dynamic_noise_region),
+                # FadeIn(noise_label),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class DesignIntro(Scene):
+    def construct(self):
+        the_design_process = Tex("The Design Process").scale(1.5)
+
+        notebook_ss = ImageMobject("./static/notebook_screenshot.png")
+        notebook_label = Text("cfar.ipynb", font="FiraCode Nerd Font Mono").next_to(
+            notebook_ss, UP
+        )
+        notebook_box = SurroundingRectangle(
+            Group(notebook_ss, notebook_label),
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+        )
+        notebook = (
+            Group(notebook_box, notebook_label, notebook_ss)
+            .scale_to_fit_width(config["frame_width"] * 0.8)
+            .move_to(ORIGIN)
+            .set_z_index(2)
+        )
+
+        params = (
+            BulletedList("Gap Cells", "Reference Cells", "Bias")
+            .scale(1.5)
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+
+        self.play(FadeIn(the_design_process))
+
+        self.wait(0.5)
+
+        self.play(the_design_process.animate.to_edge(UP, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(params[0], shift=RIGHT))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(params[1], shift=LEFT))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(params[2], shift=RIGHT))
+
+        self.wait(0.5)
+
+        self.play(notebook.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        self.play(Group(*self.mobjects).animate.shift(UP * 8))
+
+        self.wait(2)
+
+
+class Designer(Scene):
+    def construct(self):
+        stop_time = 16
+        fs = 1000
+
+        f1 = 1.5
+        f2 = 2.7
+        f3 = 3.4
+
+        power_norm_1 = VT(-3)
+        power_norm_2 = VT(-9)
+        power_norm_3 = VT(0)
+
+        noise_sigma_db = VT(3)
+
+        f_max = 8
+        y_min = VT(-30)
+
+        x_len = VT(11)
+        y_len = 5.5
+
+        noise_seed = VT(2)
+
+        ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -~y_min, -~y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=~x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, MED_SMALL_BUFF)
+
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex("$A$"))
+
+        freq, X_k_log = get_plot_values(
+            power_norm_1=~power_norm_1,
+            power_norm_2=~power_norm_2,
+            power_norm_3=~power_norm_3,
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
+            y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
+        ).values()
+
+        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
+
+        n_gap_cells = VT(3)
+        n_ref_cells = VT(4)
+
+        cell_size = VT(0.05)
+        f_0 = ~cell_size * 2 * (~n_gap_cells + ~n_ref_cells)
+        f = VT(f3)
+        bias = VT(1)
+
+        cfar_plot = always_redraw(
+            lambda: ax.plot(
+                interpolate.interp1d(
+                    freq,
+                    cfar_fast(
+                        X_k_log,
+                        num_guard_cells=int(8 * 6 / ~n_gap_cells),
+                        num_ref_cells=int(12 * 8 / ~n_ref_cells),
+                        bias=~bias,
+                    ),
+                    fill_value="extrapolate",
+                ),
+                x_range=[f_0, f_max - f_0, 1 / fs],
+                color=REF_COLOR,
+            )
+        )
+
+        def get_sample_poly(idx, color, top_coord=None, bias: VT = None):
+            def updater():
+                mid = ~f + idx * ~cell_size * 2
+                if top_coord is None:
+                    top_coord_lc = ax.input_to_graph_coords(mid, return_plot)[1]
+                else:
+                    top_coord_lc = top_coord
+                if bias is None:
+                    bias_lc = 1
+                else:
+                    bias_lc = bias
+
+                c = ~bias_lc if type(bias_lc) is VT else bias_lc
+                top = ax.c2p(mid, top_coord_lc * c)[1]
+                left_x = ax.input_to_graph_point(mid - ~cell_size, return_plot)[0]
+                right_x = ax.input_to_graph_point(mid + ~cell_size, return_plot)[0]
+                bot = ax.c2p(0, 0)[1]
+                box = Polygon(
+                    (left_x, top, 0),
+                    (left_x, bot, 0),
+                    (right_x, bot, 0),
+                    (right_x, top, 0),
+                    fill_color=color,
+                    fill_opacity=0.3,
+                    stroke_width=DEFAULT_STROKE_WIDTH / 8,
+                )
+                return box
+
+            return updater
+
+        cut_vert_box = always_redraw(get_sample_poly(0, CUT_COLOR))
+
+        gap_vert_boxes_l = always_redraw(
+            lambda: VGroup(
+                *[
+                    get_sample_poly(-idx, GAP_COLOR)()
+                    for idx in range(1, int(~n_gap_cells + 1))
+                ]
+            )
+        )
+        gap_vert_boxes_r = always_redraw(
+            lambda: VGroup(
+                *[
+                    get_sample_poly(idx, GAP_COLOR)()
+                    for idx in range(1, int(~n_gap_cells + 1))
+                ]
+            )
+        )
+
+        ref_vert_boxes_l = always_redraw(
+            lambda: VGroup(
+                *[
+                    get_sample_poly(-idx, REF_COLOR)()
+                    for idx in range(
+                        int(1 + ~n_gap_cells), int(~n_ref_cells + 1 + ~n_gap_cells)
+                    )
+                ]
+            )
+        )
+        ref_vert_boxes_r = always_redraw(
+            lambda: VGroup(
+                *[
+                    get_sample_poly(idx, REF_COLOR)()
+                    for idx in range(
+                        int(1 + ~n_gap_cells), int(~n_ref_cells + 1 + ~n_gap_cells)
+                    )
+                ]
+            )
+        )
+
+        plot_group = VGroup(ax, ax_label, return_plot, cfar_plot)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(plot_group.shift(DOWN * 10).animate.shift(UP * 10))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(cut_vert_box))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(gap_vert_boxes_l, gap_vert_boxes_r))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(ref_vert_boxes_l, ref_vert_boxes_r))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        gap_cells_label = Tex("Gap Cells:")
+        ref_cells_label = Tex("Ref Cells:")
+        bias_label = Tex("Bias:")
+
+        param_labels = (
+            VGroup(gap_cells_label, ref_cells_label, bias_label)
+            .arrange(DOWN, SMALL_BUFF, aligned_edge=LEFT)
+            .to_corner(UR)
+            .shift(LEFT)
+        )
+
+        gap_cells_num_label = always_redraw(
+            lambda: Tex(f"{int(~n_gap_cells)}").next_to(
+                gap_cells_label, RIGHT, SMALL_BUFF
+            )
+        )
+        ref_cells_num_label = always_redraw(
+            lambda: Tex(f"{int(~n_ref_cells)}").next_to(
+                ref_cells_label, RIGHT, SMALL_BUFF
+            )
+        )
+        bias_num_label = always_redraw(
+            lambda: Tex(f"{~bias:.2f}").next_to(bias_label, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            FadeIn(
+                param_labels,
+                gap_cells_num_label,
+                ref_cells_num_label,
+                bias_num_label,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(gap_cells_label.animate.set_color(YELLOW))
+
+        # self.next_section(skip_animations=skip_animations(True))
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             AnimationGroup(
+        #                 l.animate(rate_func=rate_functions.there_and_back).scale(1.5),
+        #                 r.animate(rate_func=rate_functions.there_and_back).scale(1.5),
+        #             )
+        #             for l, r in zip(gap_vert_boxes_l, gap_vert_boxes_r)
+        #         ],
+        #         lag_ratio=0.2,
+        #     )
+        # )
+
+        # Plane vs human
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        person = ImageMobject("../props/static/person.png").scale_to_fit_height(
+            config["frame_height"] * 0.2
+        )
+        plane = SVGMobject("../props/static/plane.svg").scale(1.2).next_to(person, UR)
+        targets = Group(person, plane)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale(0.5).next_to(person, LEFT, LARGE_BUFF * 3)
+
+        beam_bot = Line(
+            radar.radome.get_right() + [0.1, 0, 0],
+            person.get_corner(DL),
+            color=TX_COLOR,
+        )
+        beam_top = Line(
+            radar.radome.get_right() + [0.1, 0, 0], plane.get_corner(UL), color=TX_COLOR
+        )
+
+        example = Group(radar.vgroup, beam_top, beam_bot, plane, person).move_to(ORIGIN)
+
+        example_box = SurroundingRectangle(
+            example,
+            color=RED,
+            corner_radius=0.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            buff=MED_SMALL_BUFF,
+        )
+        example = Group(example_box, *example).set_z_index(3)
+
+        self.play(GrowFromCenter(example_box))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(radar.vgroup),
+                GrowFromCenter(person),
+                GrowFromCenter(plane),
+                AnimationGroup(Create(beam_top), Create(beam_bot)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ShrinkToCenter(example))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        target_gap_cells = 14
+        target_ref_cells = 18
+
+        while ~n_gap_cells < target_gap_cells:
+            n_gap_cells += 1
+            self.wait(0.2, frozen_frame=False)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        target_gap_cells = 6
+
+        while ~n_gap_cells > target_gap_cells:
+            n_gap_cells -= 1
+            self.wait(0.1, frozen_frame=False)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        charvat_book = ImageMobject(
+            "../props/static/charvat_radar_book_cover.jpg"
+        ).scale_to_fit_height(config["frame_height"] * 0.7)
+        purdue_article = ImageMobject(
+            "./static/purdue_cfar_screenshot.png"
+        ).scale_to_fit_width(config["frame_width"] * 0.3)
+        arrow = Arrow(UP * 2, DOWN * 2)
+        in_the_description = Tex("in the description").rotate(-PI / 2)
+        resources = Group(
+            charvat_book, purdue_article, arrow, in_the_description
+        ).arrange(RIGHT, MED_SMALL_BUFF)
+        resources_box = SurroundingRectangle(
+            resources,
+            color=RED,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.2,
+        )
+        resources = Group(resources_box, *resources).set_z_index(3)
+
+        self.play(GrowFromCenter(resources_box))
+        self.play(
+            LaggedStart(
+                GrowFromCenter(charvat_book),
+                GrowFromCenter(purdue_article),
+                AnimationGroup(GrowArrow(arrow), FadeIn(in_the_description)),
+                lag_ratio=0.35,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(resources))
+
+        self.wait(0.5)
+
+        self.play(
+            gap_cells_label.animate.set_color(WHITE),
+            bias_label.animate.set_color(YELLOW),
+        )
+
+        self.play(bias + 2)
+
+        self.wait(0.5)
+
+        self.play(bias - 1)
+
+        self.wait(0.5)
+
+        self.play(
+            bias_label.animate.set_color(WHITE),
+            ref_cells_label.animate.set_color(YELLOW),
+        )
+
+        # self.next_section(skip_animations=skip_animations(True))
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             AnimationGroup(
+        #                 l.animate(rate_func=rate_functions.there_and_back).scale(1.5),
+        #                 r.animate(rate_func=rate_functions.there_and_back).scale(1.5),
+        #             )
+        #             for l, r in zip(ref_vert_boxes_l, ref_vert_boxes_r)
+        #         ],
+        #         lag_ratio=0.2,
+        #     )
+        # )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        while ~n_ref_cells < target_ref_cells:
+            n_ref_cells += 1
+            self.wait(0.2, frozen_frame=False)
+
+        self.wait(0.5)
+
+        target_ref_cells = 8
+
+        while ~n_ref_cells > target_ref_cells:
+            n_ref_cells -= 1
+            self.wait(0.1, frozen_frame=False)
+
+        self.wait(0.5)
+
+        self.play(ref_cells_label.animate.set_color(WHITE))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(2)
+
+
+class CFARMethods(MovingCameraScene):
+    def construct(self):
+        n_samples = 30
+        sample_rects = (
+            VGroup(
+                *[
+                    Square(
+                        color=BLACK,
+                        fill_color=BLUE,
+                        fill_opacity=0,
+                        stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                    )
+                    for _ in range(n_samples)
+                ]
+            )
+            .arrange(RIGHT, 0)
+            .scale_to_fit_width(config["frame_width"] / 1.2)
+        )
+
+        sample_labels = VGroup(
+            *[
+                MathTex(f"A_{{{idx}}}")
+                .scale_to_fit_width(rect.width * 0.7)
+                .move_to(rect)
+                for idx, rect in enumerate(sample_rects)
+            ]
+        )
+
+        self.add(sample_rects, sample_labels)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        GrowFromCenter(lb),
+                        GrowFromCenter(rb),
+                        GrowFromCenter(ll),
+                        GrowFromCenter(rl),
+                    )
+                    for lb, rb, ll, rl in zip(
+                        sample_rects[: n_samples / 2],
+                        sample_rects[n_samples / 2 :],
+                        sample_labels[: n_samples / 2],
+                        sample_labels[n_samples / 2 :],
+                    )
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+
+""" Testing """
+
+
+class TargetSize(Scene):
+    def construct(self):
+        person = ImageMobject("../props/static/person.png").scale_to_fit_height(
+            config["frame_height"] * 0.2
+        )
+        plane = SVGMobject("../props/static/plane.svg").scale(1.2).next_to(person, UR)
+        targets = Group(person, plane)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale(0.5).next_to(person, LEFT, LARGE_BUFF * 3)
+
+        beam_bot = Line(
+            radar.radome.get_right() + [0.1, 0, 0],
+            person.get_corner(DL),
+            color=TX_COLOR,
+        )
+        beam_top = Line(
+            radar.radome.get_right() + [0.1, 0, 0], plane.get_corner(UL), color=TX_COLOR
+        )
+
+        example = Group(radar.vgroup, beam_top, beam_bot, plane, person).move_to(ORIGIN)
+
+        example_box = SurroundingRectangle(
+            example,
+            color=RED,
+            corner_radius=0.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            buff=MED_SMALL_BUFF,
+        )
+        example = Group(example_box, *example).set_z_index(3)
+
+        self.play(GrowFromCenter(example_box))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(radar.vgroup),
+                GrowFromCenter(person),
+                GrowFromCenter(plane),
+                AnimationGroup(Create(beam_top), Create(beam_bot)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
+
+
+class References(Scene):
+    def construct(self):
+        charvat_book = ImageMobject(
+            "../props/static/charvat_radar_book_cover.jpg"
+        ).scale_to_fit_height(config["frame_height"] * 0.7)
+        purdue_article = ImageMobject(
+            "./static/purdue_cfar_screenshot.png"
+        ).scale_to_fit_width(config["frame_width"] * 0.3)
+        arrow = Arrow(UP * 2, DOWN * 2)
+        in_the_description = Tex("in the description").rotate(-PI / 2)
+        resources = Group(
+            charvat_book, purdue_article, arrow, in_the_description
+        ).arrange(RIGHT, MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(charvat_book),
+                GrowFromCenter(purdue_article),
+                AnimationGroup(GrowArrow(arrow), FadeIn(in_the_description)),
+                lag_ratio=0.35,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(charvat_book, purdue_article, arrow, in_the_description))
 
         self.wait(2)
