@@ -28,7 +28,7 @@ GAP_COLOR = RED
 REF_COLOR = BLUE
 
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -2620,6 +2620,8 @@ class CFARMethods(MovingCameraScene):
 
         # self.add(sample_rects, sample_labels)
 
+        self.next_section(skip_animations=skip_animations(True))
+
         self.play(
             LaggedStart(
                 *[
@@ -2639,6 +2641,172 @@ class CFARMethods(MovingCameraScene):
                 lag_ratio=0.1,
             )
         )
+
+        self.wait(0.5)
+
+        cut_index = n_samples // 2 + n_samples // 6
+
+        n_gap_cells = 3
+        gap_index_l = cut_index - n_gap_cells
+        gap_index_r = cut_index + n_gap_cells
+
+        n_ref_cells = 4
+        ref_index_l = gap_index_l - n_ref_cells
+        ref_index_r = gap_index_r + n_ref_cells
+
+        cut = sample_rects[cut_index]
+
+        gap_cells_l = sample_rects[gap_index_l:cut_index]
+        gap_cells_r = sample_rects[cut_index + 1 : gap_index_r + 1]
+
+        ref_cells_l = sample_rects[ref_index_l:gap_index_l]
+        ref_cells_r = sample_rects[gap_index_r + 1 : ref_index_r + 1]
+
+        cut_label = (
+            Tex("CUT", color=CUT_COLOR)
+            .scale_to_fit_width(sample_labels[0].width * 1.5)
+            .next_to(cut, UP, SMALL_BUFF)
+        )
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                sample_rects[: 1 + n_gap_cells * 2 + n_ref_cells * 2 + 2].width
+            ).move_to(cut)
+        )
+
+        self.wait(0.5)
+
+        gap_label_l = (
+            Tex("Gap", color=GAP_COLOR)
+            .scale_to_fit_width(sample_labels[0].width * 1.5)
+            .next_to(gap_cells_l, UP, SMALL_BUFF)
+        )
+        gap_label_r = gap_label_l.copy().next_to(gap_cells_r, UP, SMALL_BUFF)
+
+        ref_label_l = (
+            Tex("Ref", color=REF_COLOR)
+            .scale_to_fit_width(sample_labels[0].width * 1.5)
+            .next_to(ref_cells_l, UP, SMALL_BUFF)
+        )
+        ref_label_r = ref_label_l.copy().next_to(ref_cells_r, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                cut.animate.set_fill(CUT_COLOR, opacity=0.5),
+                FadeIn(cut_label, shift=DOWN),
+                *[
+                    AnimationGroup(
+                        cell_l.animate.set_fill(GAP_COLOR, opacity=0.5),
+                        cell_r.animate.set_fill(GAP_COLOR, opacity=0.5),
+                    )
+                    for cell_l, cell_r in zip(gap_cells_l[::-1], gap_cells_r)
+                ],
+                FadeIn(gap_label_l, gap_label_r, shift=DOWN),
+                *[
+                    AnimationGroup(
+                        cell_l.animate.set_fill(REF_COLOR, opacity=0.5),
+                        cell_r.animate.set_fill(REF_COLOR, opacity=0.5),
+                    )
+                    for cell_l, cell_r in zip(ref_cells_l[::-1], ref_cells_r)
+                ],
+                FadeIn(ref_label_l, ref_label_r),
+                lag_ratio=0.15,
+            ),
+        )
+
+        self.wait(0.5)
+
+        frame_shift = DOWN * (
+            self.camera.frame.get_top()[1] - cut_label.get_y() - MED_LARGE_BUFF
+        )
+
+        font_size_zoomed = DEFAULT_FONT_SIZE * 0.5
+
+        greatest = Tex("Greatest", font_size=font_size_zoomed * 1.4).next_to(
+            self.camera.frame.copy().shift(frame_shift).get_bottom(), UP
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(frame_shift),
+                FadeIn(greatest, shift=UP),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        ref_cell_labels_l = sample_labels[ref_index_l:gap_index_l]
+        ref_cell_labels_r = sample_labels[gap_index_r + 1 : ref_index_r + 1]
+
+        rcl_l_str = "[%s]" % ",".join([s.get_tex_string() for s in ref_cell_labels_l])
+        rcl_l_fmt = MathTex(rcl_l_str, font_size=font_size_zoomed)
+        rcl_r_str = "[%s]" % ",".join([s.get_tex_string() for s in ref_cell_labels_r])
+        rcl_r_fmt = MathTex(rcl_r_str, font_size=font_size_zoomed)
+        rcl_fmt = MathTex(
+            f"{rcl_l_str}\\ {rcl_r_str}", font_size=font_size_zoomed
+        ).move_to(self.camera.frame)
+
+        Group(rcl_l_fmt, rcl_r_fmt).arrange(RIGHT, MED_LARGE_BUFF).move_to(
+            self.camera.frame
+        )
+
+        # self.add(rcl_fmt, index_labels(rcl_fmt[0]).shift(DOWN))
+
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             TransformFromCopy(m1, m2)
+        #             for m1, m2 in zip(
+        #                 [*ref_cell_labels_l, *ref_cell_labels_r],
+        #                 [
+        #                     rcl_fmt[0][1:4],
+        #                     rcl_fmt[0][5:8],
+        #                     rcl_fmt[0][9:12],
+        #                     rcl_fmt[0][13:16],
+        #                     rcl_fmt[0][18:21],
+        #                     rcl_fmt[0][22:25],
+        #                     rcl_fmt[0][26:29],
+        #                     rcl_fmt[0][30:33],
+        #                 ],
+        #             )
+        #         ]
+        #     )
+        # )
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(
+                        FadeIn(rcl_l_fmt[0][idx * 4]),
+                        TransformFromCopy(m, rcl_l_fmt[0][idx * 4 + 1 : idx * 4 + 4]),
+                        # FadeIn(rcl_l_fmt[0][(idx + 1) * 4 - 1]),
+                        lag_ratio=0.3,
+                    )
+                    for idx, m in enumerate(ref_cell_labels_l.set_z_index(-1))
+                ],
+                FadeIn(rcl_l_fmt[0][-1:]),
+                *[
+                    LaggedStart(
+                        FadeIn(rcl_r_fmt[0][idx * 4]),
+                        TransformFromCopy(m, rcl_r_fmt[0][idx * 4 + 1 : idx * 4 + 4]),
+                        # FadeIn(rcl_r_fmt[0][(idx + 1) * 4 - 1]),
+                        lag_ratio=0.3,
+                    )
+                    for idx, m in enumerate(ref_cell_labels_r.set_z_index(-1))
+                ],
+                FadeIn(rcl_r_fmt[0][-1:]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        rcl_sum_mean = MathTex(
+            f"\\text{{max}}\\left( \\text{{ mean }} \\left( {rcl_l_str} \\right), \\text{{ mean }} \\left( {rcl_l_str} \\right) \\right)"
+        )
+
+        self.wait(2)
 
 
 """ Testing """
