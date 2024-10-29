@@ -2334,6 +2334,262 @@ class Designer(Scene):
         self.wait(2)
 
 
+class DesignerV2(Scene):
+    def construct(self):
+        stop_time = 16
+        fs = 1000
+
+        f1 = 1.5
+        f2 = 2.7
+        f3 = 3.4
+
+        power_norm_1 = VT(-3)
+        power_norm_2 = VT(-9)
+        power_norm_3 = VT(0)
+
+        noise_sigma_db = VT(3)
+
+        f_max = 8
+        y_min = VT(-30)
+
+        x_len = VT(11)
+        y_len = 5.5
+
+        noise_seed = VT(2)
+
+        ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -~y_min, -~y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=~x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, MED_SMALL_BUFF)
+
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex("$A$"))
+
+        freq, X_k_log = get_plot_values(
+            power_norm_1=~power_norm_1,
+            power_norm_2=~power_norm_2,
+            power_norm_3=~power_norm_3,
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
+            y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
+        ).values()
+
+        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
+
+        n_gap_cells = VT(8)
+        n_ref_cells = VT(12)
+        bias = VT(1)
+
+        cell_size = VT(0.05)
+        f_0 = ~cell_size * 2 * (~n_gap_cells + ~n_ref_cells)
+        f = VT(f3)
+
+        cfar_plot = always_redraw(
+            lambda: ax.plot(
+                interpolate.interp1d(
+                    freq,
+                    cfar_fast(
+                        X_k_log,
+                        num_guard_cells=int(~n_gap_cells),
+                        num_ref_cells=int(~n_ref_cells),
+                        bias=~bias,
+                    ),
+                    fill_value="extrapolate",
+                ),
+                # x_range=[f_0, f_max - f_0, 1 / fs],
+                x_range=[0, f_max, 1 / fs],
+                color=REF_COLOR,
+            )
+        )
+
+        gap_label = Tex("Gap cells:")
+        gap_slider = NumberLine(
+            x_range=[1, 100, 10], length=config["frame_width"] * 0.5
+        ).next_to(gap_label)
+        ref_label = Tex("Ref cells:")
+        ref_slider = NumberLine(
+            x_range=[1, 100, 10], length=config["frame_width"] * 0.5
+        ).next_to(ref_label)
+        bias_label = Tex("Bias:")
+        bias_slider = NumberLine(
+            x_range=[1, 3, 1], length=config["frame_width"] * 0.5
+        ).next_to(bias_label)
+
+        sliders = (
+            VGroup(
+                VGroup(gap_label, ref_label, bias_label).arrange(
+                    DOWN, SMALL_BUFF, aligned_edge=RIGHT
+                ),
+                VGroup(
+                    VGroup(Tex("1"), gap_slider, Tex("100")).arrange(RIGHT, SMALL_BUFF),
+                    VGroup(Tex("1"), ref_slider, Tex("100")).arrange(RIGHT, SMALL_BUFF),
+                    VGroup(Tex("1"), bias_slider, Tex("3")).arrange(RIGHT, SMALL_BUFF),
+                ).arrange(DOWN, SMALL_BUFF, aligned_edge=LEFT),
+            )
+            .arrange(RIGHT, SMALL_BUFF)
+            .to_edge(UP)
+        )
+
+        gap_marker = always_redraw(lambda: Dot().move_to(gap_slider.n2p(~n_gap_cells)))
+        ref_marker = always_redraw(lambda: Dot().move_to(ref_slider.n2p(~n_ref_cells)))
+        bias_marker = always_redraw(lambda: Dot().move_to(bias_slider.n2p(~bias)))
+
+        plot_group = VGroup(ax, ax_label, return_plot, cfar_plot)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(plot_group.shift(DOWN * 10).animate.set_y(0))
+
+        self.wait(0.5)
+
+        self.play(
+            plot_group.animate.to_edge(DOWN, MED_SMALL_BUFF),
+            FadeIn(sliders, shift=DOWN * 2),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Create(gap_marker),
+            Create(ref_marker),
+            Create(bias_marker),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        person = ImageMobject("../props/static/person.png").scale_to_fit_height(
+            config["frame_height"] * 0.2
+        )
+        plane = SVGMobject("../props/static/plane.svg").scale(1.2).next_to(person, UR)
+        targets = Group(person, plane)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale(0.5).next_to(person, LEFT, LARGE_BUFF * 3)
+
+        beam_bot = Line(
+            radar.radome.get_right() + [0.1, 0, 0],
+            person.get_corner(DL),
+            color=TX_COLOR,
+        )
+        beam_top = Line(
+            radar.radome.get_right() + [0.1, 0, 0], plane.get_corner(UL), color=TX_COLOR
+        )
+
+        example = Group(radar.vgroup, beam_top, beam_bot, plane, person).move_to(ORIGIN)
+
+        example_box = SurroundingRectangle(
+            example,
+            color=RED,
+            corner_radius=0.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            buff=MED_SMALL_BUFF,
+        )
+        example = Group(example_box, *example).set_z_index(3)
+
+        self.play(GrowFromCenter(example_box))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(radar.vgroup),
+                GrowFromCenter(person),
+                GrowFromCenter(plane),
+                AnimationGroup(Create(beam_top), Create(beam_bot)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ShrinkToCenter(example))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(n_gap_cells @ 90, run_time=4)
+
+        self.wait(0.5)
+
+        self.play(n_gap_cells @ 8, run_time=2)
+
+        self.wait(0.5)
+
+        charvat_book = ImageMobject(
+            "../props/static/charvat_radar_book_cover.jpg"
+        ).scale_to_fit_height(config["frame_height"] * 0.7)
+        purdue_article = ImageMobject(
+            "./static/purdue_cfar_screenshot.png"
+        ).scale_to_fit_width(config["frame_width"] * 0.3)
+        arrow = Arrow(UP * 2, DOWN * 2)
+        in_the_description = Tex("in the description").rotate(-PI / 2)
+        resources = Group(
+            charvat_book, purdue_article, arrow, in_the_description
+        ).arrange(RIGHT, MED_SMALL_BUFF)
+        resources_box = SurroundingRectangle(
+            resources,
+            color=RED,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.2,
+        )
+        resources = Group(resources_box, *resources).set_z_index(3)
+
+        self.play(GrowFromCenter(resources_box))
+        self.play(
+            LaggedStart(
+                GrowFromCenter(charvat_book),
+                GrowFromCenter(purdue_article),
+                AnimationGroup(GrowArrow(arrow), FadeIn(in_the_description)),
+                lag_ratio=0.35,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(resources))
+
+        self.wait(0.5)
+
+        self.play(bias @ 3, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(bias @ 1.5, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(n_ref_cells @ 90, run_time=4)
+
+        self.wait(0.5)
+
+        self.play(n_ref_cells @ 12, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
 class CFARMethods(MovingCameraScene):
     def construct(self):
         n_samples = 30
@@ -2362,7 +2618,7 @@ class CFARMethods(MovingCameraScene):
             ]
         )
 
-        self.add(sample_rects, sample_labels)
+        # self.add(sample_rects, sample_labels)
 
         self.play(
             LaggedStart(
@@ -2374,13 +2630,13 @@ class CFARMethods(MovingCameraScene):
                         GrowFromCenter(rl),
                     )
                     for lb, rb, ll, rl in zip(
-                        sample_rects[: n_samples / 2],
-                        sample_rects[n_samples / 2 :],
-                        sample_labels[: n_samples / 2],
-                        sample_labels[n_samples / 2 :],
+                        sample_rects[: n_samples // 2][::-1],
+                        sample_rects[n_samples // 2 :],
+                        sample_labels[: n_samples // 2][::-1],
+                        sample_labels[n_samples // 2 :],
                     )
                 ],
-                lag_ratio=0.2,
+                lag_ratio=0.1,
             )
         )
 
