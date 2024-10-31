@@ -3,7 +3,7 @@
 import sys
 import warnings
 
-from random import randint
+from random import randint, randrange
 import numpy as np
 from manim import *
 from MF_Tools import VT, TransformByGlyphMap
@@ -28,7 +28,7 @@ GAP_COLOR = RED
 REF_COLOR = BLUE
 
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -2725,6 +2725,9 @@ class CFARMethods(MovingCameraScene):
         greatest = Tex("Greatest", font_size=font_size_zoomed * 1.4).next_to(
             self.camera.frame.copy().shift(frame_shift).get_bottom(), UP
         )
+        smallest = Tex("Smallest", font_size=font_size_zoomed * 1.4).next_to(
+            self.camera.frame.copy().shift(frame_shift).get_bottom(), UP
+        )
 
         self.play(
             LaggedStart(
@@ -2733,7 +2736,7 @@ class CFARMethods(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         ref_cell_labels_l = sample_labels[ref_index_l:gap_index_l]
@@ -2780,7 +2783,6 @@ class CFARMethods(MovingCameraScene):
                     LaggedStart(
                         FadeIn(rcl_l_fmt[0][idx * 4]),
                         TransformFromCopy(m, rcl_l_fmt[0][idx * 4 + 1 : idx * 4 + 4]),
-                        # FadeIn(rcl_l_fmt[0][(idx + 1) * 4 - 1]),
                         lag_ratio=0.3,
                     )
                     for idx, m in enumerate(ref_cell_labels_l.set_z_index(-1))
@@ -2790,7 +2792,6 @@ class CFARMethods(MovingCameraScene):
                     LaggedStart(
                         FadeIn(rcl_r_fmt[0][idx * 4]),
                         TransformFromCopy(m, rcl_r_fmt[0][idx * 4 + 1 : idx * 4 + 4]),
-                        # FadeIn(rcl_r_fmt[0][(idx + 1) * 4 - 1]),
                         lag_ratio=0.3,
                     )
                     for idx, m in enumerate(ref_cell_labels_r.set_z_index(-1))
@@ -2800,11 +2801,200 @@ class CFARMethods(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        rcl_sum_mean = MathTex(
-            f"\\text{{max}}\\left( \\text{{ mean }} \\left( {rcl_l_str} \\right), \\text{{ mean }} \\left( {rcl_l_str} \\right) \\right)"
+        rcl_l_sum_mean = MathTex(
+            f"\\text{{mean}} \\left( {rcl_l_str} \\right),\\ ",
+            font_size=font_size_zoomed,
         )
+        rcl_r_sum_mean = MathTex(
+            f"\\text{{mean}} \\left( {rcl_r_str} \\right)",
+            font_size=font_size_zoomed,
+        )
+        Group(rcl_l_sum_mean, rcl_r_sum_mean).arrange(RIGHT, SMALL_BUFF).move_to(
+            self.camera.frame
+        )
+
+        self.play(
+            TransformByGlyphMap(
+                rcl_l_fmt,
+                rcl_l_sum_mean,
+                ([], [0, 1, 2, 3], {"delay": 0.6, "shift": DOWN}),
+                ([], [4], {"delay": 0.4, "shift": RIGHT}),
+                (
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+                ),
+                ([], [22], {"delay": 0.4}),
+                ([], [23], {"delay": 0.8}),
+            ),
+            TransformByGlyphMap(
+                rcl_r_fmt,
+                rcl_r_sum_mean,
+                ([], [0, 1, 2, 3], {"delay": 0.6, "shift": DOWN}),
+                ([], [4], {"delay": 0.4, "shift": RIGHT}),
+                (
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+                ),
+                ([], [22], {"delay": 0.4}),
+            ),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        greatest_max = Tex("max", "$($", font_size=font_size_zoomed).next_to(
+            rcl_l_sum_mean, LEFT, SMALL_BUFF
+        )
+        end_parenthesis = Tex("$)$", font_size=font_size_zoomed).next_to(
+            rcl_r_sum_mean, RIGHT, SMALL_BUFF
+        )
+
+        greatest_eqn = VGroup(
+            greatest_max,
+            rcl_l_sum_mean.copy(),
+            rcl_r_sum_mean.copy(),
+            end_parenthesis,
+        ).scale_to_fit_width(self.camera.frame.width * 0.9)
+
+        greatest_min = (
+            Tex("min", font_size=font_size_zoomed)
+            .move_to(greatest_max[0])
+            .match_width(greatest_max[0])
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Transform(rcl_l_sum_mean, greatest_eqn[1]),
+                    Transform(rcl_r_sum_mean, greatest_eqn[2]),
+                ),
+                AnimationGroup(
+                    FadeIn(greatest_max, shift=RIGHT),
+                    FadeIn(end_parenthesis, shift=LEFT),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(Transform(greatest, smallest, path_arc=PI))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(greatest_max[0], shift=DOWN),
+            FadeIn(greatest_min.set_color(GREEN), shift=DOWN),
+        )
+
+        self.wait(0.5)
+
+        self.play(greatest_min.animate.set_color(WHITE))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        and_even_more = Tex(
+            "Smallest", "... and even more", font_size=font_size_zoomed * 1.4
+        ).move_to(smallest, aligned_edge=LEFT)
+
+        self.play(Create(and_even_more[1]))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class Knobs(Scene):
+    def construct(self):
+        gap_label = Tex("Gap cells:")
+        ref_label = Tex("Ref cells:")
+        bias_label = Tex("Bias:")
+        method_label = Tex("Method:")
+
+        labels = VGroup(
+            gap_label,
+            ref_label,
+            bias_label,
+            # method_label,
+        ).arrange(DOWN, MED_LARGE_BUFF)
+
+        gap_slider = NumberLine(
+            x_range=[1, 100, 10], length=config["frame_width"] * 0.5
+        ).next_to(gap_label)
+        ref_slider = NumberLine(
+            x_range=[1, 100, 10], length=config["frame_width"] * 0.5
+        ).next_to(ref_label)
+        bias_slider = NumberLine(
+            x_range=[1, 3, 1], length=config["frame_width"] * 0.5
+        ).next_to(bias_label)
+        curr_method = Tex("Cell averaging").next_to(method_label)
+        curr_methods = [
+            Tex("Cell averaging").next_to(method_label, MED_SMALL_BUFF),
+            Tex("Greatest").next_to(method_label, MED_SMALL_BUFF),
+            Tex("Smallest").next_to(method_label, MED_SMALL_BUFF),
+        ]
+
+        values = VGroup(
+            gap_slider,
+            ref_slider,
+            bias_slider,
+            # curr_method,
+        )
+
+        knobs = VGroup(labels, values).move_to(ORIGIN)
+
+        gap = VT(50)
+        ref = VT(20)
+        bias = VT(1.5)
+        gap_dot = always_redraw(lambda: Dot().move_to(gap_slider.n2p(~gap)))
+        ref_dot = always_redraw(lambda: Dot().move_to(ref_slider.n2p(~ref)))
+        bias_dot = always_redraw(lambda: Dot().move_to(bias_slider.n2p(~bias)))
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(FadeIn(label), Create(slider))
+                    for label, slider in zip(labels, values)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(gap_dot), Create(ref_dot), Create(bias_dot))
+
+        self.wait(0.5)
+
+        not_perfect_label = Tex("not perfect", color=BLACK)
+        not_perfect_box = SurroundingRectangle(
+            not_perfect_label, stroke_opacity=0, fill_color=YELLOW, fill_opacity=1
+        )
+        not_perfect = Group(not_perfect_box, not_perfect_label).scale(2).rotate(PI / 6)
+
+        for idx in range(10):
+            if idx == 5:
+                self.play(
+                    gap @ randint(0, 100),
+                    ref @ randint(0, 100),
+                    bias @ (float(randrange(10, 30)) / 10),
+                    # Transform(curr_method, curr_methods[randrange(0, 3)].copy()),
+                    GrowFromCenter(not_perfect),
+                )
+                continue
+            self.play(
+                gap @ randint(0, 100),
+                ref @ randint(0, 100),
+                bias @ (float(randrange(10, 30)) / 10),
+                # Transform(curr_method, curr_methods[randrange(0, 3)].copy()),
+            )
 
         self.wait(2)
 
