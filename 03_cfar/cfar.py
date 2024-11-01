@@ -2922,8 +2922,8 @@ class Knobs(Scene):
             gap_label,
             ref_label,
             bias_label,
-            # method_label,
-        ).arrange(DOWN, MED_LARGE_BUFF)
+            method_label,
+        ).arrange(DOWN, MED_LARGE_BUFF, aligned_edge=RIGHT)
 
         gap_slider = NumberLine(
             x_range=[1, 100, 10], length=config["frame_width"] * 0.5
@@ -2935,17 +2935,12 @@ class Knobs(Scene):
             x_range=[1, 3, 1], length=config["frame_width"] * 0.5
         ).next_to(bias_label)
         curr_method = Tex("Cell averaging").next_to(method_label)
-        curr_methods = [
-            Tex("Cell averaging").next_to(method_label, MED_SMALL_BUFF),
-            Tex("Greatest").next_to(method_label, MED_SMALL_BUFF),
-            Tex("Smallest").next_to(method_label, MED_SMALL_BUFF),
-        ]
 
         values = VGroup(
             gap_slider,
             ref_slider,
             bias_slider,
-            # curr_method,
+            curr_method,
         )
 
         knobs = VGroup(labels, values).move_to(ORIGIN)
@@ -2979,22 +2974,181 @@ class Knobs(Scene):
         )
         not_perfect = Group(not_perfect_box, not_perfect_label).scale(2).rotate(PI / 6)
 
+        pfa = MathTex(r"P_{FA} > 0", font_size=DEFAULT_FONT_SIZE * 1.7).to_edge(
+            DOWN, MED_LARGE_BUFF
+        )
+
+        code = Code(
+            "./cfar_example_code.py",
+            background="window",
+            background_stroke_color=WHITE,
+            language="Python",
+            tab_width=4,
+            insert_line_no=True,
+            style="paraiso-dark",
+        ).scale_to_fit_width(config["frame_width"] * 0.95)
+        for ln in code.line_numbers:
+            ln.set_color(WHITE)
+
+        self.next_section(skip_animations=skip_animations(True))
         for idx in range(10):
-            if idx == 5:
+            if idx == 3:
                 self.play(
                     gap @ randint(0, 100),
                     ref @ randint(0, 100),
                     bias @ (float(randrange(10, 30)) / 10),
-                    # Transform(curr_method, curr_methods[randrange(0, 3)].copy()),
+                    Transform(
+                        curr_method,
+                        Tex(
+                            [
+                                "Greatest",
+                                "Smallest",
+                                "Cell averaging",
+                                "Order statistic",
+                            ][randrange(0, 4)]
+                        ).move_to(curr_method, LEFT),
+                    ),
                     GrowFromCenter(not_perfect),
+                )
+                continue
+            if idx == 6:
+                self.play(
+                    gap @ randint(0, 100),
+                    ref @ randint(0, 100),
+                    bias @ (float(randrange(10, 30)) / 10),
+                    Transform(
+                        curr_method,
+                        Tex(
+                            [
+                                "Greatest",
+                                "Smallest",
+                                "Cell averaging",
+                                "Order statistic",
+                            ][randrange(0, 4)]
+                        ).move_to(curr_method, LEFT),
+                    ),
+                    FadeIn(pfa, shift=UP),
                 )
                 continue
             self.play(
                 gap @ randint(0, 100),
                 ref @ randint(0, 100),
                 bias @ (float(randrange(10, 30)) / 10),
-                # Transform(curr_method, curr_methods[randrange(0, 3)].copy()),
+                Transform(
+                    curr_method,
+                    Tex(
+                        [
+                            "Greatest",
+                            "Smallest",
+                            "Cell averaging",
+                            "Order statistic",
+                        ][randrange(0, 4)]
+                    ).move_to(curr_method, LEFT),
+                ),
             )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(0.5)
+
+        self.play(
+            code.next_to([0, -config["frame_height"] / 2, 0], DOWN).animate.move_to(
+                ORIGIN
+            )
+        )
+
+        self.wait(0.5)
+
+        stop_time = 16
+        fs = 1000
+
+        f1 = 1.5
+        f2 = 2.7
+        f3 = 3.4
+
+        power_norm_1 = -3
+        power_norm_2 = -9
+        power_norm_3 = 0
+
+        noise_sigma_db = 3
+
+        f_max = 8
+        y_min = -30
+
+        x_len = 11
+
+        noise_seed = 2
+
+        ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -y_min, -y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=(config["frame_height"] - code.height) * 0.8,
+        )
+
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex("$A$"))
+
+        freq, X_k_log = get_plot_values(
+            power_norm_1=power_norm_1,
+            power_norm_2=power_norm_2,
+            power_norm_3=power_norm_3,
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=noise_seed,
+            y_min=y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+            f1l=f1,
+            f2l=f2,
+            f3l=f3,
+        ).values()
+
+        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
+
+        n_gap_cells = 8
+        n_ref_cells = 12
+        bias = 2
+
+        cfar_plot = ax.plot(
+            interpolate.interp1d(
+                freq,
+                cfar_fast(
+                    X_k_log,
+                    num_guard_cells=int(n_gap_cells),
+                    num_ref_cells=int(n_ref_cells),
+                    bias=bias,
+                ),
+                fill_value="extrapolate",
+            ),
+            x_range=[0, f_max, 1 / fs],
+            color=REF_COLOR,
+        )
+
+        plot_group = Group(ax, return_plot, cfar_plot)
+
+        self.play(
+            code.animate.to_edge(UP, MED_SMALL_BUFF),
+            plot_group.next_to([0, -config["frame_height"] / 2, 0], DOWN)
+            .animate.to_edge(DOWN, MED_SMALL_BUFF)
+            .set_x(0),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            code.animate.next_to([0, config["frame_height"] / 2, 0], UP),
+            plot_group.animate.next_to([0, -config["frame_height"] / 2, 0], DOWN),
+        )
 
         self.wait(2)
 
