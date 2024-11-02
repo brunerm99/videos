@@ -30,3 +30,5 @@ file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p6
 file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/StaticThreshold/uncached_00028.mp4'
 file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/StaticThreshold/uncached_00029.mp4'
 file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/StaticThreshold/uncached_00030.mp4'
+file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/StaticThreshold/uncached_00031.mp4'
+file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/StaticThreshold/uncached_00032.mp4'
