@@ -50,7 +50,7 @@ def get_plot_values(
     f2l=None,
     f3l=None,
 ):
-    N = fs * stop_time
+    N = int(fs * stop_time)
     fft_len = N * 4
     freq = np.linspace(-fs / 2, fs / 2, fft_len)
 
@@ -716,7 +716,7 @@ class CFARIntro(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        stop_time = 16
+        stop_time = VT(16)
         fs = 1000
 
         f1 = 1.5
@@ -759,7 +759,7 @@ class CFARIntro(MovingCameraScene):
             y_min=~y_min,
             f_max=f_max,
             fs=fs,
-            stop_time=stop_time,
+            stop_time=~stop_time,
             f1l=f1,
             f2l=f2,
             f3l=f3,
@@ -1117,31 +1117,29 @@ class CFARIntro(MovingCameraScene):
             },
             x_length=x_len,
             y_length=y_len,
-        ).next_to(self.camera.frame.get_bottom(), DOWN, LARGE_BUFF * 2)
-        ax_label = ax.get_axis_labels(Tex("$R$"), Tex())
-
-        freq, X_k_log = get_plot_values(
-            power_norm_1=~power_norm_1,
-            power_norm_2=~power_norm_2,
-            power_norm_3=~power_norm_3,
-            ports=["1", "2", "3", "noise"],
-            noise_power_db=~noise_sigma_db,
-            noise_seed=~noise_seed,
-            y_min=~y_min,
-            f_max=f_max,
-            fs=fs,
-            stop_time=stop_time,
-            f1l=f1,
-            f2l=f2,
-            f3l=f3,
-        ).values()
-
-        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
-
-        return_plot = ax.plot(
-            f_X_k_log, x_range=[f3 - 1, f3 + 1, 1 / fs], color=RX_COLOR
         )
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex("$A$"))
 
+        def plot_return():
+            freq, X_k_log = get_plot_values(
+                power_norm_1=~power_norm_1,
+                power_norm_2=~power_norm_2,
+                power_norm_3=~power_norm_3,
+                ports=["1", "2", "3", "noise"],
+                noise_power_db=~noise_sigma_db,
+                noise_seed=~noise_seed,
+                y_min=~y_min,
+                f_max=f_max,
+                fs=fs,
+                stop_time=~stop_time,
+                f1l=f1,
+                f2l=f2,
+                f3l=f3,
+            ).values()
+            f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+            return ax.plot(f_X_k_log, x_range=[f3 - 1, f3 + 1, 1 / fs], color=RX_COLOR)
+
+        return_plot = always_redraw(plot_return)
         plot_group = VGroup(ax, ax_label, return_plot).next_to(
             [0, -config["frame_height"] / 2, 0], DOWN
         )
@@ -1153,6 +1151,7 @@ class CFARIntro(MovingCameraScene):
             self.camera.frame.animate.scale_to_fit_width(ax.width * 1.2).move_to(ax)
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         cell_size = VT(0.05)
@@ -1204,7 +1203,7 @@ class CFARIntro(MovingCameraScene):
 
         self.play(FadeIn(cut_vert_box))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         cut_marker_midpoint = ax.input_to_graph_point(f3, return_plot) + UP / 4
@@ -1261,6 +1260,61 @@ class CFARIntro(MovingCameraScene):
             ),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(FadeIn(gap_vert_boxes_l, gap_vert_boxes_r))
+
+        self.wait(0.5)
+
+        cut_width_l.save_state()
+        cut_width_r.save_state()
+        cut_width_end_l.save_state()
+        cut_width_end_r.save_state()
+        self.play(
+            stop_time @ 8,
+            Transform(
+                cut_width_l,
+                Line(
+                    cut_width_l.get_start(),
+                    cut_marker_midpoint + [-cell_size_pts * 2, 0, 0],
+                ),
+            ),
+            Transform(
+                cut_width_r,
+                Line(
+                    cut_width_r.get_start(),
+                    cut_marker_midpoint + [cell_size_pts * 2, 0, 0],
+                ),
+            ),
+            Transform(
+                cut_width_end_l,
+                Line(
+                    cut_width_l.get_end() + [-cell_size_pts, 0, 0] + UP / 8,
+                    cut_width_l.get_end() + [-cell_size_pts, 0, 0] + DOWN / 8,
+                ),
+            ),
+            Transform(
+                cut_width_end_r,
+                Line(
+                    cut_width_r.get_end() + [cell_size_pts, 0, 0] + UP / 8,
+                    cut_width_r.get_end() + [cell_size_pts, 0, 0] + DOWN / 8,
+                ),
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            stop_time @ 16,
+            cut_width_l.animate.restore(),
+            cut_width_r.animate.restore(),
+            cut_width_end_l.animate.restore(),
+            cut_width_end_r.animate.restore(),
+            run_time=2,
+        )
+
         self.wait(0.5)
 
         self.play(
@@ -1271,11 +1325,6 @@ class CFARIntro(MovingCameraScene):
             Uncreate(cut_width_end_l),
             Uncreate(cut_width_end_r),
         )
-
-        self.next_section(skip_animations=skip_animations(True))
-        self.wait(0.5)
-
-        self.play(FadeIn(gap_vert_boxes_l, gap_vert_boxes_r))
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
@@ -2413,7 +2462,7 @@ class Designer(Scene):
 
 class DesignerV2(Scene):
     def construct(self):
-        stop_time = 16
+        stop_time = VT(16)
         fs = 1000
 
         f1 = 1.5
@@ -2447,25 +2496,26 @@ class DesignerV2(Scene):
 
         ax_label = ax.get_axis_labels(Tex("$R$"), Tex("$A$"))
 
-        freq, X_k_log = get_plot_values(
-            power_norm_1=~power_norm_1,
-            power_norm_2=~power_norm_2,
-            power_norm_3=~power_norm_3,
-            ports=["1", "2", "3", "noise"],
-            noise_power_db=~noise_sigma_db,
-            noise_seed=~noise_seed,
-            y_min=~y_min,
-            f_max=f_max,
-            fs=fs,
-            stop_time=stop_time,
-            f1l=f1,
-            f2l=f2,
-            f3l=f3,
-        ).values()
+        def plot_return():
+            freq, X_k_log = get_plot_values(
+                power_norm_1=~power_norm_1,
+                power_norm_2=~power_norm_2,
+                power_norm_3=~power_norm_3,
+                ports=["1", "2", "3", "noise"],
+                noise_power_db=~noise_sigma_db,
+                noise_seed=~noise_seed,
+                y_min=~y_min,
+                f_max=f_max,
+                fs=fs,
+                stop_time=~stop_time,
+                f1l=f1,
+                f2l=f2,
+                f3l=f3,
+            ).values()
+            f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+            return ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
 
-        f_X_k_log = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
-
-        return_plot = ax.plot(f_X_k_log, x_range=[0, f_max, 1 / fs], color=RX_COLOR)
+        return_plot = always_redraw(plot_return)
 
         n_gap_cells = VT(8)
         n_ref_cells = VT(12)
@@ -2475,8 +2525,23 @@ class DesignerV2(Scene):
         f_0 = ~cell_size * 2 * (~n_gap_cells + ~n_ref_cells)
         f = VT(f3)
 
-        cfar_plot = always_redraw(
-            lambda: ax.plot(
+        def plot_cfar():
+            freq, X_k_log = get_plot_values(
+                power_norm_1=~power_norm_1,
+                power_norm_2=~power_norm_2,
+                power_norm_3=~power_norm_3,
+                ports=["1", "2", "3", "noise"],
+                noise_power_db=~noise_sigma_db,
+                noise_seed=~noise_seed,
+                y_min=~y_min,
+                f_max=f_max,
+                fs=fs,
+                stop_time=~stop_time,
+                f1l=f1,
+                f2l=f2,
+                f3l=f3,
+            ).values()
+            return ax.plot(
                 interpolate.interp1d(
                     freq,
                     cfar_fast(
@@ -2491,7 +2556,8 @@ class DesignerV2(Scene):
                 x_range=[0, f_max, 1 / fs],
                 color=REF_COLOR,
             )
-        )
+
+        cfar_plot = always_redraw(plot_cfar)
 
         gap_label = Tex("Gap cells:")
         gap_slider = NumberLine(
@@ -2547,7 +2613,7 @@ class DesignerV2(Scene):
             Create(bias_marker),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         tex_template = TexTemplate()
@@ -2621,16 +2687,25 @@ class DesignerV2(Scene):
 
         self.play(ShrinkToCenter(example))
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        self.play(n_gap_cells @ 90, run_time=4)
+        self.play(stop_time @ 8, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(n_gap_cells @ 50, run_time=4)
+
+        self.wait(0.5)
+
+        self.play(stop_time @ 16, run_time=2)
 
         self.wait(0.5)
 
         self.play(n_gap_cells @ 8, run_time=2)
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         charvat_book = ImageMobject(
             "../props/static/charvat_radar_book_cover.jpg"
@@ -3253,16 +3328,100 @@ class Knobs(Scene):
         self.wait(2)
 
 
+class InTheDescription(Scene):
+    def construct(self):
+        text_scale = 0.8
+
+        thanks = Text("Thanks for watching!")
+
+        resources = Text("resources").scale(text_scale)
+        caveats = Text("caveats").scale(text_scale)
+        source_code = Text(
+            "// source code", font="FiraCode Nerd Font Mono", color=GRAY_C
+        ).scale(text_scale)
+        VGroup(resources, caveats, source_code).arrange(RIGHT, MED_LARGE_BUFF)
+
+        resources_p2 = resources.get_bottom() + [0, -0.1, 0]
+        caveats_p2 = caveats.get_bottom() + [0, -0.1, 0]
+        source_code_p2 = source_code.get_bottom() + [0, -0.1, 0]
+
+        tip = (
+            Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+            .scale(0.4)
+            .to_edge(DOWN)
+            .rotate(PI / 3)
+        )
+        tip_p1 = tip.get_top()
+
+        resources_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            resources_p2 + [0, -1, 0],
+            resources_p2,
+        )
+        caveats_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            caveats_p2 + [0, -1, 0],
+            caveats_p2,
+        )
+        source_code_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            source_code_p2 + [0, -1, 0],
+            source_code_p2,
+        )
+
+        self.play(GrowFromCenter(thanks))
+
+        self.wait(0.5)
+
+        self.play(thanks.animate.to_edge(UP))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(tip),
+                Create(resources_bez),
+                GrowFromCenter(resources),
+                lag_ratio=0.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                Create(caveats_bez),
+                GrowFromCenter(caveats),
+                lag_ratio=0.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                Create(source_code_bez),
+                GrowFromCenter(source_code),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
 class EndScreen(Scene):
     def construct(self):
         stats_title = Tex("Stats for Nerds")
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "10,422"],
-                    ["Script word count", "3,603"],
-                    ["Days to make", "64"],
-                    ["Git commits", "55"],
+                    ["Lines of code", "3,682"],
+                    ["Script word count", "1,301"],
+                    ["Days to make", "20"],
+                    ["Git commits", "17"],
                 ]
             )
             .scale(0.5)
@@ -3283,9 +3442,8 @@ class EndScreen(Scene):
             .to_edge(DOWN)
         )
 
-        profile_pic = Circle(radius=1.2)
         marshall_bruner = Tex("Marshall Bruner").next_to(
-            profile_pic, direction=DOWN, buff=MED_SMALL_BUFF
+            [-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF
         )
 
         self.play(
@@ -3381,6 +3539,28 @@ class References(Scene):
         self.play(FadeOut(charvat_book, purdue_article, arrow, in_the_description))
 
         self.wait(2)
+
+
+class NotebookReminder(Scene):
+    def construct(self):
+        myTemplate = TexTemplate()
+        myTemplate.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"cfar.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=myTemplate,
+            font_size=DEFAULT_FONT_SIZE * 2.5,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = Group(notebook_box, notebook_reminder).to_edge(DOWN, MED_LARGE_BUFF)
+
+        self.play(notebook.shift(DOWN * 5).animate.shift(UP * 5))
+
+        self.wait(0.5)
+
+        self.play(notebook.animate.shift(DOWN * 5))
 
 
 """ Thumbnail """
@@ -3582,25 +3762,3 @@ class Thumbnail(MovingCameraScene):
         self.add(target_or_noise, bez, bez_tip, hidden_section)
 
         # self.play(f @ (8 - f_0), run_time=14, rate_func=rate_functions.ease_in_sine)
-
-
-class NotebookReminder(Scene):
-    def construct(self):
-        myTemplate = TexTemplate()
-        myTemplate.add_to_preamble(r"\usepackage{graphicx}")
-
-        notebook_reminder = Tex(
-            r"cfar.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
-            tex_template=myTemplate,
-            font_size=DEFAULT_FONT_SIZE * 2.5,
-        )
-        notebook_box = SurroundingRectangle(
-            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
-        )
-        notebook = Group(notebook_box, notebook_reminder).to_edge(DOWN, MED_LARGE_BUFF)
-
-        self.play(notebook.shift(DOWN * 5).animate.shift(UP * 5))
-
-        self.wait(0.5)
-
-        self.play(notebook.animate.shift(DOWN * 5))
