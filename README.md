@@ -23,3 +23,13 @@ In this video I attempt to clear this up a bit by going through a simplified blo
 There are so many other applications and implementations of FMCW radar that this video could not possibly cover, so take all this information with a grain of salt and hopefully you'll go on to explore it further. 
 
 ![thumbnail](./02_fmcw_implementation/media/images/fmcw_implementation/Thumbnail_Option_1.png)
+
+## [03 - How RADARs use CFAR to detect targets](https://youtu.be/BEg29UuZk6c)
+
+Constant false alarm rate - or CFAR - is easily one of the most well-known radar detection algorithms. 
+
+This is due in part to its simplicity if implementation and relative effectiveness over using a static threshold or getting just saying the maximum values are the targets. It can also be used on different measurement types, and even in multiple dimensions (e.g., range, Doppler velocity, 2D range-Doppler spectrum).
+
+In this video I go over the motivation, implementation, and some of the design knobs available when using CFAR.
+
+![thumbnail](./03_cfar/media/images/cfar/thumbnails/Thumbnail_1.png)
