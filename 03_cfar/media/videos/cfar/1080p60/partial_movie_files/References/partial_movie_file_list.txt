@@ -1,0 +1,4 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/References/2465084616_508075164_2358810818.mp4'
+file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/References/3497492553_3036656065_657875822.mp4'
+file 'file:/home/marchall/documents/tech-videos/03_cfar/media/videos/cfar/1080p60/partial_movie_files/References/3497492553_1141282389_1394257492.mp4'
