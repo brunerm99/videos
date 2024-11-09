@@ -3,7 +3,7 @@
 import sys
 import warnings
 
-from random import randint, randrange
+from random import randint, randrange, shuffle
 import numpy as np
 from manim import *
 from MF_Tools import VT, TransformByGlyphMap
@@ -16,13 +16,14 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, "..")
 
 from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR, IF_COLOR
+from props.helpers import get_plot_values
 from props import WeatherRadarTower, get_blocks
 
 config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -879,3 +880,330 @@ class TriangularNotSufficient(Scene):
         )
 
         self.wait(2)
+
+
+class RangeDopplerIntro(MovingCameraScene):
+    def construct(self):
+        stop_time = 16
+        fs = 1000
+
+        f1 = 1.5
+        f2 = 6
+
+        power_norm_1 = VT(-3)
+        power_norm_3 = VT(0)
+
+        noise_sigma_db = VT(3)
+
+        f_max = 8
+        y_min = VT(-30)
+
+        x_len = 9.5
+        y_len = 4.5
+
+        noise_seed = VT(2)
+
+        ax = Axes(
+            x_range=[0, f_max, f_max / 4],
+            y_range=[0, -~y_min, -~y_min / 4],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, LARGE_BUFF)
+        ax_label = ax.get_axis_labels(Tex("$R$"), Tex())
+
+        freq, X_k_log = get_plot_values(
+            frequencies=[f1, f2],
+            power_norms=[~power_norm_1, ~power_norm_3],
+            ports=["1", "2", "3", "noise"],
+            noise_power_db=~noise_sigma_db,
+            noise_seed=~noise_seed,
+            y_min=~y_min,
+            f_max=f_max,
+            fs=fs,
+            stop_time=stop_time,
+        ).values()
+
+        f_X_k = interpolate.interp1d(freq, X_k_log, fill_value="extrapolate")
+
+        return_plot = ax.plot(f_X_k, color=IF_COLOR, x_range=[0, f_max, 1 / fs])
+
+        peak_1 = ax.input_to_graph_point(f1, return_plot)
+        peak_2 = ax.input_to_graph_point(f2, return_plot)
+
+        targets = Tex("Targets").to_edge(UP)
+
+        peak_1_bez = CubicBezier(
+            targets.get_bottom() + [0, -0.1, 0],
+            targets.get_bottom() + [0, -0.1, 0] + [0, -1, 0],
+            peak_1 + [0, 1, 0],
+            peak_1 + [0, 0.1, 0],
+        )
+        peak_2_bez = CubicBezier(
+            targets.get_bottom() + [0, -0.1, 0],
+            targets.get_bottom() + [0, -0.1, 0] + [0, -1, 0],
+            peak_2 + [0, 1, 0],
+            peak_2 + [0, 0.1, 0],
+        )
+
+        plot_group = VGroup(ax, ax_label, return_plot)
+
+        self.next_section(skip_animations=skip_animations(True))
+        # self.add(ax, ax_label, return_plot)
+
+        self.play(plot_group.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(targets, shift=DOWN),
+                AnimationGroup(Create(peak_1_bez), Create(peak_2_bez)),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Uncreate(peak_1_bez), Uncreate(peak_2_bez)),
+                FadeOut(targets, shift=UP),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        v1 = MathTex(r"v_1").next_to(peak_1, UP)
+        v2 = MathTex(r"v_2").next_to(peak_2, UP)
+
+        self.play(
+            LaggedStart(
+                FadeIn(v1, shift=DOWN),
+                FadeIn(v2, shift=DOWN),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        range_resolution = 0.15
+        f2_left_res = DashedLine(
+            ax.c2p(f2 - range_resolution, 0),
+            [
+                ax.c2p(f2 - range_resolution, 0)[0],
+                ax.input_to_graph_point(f2, return_plot)[1],
+                0,
+            ],
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+        )
+        f2_right_res = DashedLine(
+            ax.c2p(f2 + range_resolution, 0),
+            [
+                ax.c2p(f2 + range_resolution, 0)[0],
+                ax.input_to_graph_point(f2, return_plot)[1],
+                0,
+            ],
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+        )
+
+        multiple_targets = Tex("Multiple targets?").next_to(
+            ax.input_to_graph_point(f2, return_plot), UP, LARGE_BUFF * 1.4
+        )
+
+        multiple_targets_left_bez = CubicBezier(
+            multiple_targets.get_corner(DL) + [0, -0.1, 0],
+            multiple_targets.get_corner(DL) + [0, -0.1, 0] + [0, -1, 0],
+            f2_left_res.get_top() + [0, 1, 0],
+            f2_left_res.get_top() + [0, 0.1, 0],
+        )
+        multiple_targets_right_bez = CubicBezier(
+            multiple_targets.get_corner(DR) + [0, -0.1, 0],
+            multiple_targets.get_corner(DR) + [0, -0.1, 0] + [0, -1, 0],
+            f2_right_res.get_top() + [0, 1, 0],
+            f2_right_res.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(f2_left_res), Create(f2_right_res)),
+                AnimationGroup(
+                    Create(multiple_targets_left_bez),
+                    Create(multiple_targets_right_bez),
+                ),
+                FadeIn(multiple_targets, shift=DOWN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(f2_left_res),
+            Uncreate(f2_right_res),
+            Uncreate(multiple_targets_left_bez),
+            Uncreate(multiple_targets_right_bez),
+            FadeOut(multiple_targets, shift=UP),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        v_spectrum = MathTex(r"v = [v_{(n,1)}, v_{(n,2)}, \ldots , v_{(n,M)}]").to_edge(
+            UP, LARGE_BUFF
+        )
+
+        self.play(
+            FadeOut(v1),
+            TransformByGlyphMap(
+                v2,
+                v_spectrum,
+                ([0], [0]),
+                ([1], ShrinkToCenter),
+                ([], [1], {"delay": 0.2}),
+                ([], [2, 27], {"delay": 0.3}),
+                ([], [3, 4, 5, 6, 7, 8, 9], {"delay": 0.4}),
+                ([], [10, 11, 12, 13, 14, 15, 16], {"delay": 0.5}),
+                ([], [17, 18, 19, 20], {"delay": 0.6}),
+                ([], [21, 22, 23, 24, 25, 26], {"delay": 0.7}),
+            ),
+        )
+
+        self.wait(0.5)
+
+        num_samples = 28
+        samples = ax.get_vertical_lines_to_graph(
+            return_plot, x_range=[0, f_max], num_lines=num_samples, color=BLUE
+        )
+
+        sample_rects = ax.get_riemann_rectangles(
+            return_plot,
+            input_sample_type="right",
+            x_range=[0, f_max],
+            dx=f_max / num_samples,
+            color=BLUE,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+
+        self.play(Create(samples), run_time=1)
+        self.play(
+            *[
+                ReplacementTransform(sample, rect)
+                for sample, rect in zip(samples, sample_rects)
+            ]
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(plot_group.set_z_index(-1)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    Transform(
+                        rect,
+                        Square(
+                            rect.width,
+                            color=BLACK,
+                            fill_color=BLUE,
+                            fill_opacity=0.7,
+                            stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                        )
+                        .move_to(rect)
+                        .set_y(0),
+                    )
+                    for rect in sample_rects
+                ],
+                lag_ratio=0.02,
+            )
+        )
+
+        self.wait(0.5)
+
+        v_spectrum_vert = MathTex(
+            r"v &=\\ [ &v_{(n,1)},\\ &v_{(n,2)},\\ &\ldots ,\\ &v_{(n,M)}]"
+        ).to_edge(LEFT, MED_LARGE_BUFF)
+
+        range_spectrum = MathTex(r"R = \left[ R_1, R_2, \ldots , R_N \right]").to_edge(
+            DOWN, MED_LARGE_BUFF
+        )
+
+        M = 9
+        self.play(
+            LaggedStart(
+                TransformByGlyphMap(
+                    v_spectrum,
+                    v_spectrum_vert,
+                    ([0], [0]),
+                    ([1], [1]),
+                    (
+                        [2, 3, 4, 5, 6, 7, 8, 9],
+                        [2, 3, 4, 5, 6, 7, 8, 9],
+                        {"delay": 0.1},
+                    ),
+                    (
+                        [10, 11, 12, 13, 14, 15, 16],
+                        [10, 11, 12, 13, 14, 15, 16],
+                        {"delay": 0.2},
+                    ),
+                    ([17, 18, 19, 20], [17, 18, 19, 20], {"delay": 0.3}),
+                    (
+                        [21, 22, 23, 24, 25, 26, 27],
+                        [21, 22, 23, 24, 25, 26, 27],
+                        {"delay": 0.4},
+                    ),
+                ),
+                LaggedStart(
+                    *[
+                        AnimationGroup(
+                            TransformFromCopy(
+                                sample_rects,
+                                sample_rects.copy().shift(
+                                    UP * sample_rects.height * idx
+                                ),
+                            ),
+                            TransformFromCopy(
+                                sample_rects,
+                                sample_rects.copy().shift(
+                                    DOWN * sample_rects.height * idx
+                                ),
+                            ),
+                        )
+                        for idx in range(1, M)
+                    ],
+                    lag_ratio=0.02,
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(range_spectrum, shift=UP))
+
+        self.wait(0.5)
+
+        range_doppler_label = Tex(
+            "Range-Doppler Spectrum", font_size=DEFAULT_FONT_SIZE * 1.8
+        ).to_edge(UP, 0)
+
+        self.play(self.camera.frame.animate.scale(1.2), Create(range_doppler_label))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+# class HowToLearn(Scene):
+#     def construct(self):
