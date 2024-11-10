@@ -23,7 +23,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -1205,5 +1205,372 @@ class RangeDopplerIntro(MovingCameraScene):
         self.wait(2)
 
 
-# class HowToLearn(Scene):
-#     def construct(self):
+class HowToLearn(Scene):
+    def construct(self):
+        phaser = ImageMobject(
+            "../props/static/phaser_hardware_2.png"
+        ).scale_to_fit_width(config["frame_width"] * 0.3)
+
+        textbook = (
+            Tex(r"""
+Here we have the coherent processing interval, $T_{CPI}$, which is comprised of $M$ pulse repetition intervals, $T_{PRI}$. This gives us our velocity resolution, 
+
+\begin{equation}
+    \Delta f = \frac{1}{M T_{PRI}}
+\end{equation}
+
+From this, we can define the pulse train LFM as
+
+\begin{equation}
+    s(t) = \sum_{m=0}^{M-1} s_p(t - m T_{PRI})
+\end{equation}
+
+where $s_t$ is the single LFM pulse waveform with duration, $T_c$,
+
+\begin{equation}
+    s_p = \begin{cases} 
+      \exp{j \pi \frac{B}{2 T_c} t^2} & 0 \le t \le T_c \\
+      0 & \text{otherwise}
+   \end{cases}
+\end{equation}
+
+For a target with velocity, $v$, and range, $r$, the equation for the beat signal becomes
+
+\begin{equation}
+    b(t) = a \exp{\left[ j 2 \pi \frac{2 B r}{T_c c} (t - m T_{PRI}) \right]} \exp{\left[ j 2 \pi \frac{2 f_c v}{c} t \right]}
+\end{equation}
+
+for $(m-1) T_{PRI} \le t \le m T_{PRI}$ and $0 \le m \le M$.
+
+Then if you sample the $M$ pulse repitions with a sampling rate of $T_s$, you get the 2D sampled beat signal,
+
+\begin{equation}
+    b[l, m] = a \exp{\left[ j 2 \pi \left( \frac{2 f_c v}{c} + \frac{2 B r}{T_c c} \right) l T_s \right]} \exp{\left[ j 2 \pi \frac{2 f_c v}{c} m T_{PRI} \right]}
+\end{equation}
+
+Then taking the FFT on $b[l, m]$, you get
+
+\begin{equation}
+    B[p, k] = \frac{1}{\sqrt{N_z M}} \sum_{l=0}^{N_z-1} \sum_{m=0}^{M-1} b[l, m] \exp{\left[ -j 2 \pi \left( \frac{lp}{N_z} + \frac{mk}{M} \right) \right]}
+\end{equation}
+            """)
+            .scale_to_fit_width(config["frame_width"] * 0.8)
+            .next_to([0, -config["frame_height"] / 2, 0], DOWN)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(
+            phaser.next_to([0, -config["frame_height"] / 2, 0], DOWN).animate.move_to(
+                ORIGIN
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(phaser.animate.next_to([0, config["frame_height"] / 2, 0], UP))
+
+        self.wait(0.5)
+
+        self.play(
+            textbook.animate.next_to([0, config["frame_height"] / 2, 0], UP),
+            run_time=4,
+            rate_func=rate_functions.linear,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        speed = VT(1)
+        speed_label = always_redraw(
+            lambda: Tex(
+                f"Speed: {~speed:.2f}x",
+                font_size=DEFAULT_FONT_SIZE,
+            )
+        )
+
+        self.play(Create(speed_label))
+
+        self.wait(0.5)
+
+        example_beat_signal = ImageMobject(
+            "../props/static/beat_signal_example.png"
+        ).to_corner(UL)
+        example_range_doppler = ImageMobject(
+            "../props/static/range_doppler_example.png"
+        ).to_corner(DR)
+
+        self.play(
+            LaggedStart(
+                speed @ 0.2,
+                FadeIn(example_range_doppler, shift=UP),
+                FadeIn(example_beat_signal, shift=DOWN),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(speed_label),
+            FadeOut(example_range_doppler, shift=DOWN),
+            FadeOut(example_beat_signal, shift=UP),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"fmcw\_range\_doppler.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = Group(notebook_box, notebook_reminder).to_edge(DOWN, MED_LARGE_BUFF)
+
+        notebook_sc = (
+            ImageMobject("./static/notebook_sc.png")
+            .scale_to_fit_height(config.frame_height * 0.65)
+            .to_edge(UP)
+        )
+        notebook_sc_box = SurroundingRectangle(
+            notebook_sc, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook_sc_group = Group(notebook_sc_box, notebook_sc)
+
+        notebook_sc_2 = (
+            ImageMobject("./static/notebook_sc_2.png")
+            .scale_to_fit_height(config.frame_height * 0.65)
+            .to_edge(UP)
+        )
+        notebook_sc_box_2 = SurroundingRectangle(
+            notebook_sc_2, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook_sc_group_2 = Group(notebook_sc_box_2, notebook_sc_2)
+
+        notebook_sc_3 = (
+            ImageMobject("./static/notebook_sc_3.png")
+            .scale_to_fit_height(config.frame_height * 0.65)
+            .to_edge(UP)
+        )
+        notebook_sc_box_3 = SurroundingRectangle(
+            notebook_sc_3, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook_sc_group_3 = Group(notebook_sc_box_3, notebook_sc_3)
+
+        self.play(
+            notebook.shift(DOWN * 5).animate.shift(UP * 5),
+            notebook_sc_group.shift(UP * 10).animate.shift(DOWN * 10),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            notebook_sc_group.animate.shift(LEFT * 18),
+            notebook_sc_group_2.shift(RIGHT * 18).animate.shift(LEFT * 18),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            notebook_sc_group_2.animate.shift(LEFT * 18),
+            notebook_sc_group_3.shift(RIGHT * 18).animate.shift(LEFT * 18),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            notebook.animate.shift(DOWN * 5),
+            notebook_sc_group_3.animate.shift(UP * 10),
+        )
+        self.remove(
+            notebook, notebook_sc_group, notebook_sc_group_2, notebook_sc_group_3
+        )
+
+        self.wait(2)
+
+
+class Phase(MovingCameraScene):
+    def construct(self):
+        mixer = BLOCKS.get("mixer").copy()
+
+        fs = 1000
+        step = 1 / fs
+        x_range = [0, 1, step]
+        x_range_lo = [0, 0.7, step]
+        x_len = 4
+        y_len = 2
+        tx_ax = (
+            Axes(
+                x_range=x_range_lo[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len
+            )
+            .rotate(-PI / 2)
+            .next_to(mixer, direction=UP, buff=0)
+        )
+        rx_ax = Axes(
+            x_range=x_range[:2], y_range=[-2, 2], x_length=x_len, y_length=y_len
+        ).next_to(mixer, direction=LEFT, buff=0)
+        if_ax = Axes(
+            x_range=x_range[:2],
+            y_range=[-2, 2],
+            x_length=x_len,
+            y_length=y_len,
+            tips=False,
+            axis_config={"include_numbers": False},
+        ).next_to(mixer, direction=RIGHT, buff=0)
+
+        A = 1
+        f_tx = 12
+        f_rx = 10
+        tx_signal = tx_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_tx * t), x_range=x_range_lo, color=TX_COLOR
+        )
+        rx_signal = rx_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_rx * t), x_range=x_range, color=RX_COLOR
+        )
+        if_signal = if_ax.plot(
+            lambda t: A * np.sin(2 * PI * f_tx * t) * A * np.sin(2 * PI * f_rx * t),
+            x_range=x_range,
+            color=IF_COLOR,
+        )
+
+        lo_port = (
+            Tex("LO")
+            .scale(0.6)
+            .next_to(mixer.get_top(), direction=DOWN, buff=SMALL_BUFF)
+        )
+        rf_port = (
+            Tex("RF")
+            .scale(0.6)
+            .next_to(mixer.get_left(), direction=RIGHT, buff=SMALL_BUFF)
+        )
+        if_port = (
+            Tex("IF")
+            .scale(0.6)
+            .next_to(mixer.get_right(), direction=LEFT, buff=SMALL_BUFF)
+        )
+
+        tx_eqn = MathTex(r"\sin{\left( 2 \pi f_{TX}(t) t \right)}").next_to(
+            tx_signal, LEFT
+        )
+        tx_eqn[0][11:17].set_color(TX_COLOR)
+        rx_eqn = MathTex(r"\sin{\left( 2 \pi f_{TX}(t - t_{shift}) t \right)}").next_to(
+            rx_signal, DOWN, LARGE_BUFF
+        )
+        rx_eqn[0][11:24].set_color(RX_COLOR)
+
+        # self.add(mixer, tx_signal, rx_signal, if_signal, lo_port, rf_port, if_port)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(GrowFromCenter(Group(mixer, lo_port, rf_port, if_port)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(tx_signal),
+                    FadeIn(tx_eqn, shift=DOWN),
+                ),
+                AnimationGroup(
+                    Create(rx_signal),
+                    FadeIn(rx_eqn, shift=RIGHT),
+                ),
+                Create(if_signal),
+                lag_ratio=0.8,
+            )
+        )
+
+        self.wait(0.5)
+
+        lp_filter = BLOCKS.get("lp_filter").copy().next_to(if_signal, RIGHT, 0)
+
+        if_filt_ax = Axes(
+            x_range=x_range[:2],
+            y_range=[-2, 2],
+            x_length=x_len,
+            y_length=y_len,
+            tips=False,
+            axis_config={"include_numbers": False},
+        ).next_to(lp_filter, direction=RIGHT, buff=0)
+        if_signal_filt = if_filt_ax.plot(
+            lambda t: A * np.cos(2 * PI * (f_tx - f_rx) * t),
+            x_range=x_range,
+            color=IF_COLOR,
+        )
+
+        if_eqn = (
+            MathTex(
+                r"\sin{\left( 2 \pi (f_{TX}(t) - f_{TX}(t - t_{shift}))  t \right)}",
+            )
+            .next_to(Group(lp_filter, if_signal_filt), UP, LARGE_BUFF)
+            .shift(LEFT)
+        )
+        if_eqn[0][7:13].set_color(TX_COLOR)
+        if_eqn[0][14:27].set_color(RX_COLOR)
+
+        beat_eqn = MathTex(
+            r"\sin{\left( 2 \pi f_{beat} t \right)}",
+        ).move_to(if_eqn)
+        beat_eqn[0][6:11].set_color(IF_COLOR)
+
+        self.play(GrowFromCenter(lp_filter))
+
+        self.wait(0.5)
+
+        sig_group = Group(rx_eqn, if_signal_filt)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(sig_group.width * 1.1)
+            .move_to(sig_group)
+            .shift(UP * 2),
+            Create(if_signal_filt),
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(if_eqn, shift=LEFT))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                if_eqn,
+                beat_eqn,
+                ([0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6]),
+                (
+                    [
+                        6,
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18,
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                    ],
+                    [6, 7, 8, 9, 10],
+                ),
+                ([28, 29], [11, 12]),
+            )
+        )
+
+        self.wait(2)

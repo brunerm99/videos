@@ -1,0 +1,50 @@
+\documentclass[preview]{standalone}
+\usepackage[english]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\begin{document}
+\begin{center}
+Here we have the coherent processing interval, $T_{CPI}$, which is comprised of $M$ pulse repetition intervals, $T_{PRI}$. This gives us our velocity resolution, 
+
+\begin{equation}
+    \Delta f = \frac{1}{M T_{PRI}}
+\end{equation}
+
+From this, we can define the pulse train LFM as
+
+\begin{equation}
+    s(t) = \sum_{m=0}^{M-1} s_p(t - m T_{PRI})
+\end{equation}
+
+where $s_t$ is the single LFM pulse waveform with duration, $T_c$,
+
+\begin{equation}
+    s_p = \begin{cases} 
+      \exp{j \pi \frac{B}{2 T_c} t^2} & 0 \le t \le T_c \\
+      0 & \text{otherwise}
+   \end{cases}
+\end{equation}
+
+For a target with velocity, $v$, and range, $r$, the equation for the beat signal becomes
+
+\begin{equation}
+    b(t) = a \exp{\left[ j 2 \pi \frac{2 B r}{T_c c} (t - m T_{PRI}) \right]} \exp{\left[ j 2 \pi \frac{2 f_c v}{c} t \right]}
+\end{equation}
+
+for $(m-1) T_{PRI} \le t \le m T_{PRI}$ and $0 \le m \le M$.
+
+Then if you sample the $M$ pulse repitions with a sampling rate of $T_s$, you get the 2D sampled beat signal,
+
+\begin{equation}
+    b[l, m] = a \exp{\left[ j 2 \pi \left( \frac{2 f_c v}{c} + \frac{2 B r}{T_c c} \right) l T_s \right]} \exp{\left[ j 2 \pi \frac{2 f_c v}{c} m T_{PRI} \right]}
+\end{equation}
+
+Then taking the FFT on $b[l, m]$, you get
+
+\begin{equation}
+    B[p, k] = \frac{1}{\sqrt{N_z M}} \sum_{l=0}^{N_z-1} \sum_{m=0}^{M-1} b[l, m] \exp{\left[ -j 2 \pi \left( \frac{lp}{N_z} + \frac{mk}{M} \right) \right]}
+\end{equation}
+
+where the indices $p$ and $k$ are
+\end{center}
+\end{document}
