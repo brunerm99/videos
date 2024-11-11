@@ -1458,15 +1458,15 @@ class Phase(MovingCameraScene):
         tx_eqn = MathTex(r"\sin{\left( 2 \pi f_{TX}(t) t \right)}").next_to(
             tx_signal, LEFT
         )
-        tx_eqn[0][11:17].set_color(TX_COLOR)
+        tx_eqn[0][6:12].set_color(TX_COLOR)
         rx_eqn = MathTex(r"\sin{\left( 2 \pi f_{TX}(t - t_{shift}) t \right)}").next_to(
             rx_signal, DOWN, LARGE_BUFF
         )
-        rx_eqn[0][11:24].set_color(RX_COLOR)
+        rx_eqn[0][6:19].set_color(RX_COLOR)
 
         # self.add(mixer, tx_signal, rx_signal, if_signal, lo_port, rf_port, if_port)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(GrowFromCenter(Group(mixer, lo_port, rf_port, if_port)))
 
         self.wait(0.5)
@@ -1490,19 +1490,27 @@ class Phase(MovingCameraScene):
 
         lp_filter = BLOCKS.get("lp_filter").copy().next_to(if_signal, RIGHT, 0)
 
-        if_filt_ax = Axes(
-            x_range=x_range[:2],
-            y_range=[-2, 2],
-            x_length=x_len,
-            y_length=y_len,
-            tips=False,
-            axis_config={"include_numbers": False},
-        ).next_to(lp_filter, direction=RIGHT, buff=0)
-        if_signal_filt = if_filt_ax.plot(
-            lambda t: A * np.cos(2 * PI * (f_tx - f_rx) * t),
-            x_range=x_range,
-            color=IF_COLOR,
+        if_filt_ax = (
+            Axes(
+                x_range=x_range[:2],
+                y_range=[-2, 2],
+                x_length=x_len,
+                y_length=y_len,
+                tips=False,
+                axis_config={"include_numbers": False},
+            )
+            .set_opacity(0)
+            .next_to(lp_filter, direction=RIGHT, buff=0)
         )
+        phase = VT(0)
+        if_signal_filt = always_redraw(
+            lambda: if_filt_ax.plot(
+                lambda t: A * np.cos(2 * PI * (f_tx - f_rx) * t + ~phase),
+                x_range=x_range,
+                color=IF_COLOR,
+            )
+        )
+        if_filt_plot_group = VGroup(if_filt_ax, if_signal_filt)
 
         if_eqn = (
             MathTex(
@@ -1524,6 +1532,8 @@ class Phase(MovingCameraScene):
         self.wait(0.5)
 
         sig_group = Group(rx_eqn, if_signal_filt)
+
+        self.camera.frame.save_state()
         self.play(
             self.camera.frame.animate.scale_to_fit_width(sig_group.width * 1.1)
             .move_to(sig_group)
@@ -1537,40 +1547,181 @@ class Phase(MovingCameraScene):
 
         self.wait(0.5)
 
+        # fmt: off
         self.play(
             TransformByGlyphMap(
                 if_eqn,
                 beat_eqn,
                 ([0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6]),
-                (
-                    [
-                        6,
-                        7,
-                        8,
-                        9,
-                        10,
-                        11,
-                        12,
-                        13,
-                        14,
-                        15,
-                        16,
-                        17,
-                        18,
-                        19,
-                        20,
-                        21,
-                        22,
-                        23,
-                        24,
-                        25,
-                        26,
-                        27,
-                    ],
-                    [6, 7, 8, 9, 10],
-                ),
+                ([6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], [6, 7, 8, 9, 10]),
                 ([28, 29], [11, 12]),
             )
         )
+        # fmt: on
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    mixer,
+                    lo_port,
+                    rf_port,
+                    if_port,
+                    tx_signal,
+                    rx_signal,
+                    if_signal,
+                    tx_eqn,
+                    rx_eqn,
+                    lp_filter,
+                ),
+                AnimationGroup(
+                    self.camera.frame.animate.restore(),
+                    VGroup(beat_eqn, if_filt_plot_group)
+                    .animate.arrange(DOWN, LARGE_BUFF)
+                    .move_to(ORIGIN),
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_label = always_redraw(
+            lambda: Tex(f"$\\phi =\\ ${~phase:.2f} radians").to_corner(DL, LARGE_BUFF)
+        )
+        beat_eqn_w_phase = MathTex(
+            r"\sin{\left( 2 \pi f_{beat} t + \phi \right)}",
+        ).move_to(beat_eqn)
+        beat_eqn_w_phase[0][6:11].set_color(IF_COLOR)
+
+        self.play(
+            TransformByGlyphMap(
+                beat_eqn,
+                beat_eqn_w_phase,
+                (
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                ),
+                ([12], [14]),
+                ([], [12], {"delay": 0.2}),
+                ([], [13], {"delay": 0.4}),
+            ),
+        )
+        self.play(FadeIn(phase_label, shift=UP * 2))
+
+        self.wait(0.5)
+
+        self.play(phase @ PI)
+
+        self.wait(0.5)
+
+        self.play(phase @ 0)
+
+        self.wait(0.5)
+
+        self.play(
+            Group(beat_eqn_w_phase, if_filt_plot_group)
+            .animate.arrange(RIGHT, LARGE_BUFF * 1.5)
+            .shift(UP / 2),
+            FadeOut(phase_label, shift=DOWN * 2),
+        )
+
+        self.wait(0.5)
+
+        phase_delta = VT(0.4)  # radians
+        phase_delta_label = always_redraw(
+            lambda: Tex(f"$\\Delta \\phi =\\ ${~phase_delta:.2f} radians").to_corner(
+                DL, MED_SMALL_BUFF
+            )
+        )
+
+        def create_phase_shifted_beat(n):
+            return always_redraw(
+                lambda: if_filt_ax.plot(
+                    lambda t: A * np.cos(2 * PI * (f_tx - f_rx) * t + n * ~phase_delta),
+                    x_range=x_range,
+                    color=IF_COLOR,
+                ).shift(if_signal_filt.height * 1.2 * n * UP)
+            )
+
+        def create_phase_shifted_beat_eqn(n):
+            n_fmt = "+" if n == 1 else "-" if n == -1 else f"+ {n}"
+            eqn = (
+                MathTex(
+                    f"\\sin{{\\left( 2 \\pi f_{{beat}} t + \\phi_0 {n_fmt} \\Delta \\phi \\right)}}",
+                )
+                .move_to(beat_eqn_w_phase)
+                .shift(if_signal_filt.height * 1.2 * n * UP)
+            )
+            eqn[0][6:11].set_color(IF_COLOR)
+            return eqn
+
+        n_values = [-2, 2, -1, 1]
+        shifted_beats = VGroup(*[create_phase_shifted_beat(n) for n in n_values])
+        shifted_beat_eqns = VGroup(
+            *[create_phase_shifted_beat_eqn(n) for n in n_values]
+        )
+
+        beat_eqn_w_phase_0 = MathTex(
+            r"\sin{\left( 2 \pi f_{beat} t + \phi_0 \right)}",
+        ).move_to(beat_eqn_w_phase)
+        beat_eqn_w_phase_0[0][6:11].set_color(IF_COLOR)
+
+        self.play(
+            LaggedStart(
+                TransformByGlyphMap(
+                    beat_eqn_w_phase,
+                    beat_eqn_w_phase_0,
+                    (
+                        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+                        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+                    ),
+                    ([14], [15]),
+                    ([], [14], {"delay": 0.2}),
+                ),
+                *[
+                    AnimationGroup(
+                        TransformFromCopy(if_signal_filt, sig),
+                        TransformFromCopy(beat_eqn_w_phase, eqn),
+                    )
+                    for sig, eqn in zip(shifted_beats, shifted_beat_eqns)
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(phase_delta_label, shift=UP * 2))
+
+        self.wait(0.5)
+
+        self.play(phase_delta @ PI, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phase_delta @ 0, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phase_delta @ 0.6, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            *[Uncreate(sig) for sig in [*shifted_beats, if_signal_filt]],
+            FadeOut(*shifted_beat_eqns[:-1], phase_delta_label, beat_eqn_w_phase_0),
+            shifted_beat_eqns[-1].animate.move_to(ORIGIN),
+        )
+
+        self.wait(0.5)
+
+        self.play(shifted_beat_eqns[-1][0][-3:-1].animate.set_color(YELLOW))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
