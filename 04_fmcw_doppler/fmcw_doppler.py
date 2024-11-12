@@ -23,7 +23,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -1725,3 +1725,163 @@ class Phase(MovingCameraScene):
         self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
+
+
+class StationaryTarget(Scene):
+    def construct(self): ...
+
+
+class RealSystem(Scene):
+    def construct(self):
+        ic = ImageMobject("../props/static/microcontroller.png").scale_to_fit_width(
+            config.frame_height * 0.4
+        )
+
+        self.play(ic.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        ic_label = Tex("AWR1642").next_to(ic, UL, LARGE_BUFF).shift(LEFT)
+        ic_label_l1 = Line(
+            ic_label.get_corner(DR) + [1, -0.1, 0],
+            ic_label.get_corner(DL) + [-0.1, -0.1, 0],
+        )
+        ic_label_l2 = Line(
+            ic.get_center() + [-0.3, 0.5, 0],
+            ic_label.get_corner(DR) + [1, -0.1, 0],
+        )
+        ic_label_dot = Dot(ic.get_center() + [-0.3, 0.5, 0])
+
+        self.play(
+            LaggedStart(
+                Create(ic_label_dot),
+                Create(ic_label_l2),
+                AnimationGroup(Create(ic_label_l1), FadeIn(ic_label)),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        f_label = (
+            Tex(r"$76 \le f_c \le 81$ GHz").next_to(ic, DR, LARGE_BUFF).shift(LEFT)
+        )
+        f_label_eq = Tex(r"$f_c = 77$ GHz").move_to(f_label)
+        f_label_l1 = Line(
+            f_label.get_corner(DL) + [-0.3, -0.1, 0],
+            f_label.get_corner(DR) + [0.1, -0.1, 0],
+        )
+        f_label_dot = Dot(ic.get_center() + [0.3, -0.5, 0])
+        f_label_l2 = Line(
+            f_label_dot.get_center(),
+            f_label_l1.get_start(),
+        )
+
+        self.play(
+            LaggedStart(
+                Create(f_label_dot),
+                Create(f_label_l2),
+                AnimationGroup(Create(f_label_l1), FadeIn(f_label)),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                f_label,
+                f_label_eq,
+                ([0, 1, 2], []),
+                ([3, 4], [0, 1], {"delay": 0.2}),
+                ([5], [2], {"delay": 0.2}),
+                ([6, 7], [3, 4], {"delay": 0.2}),
+            )
+        )
+
+        self.wait(0.5)
+
+        bw_label = Tex(r"BW = 1.6 GHz").next_to(ic, UR, LARGE_BUFF).shift(LEFT)
+        bw_label_l1 = Line(
+            bw_label.get_corner(DL) + [-0.3, -0.1, 0],
+            bw_label.get_corner(DR) + [0.1, -0.1, 0],
+        )
+        bw_label_dot = Dot(ic.get_center() + [0.3, 0.5, 0])
+        bw_label_l2 = Line(
+            bw_label_dot.get_center(),
+            bw_label_l1.get_start(),
+        )
+
+        chirp_time_label = (
+            Tex(r"$T_c = 40 \mu$s").next_to(ic, DL, LARGE_BUFF).shift(LEFT)
+        )
+        chirp_time_label_l1 = Line(
+            chirp_time_label.get_corner(DR) + [0.3, -0.1, 0],
+            chirp_time_label.get_corner(DL) + [-0.1, -0.1, 0],
+        )
+        chirp_time_label_dot = Dot(ic.get_center() + [-0.3, -0.3, 0])
+        chirp_time_label_l2 = Line(
+            chirp_time_label_dot.get_center(),
+            chirp_time_label_l1.get_start(),
+        )
+
+        self.play(
+            LaggedStart(
+                Create(bw_label_dot),
+                Create(chirp_time_label_dot),
+                Create(bw_label_l2),
+                Create(chirp_time_label_l2),
+                AnimationGroup(Create(bw_label_l1), FadeIn(bw_label)),
+                AnimationGroup(Create(chirp_time_label_l1), FadeIn(chirp_time_label)),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"fmcw\_range\_doppler.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = Group(notebook_box, notebook_reminder).to_edge(DOWN, MED_LARGE_BUFF)
+
+        self.play(notebook.shift(DOWN * 5).animate.shift(UP * 5))
+
+        self.wait(0.5)
+
+        self.play(notebook.animate.shift(DOWN * 5))
+        self.remove(notebook)
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(bw_label, ic.set_z_index(-5)),
+            Uncreate(ic_label_dot),
+            Uncreate(ic_label_l1),
+            Uncreate(ic_label_l2),
+            FadeOut(ic_label),
+            Uncreate(f_label_dot),
+            Uncreate(f_label_l1),
+            Uncreate(f_label_l2),
+            FadeOut(f_label_eq),
+            Uncreate(chirp_time_label_dot),
+            Uncreate(chirp_time_label_l1),
+            Uncreate(chirp_time_label_l2),
+            FadeOut(chirp_time_label),
+            Uncreate(bw_label_dot),
+            Uncreate(bw_label_l1),
+            Uncreate(bw_label_l2),
+        )
+
+        self.wait(2)
+
+
+class CarVelocity(Scene):
+    def construct(self): ...
