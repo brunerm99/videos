@@ -1884,4 +1884,126 @@ class RealSystem(Scene):
 
 
 class CarVelocity(Scene):
-    def construct(self): ...
+    def construct(self):
+        car1 = (
+            SVGMobject("../props/static/car.svg", fill_color=WHITE, stroke_color=WHITE)
+            .scale_to_fit_width(config.frame_width * 0.2)
+            .to_edge(LEFT, LARGE_BUFF)
+            .shift(UP * 2)
+        )
+        car2 = (
+            SVGMobject("../props/static/car.svg", fill_color=WHITE, stroke_color=WHITE)
+            .flip()
+            .scale_to_fit_width(config.frame_width * 0.2)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(UP * 2)
+        )
+
+        self.play(car1.shift(LEFT * 5).animate.shift(RIGHT * 5))
+
+        self.wait(0.5)
+
+        self.play(car2.shift(RIGHT * 5).animate.shift(LEFT * 5))
+
+        self.wait(0.5)
+
+        car2_vel_arrow = Arrow(car2.get_right(), car2.get_left()).next_to(car2, DOWN)
+        car2_vel_label = MathTex(r"v &= \text{60 mph}\\&= \text{26 m/s}").next_to(
+            car2_vel_arrow, DOWN
+        )
+
+        self.play(GrowArrow(car2_vel_arrow), FadeIn(car2_vel_label[0][:7]))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(car2_vel_label[0][7:]))
+
+        self.wait(0.5)
+
+        scan_top = Line(
+            car1.get_right() + [0.1, 0, 0],
+            car2.get_corner(UL) + [-0.1, 0, 0],
+            color=TX_COLOR,
+        )
+        scan_bot = Line(
+            car1.get_right() + [0.1, 0, 0],
+            car2.get_corner(DL) + [-0.1, 0, 0],
+            color=TX_COLOR,
+        )
+        car_return = Arrow(car2.get_left(), car1.get_right(), color=RX_COLOR)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(scan_top), Create(scan_bot)),
+                GrowArrow(car_return),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        f_beat_1 = MathTex(r"f_{beat}(t_0)")
+        f_beat_1_copy = MathTex(r"f_{beat}(t_0)")
+        f_beat_group = (
+            Group(f_beat_1, f_beat_1_copy)
+            .arrange(RIGHT, LARGE_BUFF * 1.5)
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        f_beat_2 = MathTex(r"f_{beat}(t_0 + 40 \mu \text{s})").move_to(f_beat_1_copy)
+
+        r_1 = MathTex(r"R(t_0)").next_to(f_beat_1, UP)
+        r_1_copy = MathTex(r"R(t_0)").next_to(f_beat_2, UP)
+        r_2 = MathTex(r"R(t_0 + 40 \mu \text{s})").move_to(r_1_copy)
+
+        f_beat_diff = MathTex(
+            r"f_{beat}(t_0) - f_{beat}(t_0 + 40 \mu \text{s}) \approx \text{0.001 m}"
+        ).move_to(f_beat_group)
+        r_diff = MathTex(
+            r"R(t_0) - R(t_0 + 40 \mu \text{s}) \approx \text{0.001 m}"
+        ).move_to(Group(r_1, r_1_copy))
+
+        self.play(
+            f_beat_1.shift(DOWN * 5).animate.shift(UP * 5),
+            r_1.shift(DOWN * 5).animate.shift(UP * 5),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            f_beat_1_copy.shift(DOWN * 5).animate.shift(UP * 5),
+            r_1_copy.shift(DOWN * 5).animate.shift(UP * 5),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                f_beat_1_copy,
+                f_beat_2,
+                ([0, 1, 2, 3, 4, 5, 6, 7], [0, 1, 2, 3, 4, 5, 6, 7]),
+                ([], [8, 9, 10, 11, 12], {"delay": 0.3}),
+                ([8], [13]),
+            ),
+            TransformByGlyphMap(
+                r_1_copy,
+                r_2,
+                ([0, 1, 2, 3], [0, 1, 2, 3]),
+                ([], [4, 5, 6, 7, 8], {"delay": 0.3}),
+                ([4], [9]),
+            ),
+        )
+
+        self.wait(0.5)
+
+        # self.play(
+        #     TransformByGlyphMap(
+        #         f_beat_1,
+        #         f_beat_diff,
+        #     ),
+        #     TransformByGlyphMap(
+        #         r_1,
+        #         r_diff,
+        #     ),
+        # )
+
+        self.wait(2)
