@@ -23,11 +23,18 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+def get_transform_func(from_var, func=TransformFromCopy):
+    def transform_func(m, **kwargs):
+        return func(from_var, m, **kwargs)
+
+    return transform_func
 
 
 class TriangularIntro(MovingCameraScene):
@@ -725,12 +732,6 @@ class TriangularIntro(MovingCameraScene):
         f_d_eqn = MathTex(r"f_{d} = \frac{f_{up} - f_{down}}{2}").next_to(
             f_beat_eqn, DOWN, MED_LARGE_BUFF, LEFT
         )
-
-        def get_transform_func(from_var, func=TransformFromCopy):
-            def transform_func(m, **kwargs):
-                return func(from_var, m, **kwargs)
-
-            return transform_func
 
         self.play(
             TransformByGlyphMap(
@@ -1899,6 +1900,7 @@ class CarVelocity(Scene):
             .shift(UP * 2)
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.play(car1.shift(LEFT * 5).animate.shift(RIGHT * 5))
 
         self.wait(0.5)
@@ -1956,7 +1958,7 @@ class CarVelocity(Scene):
         r_2 = MathTex(r"R(t_0 + 40 \mu \text{s})").move_to(r_1_copy)
 
         f_beat_diff = MathTex(
-            r"f_{beat}(t_0) - f_{beat}(t_0 + 40 \mu \text{s}) \approx \text{0.001 m}"
+            r"f_{beat}(t_0) - f_{beat}(t_0 + 40 \mu \text{s}) \approx \text{286 Hz}"
         ).move_to(f_beat_group)
         r_diff = MathTex(
             r"R(t_0) - R(t_0 + 40 \mu \text{s}) \approx \text{0.001 m}"
@@ -1993,17 +1995,335 @@ class CarVelocity(Scene):
             ),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        # self.play(
-        #     TransformByGlyphMap(
-        #         f_beat_1,
-        #         f_beat_diff,
-        #     ),
-        #     TransformByGlyphMap(
-        #         r_1,
-        #         r_diff,
-        #     ),
-        # )
+        self.play(
+            TransformByGlyphMap(
+                r_1,
+                r_diff,
+                ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
+                (GrowFromCenter, [5], {"delay": 0.2}),
+                (
+                    get_transform_func(r_2[0], ReplacementTransform),
+                    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+                    {"delay": 0.4},
+                ),
+                (GrowFromCenter, [16], {"delay": 0.4}),
+                (GrowFromCenter, [17, 18, 19, 20, 21, 22], {"delay": 0.6}),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                f_beat_1,
+                f_beat_diff,
+                ([0, 1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+                (GrowFromCenter, [9], {"delay": 0.2}),
+                (
+                    get_transform_func(f_beat_2[0], ReplacementTransform),
+                    [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+                    {"delay": 0.4},
+                ),
+                (GrowFromCenter, [24], {"delay": 0.4}),
+                (GrowFromCenter, [25, 26, 27, 28, 29], {"delay": 0.6}),
+            )
+        )
+
+        self.wait(0.5)
+
+        bw_label_hz = Tex(r"BW = $1.6 \cdot 10^{9}$ Hz").next_to(
+            r_diff, UP, MED_LARGE_BUFF
+        )
+        bw_label = Tex(r"BW = 1.6 GHz").move_to(bw_label_hz)
+
+        self.play(FadeIn(bw_label_hz))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                bw_label_hz,
+                bw_label,
+                ([0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]),
+                ([6, 7, 8, 9], ShrinkToCenter),
+                ([10, 11], [7, 8]),
+                (FadeIn, [6]),
+            )
+        )
+
+        self.wait(0.5)
+
+        beat_eqn_w_phase = MathTex(
+            r"\sin{\left( 2 \pi f_{beat} t + \phi \right)}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+        beat_eqn_w_phase[0][6:11].set_color(IF_COLOR)
+
+        objs = self.mobjects.copy()
+        shuffle(objs)
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[
+                        FadeOut(m) if isinstance(m, Arrow) else ShrinkToCenter(m)
+                        for m in objs
+                    ],
+                    lag_ratio=0.02,
+                ),
+                GrowFromCenter(beat_eqn_w_phase),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(2)
+
+
+class PhaseEquation(Scene):
+    def construct(self):
+        beat_eqn_w_phase = MathTex(
+            r"\sin{\left( 2 \pi f_{beat} t + \phi \right)}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+        beat_eqn_w_phase[0][6:11].set_color(IF_COLOR)
+
+        self.add(beat_eqn_w_phase)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        phase_eqn = MathTex(
+            r"\phi_1 = -(2 \pi \mu \Delta \tau ) t + \pi \mu \Delta \tau^2 + 2 \pi \mu \tau_0 \Delta \tau - 2 \pi f \Delta \tau + \phi_0"
+        )
+        phase_eqn_minus = MathTex(
+            r"\phi_1 - \phi_0 = -(2 \pi \mu \Delta \tau ) t + \pi \mu \Delta \tau^2 + 2 \pi \mu \tau_0 \Delta \tau - 2 \pi f \Delta \tau"
+        )
+        phase_eqn_delta = MathTex(
+            r"\Delta \phi = -(2 \pi \mu \Delta \tau ) t + \pi \mu \Delta \tau^2 + 2 \pi \mu \tau_0 \Delta \tau - 2 \pi f \Delta \tau"
+        )
+
+        self.play(
+            TransformByGlyphMap(
+                beat_eqn_w_phase,
+                phase_eqn,
+                ([13], [0], {"path_arc": PI / 3}),
+                ([0, 1, 2], ShrinkToCenter),
+                ([3, 4, 5], ShrinkToCenter),
+                ([6, 7, 8, 9, 10], ShrinkToCenter),
+                ([11, 12, 14], ShrinkToCenter),
+                (GrowFromCenter, [1], {"delay": 0.2}),
+                (GrowFromCenter, [2], {"delay": 0.4}),
+                (GrowFromCenter, [3, 4, 5, 6, 7, 8, 9, 10, 11], {"delay": 0.6}),
+                (GrowFromCenter, [12], {"delay": 0.8}),
+                (GrowFromCenter, [13, 14, 15, 16, 17], {"delay": 1}),
+                (GrowFromCenter, [18], {"delay": 1.2}),
+                (GrowFromCenter, [19, 20, 21, 22, 23, 24, 25], {"delay": 1.4}),
+                (GrowFromCenter, [26], {"delay": 1.6}),
+                (GrowFromCenter, [27, 28, 29, 30, 31], {"delay": 1.8}),
+                (GrowFromCenter, [32], {"delay": 2}),
+                (GrowFromCenter, [33, 34], {"delay": 2.2}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_eqn,
+                phase_eqn_minus,
+                ([0, 1], [0, 1]),
+                ([2], [5]),
+                ([32], [2], {"path_arc": PI / 3}),
+                ([33, 34], [3, 4], {"path_arc": PI / 3, "delay": 0.2}),
+                ([slice(3, 32)], [slice(6, 35)]),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_eqn_minus,
+                phase_eqn_delta,
+                ([0, 1, 2], ShrinkToCenter),
+                ([4], ShrinkToCenter),
+                ([3], [1], {"delay": 0.2}),
+                (GrowFromCenter, [0], {"delay": 0.2}),
+                ([slice(5, 35)], [slice(2, 32)]),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        phase_comp_1 = phase_eqn_delta[0][slice(3, 12)]
+        phase_comp_2 = phase_eqn_delta[0][slice(13, 18)]
+        phase_comp_3 = phase_eqn_delta[0][slice(19, 26)]
+        phase_comp_4 = phase_eqn_delta[0][slice(27, 32)]
+
+        phase_comp_1_label = Tex("1", color=GREEN).next_to(phase_comp_1, UP)
+        phase_comp_2_label = Tex("2", color=BLUE).next_to(phase_comp_2, UP)
+        phase_comp_3_label = Tex("3", color=RED).next_to(phase_comp_3, UP)
+        phase_comp_4_label = Tex("4", color=YELLOW).next_to(phase_comp_4, UP)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(GrowFromCenter(label), comp.animate.set_color(color))
+                    for label, comp, color in zip(
+                        [
+                            phase_comp_1_label,
+                            phase_comp_2_label,
+                            phase_comp_3_label,
+                            phase_comp_4_label,
+                        ],
+                        [phase_comp_1, phase_comp_2, phase_comp_3, phase_comp_4],
+                        (GREEN, BLUE, RED, YELLOW),
+                    )
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_comp_4_copy = MathTex(
+            r"2 \pi f \Delta \tau",
+            font_size=DEFAULT_FONT_SIZE,
+            color=YELLOW,
+        ).shift(DOWN)
+
+        self.play(
+            Group(
+                phase_comp_1_label,
+                phase_comp_2_label,
+                phase_comp_3_label,
+                phase_comp_4_label,
+                phase_eqn_delta,
+            ).animate.to_edge(UP, LARGE_BUFF),
+            TransformFromCopy(phase_comp_4, phase_comp_4_copy[0], path_arc=PI / 2),
+        )
+        self.play(phase_comp_4_copy.animate.scale(1.5))
+
+        self.wait(0.5)
+
+        self.play(
+            phase_comp_4_copy[0][3:5]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(WHITE)
+            .shift(UP / 2)
+        )
+
+        self.wait(0.5)
+
+        phase_comp_4_eq = MathTex(
+            r"2 \pi f \Delta \tau \approx 1.29 \text{ radians}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(phase_comp_4_copy)
+        phase_comp_4_eq[0][0:5].set_color(YELLOW)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_comp_4_copy,
+                phase_comp_4_eq,
+                ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
+                (GrowFromCenter, [5], {"delay": 0.2}),
+                (
+                    GrowFromCenter,
+                    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+                    {"delay": 0.4},
+                ),
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_comp_2_val = Tex(r"$9 \cdot 10^{-10}$", color=BLUE).next_to(
+            phase_comp_2, DOWN
+        )
+        phase_comp_1_val = (
+            Tex("0.027", color=GREEN)
+            .next_to(phase_comp_1, DOWN)
+            .set_y(phase_comp_2_val.get_y())
+        )
+        phase_comp_3_val = (
+            Tex(r"$4.5 \cdot 10^{-5}$", color=RED)
+            .next_to(phase_comp_3, DOWN)
+            .set_y(phase_comp_2_val.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    GrowFromCenter(val)
+                    for val in [phase_comp_1_val, phase_comp_2_val, phase_comp_3_val]
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_eqn_approx = MathTex(
+            r"\Delta \phi \approx -2 \pi f \Delta \tau",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+        phase_eqn_approx[0][4:].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    phase_comp_4_eq.animate.shift(DOWN * 8),
+                    Group(
+                        phase_comp_1_label,
+                        phase_comp_2_label,
+                        phase_comp_3_label,
+                        phase_comp_4_label,
+                    ).animate.shift(UP * 8),
+                    FadeOut(
+                        Group(phase_comp_1_val, phase_comp_2_val, phase_comp_3_val)
+                    ),
+                ),
+                TransformByGlyphMap(
+                    phase_eqn_delta,
+                    phase_eqn_approx,
+                    ([3, 4, 5, 6, 7, 8, 9, 10, 11], ShrinkToCenter, {"delay": 0}),
+                    ([12, 13, 14, 15, 16, 17], ShrinkToCenter, {"delay": 0}),
+                    ([18, 19, 20, 21, 22, 23, 24, 25], ShrinkToCenter, {"delay": 0}),
+                    ([0, 1], [0, 1], {"delay": 0.6}),
+                    ([2], [2], {"delay": 0.8}),
+                    ([26, 27, 28, 29, 30, 31], [3, 4, 5, 6, 7, 8], {"delay": 1}),
+                ),
+                lag_ratio=0.4,
+            ),
+        )
+
+        self.wait(0.5)
+
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"fmcw\_range\_doppler.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = Group(notebook_box, notebook_reminder).to_edge(DOWN, MED_LARGE_BUFF)
+
+        self.play(notebook.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        self.play(notebook.animate.shift(DOWN * 8))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
