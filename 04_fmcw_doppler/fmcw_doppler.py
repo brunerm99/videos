@@ -10,6 +10,7 @@ from MF_Tools import VT, TransformByGlyphMap
 from numpy.fft import fft, fftshift
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import signal, interpolate
+from scipy.constants import c
 
 
 warnings.filterwarnings("ignore")
@@ -1953,8 +1954,8 @@ class CarVelocity(Scene):
         )
         f_beat_2 = MathTex(r"f_{beat}(t_0 + 40 \mu \text{s})").move_to(f_beat_1_copy)
 
-        r_1 = MathTex(r"R(t_0)").next_to(f_beat_1, UP)
-        r_1_copy = MathTex(r"R(t_0)").next_to(f_beat_2, UP)
+        r_1 = MathTex(r"R(t_0)").next_to(f_beat_1, UP, MED_LARGE_BUFF)
+        r_1_copy = MathTex(r"R(t_0)").next_to(f_beat_2, UP, MED_LARGE_BUFF)
         r_2 = MathTex(r"R(t_0 + 40 \mu \text{s})").move_to(r_1_copy)
 
         f_beat_diff = MathTex(
@@ -2034,25 +2035,43 @@ class CarVelocity(Scene):
 
         self.wait(0.5)
 
-        bw_label_hz = Tex(r"BW = $1.6 \cdot 10^{9}$ Hz").next_to(
-            r_diff, UP, MED_LARGE_BUFF
+        bw = 1.6e9
+        range_resolution_label = Tex(
+            f"$\\Delta R = \\frac{{c}}{{2 BW}} =$ {c / (2*bw):.3f} m"
         )
-        bw_label = Tex(r"BW = 1.6 GHz").move_to(bw_label_hz)
-
-        self.play(FadeIn(bw_label_hz))
-
-        self.wait(0.5)
+        range_group = (
+            Group(r_diff.copy(), range_resolution_label)
+            .arrange(RIGHT, LARGE_BUFF)
+            .set_y(r_diff.get_y())
+        )
 
         self.play(
-            TransformByGlyphMap(
-                bw_label_hz,
-                bw_label,
-                ([0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]),
-                ([6, 7, 8, 9], ShrinkToCenter),
-                ([10, 11], [7, 8]),
-                (FadeIn, [6]),
+            LaggedStart(
+                r_diff.animate.move_to(range_group[0]),
+                range_resolution_label.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                lag_ratio=0.3,
             )
         )
+
+        # bw_label_hz = Tex(r"BW = $1.6 \cdot 10^{9}$ Hz").next_to(
+        #     r_diff, UP, MED_LARGE_BUFF
+        # )
+        # bw_label = Tex(r"BW = 1.6 GHz").move_to(bw_label_hz)
+
+        # self.play(FadeIn(bw_label_hz))
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     TransformByGlyphMap(
+        #         bw_label_hz,
+        #         bw_label,
+        #         ([0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]),
+        #         ([6, 7, 8, 9], ShrinkToCenter),
+        #         ([10, 11], [7, 8]),
+        #         (FadeIn, [6]),
+        #     )
+        # )
 
         self.wait(0.5)
 
