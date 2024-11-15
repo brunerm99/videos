@@ -38,6 +38,7 @@ def get_transform_func(from_var, func=TransformFromCopy):
     return transform_func
 
 
+# TODO: Re-render
 class TriangularIntro(MovingCameraScene):
     def construct(self):
         carrier_freq = 10
@@ -300,6 +301,7 @@ class TriangularIntro(MovingCameraScene):
         f_beat_eqn = MathTex(r"f_{TX}", " - ", r"f_{RX}", r"= f_{beat}").to_corner(UL)
         f_beat_eqn[0].set_color(TX_COLOR)
         f_beat_eqn[2].set_color(RX_COLOR)
+        f_beat_eqn[3][1:].set_color(IF_COLOR)
 
         self.play(t_dot @ (duration / 2), run_time=2)
 
