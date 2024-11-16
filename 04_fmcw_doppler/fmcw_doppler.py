@@ -3,12 +3,11 @@
 import sys
 import warnings
 
-from random import randint, randrange, shuffle
+from random import shuffle
 import numpy as np
 from manim import *
 from MF_Tools import VT, TransformByGlyphMap
-from numpy.fft import fft, fftshift
-from numpy.lib.stride_tricks import sliding_window_view
+from numpy.fft import fftshift, fft2
 from scipy import signal, interpolate
 from scipy.constants import c
 
@@ -2348,3 +2347,266 @@ class PhaseEquation(Scene):
         self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
+
+
+# Pulled from notebook
+# Radar setup
+f = 77e9  # Hz
+Tc = 40e-6  # chirp time - s
+bw = 1.6e9  # bandwidth - Hz
+chirp_rate = bw / Tc  # Hz/s
+
+wavelength = c / f
+M = 40  # number of chirps in coherent processing interval (CPI)
+
+range_resolution = c / (2 * bw)
+
+
+def get_time_from_dist(r):
+    return r / c
+
+
+def get_time_from_vel(v):
+    return 2 * (v * Tc) / c
+
+
+def compute_phase_diff(v):
+    time_from_vel = get_time_from_vel(v)
+    return 2 * PI * f * time_from_vel
+
+
+def compute_f_beat(r):
+    return (2 * r * bw) / (c * Tc)
+
+
+max_vel = wavelength / (4 * Tc)
+vel_res = wavelength / (2 * M * Tc)
+
+
+class FastSlowTime(Scene):
+    def construct(self):
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+        ]
+
+        target_data = [(compute_f_beat(r), compute_phase_diff(v)) for r, v in targets]
+
+        max_time = 6 / target_data[0][0]
+        N = 1000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        # cpi = np.array(
+        #     [
+        #         (
+        #             np.sum(
+        #                 [
+        #                     np.sin(
+        #                         2 * PI * compute_f_beat(r) * t
+        #                         + m * compute_phase_diff(v)
+        #                     )
+        #                     for r, v in targets
+        #                 ],
+        #                 axis=0,
+        #             )
+        #             + np.random.normal(0, 0.1, N)
+        #         )
+        #         * window
+        #         for m in range(M)
+        #     ]
+        # )
+
+        phi_0_1 = -PI / 6
+        phi_0_2 = phi_0_1 + PI * 0.6
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.4
+
+        duration = 1
+        amp_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).next_to([0, -config.frame_height / 2, 0], DOWN)
+
+        target_1_color = PURPLE
+        target_2_color = GREEN
+        targets_color = ORANGE
+
+        A_1 = VT(1)
+        A_2 = VT(1)
+
+        target_1_plot = always_redraw(
+            lambda: amp_ax.plot(
+                lambda t: ~A_1
+                * (
+                    np.sin(2 * PI * 3 * t + phi_0_1)
+                    + (1 - ~A_2) * np.sin(2 * PI * 3 * t + phi_0_2)
+                ),
+                color=interpolate_color(target_1_color, targets_color, (1 - ~A_2)),
+                x_range=[0, duration, 1 / 1000],
+            )
+        )
+
+        target_2_plot = always_redraw(
+            lambda: amp_ax.plot(
+                lambda t: ~A_2 * np.sin(2 * PI * 3 * t + phi_0_2),
+                color=target_2_color,
+                x_range=[0, duration, 1 / 1000],
+            )
+        )
+        plot_group = Group(amp_ax, target_1_plot, target_2_plot)
+
+        eqn_1 = MathTex(
+            r"\sin{\left(2 \pi f_{beat,1} t + \phi_1\right)}", color=target_1_color
+        )
+        eqn_2 = MathTex(
+            r"\sin{\left(2 \pi f_{beat,2} t + \phi_2\right)}", color=target_2_color
+        )
+        eqn_group = Group(eqn_1, eqn_2).arrange(RIGHT, LARGE_BUFF)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(GrowFromCenter(eqn_1), GrowFromCenter(eqn_2), lag_ratio=0.3)
+        )
+
+        self.wait(0.5)
+
+        self.add(target_1_plot, target_2_plot)
+        self.play(Group(eqn_group, amp_ax).animate.arrange(DOWN, LARGE_BUFF * 2.5))
+
+        self.wait(0.5)
+
+        plus = MathTex("+").set_y(eqn_1.get_y())
+        plus_group = (
+            Group(eqn_1.copy(), plus, eqn_2.copy())
+            .arrange(RIGHT, SMALL_BUFF)
+            .set_y(eqn_1.get_y())
+        )
+
+        self.play(
+            A_1 @ 0.5,
+            A_2 @ 0,
+            GrowFromCenter(plus),
+            eqn_1.animate.move_to(plus_group[0]),
+            eqn_2.animate.move_to(plus_group[2]),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        num_samples = 20
+        sample_rects = amp_ax.get_riemann_rectangles(
+            target_1_plot,
+            input_sample_type="right",
+            x_range=[0, duration],
+            dx=duration / num_samples,
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+
+        self.play(Create(sample_rects))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(plot_group.set_z_index(-1)))
+
+        self.wait(0.5)
+
+        ts_line = Line(
+            sample_rects[7].get_top() + UP,
+            [sample_rects[8].get_top()[0], (sample_rects[7].get_top() + UP)[1], 0],
+        )
+        ts_line_l = Line(ts_line.get_left() + DOWN / 8, ts_line.get_left() + UP / 8)
+        ts_line_r = Line(ts_line.get_right() + DOWN / 8, ts_line.get_right() + UP / 8)
+        ts_label = MathTex(r"T_s").next_to(ts_line, UP)
+
+        self.play(
+            LaggedStart(
+                Create(ts_line_l),
+                Create(ts_line),
+                Create(ts_line_r),
+                FadeIn(ts_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(2)
+
+
+class RangeDoppler3D(ThreeDScene):
+    def construct(self):
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+
+        sep = "\n\t"
+        print(
+            f"Targets:",
+            sep
+            + sep.join(
+                [
+                    f"{idx}: distance = {r:.2f} m, velocity = {v:.2f} m/s"
+                    for idx, (r, v) in enumerate(targets, start=1)
+                ]
+            ),
+        )
+
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+
+        range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+
+        vels = np.linspace(-max_vel, max_vel, M)
+        rmax = c * Tc * fs / (2 * bw)
+
+        plot_vel = (-20, 20)  # m/s
+        plot_range = (0, 40)  # m
+
+        v_ind = np.where((vels > plot_vel[0]) & (vels < plot_vel[1]))[0]
+        vx = vels[v_ind[0] : v_ind[-1]]
+
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        r_ind = np.where((n_ranges > plot_range[0]) & (n_ranges < plot_range[1]))[0]
+        ry = n_ranges[r_ind[0] : r_ind[-1]]
+
+        rdz = range_doppler[r_ind[0] : r_ind[-1], v_ind[0] : v_ind[-1]]
+
+        X, Y = np.meshgrid(vx, ry, indexing="xy")
