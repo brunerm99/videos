@@ -7,9 +7,10 @@ from random import shuffle
 import numpy as np
 from manim import *
 from MF_Tools import VT, TransformByGlyphMap
-from numpy.fft import fftshift, fft2
+from numpy.fft import fftshift, fft2, fft
 from scipy import signal, interpolate
 from scipy.constants import c
+from scipy.interpolate import bisplrep, bisplev
 
 
 warnings.filterwarnings("ignore")
@@ -547,9 +548,36 @@ class TriangularIntro(MovingCameraScene):
 
         self.play(Create(x0_line_disp), Create(x1_line_disp))
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(x1_disp @ (duration / 2), x1_sub @ (duration / 2))
+
+        self.wait(0.5)
+
+        rx_lower = Line(
+            f_ax.input_to_graph_point(~x0_disp, tri_f_graph_rx),
+            f_ax.input_to_graph_point(~x1_disp, tri_f_graph_rx),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.play(Create(rx_lower))
+
+        self.wait(0.5)
+
+        tx_upper = Line(
+            f_ax.input_to_graph_point(~x0_disp, tri_f_graph),
+            f_ax.input_to_graph_point(~x1_disp, tri_f_graph),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.play(LaggedStart(Uncreate(rx_lower), Create(tx_upper), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(Uncreate(tx_upper))
 
         self.wait(0.5)
 
@@ -584,7 +612,7 @@ class TriangularIntro(MovingCameraScene):
 
         self.play(Create(beat_time_shift_right), Create(f_beat_label))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         section_dist = (duration / 2 - ~beat_time_shift) / 2
@@ -619,11 +647,53 @@ class TriangularIntro(MovingCameraScene):
             x1_disp @ (duration / 2 + ~beat_time_shift),
         )
 
+        # self.next_section(skip_animations=skip_animations(False))
+        # self.wait(0.5)
+
+        # zero_cross_dot = Dot(
+        #     f_ax.input_to_graph_point(~x0_disp + ~beat_time_shift, tri_f_graph),
+        #     color=YELLOW,
+        # )
+
+        # self.play(Create(zero_cross_dot))
+
+        # self.wait(0.5)
+
+        # self.play(Uncreate(zero_cross_dot))
+
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(x0_disp @ (duration / 2 + ~beat_time_shift))
         self.play(x1_sub @ duration, x1_disp @ duration)
 
+        self.wait(0.5)
+
+        rx_upper = Line(
+            f_ax.input_to_graph_point(~x0_disp, tri_f_graph_rx),
+            f_ax.input_to_graph_point(~x1_disp, tri_f_graph_rx),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.play(Create(rx_upper))
+
+        self.wait(0.5)
+
+        tx_lower = Line(
+            f_ax.input_to_graph_point(~x0_disp, tri_f_graph),
+            f_ax.input_to_graph_point(~x1_disp, tri_f_graph),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.play(LaggedStart(Uncreate(rx_upper), Create(tx_lower), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(Uncreate(tx_lower))
+
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -646,6 +716,7 @@ class TriangularIntro(MovingCameraScene):
             Uncreate(x1_line_disp),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         f_up_label = MathTex(r"f_{up}").set_color(YELLOW).next_to(f_up, UP)
@@ -657,6 +728,12 @@ class TriangularIntro(MovingCameraScene):
                 GrowFromCenter(f_down_label),
                 lag_ratio=0.4,
             )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            f_down_label.animate(rate_func=rate_functions.there_and_back).shift(UP / 2)
         )
 
         self.next_section(skip_animations=skip_animations(True))
@@ -1474,20 +1551,15 @@ class Phase(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    Create(tx_signal),
-                    FadeIn(tx_eqn, shift=DOWN),
-                ),
-                AnimationGroup(
-                    Create(rx_signal),
-                    FadeIn(rx_eqn, shift=RIGHT),
-                ),
-                Create(if_signal),
-                lag_ratio=0.8,
-            )
-        )
+        self.play(Create(tx_signal), FadeIn(tx_eqn, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(Create(rx_signal), FadeIn(rx_eqn, shift=RIGHT))
+
+        self.wait(0.5)
+
+        self.play(Create(if_signal))
 
         self.wait(0.5)
 
@@ -1895,11 +1967,14 @@ class CarVelocity(Scene):
             .shift(UP * 2)
         )
         car2 = (
-            SVGMobject("../props/static/car.svg", fill_color=WHITE, stroke_color=WHITE)
-            .flip()
-            .scale_to_fit_width(config.frame_width * 0.2)
+            SVGMobject(
+                "../props/static/person.svg", fill_color=WHITE, stroke_color=WHITE
+            )
+            # .flip()
+            # .scale_to_fit_width(config.frame_width * 0.2)
+            .scale_to_fit_height(car1.height)
             .to_edge(RIGHT, LARGE_BUFF)
-            .shift(UP * 2)
+            .set_y(car1.get_y())
         )
 
         self.next_section(skip_animations=skip_animations(True))
@@ -1911,16 +1986,16 @@ class CarVelocity(Scene):
 
         self.wait(0.5)
 
-        car2_vel_arrow = Arrow(car2.get_right(), car2.get_left()).next_to(car2, DOWN)
-        car2_vel_label = MathTex(r"v &= \text{60 mph}\\&= \text{26 m/s}").next_to(
-            car2_vel_arrow, DOWN
-        )
+        car_vel_arrow = Arrow(car1.get_left(), car1.get_right()).next_to(car1, DOWN)
+        car_vel_label = MathTex(
+            r"v &= \text{10 m/s} \\ &\approx \text{22 mph}"
+        ).next_to(car_vel_arrow, DOWN)
 
-        self.play(GrowArrow(car2_vel_arrow), FadeIn(car2_vel_label[0][:7]))
+        self.play(GrowArrow(car_vel_arrow), FadeIn(car_vel_label[0][:7]))
 
         self.wait(0.5)
 
-        self.play(FadeIn(car2_vel_label[0][7:]))
+        self.play(FadeIn(car_vel_label[0][7:]))
 
         self.wait(0.5)
 
@@ -1957,37 +2032,42 @@ class CarVelocity(Scene):
 
         r_1 = MathTex(r"R(t_0)").next_to(f_beat_1, UP, MED_LARGE_BUFF)
         r_1_copy = MathTex(r"R(t_0)").next_to(f_beat_2, UP, MED_LARGE_BUFF)
+        r_group = (
+            Group(r_1, r_1_copy)
+            .arrange(RIGHT, LARGE_BUFF * 1.5)
+            .to_edge(DOWN, LARGE_BUFF * 1.5)
+        )
         r_2 = MathTex(r"R(t_0 + 40 \mu \text{s})").move_to(r_1_copy)
 
         f_beat_diff = MathTex(
             r"f_{beat}(t_0) - f_{beat}(t_0 + 40 \mu \text{s}) \approx \text{286 Hz}"
         ).move_to(f_beat_group)
         r_diff = MathTex(
-            r"R(t_0) - R(t_0 + 40 \mu \text{s}) \approx \text{0.001 m}"
-        ).move_to(Group(r_1, r_1_copy))
+            r"R(t_0) - R(t_0 + 40 \mu \text{s}) \approx \text{0.0004 m}"
+        ).move_to(r_group)
 
         self.play(
-            f_beat_1.shift(DOWN * 5).animate.shift(UP * 5),
+            # f_beat_1.shift(DOWN * 5).animate.shift(UP * 5),
             r_1.shift(DOWN * 5).animate.shift(UP * 5),
         )
 
         self.wait(0.5)
 
         self.play(
-            f_beat_1_copy.shift(DOWN * 5).animate.shift(UP * 5),
+            # f_beat_1_copy.shift(DOWN * 5).animate.shift(UP * 5),
             r_1_copy.shift(DOWN * 5).animate.shift(UP * 5),
         )
 
         self.wait(0.5)
 
         self.play(
-            TransformByGlyphMap(
-                f_beat_1_copy,
-                f_beat_2,
-                ([0, 1, 2, 3, 4, 5, 6, 7], [0, 1, 2, 3, 4, 5, 6, 7]),
-                ([], [8, 9, 10, 11, 12], {"delay": 0.3}),
-                ([8], [13]),
-            ),
+            # TransformByGlyphMap(
+            #     f_beat_1_copy,
+            #     f_beat_2,
+            #     ([0, 1, 2, 3, 4, 5, 6, 7], [0, 1, 2, 3, 4, 5, 6, 7]),
+            #     ([], [8, 9, 10, 11, 12], {"delay": 0.3}),
+            #     ([8], [13]),
+            # ),
             TransformByGlyphMap(
                 r_1_copy,
                 r_2,
@@ -2012,27 +2092,27 @@ class CarVelocity(Scene):
                     {"delay": 0.4},
                 ),
                 (GrowFromCenter, [16], {"delay": 0.4}),
-                (GrowFromCenter, [17, 18, 19, 20, 21, 22], {"delay": 0.6}),
+                (GrowFromCenter, [17, 18, 19, 20, 21, 22, 23], {"delay": 0.6}),
             )
         )
 
-        self.wait(0.5)
+        # self.wait(0.5)
 
-        self.play(
-            TransformByGlyphMap(
-                f_beat_1,
-                f_beat_diff,
-                ([0, 1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7, 8]),
-                (GrowFromCenter, [9], {"delay": 0.2}),
-                (
-                    get_transform_func(f_beat_2[0], ReplacementTransform),
-                    [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
-                    {"delay": 0.4},
-                ),
-                (GrowFromCenter, [24], {"delay": 0.4}),
-                (GrowFromCenter, [25, 26, 27, 28, 29], {"delay": 0.6}),
-            )
-        )
+        # self.play(
+        #     TransformByGlyphMap(
+        #         f_beat_1,
+        #         f_beat_diff,
+        #         ([0, 1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+        #         (GrowFromCenter, [9], {"delay": 0.2}),
+        #         (
+        #             get_transform_func(f_beat_2[0], ReplacementTransform),
+        #             [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+        #             {"delay": 0.4},
+        #         ),
+        #         (GrowFromCenter, [24], {"delay": 0.4}),
+        #         (GrowFromCenter, [25, 26, 27, 28, 29], {"delay": 0.6}),
+        #     )
+        # )
 
         self.wait(0.5)
 
@@ -2398,26 +2478,6 @@ class FastSlowTime(Scene):
         fs = 1 / Ts
 
         t = np.arange(0, max_time, 1 / fs)
-        window = signal.windows.blackman(N)
-        # cpi = np.array(
-        #     [
-        #         (
-        #             np.sum(
-        #                 [
-        #                     np.sin(
-        #                         2 * PI * compute_f_beat(r) * t
-        #                         + m * compute_phase_diff(v)
-        #                     )
-        #                     for r, v in targets
-        #                 ],
-        #                 axis=0,
-        #             )
-        #             + np.random.normal(0, 0.1, N)
-        #         )
-        #         * window
-        #         for m in range(M)
-        #     ]
-        # )
 
         phi_0_1 = -PI / 6
         phi_0_2 = phi_0_1 + PI * 0.6
@@ -2471,7 +2531,7 @@ class FastSlowTime(Scene):
         )
         eqn_group = Group(eqn_1, eqn_2).arrange(RIGHT, LARGE_BUFF)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -2524,12 +2584,14 @@ class FastSlowTime(Scene):
         self.wait(0.5)
 
         ts_line = Line(
-            sample_rects[7].get_top() + UP,
-            [sample_rects[8].get_top()[0], (sample_rects[7].get_top() + UP)[1], 0],
+            sample_rects[7].get_top() + UP / 2,
+            [sample_rects[8].get_top()[0], (sample_rects[7].get_top() + UP / 2)[1], 0],
         )
         ts_line_l = Line(ts_line.get_left() + DOWN / 8, ts_line.get_left() + UP / 8)
         ts_line_r = Line(ts_line.get_right() + DOWN / 8, ts_line.get_right() + UP / 8)
-        ts_label = MathTex(r"T_s").next_to(ts_line, UP)
+        ts_label = MathTex(r"T_s", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            ts_line, UP
+        )
 
         self.play(
             LaggedStart(
@@ -2541,7 +2603,400 @@ class FastSlowTime(Scene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(ts_line),
+            Uncreate(ts_line_l),
+            Uncreate(ts_line_r),
+            Transform(
+                ts_label,
+                ts_label.copy().next_to(sample_rects[0], DOWN),
+                path_arc=PI / 2,
+            ),
+            LaggedStart(
+                *[m.animate.shift(UP * 5) for m in [eqn_1, plus, eqn_2]], lag_ratio=0.3
+            ),
+            LaggedStart(
+                *[
+                    Transform(
+                        rect,
+                        Square(
+                            rect.width,
+                            color=BLACK,
+                            fill_color=BLUE,
+                            fill_opacity=0.7,
+                            stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                        )
+                        .move_to(rect)
+                        .set_y(sample_rects[0].get_y()),
+                    )
+                    for rect in sample_rects
+                ],
+                lag_ratio=0.05,
+            ),
+        )
+        self.remove(eqn_1, plus, eqn_2)
+
+        self.wait(0.5)
+
+        n_ts_disp = 3
+        n_ts = Group(
+            *[
+                MathTex(f"{idx}T_s", font_size=DEFAULT_FONT_SIZE * 0.8)
+                .next_to(sample_rects[idx - 1], DOWN)
+                .set_y(ts_label.get_y())
+                .shift(DOWN * (0.5 if idx % 2 == 0 else 0))
+                for idx in range(2, n_ts_disp + 2)
+            ],
+            MathTex(r"\cdots")
+            .next_to(sample_rects[len(sample_rects) // 2], DOWN)
+            .set_y(ts_label.get_y()),
+            MathTex(f"NT_s", font_size=DEFAULT_FONT_SIZE * 0.8)
+            .next_to(sample_rects[-1], DOWN)
+            .set_y(ts_label.get_y()),
+        )
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in n_ts], lag_ratio=0.2))
+
+        self.wait(0.5)
+
+        n_slow_time = 8
+        cpi_rects = Group(
+            sample_rects,
+            *[
+                sample_rects.copy().shift(UP * idx * sample_rects.height)
+                for idx in range(1, n_slow_time)
+            ],
+        )
+
+        self.play(
+            LaggedStart(
+                *[TransformFromCopy(sample_rects, m) for m in cpi_rects[1:][::-1]]
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        n_tc = Group(
+            *[
+                MathTex(
+                    f"{idx+1 if idx+1 > 1 else ''}T_c",
+                    font_size=DEFAULT_FONT_SIZE * 0.8,
+                ).next_to(cpi_rects[idx], LEFT)
+                for idx in range(n_ts_disp)
+            ],
+            MathTex(r"\cdots")
+            .rotate(PI / 2)
+            .next_to(cpi_rects[len(cpi_rects) // 2 + 1], LEFT),
+            MathTex(f"NT_c", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+                cpi_rects[-1], LEFT
+            ),
+        )
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in n_tc], lag_ratio=0.2))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        fast_time_label = Tex("Fast Time", font_size=DEFAULT_FONT_SIZE * 1.2).to_edge(
+            DOWN
+        )
+        slow_time_label = (
+            Tex("Slow Time", font_size=DEFAULT_FONT_SIZE * 1.2)
+            .rotate(PI / 2)
+            .to_edge(LEFT)
+        )
+
+        self.play(fast_time_label.shift(DOWN * 5).animate.shift(UP * 5))
+
+        self.wait(0.5)
+
+        self.play(slow_time_label.shift(LEFT * 5).animate.shift(RIGHT * 5))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(Indicate(fast_time_label))
+
+        self.wait(0.5)
+
+        self.play(Indicate(slow_time_label))
+
+        self.wait(0.5)
+
+        self.play(Indicate(ts_label))
+
+        self.wait(0.5)
+
+        self.play(Indicate(n_tc[0]))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[ShrinkToCenter(m) for m in [ts_label, *n_ts]], lag_ratio=0.08
+            ),
+            LaggedStart(*[ShrinkToCenter(m) for m in n_tc], lag_ratio=0.08),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        arrows = Group(
+            *[
+                Arrow(m[0].get_left(), m[-1].get_right(), color=BLACK).set_z_index(2)
+                for m in cpi_rects
+            ]
+        )
+
+        self.play(LaggedStart(*[GrowArrow(m) for m in arrows], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(arrows))
+
+        self.wait(0.5)
+
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        fft_len = N * 8
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            # (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+        np.random.seed(1)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+
+        rmax = c * Tc * fs / (2 * bw)
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+
+        plot_shift_x = VT(0)
+        plot_shift_y = VT(0)
+        x_max = VT(40)
+        x_min = VT(0)
+
+        def plot_fft(n):
+            def updater():
+                X_k = fftshift(fft(cpi[n], fft_len))
+                X_k /= N / 2
+                X_k = np.abs(X_k)
+                X_k = 10 * np.log10(X_k)
+                f_X_k_log = interpolate.interp1d(ranges, X_k, fill_value="extrapolate")
+
+                f_ax = Axes(
+                    x_range=[0, 40, 10],
+                    y_range=[-40, 0, 10],
+                    tips=False,
+                    axis_config={"include_numbers": False},
+                    x_length=cpi_rects[0].width,
+                    y_length=cpi_rects[0].height * 3,
+                ).move_to(cpi_rects[n], LEFT)
+
+                cpi_n_fft = (
+                    f_ax.plot(
+                        f_X_k_log, x_range=[~x_min, ~x_max, 1 / 100], color=IF_COLOR
+                    )
+                    .set_z_index(5)
+                    .shift([~plot_shift_x, ~plot_shift_y, 0])
+                )
+                return cpi_n_fft
+
+            return updater
+
+        plots = [always_redraw(plot_fft(n)) for n in range(len(cpi_rects))]
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        LaggedStart(
+                            *[m.animate.set_opacity(0) for m in row], lag_ratio=0.05
+                        ),
+                        Create(plots[n]),
+                    )
+                    for n, row in enumerate(cpi_rects)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        # self.play(
+        #     cpi_rects.animate.arrange(UP, MED_SMALL_BUFF, center=True),
+        #     y_mult @ 4,
+        # )
+
+        target_x_min = targets[0][0] - 3
+        target_x_max = targets[0][0] + 3
+        bot_ax = Axes(
+            x_range=[0, 40, 10],
+            y_range=[-40, 0, 10],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=cpi_rects[0].width,
+            y_length=cpi_rects[0].height * 3,
+        ).move_to(cpi_rects[0], LEFT)
+        line_l = DashedLine(
+            bot_ax.c2p(target_x_min, -40),
+            bot_ax.c2p(target_x_min, 100),
+            dash_length=DEFAULT_DASH_LENGTH * 4,
+        )
+        line_r = DashedLine(
+            bot_ax.c2p(target_x_max, -40),
+            bot_ax.c2p(target_x_max, 100),
+            dash_length=DEFAULT_DASH_LENGTH * 4,
+        )
+        self.play(FadeIn(line_l, shift=RIGHT), FadeIn(line_r, shift=LEFT))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        mid_ax = Axes(
+            x_range=[0, 40, 10],
+            y_range=[-40, 0, 10],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=cpi_rects[0].width,
+            y_length=cpi_rects[0].height * 3,
+        ).move_to(cpi_rects[len(cpi_rects) // 2 + 1], LEFT)
+
+        plots_new = [always_redraw(plot_fft(n)) for n in range(len(cpi_rects))]
+        self.add(*plots_new)
+        self.remove(*[plots[n] for n in range(len(cpi_rects))])
+
+        plot_shift = -mid_ax.c2p(20, -20) + UP
+        self.play(
+            Group(line_l, line_r).animate.shift(plot_shift),
+            plot_shift_x @ plot_shift[0],
+            plot_shift_y @ plot_shift[1],
+            x_min @ target_x_min,
+            x_max @ target_x_max,
+        )
+
+        self.wait(0.5)
+
+        plots_new_2 = Group(*[plot_fft(n)() for n in range(len(cpi_rects))])
+        self.add(plots_new_2)
+        self.remove(*plots_new)
+
+        self.play(
+            FadeOut(line_l, line_r),
+            fast_time_label.animate.shift(DOWN * 5),
+            slow_time_label.animate.shift(LEFT * 5),
+            plots_new_2.animate.arrange(UP, -SMALL_BUFF),
+        )
+        print(cpi_rects[0].width, cpi_rects[0].height * 3)
+
         self.wait(2)
+
+
+class PeakPhase(Scene):
+    def construct(self):
+        n_slow_time = 8
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        fft_len = N * 8
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            # (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+        np.random.seed(1)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+
+        rmax = c * Tc * fs / (2 * bw)
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+
+        target_x_min = targets[0][0] - 3
+        target_x_max = targets[0][0] + 3
+
+        def plot_fft(n):
+            def updater():
+                X_k = fftshift(fft(cpi[n], fft_len))
+                X_k /= N / 2
+                X_k = np.abs(X_k)
+                X_k = 10 * np.log10(X_k)
+                f_X_k_log = interpolate.interp1d(ranges, X_k, fill_value="extrapolate")
+
+                f_ax = Axes(
+                    x_range=[0, 40, 10],
+                    y_range=[-40, 0, 10],
+                    tips=False,
+                    axis_config={"include_numbers": False},
+                    x_length=9.050957575757575,
+                    y_length=1.3589333333333418,
+                )
+
+                cpi_n_fft = f_ax.plot(
+                    f_X_k_log,
+                    x_range=[target_x_min, target_x_max, 1 / 100],
+                    color=IF_COLOR,
+                ).set_z_index(5)
+                return Group(f_ax, cpi_n_fft)
+
+            return updater
+
+        plots = Group(*[plot_fft(n)()[1] for n in range(n_slow_time)])
+
+        self.add(plots.arrange(UP, -SMALL_BUFF).move_to(ORIGIN))
 
 
 class RangeDoppler3D(ThreeDScene):
@@ -2554,7 +3009,7 @@ class RangeDoppler3D(ThreeDScene):
 
         sep = "\n\t"
         print(
-            f"Targets:",
+            "Targets:",
             sep
             + sep.join(
                 [
@@ -2610,3 +3065,29 @@ class RangeDoppler3D(ThreeDScene):
         rdz = range_doppler[r_ind[0] : r_ind[-1], v_ind[0] : v_ind[-1]]
 
         X, Y = np.meshgrid(vx, ry, indexing="xy")
+        tck = bisplrep(X, Y, 10 * np.log10(rdz))
+
+        axes = ThreeDAxes(
+            x_range=[-20, 20, 20],
+            y_range=[0, 40, 20],
+            z_range=[-25, 10, 10],
+            x_length=8,
+        )
+        res = 25
+        surface = Surface(
+            lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
+            u_range=[-20, 20],
+            v_range=[0, 40],
+            resolution=(res, res),
+        ).set_z(0)
+        surface.set_style(fill_opacity=1)
+        surface.set_fill_by_value(
+            axes=axes, colorscale=[(BLUE, -20), (RED, 10)], axis=2
+        )
+        self.add(surface)
+
+        self.set_camera_orientation(theta=-50 * DEGREES, phi=60 * DEGREES, zoom=0.6)
+
+        self.begin_ambient_camera_rotation(0.1)
+
+        self.wait(30)
