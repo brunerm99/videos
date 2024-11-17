@@ -2256,7 +2256,7 @@ class PhaseEquation(Scene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         phase_comp_1 = phase_eqn_delta[0][slice(3, 12)]
@@ -2288,13 +2288,59 @@ class PhaseEquation(Scene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        phase_comp_4_copy = MathTex(
-            r"2 \pi f \Delta \tau",
-            font_size=DEFAULT_FONT_SIZE,
-            color=YELLOW,
-        ).shift(DOWN)
+        # phase_comp_4_copy = MathTex(
+        #     r"2 \pi f \Delta \tau",
+        #     font_size=DEFAULT_FONT_SIZE,
+        #     color=YELLOW,
+        # ).shift(DOWN)
+
+        # self.play(
+        #     Group(
+        #         phase_comp_1_label,
+        #         phase_comp_2_label,
+        #         phase_comp_3_label,
+        #         phase_comp_4_label,
+        #         phase_eqn_delta,
+        #     ).animate.to_edge(UP, LARGE_BUFF),
+        #     TransformFromCopy(phase_comp_4, phase_comp_4_copy[0], path_arc=PI / 2),
+        # )
+        # self.play(phase_comp_4_copy.animate.scale(1.5))
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     phase_comp_4_copy[0][3:5]
+        #     .animate(rate_func=rate_functions.there_and_back)
+        #     .set_color(WHITE)
+        #     .shift(UP / 2)
+        # )
+
+        # self.wait(0.5)
+
+        # phase_comp_4_eq = MathTex(
+        #     r"2 \pi f \Delta \tau \approx 1.29 \text{ radians}",
+        #     font_size=DEFAULT_FONT_SIZE * 1.5,
+        # ).move_to(phase_comp_4_copy)
+        # phase_comp_4_eq[0][0:5].set_color(YELLOW)
+
+        # self.play(
+        #     TransformByGlyphMap(
+        #         phase_comp_4_copy,
+        #         phase_comp_4_eq,
+        #         ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
+        #         (GrowFromCenter, [5], {"delay": 0.2}),
+        #         (
+        #             GrowFromCenter,
+        #             [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+        #             {"delay": 0.4},
+        #         ),
+        #     )
+        # )
+
+        self.wait(0.5)
 
         self.play(
             Group(
@@ -2303,40 +2349,7 @@ class PhaseEquation(Scene):
                 phase_comp_3_label,
                 phase_comp_4_label,
                 phase_eqn_delta,
-            ).animate.to_edge(UP, LARGE_BUFF),
-            TransformFromCopy(phase_comp_4, phase_comp_4_copy[0], path_arc=PI / 2),
-        )
-        self.play(phase_comp_4_copy.animate.scale(1.5))
-
-        self.wait(0.5)
-
-        self.play(
-            phase_comp_4_copy[0][3:5]
-            .animate(rate_func=rate_functions.there_and_back)
-            .set_color(WHITE)
-            .shift(UP / 2)
-        )
-
-        self.wait(0.5)
-
-        phase_comp_4_eq = MathTex(
-            r"2 \pi f \Delta \tau \approx 1.29 \text{ radians}",
-            font_size=DEFAULT_FONT_SIZE * 1.5,
-        ).move_to(phase_comp_4_copy)
-        phase_comp_4_eq[0][0:5].set_color(YELLOW)
-
-        self.play(
-            TransformByGlyphMap(
-                phase_comp_4_copy,
-                phase_comp_4_eq,
-                ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
-                (GrowFromCenter, [5], {"delay": 0.2}),
-                (
-                    GrowFromCenter,
-                    [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-                    {"delay": 0.4},
-                ),
-            )
+            ).animate.to_edge(UP, MED_LARGE_BUFF)
         )
 
         self.wait(0.5)
@@ -2354,18 +2367,120 @@ class PhaseEquation(Scene):
             .next_to(phase_comp_3, DOWN)
             .set_y(phase_comp_2_val.get_y())
         )
+        phase_comp_4_val = (
+            Tex(r"1.3", color=YELLOW)
+            .next_to(phase_comp_4, DOWN)
+            .set_y(phase_comp_2_val.get_y())
+        )
+
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             GrowFromCenter(val)
+        #             for val in [phase_comp_1_val, phase_comp_2_val, phase_comp_3_val]
+        #         ],
+        #         lag_ratio=0.2,
+        #     )
+        # )
+
+        self.play(GrowFromCenter(phase_comp_1_val))
+
+        self.wait(0.5)
+
+        x_len = config.frame_width * 0.25
+        y_len = config.frame_width * 0.25
+        unit_circle_ax = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        unit_circle = Circle(unit_circle_ax.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax.c2p(0, 0)
+        )
+        unit_circle_labels = Group(
+            *[
+                MathTex(s).next_to(unit_circle_ax.c2p(*a), d)
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+        pi_label = MathTex(r"\pi \approx 3.14").next_to(unit_circle_ax.c2p(-1, 0), LEFT)
 
         self.play(
+            Create(unit_circle_ax),
+            Create(unit_circle),
             LaggedStart(
-                *[
-                    GrowFromCenter(val)
-                    for val in [phase_comp_1_val, phase_comp_2_val, phase_comp_3_val]
-                ],
-                lag_ratio=0.2,
-            )
+                *[GrowFromCenter(label) for label in unit_circle_labels],
+                lag_ratio=0.3,
+            ),
         )
 
         self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                unit_circle_labels[2],
+                pi_label,
+                ([0], [0]),
+                (GrowFromCenter, [1], {"delay": 0.2}),
+                (GrowFromCenter, [2, 3, 4, 5], {"delay": 0.4}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        angle_1 = 0.027
+        angle_2 = 9e-10
+        angle_3 = 4.5e-5
+
+        dot_1 = Dot(unit_circle_ax.c2p(np.cos(angle_1), np.sin(angle_1)), color=GREEN)
+        dot_2 = Dot(unit_circle_ax.c2p(np.cos(angle_2), np.sin(angle_2)), color=BLUE)
+        dot_3 = Dot(unit_circle_ax.c2p(np.cos(angle_3), np.sin(angle_3)), color=RED)
+
+        line_1 = Line(unit_circle_ax.c2p(0, 0), dot_1.get_center(), color=GREEN)
+        line_2 = Line(unit_circle_ax.c2p(0, 0), dot_2.get_center(), color=BLUE)
+        line_3 = Line(unit_circle_ax.c2p(0, 0), dot_3.get_center(), color=RED)
+
+        self.play(Create(line_1), Create(dot_1))
+
+        self.wait(0.5)
+
+        self.play(Create(line_2), Create(dot_2), GrowFromCenter(phase_comp_2_val))
+
+        self.wait(0.5)
+
+        self.play(Create(line_3), Create(dot_3), GrowFromCenter(phase_comp_3_val))
+
+        self.wait(0.5)
+
+        angle_4 = VT(0)
+        dot_4 = always_redraw(
+            lambda: Dot(
+                unit_circle_ax.c2p(np.cos(~angle_4), np.sin(~angle_4)), color=YELLOW
+            )
+        )
+        line_4 = always_redraw(
+            lambda: Line(
+                unit_circle_ax.c2p(0, 0),
+                unit_circle_ax.c2p(np.cos(~angle_4), np.sin(~angle_4)),
+                color=YELLOW,
+            )
+        )
+
+        self.play(Create(line_4), Create(dot_4), GrowFromCenter(phase_comp_4_val))
+        self.play(angle_4 @ 1.29)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
 
         phase_eqn_approx = MathTex(
             r"\Delta \phi \approx -2 \pi f \Delta \tau",
@@ -2376,7 +2491,19 @@ class PhaseEquation(Scene):
         self.play(
             LaggedStart(
                 AnimationGroup(
-                    phase_comp_4_eq.animate.shift(DOWN * 8),
+                    # phase_comp_4_eq.animate.shift(DOWN * 8),
+                    Group(
+                        unit_circle_ax,
+                        unit_circle_labels,
+                        line_1,
+                        line_2,
+                        line_3,
+                        dot_1,
+                        dot_2,
+                        dot_3,
+                        pi_label,
+                        unit_circle,
+                    ).animate.shift(DOWN * 8),
                     Group(
                         phase_comp_1_label,
                         phase_comp_2_label,
@@ -2384,7 +2511,12 @@ class PhaseEquation(Scene):
                         phase_comp_4_label,
                     ).animate.shift(UP * 8),
                     FadeOut(
-                        Group(phase_comp_1_val, phase_comp_2_val, phase_comp_3_val)
+                        Group(
+                            phase_comp_1_val,
+                            phase_comp_2_val,
+                            phase_comp_3_val,
+                            phase_comp_4_val,
+                        )
                     ),
                 ),
                 TransformByGlyphMap(
@@ -2401,6 +2533,7 @@ class PhaseEquation(Scene):
             ),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         tex_template = TexTemplate()
