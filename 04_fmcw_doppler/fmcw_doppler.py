@@ -3824,6 +3824,177 @@ class SlowTimeFFT(MovingCameraScene):
         self.wait(2)
 
 
+class Solution(MovingCameraScene):
+    def construct(self):
+        solution_label = Tex("The Solution", font_size=DEFAULT_FONT_SIZE * 1.8).to_edge(
+            UP, LARGE_BUFF
+        )
+
+        N = 20
+        M = 8
+        sample_rects = Group(
+            *[
+                Square(
+                    color=BLACK,
+                    fill_color=BLUE,
+                    fill_opacity=0.7,
+                    stroke_width=DEFAULT_STROKE_WIDTH / 2,
+                )
+                for _ in range(N)
+            ]
+        ).arrange(RIGHT, 0)
+        cpi_rects = (
+            Group(*[sample_rects.copy() for _ in range(M)])
+            .arrange(UP, 0)
+            .scale_to_fit_height(config.frame_height * 0.5)
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        fast_time_label = Tex("Fast Time").next_to(cpi_rects, DOWN)
+        slow_time_label = Tex("Slow Time").rotate(PI / 2).next_to(cpi_rects, LEFT)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(solution_label.shift(UP * 5).animate.shift(DOWN * 5))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(
+                        *[GrowFromCenter(rect) for rect in row],
+                        lag_ratio=0.03,
+                    )
+                    for row in cpi_rects
+                ],
+                fast_time_label.shift(DOWN * 5).animate.shift(UP * 5),
+                slow_time_label.shift(LEFT * 5).animate.shift(RIGHT * 5),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        l_brace = Brace(
+            Group(cpi_rects, slow_time_label, fast_time_label), direction=LEFT
+        )
+        fft_label = Tex("2D FFT").rotate(PI / 2).next_to(l_brace, LEFT)
+        r_brace = Brace(
+            Group(cpi_rects, slow_time_label, fast_time_label), direction=RIGHT
+        )
+        fft_group = Group(fft_label, l_brace, r_brace)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(fft_group.width * 1.2),
+                AnimationGroup(
+                    Group(fft_label, l_brace).shift(LEFT * 8).animate.shift(RIGHT * 8),
+                    r_brace.shift(RIGHT * 8).animate.shift(LEFT * 8),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        row_arrows = Group(
+            *[
+                Arrow(m[0].get_left(), m[-1].get_right(), color=BLACK).set_z_index(2)
+                for m in cpi_rects
+            ]
+        )
+        col_arrows = Group(
+            *[
+                Arrow(m0.get_bottom(), m1.get_top(), color=BLACK).set_z_index(2)
+                for m0, m1 in zip(cpi_rects[0], cpi_rects[-1])
+            ]
+        )
+
+        self.play(
+            LaggedStart(*[GrowArrow(arrow) for arrow in row_arrows], lag_ratio=0.05)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(*[GrowArrow(arrow) for arrow in col_arrows], lag_ratio=0.05)
+        )
+
+        self.wait(0.5)
+
+        range_label = Tex("Range").move_to(fast_time_label)
+        velocity_label = Tex("Velocity").rotate(PI / 2).move_to(slow_time_label)
+
+        self.play(
+            Transform(
+                fast_time_label, fast_time_label.copy().shift(DOWN * 5), path_arc=PI
+            ),
+            ReplacementTransform(
+                range_label.copy().shift(DOWN * 5), range_label, path_arc=PI
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(
+                slow_time_label, slow_time_label.copy().shift(LEFT * 5), path_arc=PI
+            ),
+            ReplacementTransform(
+                velocity_label.copy().shift(LEFT * 5), velocity_label, path_arc=PI
+            ),
+        )
+
+        self.wait(0.5)
+
+        range_doppler_code = Code(
+            code="from numpy.fft import fftshift, fft2\n\n"
+            "range_doppler = 10 * np.log10(fftshift(np.abs(fft2(cpi))))",
+            tab_width=4,
+            background="window",
+            font="FiraCode Nerd Font Mono",
+            language="Python",
+        )
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+        notebook_reminder = Tex(
+            r"fmcw\_range\_doppler.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = Group(notebook_box, notebook_reminder).next_to(
+            range_doppler_code, DOWN
+        )
+
+        code_group = Group(range_doppler_code, notebook).set_z_index(3)
+
+        self.play(
+            code_group.next_to([0, -config.frame_height / 2, 0], DOWN).animate.move_to(
+                ORIGIN
+            ),
+            FadeOut(
+                col_arrows,
+                row_arrows,
+                fft_group,
+                cpi_rects,
+                velocity_label,
+                range_label,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            solution_label.animate.next_to([0, config.frame_height / 2, 0], UP),
+            code_group.animate.next_to([0, -config.frame_height / 2, 0], DOWN),
+        )
+
+        self.wait(2)
+
+
 class RangeDoppler3D(ThreeDScene):
     def construct(self):
         targets = [
