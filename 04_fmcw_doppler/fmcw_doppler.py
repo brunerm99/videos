@@ -2614,6 +2614,10 @@ class FastSlowTime(Scene):
 
         phi_0_1 = -PI / 6
         phi_0_2 = phi_0_1 + PI * 0.6
+        phi_0_3 = phi_0_1 + PI * 0.3
+
+        f_beat_1_2 = 3
+        f_beat_3 = 4.5
 
         x_len = config.frame_width * 0.7
         y_len = config.frame_height * 0.4
@@ -2628,19 +2632,22 @@ class FastSlowTime(Scene):
             y_length=y_len,
         ).next_to([0, -config.frame_height / 2, 0], DOWN)
 
-        target_1_color = PURPLE
-        target_2_color = GREEN
+        target_1_color = GREEN
+        target_2_color = PURPLE
+        target_3_color = GOLD
         targets_color = ORANGE
 
         A_1 = VT(1)
         A_2 = VT(1)
+        A_3 = VT(1)
 
         target_1_plot = always_redraw(
             lambda: amp_ax.plot(
                 lambda t: ~A_1
                 * (
-                    np.sin(2 * PI * 3 * t + phi_0_1)
-                    + (1 - ~A_2) * np.sin(2 * PI * 3 * t + phi_0_2)
+                    np.sin(2 * PI * f_beat_1_2 * t + phi_0_1)
+                    + (1 - ~A_2) * np.sin(2 * PI * f_beat_1_2 * t + phi_0_2)
+                    + (1 - ~A_3) * np.sin(2 * PI * f_beat_3 * t + phi_0_3)
                 ),
                 color=interpolate_color(target_1_color, targets_color, (1 - ~A_2)),
                 x_range=[0, duration, 1 / 1000],
@@ -2649,48 +2656,71 @@ class FastSlowTime(Scene):
 
         target_2_plot = always_redraw(
             lambda: amp_ax.plot(
-                lambda t: ~A_2 * np.sin(2 * PI * 3 * t + phi_0_2),
+                lambda t: ~A_2 * np.sin(2 * PI * f_beat_1_2 * t + phi_0_2),
                 color=target_2_color,
                 x_range=[0, duration, 1 / 1000],
             )
         )
-        plot_group = Group(amp_ax, target_1_plot, target_2_plot)
+        target_3_plot = always_redraw(
+            lambda: amp_ax.plot(
+                lambda t: ~A_3 * np.sin(2 * PI * f_beat_3 * t + phi_0_3),
+                color=target_3_color,
+                x_range=[0, duration, 1 / 1000],
+            )
+        )
+        plot_group = Group(amp_ax, target_1_plot, target_2_plot, target_3_plot)
 
         eqn_1 = MathTex(
             r"\sin{\left(2 \pi f_{beat,1} t + \phi_1\right)}", color=target_1_color
         )
         eqn_2 = MathTex(
-            r"\sin{\left(2 \pi f_{beat,2} t + \phi_2\right)}", color=target_2_color
+            r"\sin{\left(2 \pi f_{beat,1} t + \phi_2\right)}", color=target_2_color
         )
-        eqn_group = Group(eqn_1, eqn_2).arrange(RIGHT, LARGE_BUFF)
+        eqn_3 = MathTex(
+            r"\sin{\left(2 \pi f_{beat,2} t + \phi_3\right)}", color=target_3_color
+        )
+        eqn_group = (
+            Group(eqn_1, eqn_2, eqn_3)
+            .arrange(RIGHT, LARGE_BUFF)
+            .scale_to_fit_width(config.frame_width * 0.9)
+        )
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
-            LaggedStart(GrowFromCenter(eqn_1), GrowFromCenter(eqn_2), lag_ratio=0.3)
+            LaggedStart(
+                GrowFromCenter(eqn_1),
+                GrowFromCenter(eqn_2),
+                GrowFromCenter(eqn_3),
+                lag_ratio=0.3,
+            )
         )
 
         self.wait(0.5)
 
-        self.add(target_1_plot, target_2_plot)
+        self.add(target_1_plot, target_2_plot, target_3_plot)
         self.play(Group(eqn_group, amp_ax).animate.arrange(DOWN, LARGE_BUFF * 2.5))
 
         self.wait(0.5)
 
         plus = MathTex("+").set_y(eqn_1.get_y())
+        plus2 = MathTex("+").set_y(eqn_1.get_y())
         plus_group = (
-            Group(eqn_1.copy(), plus, eqn_2.copy())
+            Group(eqn_1.copy(), plus, eqn_2.copy(), plus2, eqn_3.copy())
             .arrange(RIGHT, SMALL_BUFF)
             .set_y(eqn_1.get_y())
         )
 
         self.play(
-            A_1 @ 0.5,
+            A_1 @ (1 / 3),
             A_2 @ 0,
+            A_3 @ 0,
             GrowFromCenter(plus),
+            GrowFromCenter(plus2),
             eqn_1.animate.move_to(plus_group[0]),
             eqn_2.animate.move_to(plus_group[2]),
+            eqn_3.animate.move_to(plus_group[4]),
             run_time=2,
         )
 
@@ -2751,7 +2781,8 @@ class FastSlowTime(Scene):
                 path_arc=PI / 2,
             ),
             LaggedStart(
-                *[m.animate.shift(UP * 5) for m in [eqn_1, plus, eqn_2]], lag_ratio=0.3
+                *[m.animate.shift(UP * 5) for m in [eqn_1, plus, eqn_2, plus2, eqn_3]],
+                lag_ratio=0.3,
             ),
             LaggedStart(
                 *[
@@ -2772,7 +2803,7 @@ class FastSlowTime(Scene):
                 lag_ratio=0.05,
             ),
         )
-        self.remove(eqn_1, plus, eqn_2)
+        self.remove(eqn_1, plus, eqn_2, plus2, eqn_3)
 
         self.wait(0.5)
 
@@ -2812,7 +2843,7 @@ class FastSlowTime(Scene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         n_tc = Group(
@@ -2908,7 +2939,7 @@ class FastSlowTime(Scene):
         window = signal.windows.blackman(N)
         targets = [
             (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
-            # (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
             (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
         ]
         np.random.seed(1)
@@ -2970,6 +3001,7 @@ class FastSlowTime(Scene):
 
         plots = [always_redraw(plot_fft(n)) for n in range(len(cpi_rects))]
 
+        self.next_section(skip_animations=skip_animations(False))
         self.play(
             LaggedStart(
                 *[
@@ -3050,7 +3082,7 @@ class FastSlowTime(Scene):
             FadeOut(line_l, line_r),
             fast_time_label.animate.shift(DOWN * 5),
             slow_time_label.animate.shift(LEFT * 5),
-            plots_new_2.animate.arrange(UP, -SMALL_BUFF),
+            plots_new_2.animate.arrange(UP, -SMALL_BUFF * 1.5),
         )
         print(cpi_rects[0].width, cpi_rects[0].height * 3)
 
@@ -3072,7 +3104,7 @@ class PeakPhase(MovingCameraScene):
         window = signal.windows.blackman(N)
         targets = [
             (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
-            # (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
             (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
         ]
         np.random.seed(1)
@@ -3130,9 +3162,9 @@ class PeakPhase(MovingCameraScene):
 
         plots = Group(*[plot_fft(n)()[1] for n in range(n_slow_time)])
 
-        self.add(plots.arrange(UP, -SMALL_BUFF).move_to(ORIGIN))
+        self.add(plots.arrange(UP, -SMALL_BUFF * 1.5).move_to(ORIGIN))
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         def create_phase_shifted_beat_eqn(n):
@@ -3396,7 +3428,7 @@ class PeakPhase(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -3445,7 +3477,7 @@ class PeakPhase(MovingCameraScene):
 
         # self.play(phase_delta @ 2.6)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         # Yes, there's probably a much better way of doing this...
@@ -3515,12 +3547,281 @@ class PeakPhase(MovingCameraScene):
         self.wait(2)
 
 
-class SlowTimeFFT(Scene):
+class SlowTimeFFT(MovingCameraScene):
     def construct(self):
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+
+        sep = "\n\t"
+        print(
+            "Targets:",
+            sep
+            + sep.join(
+                [
+                    f"{idx}: distance = {r:.2f} m, velocity = {v:.2f} m/s"
+                    for idx, (r, v) in enumerate(targets, start=1)
+                ]
+            ),
+        )
+
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+        range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+
+        vels = np.linspace(-max_vel, max_vel, M)
+        rmax = c * Tc * fs / (2 * bw)
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        fft_len = N * 8
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+
+        roi = 20
+        roi_idx = np.abs(n_ranges - roi).argmin()
+
         fft_slow_time_label = Tex("Fourier Transform Along Slow-Time Axis").to_edge(
             UP, LARGE_BUFF
         )
+
+        self.next_section(skip_animations=skip_animations(True))
         self.play(FadeIn(fft_slow_time_label))
+
+        self.wait(0.5)
+
+        x_len = config.frame_width * 0.8
+        y_len = config.frame_height * 0.6
+        ax = Axes(
+            x_range=[-max_vel, max_vel, max_vel / 8],
+            y_range=[-6, 10, 4],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, MED_LARGE_BUFF)
+        ax_labels = Group(
+            *[
+                MathTex(label, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+                    ax.c2p(v, 0), DOWN
+                )
+                for label, v in [
+                    (r"-v_{max}", -max_vel),
+                    (r"-\frac{v_{max}}{2}", -max_vel / 2),
+                    (r"\frac{v_{max}}{2}", max_vel / 2),
+                    (r"v_{max}", max_vel),
+                ]
+            ]
+        )
+        ax_labels_num = Group(
+            *[
+                MathTex(label, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+                    ax.c2p(v, 0), DOWN
+                )
+                for label, v in [
+                    (f"{int(-max_vel)}", -max_vel),
+                    (f"{int(-max_vel/2)}", -max_vel / 2),
+                    (f"{int(max_vel/2)}", max_vel / 2),
+                    (f"{int(max_vel)}", max_vel),
+                ]
+            ]
+        )
+
+        f_vel_fft = interpolate.interp1d(
+            vels, 10 * np.log10(range_doppler[roi_idx]), fill_value="extrapolate"
+        )
+        vel_plot = ax.plot(f_vel_fft, x_range=[-20, 20, 1 / 100], color=ORANGE)
+
+        self.play(
+            LaggedStart(
+                Create(ax),
+                LaggedStart(
+                    *[GrowFromCenter(label) for label in ax_labels],
+                    lag_ratio=0.2,
+                ),
+                Create(vel_plot),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    Transform(label, label_num)
+                    for label, label_num in zip(ax_labels, ax_labels_num)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale(1.8).move_to(
+                fft_slow_time_label.get_top() + UP, UP
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        x_len = config.frame_width * 0.25
+        y_len = config.frame_width * 0.25
+        unit_circle_ax_l = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        unit_circle_l = Circle(unit_circle_ax_l.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax_l.c2p(0, 0)
+        )
+        unit_circle_labels_l = Group(
+            *[
+                MathTex(s).next_to(unit_circle_ax_l.c2p(*a), d)
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+
+        unit_circle_ax_r = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        unit_circle_r = Circle(unit_circle_ax_r.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax_r.c2p(0, 0)
+        )
+        unit_circle_labels_r = Group(
+            *[
+                MathTex(s).next_to(unit_circle_ax_r.c2p(*a), d)
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+        unit_circle_l_group = Group(
+            unit_circle_ax_l, unit_circle_l, unit_circle_labels_l
+        ).next_to(self.camera.frame.get_corner(DL), UR, LARGE_BUFF)
+        unit_circle_r_group = Group(
+            unit_circle_ax_r, unit_circle_r, unit_circle_labels_r
+        ).next_to(self.camera.frame.get_corner(DR), UL, LARGE_BUFF)
+
+        vel_1 = targets[0][1] / np.abs(targets[0][1])
+        vel_2 = targets[1][1] / np.abs(targets[0][1])
+
+        angle_1 = VT(0)
+        angle_2 = VT(0)
+
+        dot_1 = always_redraw(
+            lambda: Dot(
+                unit_circle_ax_r.c2p(np.cos(~angle_1), np.sin(~angle_1)), color=YELLOW
+            )
+        )
+        line_1 = always_redraw(
+            lambda: Line(
+                unit_circle_ax_r.c2p(0, 0),
+                unit_circle_ax_r.c2p(np.cos(~angle_1), np.sin(~angle_1)),
+                color=YELLOW,
+            )
+        )
+        dot_2 = always_redraw(
+            lambda: Dot(
+                unit_circle_ax_l.c2p(np.cos(~angle_2), np.sin(~angle_2)), color=YELLOW
+            )
+        )
+        line_2 = always_redraw(
+            lambda: Line(
+                unit_circle_ax_l.c2p(0, 0),
+                unit_circle_ax_l.c2p(np.cos(~angle_2), np.sin(~angle_2)),
+                color=YELLOW,
+            )
+        )
+
+        peak_r = ax.input_to_graph_point(targets[0][1], vel_plot)
+        peak_l = ax.input_to_graph_point(targets[1][1], vel_plot)
+
+        peak_r_bez = CubicBezier(
+            peak_r + [0.5, 0.1, 0],
+            peak_r + [3, 5, 0],
+            unit_circle_r_group.get_top() + [0, 5, 0],
+            unit_circle_r_group.get_top() + [0, 0.1, 0],
+        )
+        peak_l_bez = CubicBezier(
+            peak_l + [-0.1, 0.1, 0],
+            peak_l + [-3, 5, 0],
+            unit_circle_l_group.get_top() + [0, 5, 0],
+            unit_circle_l_group.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            unit_circle_l_group.shift(LEFT * 8).animate.shift(RIGHT * 8),
+            unit_circle_r_group.shift(RIGHT * 8).animate.shift(LEFT * 8),
+            Create(peak_l_bez),
+            Create(peak_r_bez),
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(line_1), Create(dot_1), Create(line_2), Create(dot_2))
+
+        # angle_1.add_updater(phase_updater(vel_1))
+        # angle_2.add_updater(phase_updater(vel_2))
+
+        self.wait(0.5)
+
+        self.play(
+            angle_1 @ (vel_1 * 8 * PI),
+            angle_2 @ (vel_2 * 8 * PI),
+            rate_func=rate_functions.linear,
+            run_time=10,
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
 
 
 class RangeDoppler3D(ThreeDScene):
