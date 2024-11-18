@@ -2714,11 +2714,12 @@ class FastSlowTime(Scene):
 
         self.play(FadeOut(plot_group.set_z_index(-1)))
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         ts_line = Line(
-            sample_rects[7].get_top() + UP / 2,
-            [sample_rects[8].get_top()[0], (sample_rects[7].get_top() + UP / 2)[1], 0],
+            sample_rects[7].get_corner(UL) + UP / 2,
+            sample_rects[7].get_corner(UR) + UP / 2,
         )
         ts_line_l = Line(ts_line.get_left() + DOWN / 8, ts_line.get_left() + UP / 8)
         ts_line_r = Line(ts_line.get_right() + DOWN / 8, ts_line.get_right() + UP / 8)
@@ -3056,7 +3057,7 @@ class FastSlowTime(Scene):
         self.wait(2)
 
 
-class PeakPhase(Scene):
+class PeakPhase(MovingCameraScene):
     def construct(self):
         n_slow_time = 8
         f_beat = compute_f_beat(20)
@@ -3130,6 +3131,396 @@ class PeakPhase(Scene):
         plots = Group(*[plot_fft(n)()[1] for n in range(n_slow_time)])
 
         self.add(plots.arrange(UP, -SMALL_BUFF).move_to(ORIGIN))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        def create_phase_shifted_beat_eqn(n):
+            n_fmt = (
+                r"+ \Delta \phi"
+                if n == 1
+                else r"- \Delta \phi"
+                if n == -1
+                else ""
+                if n == 0
+                else f"+ {n} \\Delta \\phi"
+            )
+            eqn = MathTex(
+                f"\\sin{{\\left( 2 \\pi f_{{beat}} t + \\phi_0 {n_fmt} \\right)}}",
+            ).next_to(plots[n], LEFT, LARGE_BUFF)
+            eqn[0][6:11].set_color(IF_COLOR)
+            return eqn
+
+        beat_signals = Group(
+            *[create_phase_shifted_beat_eqn(n) for n in range(len(plots))]
+        )
+        for beat_signal in beat_signals[1:]:
+            beat_signal.set_x(beat_signals[0].get_x())
+
+        self.play(
+            LaggedStart(
+                beat_signals[0].shift(LEFT * 8).animate.shift(RIGHT * 8),
+                beat_signals[1].shift(LEFT * 8).animate.shift(RIGHT * 8),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    beat_signal.shift(LEFT * 8).animate.shift(RIGHT * 8)
+                    for beat_signal in beat_signals[2:]
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        slow_time_arrow = Arrow(plots[0].get_bottom(), plots[-1].get_top()).shift(
+            RIGHT * 2
+        )
+
+        self.play(GrowArrow(slow_time_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m[0][-3:-1]
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(UP / 3)
+                    .set_color(YELLOW)
+                    for m in beat_signals[1:]
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        ns = [Tex(f"{n}").next_to(plot, RIGHT) for n, plot in enumerate(plots)]
+        for n in ns[1:]:
+            n.set_x(ns[0].get_x())
+
+        self.play(
+            LaggedStart(*[GrowFromCenter(n) for n in ns], lag_ratio=0.2),
+            FadeOut(slow_time_arrow),
+        )
+
+        self.wait(0.5)
+
+        phase_eqn = MathTex(r"\phi_n = \phi_0 + n \Delta \phi").to_edge(
+            RIGHT, LARGE_BUFF
+        )
+
+        self.play(phase_eqn.shift(RIGHT * 5).animate.shift(LEFT * 5))
+
+        self.wait(0.5)
+
+        self.play(
+            phase_eqn[0][-2:]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        phase_eqn_zero = MathTex(r"\phi_n = n \Delta \phi").move_to(phase_eqn)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_eqn,
+                phase_eqn_zero,
+                ([0, 1, 2], [0, 1, 2]),
+                ([3, 4, 5], ShrinkToCenter),
+                ([6, 7, 8], [3, 4, 5]),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        x_len = config.frame_width * 0.25
+        y_len = config.frame_width * 0.25
+        unit_circle_ax = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        unit_circle_labels = Group(
+            *[
+                MathTex(s).next_to(unit_circle_ax.c2p(*a), d)
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+        unit_circle = Circle(unit_circle_ax.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax.c2p(0, 0)
+        )
+        unit_circle_group = Group(
+            unit_circle_ax, unit_circle_labels, unit_circle
+        ).to_edge(RIGHT, MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                phase_eqn_zero.animate.next_to(unit_circle_group, UP, MED_SMALL_BUFF),
+                unit_circle_group.shift(RIGHT * 5).animate.shift(LEFT * 5),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        n_counter = VT(0)
+        phase_delta = VT(1.3)
+        phase = VT(~n_counter * ~phase_delta)
+
+        phase_dot = always_redraw(
+            lambda: Dot(
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)), color=YELLOW
+            )
+        )
+        phase_line = always_redraw(
+            lambda: Line(
+                unit_circle_ax.c2p(0, 0),
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)),
+                color=YELLOW,
+            )
+        )
+
+        n_label = MathTex(r"\leftarrow n").next_to(ns[0], RIGHT, SMALL_BUFF)
+
+        self.play(Create(phase_line), Create(phase_dot), FadeIn(n_label, shift=LEFT))
+
+        self.wait(0.5)
+
+        for n in range(1, len(ns)):
+            self.play(
+                n_counter + 1,
+                phase @ (n * ~phase_delta),
+                n_label.animate.next_to(ns[n], RIGHT, SMALL_BUFF),
+            )
+            self.wait(0.5)
+
+        self.wait(0.5)
+
+        n = 0
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.shift(
+                RIGHT
+                * (
+                    unit_circle_group.get_left()
+                    - (self.camera.frame.get_left() + LARGE_BUFF)
+                )
+            ),
+            n_label.animate.set_opacity(0),
+            n_counter @ 0,
+            phase @ (n * ~phase_delta),
+            # n_label.animate.next_to(ns[n], RIGHT, SMALL_BUFF),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        sine_ax = Axes(
+            x_range=[0, 4 * PI, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=config.frame_width * 0.7,
+            y_length=unit_circle.height,
+        ).next_to(unit_circle, RIGHT, 0)
+        sine_plot = always_redraw(
+            lambda: sine_ax.plot(
+                lambda t: np.sin(t), x_range=[0, ~phase, 1 / 100], color=YELLOW
+            )
+        )
+
+        sine_line = always_redraw(
+            lambda: DashedLine(
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)),
+                sine_ax.input_to_graph_point(~phase, sine_plot),
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+            )
+        )
+
+        self.add(sine_plot)
+        self.play(Create(sine_line))
+
+        for n in range(1, len(ns)):
+            self.play(phase @ (n * ~phase_delta))
+            self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        phase_delta_eq = MathTex(f"\\Delta \\phi = {~phase_delta:.1f}").next_to(
+            self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF
+        )
+
+        phase_delta_delta_tau_eq = MathTex(
+            f"\\Delta \\phi \\approx -2 \\pi f \\Delta \\tau = {~phase_delta:.1f}"
+        ).move_to(phase_delta_eq)
+
+        phase_delta_vel_eq = MathTex(
+            f"\\Delta \\phi \\approx -2 \\pi f \\frac{{2 v T_c}}{{c}} = {~phase_delta:.1f}"
+        ).move_to(phase_delta_eq)
+        phase_delta_vel_eq_2_6 = MathTex(
+            f"\\Delta \\phi \\approx -2 \\pi f \\frac{{2 v T_c}}{{c}} = 2.6"
+        ).move_to(phase_delta_vel_eq, LEFT)
+
+        self.play(FadeIn(phase_delta_eq, shift=UP * 3))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_delta_eq,
+                phase_delta_delta_tau_eq,
+                ([0, 1], [0, 1]),
+                ([2, 3, 4, 5], [9, 10, 11, 12]),
+                (GrowFromCenter, [2, 3, 4, 5, 6, 7, 8], {"delay": 0.4}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_delta_delta_tau_eq,
+                phase_delta_vel_eq,
+                ([0, 1, 2, 3, 4, 5, 6], [0, 1, 2, 3, 4, 5, 6]),
+                ([7, 8], ShrinkToCenter),
+                (GrowFromCenter, [7, 8, 9, 10, 11, 12], {"delay": 0.4}),
+                ([9, 10, 11, 12], [13, 14, 15, 16]),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            phase_delta_vel_eq[0][8]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+
+        # self.wait(0.5)
+
+        # self.remove(phase_delta_vel_eq)
+        # self.add(phase_delta_vel_eq_updating)
+        # # phase_delta_vel_eq.become(phase_delta_vel_eq_updating)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                phase_delta_vel_eq[0][-3:].animate.shift(DOWN * 4),
+                phase_delta_vel_eq_2_6[0][-3:].shift(DOWN * 4).animate.shift(UP * 4),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(phase @ 0, run_time=3)
+
+        phase_delta @= 2.6
+
+        # self.wait(0.5)
+
+        # self.play(phase_delta @ 2.6)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        # Yes, there's probably a much better way of doing this...
+        sine_ax_2 = Axes(
+            x_range=[0, 8 * PI, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=config.frame_width * 0.7,
+            y_length=unit_circle.height,
+        ).next_to(unit_circle, RIGHT, 0)
+        sine_plot_2 = always_redraw(
+            lambda: sine_ax_2.plot(
+                lambda t: np.sin(t), x_range=[0, ~phase, 1 / 100], color=YELLOW
+            )
+        )
+        self.add(sine_plot_2)
+        self.remove(sine_plot)
+
+        sine_line_2 = always_redraw(
+            lambda: DashedLine(
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)),
+                sine_ax_2.input_to_graph_point(~phase, sine_plot_2),
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+            )
+        )
+
+        self.add(sine_line_2)
+        self.remove(sine_line)
+
+        for n in range(1, len(ns)):
+            self.play(phase @ (n * ~phase_delta))
+            self.wait(0.5)
+
+        self.wait(0.5)
+
+        self.remove(*ns)
+        self.play(
+            self.camera.frame.animate.restore(),
+            Uncreate(sine_plot_2),
+            FadeOut(sine_line_2, phase_delta_vel_eq, phase_delta_vel_eq_2_6),
+        )
+
+        self.wait(0.5)
+
+        slow_time_arrow = Arrow(plots[0].get_bottom(), plots[-1].get_top()).shift(RIGHT)
+        fft_label = (
+            Tex("Fourier Transform")
+            .rotate(PI / 2)
+            .next_to(slow_time_arrow, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(slow_time_arrow),
+                FadeIn(fft_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.next_to(self.camera.frame.get_bottom(), DOWN)
+        )
+
+        self.wait(2)
+
+
+class SlowTimeFFT(Scene):
+    def construct(self):
+        fft_slow_time_label = Tex("Fourier Transform Along Slow-Time Axis").to_edge(
+            UP, LARGE_BUFF
+        )
+        self.play(FadeIn(fft_slow_time_label))
 
 
 class RangeDoppler3D(ThreeDScene):
