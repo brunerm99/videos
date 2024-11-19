@@ -24,7 +24,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -3245,7 +3245,7 @@ class PeakPhase(MovingCameraScene):
 
         self.wait(0.5)
 
-        phase_eqn = MathTex(r"\phi_n = \phi_0 + n \Delta \phi").to_edge(
+        phase_eqn = MathTex(r"\phi_n = \phi_0 + m \Delta \phi").to_edge(
             RIGHT, LARGE_BUFF
         )
 
@@ -3262,7 +3262,7 @@ class PeakPhase(MovingCameraScene):
 
         self.wait(0.5)
 
-        phase_eqn_zero = MathTex(r"\phi_n = n \Delta \phi").move_to(phase_eqn)
+        phase_eqn_zero = MathTex(r"\phi_n = m \Delta \phi").move_to(phase_eqn)
 
         self.play(
             TransformByGlyphMap(
@@ -3332,7 +3332,7 @@ class PeakPhase(MovingCameraScene):
             )
         )
 
-        n_label = MathTex(r"\leftarrow n").next_to(ns[0], RIGHT, SMALL_BUFF)
+        n_label = MathTex(r"\leftarrow m").next_to(ns[0], RIGHT, SMALL_BUFF)
 
         self.play(Create(phase_line), Create(phase_dot), FadeIn(n_label, shift=LEFT))
 
@@ -3995,6 +3995,786 @@ class Solution(MovingCameraScene):
         self.wait(2)
 
 
+class RangeDoppler(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        ic = ImageMobject("../props/static/microcontroller.png").scale_to_fit_width(
+            config.frame_height * 0.4
+        )
+        ic_label = Tex("AWR1642").next_to(ic, UL, LARGE_BUFF).shift(LEFT)
+        ic_label_l1 = Line(
+            ic_label.get_corner(DR) + [1, -0.1, 0],
+            ic_label.get_corner(DL) + [-0.1, -0.1, 0],
+        )
+        ic_label_l2 = Line(
+            ic.get_center() + [-0.3, 0.5, 0],
+            ic_label.get_corner(DR) + [1, -0.1, 0],
+        )
+        ic_label_dot = Dot(ic.get_center() + [-0.3, 0.5, 0])
+
+        f_label = Tex(r"$f_c = 77$ GHz").next_to(ic, DR, LARGE_BUFF).shift(LEFT)
+        f_label_l1 = Line(
+            f_label.get_corner(DL) + [-0.3, -0.1, 0],
+            f_label.get_corner(DR) + [0.1, -0.1, 0],
+        )
+        f_label_dot = Dot(ic.get_center() + [0.3, -0.5, 0])
+        f_label_l2 = Line(
+            f_label_dot.get_center(),
+            f_label_l1.get_start(),
+        )
+
+        bw_label = Tex(r"BW = 1.6 GHz").next_to(ic, UR, LARGE_BUFF).shift(LEFT)
+        bw_label_l1 = Line(
+            bw_label.get_corner(DL) + [-0.3, -0.1, 0],
+            bw_label.get_corner(DR) + [0.1, -0.1, 0],
+        )
+        bw_label_dot = Dot(ic.get_center() + [0.3, 0.5, 0])
+        bw_label_l2 = Line(
+            bw_label_dot.get_center(),
+            bw_label_l1.get_start(),
+        )
+
+        chirp_time_label = (
+            Tex(r"$T_c = 40 \mu$s").next_to(ic, DL, LARGE_BUFF).shift(LEFT)
+        )
+        chirp_time_label_l1 = Line(
+            chirp_time_label.get_corner(DR) + [0.3, -0.1, 0],
+            chirp_time_label.get_corner(DL) + [-0.1, -0.1, 0],
+        )
+        chirp_time_label_dot = Dot(ic.get_center() + [-0.3, -0.3, 0])
+        chirp_time_label_l2 = Line(
+            chirp_time_label_dot.get_center(),
+            chirp_time_label_l1.get_start(),
+        )
+
+        self.play(ic.shift(DOWN * 8).animate.shift(UP * 8))
+        self.play(
+            LaggedStart(
+                Create(ic_label_dot),
+                Create(ic_label_l2),
+                AnimationGroup(Create(ic_label_l1), FadeIn(ic_label)),
+                lag_ratio=0.5,
+            ),
+            LaggedStart(
+                Create(f_label_dot),
+                Create(f_label_l2),
+                AnimationGroup(Create(f_label_l1), FadeIn(f_label)),
+                lag_ratio=0.5,
+            ),
+            LaggedStart(
+                Create(bw_label_dot),
+                Create(bw_label_l2),
+                AnimationGroup(Create(bw_label_l1), FadeIn(bw_label)),
+                lag_ratio=0.5,
+            ),
+            LaggedStart(
+                Create(chirp_time_label_dot),
+                Create(chirp_time_label_l2),
+                AnimationGroup(Create(chirp_time_label_l1), FadeIn(chirp_time_label)),
+                lag_ratio=0.5,
+            ),
+        )
+
+        self.wait(0.5)
+
+        duration = 1
+        fs = 5000
+        step = 1 / fs
+
+        sawtooth_f = VT(1)
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.4
+        f_ax = Axes(
+            x_range=[0, duration, duration / 4],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax_labels = f_ax.get_axis_labels(MathTex("t"), MathTex("f"))
+        f_ax_labels[1].shift(LEFT / 2)
+
+        sawtooth_f_graph = always_redraw(
+            lambda: f_ax.plot(
+                lambda t: (signal.sawtooth(2 * PI * ~sawtooth_f * t) + 1) / 2,
+                x_range=[0, 1, step],
+                use_smoothing=False,
+                color=TX_COLOR,
+            )
+        )
+        f_plot_group = VGroup(f_ax, f_ax_labels).to_edge(DOWN, LARGE_BUFF)
+
+        chirp_time_line = Line(f_ax.c2p(0, 1.2), f_ax.c2p(1, 1.2))
+        chirp_time_line_r = Line(
+            chirp_time_line.get_end() + DOWN / 8, chirp_time_line.get_end() + UP / 8
+        )
+        chirp_time_line_l = Line(
+            chirp_time_line.get_start() + DOWN / 8, chirp_time_line.get_start() + UP / 8
+        )
+
+        bw_line = Line(f_ax.c2p(1.05, 0), f_ax.c2p(1.05, 1))
+        bw_line_r = Line(bw_line.get_end() + LEFT / 8, bw_line.get_end() + RIGHT / 8)
+        bw_line_l = Line(
+            bw_line.get_start() + LEFT / 8,
+            bw_line.get_start() + RIGHT / 8,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(ic_label_dot),
+                    Uncreate(ic_label_l1),
+                    Uncreate(ic_label_l2),
+                    FadeOut(ic_label),
+                    Uncreate(f_label_dot),
+                    Uncreate(f_label_l1),
+                    Uncreate(f_label_l2),
+                    Uncreate(chirp_time_label_dot),
+                    Uncreate(chirp_time_label_l1),
+                    Uncreate(chirp_time_label_l2),
+                    Uncreate(bw_label_dot),
+                    Uncreate(bw_label_l1),
+                    Uncreate(bw_label_l2),
+                    FadeOut(bw_label[0][2:], f_label[0][2:], chirp_time_label[0][2:]),
+                ),
+                AnimationGroup(
+                    chirp_time_label[0][:2].animate.next_to(chirp_time_line, UP),
+                    f_label[0][:2].animate.next_to(f_ax.c2p(0, 0.5), LEFT),
+                    bw_label[0][:2].animate.next_to(bw_line, RIGHT),
+                    ic.set_z_index(-1).animate.scale(0.5).to_corner(UL),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.add(sawtooth_f_graph)
+        f_plot_group.save_state()
+        self.play(
+            f_plot_group.next_to(
+                [0, -config.frame_height / 2, 0], DOWN
+            ).animate.restore()
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(chirp_time_line_l),
+                Create(chirp_time_line),
+                Create(chirp_time_line_r),
+                lag_ratio=0.2,
+            ),
+            LaggedStart(
+                Create(bw_line_l),
+                Create(bw_line),
+                Create(bw_line_r),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        M_disp = 8
+
+        chirp_time_line_new = Line(f_ax.c2p(0, 1.2), f_ax.c2p(1 / M_disp, 1.2))
+        chirp_time_line_r_new = Line(
+            chirp_time_line_new.get_end() + DOWN / 8,
+            chirp_time_line_new.get_end() + UP / 8,
+        )
+
+        M_label = always_redraw(
+            lambda: Tex(f"$M = $ {int(~sawtooth_f)}").to_edge(UP, LARGE_BUFF)
+        )
+
+        self.play(FadeIn(M_label, shift=DOWN * 2))
+
+        self.wait(0.5)
+
+        self.play(
+            sawtooth_f @ M_disp,
+            Transform(chirp_time_line, chirp_time_line_new),
+            Transform(chirp_time_line_r, chirp_time_line_r_new),
+            chirp_time_label[0][:2].animate.next_to(chirp_time_line_new, UP),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        v_res_eqn = MathTex(r"\Delta v = \frac{\lambda}{2 M T_c}").next_to(
+            M_label, DOWN
+        )
+
+        self.play(v_res_eqn.shift(RIGHT * 8).animate.shift(LEFT * 8))
+
+        self.wait(0.5)
+
+        M_disp = 40
+
+        chirp_time_line_new_2 = Line(f_ax.c2p(0, 1.2), f_ax.c2p(1 / M_disp, 1.2))
+        chirp_time_line_r_new_2 = Line(
+            chirp_time_line_new_2.get_end() + DOWN / 8,
+            chirp_time_line_new_2.get_end() + UP / 8,
+        )
+
+        self.play(
+            sawtooth_f @ M_disp,
+            Transform(chirp_time_line, chirp_time_line_new_2),
+            Transform(chirp_time_line_r, chirp_time_line_r_new_2),
+            chirp_time_label[0][:2].animate.next_to(chirp_time_line_new_2, UP),
+            run_time=3,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        v_res_eqn_eq = MathTex(
+            r"\Delta v = \frac{\lambda}{2 M T_c} \approx 1.2 \text{ m/s}"
+        ).move_to(v_res_eqn)
+
+        self.play(
+            TransformByGlyphMap(
+                v_res_eqn,
+                v_res_eqn_eq,
+                ([0, 1, 2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3, 4, 5, 6, 7, 8]),
+                (GrowFromCenter, [9, 10, 11, 12, 13, 14, 15]),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        chirp_time_line_new_3 = Line(f_ax.c2p(0, 1.2), f_ax.c2p(1, 1.2))
+        chirp_time_line_r_new_3 = Line(
+            chirp_time_line_new_3.get_end() + DOWN / 8,
+            chirp_time_line_new_3.get_end() + UP / 8,
+        )
+        # chirp_time_label_no_val = MathTex(r"T_c").move_to(chirp_time_label[0][:2])
+        cpi_label = Tex("CPI | $M T_c$").next_to(chirp_time_line_new_3, UP)
+
+        M_label_static = Tex(f"$M = $ {int(~sawtooth_f)}").move_to(M_label)
+
+        self.add(M_label_static)
+        self.remove(M_label)
+
+        self.play(
+            sawtooth_f @ M_disp,
+            Transform(chirp_time_line, chirp_time_line_new_3),
+            Transform(chirp_time_line_r, chirp_time_line_r_new_3),
+            LaggedStart(
+                ReplacementTransform(
+                    chirp_time_label[0][:2], cpi_label[0][-2:], path_arc=-PI / 6
+                ),
+                FadeIn(cpi_label[0][:3], shift=DOWN),
+                FadeIn(cpi_label[0][3], shift=DOWN),
+                FadeIn(cpi_label[0][4], shift=DOWN),
+                lag_ratio=0.3,
+            ),
+            Group(M_label_static, v_res_eqn_eq)
+            .animate.arrange(RIGHT, LARGE_BUFF)
+            .to_edge(UP, MED_LARGE_BUFF),
+        )
+
+        self.wait(0.5)
+
+        v_max_label = MathTex(
+            r"v_{max} = \frac{\lambda}{4 T_c} \approx 24.3 \text{ m/s}"
+        ).next_to([config.frame_width / 2, M_label_static.get_y(), 0], RIGHT)
+
+        self.play(
+            Group(M_label_static, v_res_eqn_eq, v_max_label)
+            .animate.arrange(RIGHT, MED_LARGE_BUFF)
+            .set_y(M_label_static.get_y()),
+            ic.animate.shift(LEFT * 3),
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate.shift(UP * 2)
+                    for m in [M_label_static, v_max_label, v_res_eqn_eq]
+                ],
+                lag_ratio=0.2,
+            ),
+            Group(
+                f_plot_group,
+                chirp_time_line,
+                chirp_time_line_l,
+                chirp_time_line_r,
+                bw_line,
+                bw_line_l,
+                bw_line_r,
+                cpi_label,
+                f_label[0][:2],
+                bw_label[0][:2],
+            ).animate.shift(DOWN * 8),
+        )
+
+        self.wait(2)
+
+
+class RangeDopplerReal(Scene):
+    def construct(self):
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                # * window
+                for m in range(M)
+            ]
+        )
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.2
+
+        self.next_section(skip_animations=skip_animations(True))
+        # self.add(ax, cpi_n_plot)
+
+        target_1_color = GREEN
+        target_2_color = PURPLE
+        target_3_color = GOLD
+
+        target_1_label_group = Group(
+            Tex("Target 1:", font_size=DEFAULT_FONT_SIZE * 1.5, color=target_1_color),
+            MathTex(r"R &= 20 \text{ m} \\ v &= 10 \text{ m/s}", color=target_1_color),
+        ).arrange(DOWN, aligned_edge=LEFT)
+        target_2_label_group = Group(
+            Tex("Target 2:", font_size=DEFAULT_FONT_SIZE * 1.5, color=target_2_color),
+            MathTex(r"R &= 20 \text{ m} \\ v &= -10 \text{ m/s}", color=target_2_color),
+        ).arrange(DOWN, aligned_edge=LEFT)
+        target_3_label_group = Group(
+            Tex("Target 3:", font_size=DEFAULT_FONT_SIZE * 1.5, color=target_3_color),
+            MathTex(r"R &= 5 \text{ m} \\ v &= 5 \text{ m/s}", color=target_3_color),
+        ).arrange(DOWN, aligned_edge=LEFT)
+
+        target_labels = Group(
+            target_1_label_group, target_2_label_group, target_3_label_group
+        ).arrange(RIGHT, LARGE_BUFF)
+
+        self.play(GrowFromCenter(target_1_label_group))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(target_2_label_group))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(target_3_label_group))
+
+        self.wait(0.5)
+
+        same_range_targets = SurroundingRectangle(
+            Group(target_1_label_group, target_2_label_group)
+        )
+
+        self.play(Create(same_range_targets))
+
+        self.wait(0.5)
+
+        self.play(Uncreate(same_range_targets))
+
+        self.wait(0.5)
+
+        self.play(target_labels.animate.shift(UP * 8))
+        self.remove(target_labels)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        M_disp = 6
+
+        time_series_x0 = [VT(0) for _ in range(M_disp)]
+        time_series_x1 = [VT(max_time) for _ in range(M_disp)]
+        fft_x0 = [VT(0) for _ in range(M_disp)]
+        fft_x1 = [VT(0) for _ in range(M_disp)]
+
+        def create_cpi_n_plot(n, x0, x1):
+            ax = Axes(
+                x_range=[0, max_time, max_time / 4],
+                y_range=[-3, 3, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=x_len,
+                y_length=y_len,
+            ).set_opacity(0)
+            f_cpi_n = interpolate.interp1d(t, cpi[n], fill_value="extrapolate")
+
+            def updater():
+                cpi_n_plot = ax.plot(
+                    f_cpi_n,
+                    x_range=[~x0, ~x1, 10 / fs],
+                    color=IF_COLOR,
+                )
+                return cpi_n_plot
+
+            return ax, updater
+
+        cpi_plot_groups = [
+            create_cpi_n_plot(n, x0, x1)
+            for n, (x0, x1) in enumerate(zip(time_series_x0, time_series_x1))
+        ]
+
+        cpi_axes = Group(*[cpi_n_plot[0] for cpi_n_plot in cpi_plot_groups])
+        cpi_plots = Group(
+            *[always_redraw(cpi_n_plot[1]) for cpi_n_plot in cpi_plot_groups]
+        )
+
+        self.play(*[Create(cpi_plot) for cpi_plot in cpi_plots])
+        self.play(cpi_axes.animate.arrange(UP, -MED_LARGE_BUFF))
+
+        self.wait(0.5)
+
+        x_len_uc = config.frame_width * 0.1
+        y_len_uc = config.frame_width * 0.1
+        unit_circle_ax_top = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len_uc,
+            y_length=y_len_uc,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        unit_circle_top = Circle(unit_circle_ax_top.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax_top.c2p(0, 0)
+        )
+        unit_circle_labels_top = Group(
+            *[
+                MathTex(s, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+                    unit_circle_ax_top.c2p(*a), d, SMALL_BUFF
+                )
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+
+        unit_circle_ax_mid = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len_uc,
+            y_length=y_len_uc,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        unit_circle_mid = Circle(unit_circle_ax_mid.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax_mid.c2p(0, 0)
+        )
+        unit_circle_labels_mid = Group(
+            *[
+                MathTex(s, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+                    unit_circle_ax_mid.c2p(*a), d, SMALL_BUFF
+                )
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+        unit_circle_ax_bot = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len_uc,
+            y_length=y_len_uc,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        unit_circle_bot = Circle(unit_circle_ax_bot.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax_bot.c2p(0, 0)
+        )
+        unit_circle_labels_bot = Group(
+            *[
+                MathTex(s, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+                    unit_circle_ax_bot.c2p(*a), d, SMALL_BUFF
+                )
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+        unit_circle_top_group = Group(
+            unit_circle_ax_top, unit_circle_top, unit_circle_labels_top
+        )
+        unit_circle_mid_group = Group(
+            unit_circle_ax_mid, unit_circle_mid, unit_circle_labels_mid
+        )
+        unit_circle_bot_group = Group(
+            unit_circle_ax_bot, unit_circle_bot, unit_circle_labels_bot
+        )
+        unit_circle_group = (
+            Group(unit_circle_top_group, unit_circle_mid_group, unit_circle_bot_group)
+            .arrange(DOWN, SMALL_BUFF)
+            .to_edge(LEFT)
+        )
+        unit_circle_mid_group.shift(RIGHT)
+
+        phase = VT(0)
+
+        phase_dot_top = always_redraw(
+            lambda: Dot(
+                unit_circle_ax_top.c2p(np.cos(~phase * 2), np.sin(~phase * 2)),
+                color=target_1_color,
+            ).set_z_index(1)
+        )
+        phase_line_top = always_redraw(
+            lambda: Line(
+                unit_circle_ax_top.c2p(0, 0),
+                unit_circle_ax_top.c2p(np.cos(~phase * 2), np.sin(~phase * 2)),
+                color=target_1_color,
+            ).set_z_index(1)
+        )
+        phase_dot_mid = always_redraw(
+            lambda: Dot(
+                unit_circle_ax_mid.c2p(np.cos(~phase * -1), np.sin(~phase * -1)),
+                color=target_2_color,
+            ).set_z_index(1)
+        )
+        phase_line_mid = always_redraw(
+            lambda: Line(
+                unit_circle_ax_mid.c2p(0, 0),
+                unit_circle_ax_mid.c2p(np.cos(~phase * -1), np.sin(~phase * -1)),
+                color=target_2_color,
+            ).set_z_index(1)
+        )
+        phase_dot_bot = always_redraw(
+            lambda: Dot(
+                unit_circle_ax_bot.c2p(np.cos(~phase * -1), np.sin(~phase * -1)),
+                color=target_3_color,
+            ).set_z_index(1)
+        )
+        phase_line_bot = always_redraw(
+            lambda: Line(
+                unit_circle_ax_bot.c2p(0, 0),
+                unit_circle_ax_bot.c2p(np.cos(~phase * -1), np.sin(~phase * -1)),
+                color=target_3_color,
+            ).set_z_index(1)
+        )
+
+        self.add(
+            phase_line_top,
+            phase_dot_top,
+            phase_line_mid,
+            phase_dot_mid,
+            phase_line_bot,
+            phase_dot_bot,
+            unit_circle_group.shift(LEFT * 5),
+        )
+
+        self.play(
+            unit_circle_group.animate.shift(RIGHT * 5),
+            cpi_axes.animate.shift(RIGHT * 2),
+        )
+        self.play(phase @ (4 * PI), run_time=4, rate_func=rate_functions.linear)
+
+        self.wait(0.5)
+
+        self.play(
+            unit_circle_group.animate.shift(LEFT * 5),
+            cpi_axes.animate.shift(LEFT * 2),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        cpi_windowed = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+
+        fft_len = N * 8
+        cpi_range_ffts = fft(cpi_windowed, n=fft_len, axis=1)
+        freq = np.linspace(-fs / 2, fs / 2, fft_len)
+        rmax = c * Tc * fs / (2 * bw)
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+
+        def create_cpi_fft_n_plot(n, x0, x1):
+            ax = Axes(
+                x_range=[0, 40, 40 / 4],
+                y_range=[-40, 0, 10],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=x_len,
+                y_length=y_len,
+            ).set_opacity(0)
+            X_k = fftshift(cpi_range_ffts[n])
+            X_k /= N / 2
+            X_k = np.abs(X_k)
+            X_k = 10 * np.log10(X_k)
+            f_cpi_fft_n = interpolate.interp1d(ranges, X_k, fill_value="extrapolate")
+
+            def updater():
+                cpi_n_plot = ax.plot(
+                    f_cpi_fft_n, x_range=[~x0, ~x1, 1 / 100], color=IF_COLOR
+                )
+                return cpi_n_plot
+
+            return ax, updater
+
+        cpi_fft_plot_groups = [
+            create_cpi_fft_n_plot(n, x0, x1)
+            for n, (x0, x1) in enumerate(zip(fft_x0, fft_x1))
+        ]
+
+        cpi_fft_axes = (
+            Group(*[cpi_fft_n_plot[0] for cpi_fft_n_plot in cpi_fft_plot_groups])
+            .arrange(UP, -MED_LARGE_BUFF * 1.2)
+            .move_to(cpi_axes)
+        )
+        cpi_fft_plots = Group(
+            *[
+                always_redraw(cpi_fft_n_plot[1])
+                for cpi_fft_n_plot in cpi_fft_plot_groups
+            ]
+        )
+
+        self.add(cpi_fft_plots)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(time_series_x0_temp @ max_time, fft_x1_temp @ 40)
+                    for time_series_x0_temp, fft_x1_temp in zip(time_series_x0, fft_x1)
+                ],
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        range_doppler = 10 * np.log10(fftshift(np.abs(fft2(cpi_windowed.T))) / (N / 2))
+
+        range_doppler_image = (
+            ImageMobject(range_doppler)
+            .scale_to_fit_height(cpi_fft_axes.height)
+            .stretch_to_fit_width(cpi_fft_axes.width)
+        )
+
+        # self.play()
+        self.add(range_doppler_image)
+
+        self.wait(2)
+
+
+class ImageTest(Scene):
+    def construct(self):
+        # import matplotlib.pyplot as plt
+
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+        max_time = 20 / 5337025
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+        range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+
+        rmax = c * Tc * fs / (2 * bw)
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        fft_len = N * 8
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+        extent = [-max_vel, max_vel, ranges.min(), ranges.max()]
+
+        img = (
+            ImageMobject(10 * np.log10(range_doppler))
+            .scale_to_fit_height(config.frame_height * 0.8)
+            .stretch_to_fit_width(config.frame_height * 0.8)
+        )
+        self.add(img)
+
+        # fig, ax = plt.subplots(figsize=(8, 8))
+        # range_doppler_plot = ax.imshow(
+        #     10 * np.log10(range_doppler),
+        #     aspect="auto",
+        #     extent=extent,
+        #     origin="lower",
+        #     # cmap=get_cmap(cmap_name),
+        #     vmax=0,
+        #     vmin=-10,
+        # )
+        # ax.set_ylim([0, 40])
+        # ax.set_title("Range Doppler Spectrum", fontsize=24)
+        # ax.set_xlabel("Velocity (m/s)", fontsize=22)
+        # ax.set_ylabel("Range (m)", fontsize=22)
+        # # ax.set_ylabel("Frequency (MHz)", fontsize=22)
+        # fig.colorbar(range_doppler_plot)
+        # plt.show()
+
+
 class RangeDoppler3D(ThreeDScene):
     def construct(self):
         targets = [
@@ -4070,20 +4850,34 @@ class RangeDoppler3D(ThreeDScene):
             x_length=8,
         )
         res = 25
-        surface = Surface(
-            lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
-            u_range=[-20, 20],
-            v_range=[0, 40],
-            resolution=(res, res),
-        ).set_z(0)
-        surface.set_style(fill_opacity=1)
-        surface.set_fill_by_value(
-            axes=axes, colorscale=[(BLUE, -20), (RED, 10)], axis=2
+        u_min = VT(20)
+        surface = always_redraw(
+            lambda: Surface(
+                lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
+                u_range=[~u_min, 20],
+                v_range=[0, 40],
+                resolution=(res, res),
+            )
+            .set_z(0)
+            .set_style(fill_opacity=1)
+            .set_fill_by_value(axes=axes, colorscale=[(BLUE, -20), (RED, 10)], axis=2)
         )
-        self.add(surface)
+        # self.add(surface)
 
-        self.set_camera_orientation(theta=-50 * DEGREES, phi=60 * DEGREES, zoom=0.6)
+        self.set_camera_orientation(theta=0 * DEGREES, phi=0 * DEGREES, zoom=0.6)
+
+        self.play(FadeIn(surface))
+
+        self.wait(0.5)
+
+        self.play(u_min @ -20, run_time=4)
+
+        self.wait(0.5)
+
+        self.move_camera(theta=-50 * DEGREES, phi=60 * DEGREES, zoom=0.6)
+
+        self.wait(0.5)
 
         self.begin_ambient_camera_rotation(0.1)
 
-        self.wait(30)
+        self.wait(20)
