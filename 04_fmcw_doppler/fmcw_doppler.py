@@ -24,7 +24,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -4316,7 +4316,7 @@ class RangeDoppler(Scene):
         self.wait(2)
 
 
-class RangeDopplerReal(Scene):
+class RangeDopplerReal(MovingCameraScene):
     def construct(self):
         targets = [
             (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
@@ -4609,7 +4609,7 @@ class RangeDopplerReal(Scene):
             cpi_axes.animate.shift(LEFT * 2),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         cpi_windowed = np.array(
@@ -4690,18 +4690,132 @@ class RangeDopplerReal(Scene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        range_doppler = 10 * np.log10(fftshift(np.abs(fft2(cpi_windowed.T))) / (N / 2))
+        img = (
+            ImageMobject("./static/fmcw_doppler.png")
+            .rotate(-PI / 2)
+            .scale_to_fit_height(cpi_fft_plots.height)
+            .stretch_to_fit_width(cpi_fft_plots.width)
+            .move_to(cpi_fft_plots)
+        )
+        box = (
+            Rectangle(
+                stroke_color=BACKGROUND_COLOR,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .stretch_to_fit_width(img.width)
+            .stretch_to_fit_height(img.height)
+            .move_to(img)
+        )
+        self.add(img.set_z_index(-3), box.set_z_index(-2))
 
-        range_doppler_image = (
-            ImageMobject(range_doppler)
-            .scale_to_fit_height(cpi_fft_axes.height)
-            .stretch_to_fit_width(cpi_fft_axes.width)
+        self.play(
+            box.animate.next_to([0, config.frame_height / 2, 0], UP),
+            LaggedStart(
+                *[FadeOut(fft_plot) for fft_plot in cpi_fft_plots], lag_ratio=0.2
+            ),
+            run_time=2,
         )
 
-        # self.play()
-        self.add(range_doppler_image)
+        self.wait(0.5)
+
+        self.remove(
+            unit_circle_group,
+            phase_line_top,
+            phase_dot_top,
+            phase_line_mid,
+            phase_dot_mid,
+            phase_line_bot,
+            phase_dot_bot,
+        )
+
+        xnl = NumberLine(
+            x_range=[0, 40, 5], length=img.width, include_numbers=True
+        ).next_to(img, DOWN)
+        ynl = (
+            NumberLine(
+                x_range=[-max_vel, max_vel, 10],
+                length=img.height,
+                include_numbers=True,
+            )
+            .rotate(PI / 2)
+            .next_to(img, LEFT)
+        )
+
+        range_tracker = VT(0)
+        vel_tracker = VT(-max_vel)
+        x_line = always_redraw(
+            lambda: Line(
+                xnl.n2p(~range_tracker),
+                [xnl.n2p(~range_tracker)[0], img.get_top()[1], 0],
+                color=RED,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+        )
+        y_line = always_redraw(
+            lambda: Line(
+                ynl.n2p(~vel_tracker),
+                [img.get_right()[0], ynl.n2p(~vel_tracker)[1], 0],
+                color=RED,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+        )
+        x_dot = always_redraw(
+            lambda: Dot(
+                xnl.n2p(~range_tracker), color=RED, radius=DEFAULT_DOT_RADIUS * 2
+            )
+        )
+        y_dot = always_redraw(
+            lambda: Dot(ynl.n2p(~vel_tracker), color=RED, radius=DEFAULT_DOT_RADIUS * 2)
+        )
+        z_dot = always_redraw(
+            lambda: Dot(
+                [xnl.n2p(~range_tracker)[0], ynl.n2p(~vel_tracker)[1], 0],
+                color=RED,
+                radius=DEFAULT_DOT_RADIUS * 2,
+            )
+        )
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(img, xnl, ynl).height * 1.3
+            ),
+            Create(xnl),
+            Create(ynl),
+            Create(y_line),
+            Create(x_line),
+            Create(x_dot),
+            Create(y_dot),
+            Create(z_dot),
+        )
+
+        self.wait(0.5)
+
+        self.play(range_tracker @ targets[0][0], vel_tracker @ targets[0][1])
+
+        self.wait(0.5)
+
+        self.play(range_tracker @ targets[1][0], vel_tracker @ targets[1][1])
+
+        self.wait(0.5)
+
+        self.play(range_tracker @ targets[2][0], vel_tracker @ targets[2][1])
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(img),
+            Uncreate(xnl),
+            Uncreate(ynl),
+            Uncreate(y_line),
+            Uncreate(x_line),
+            Uncreate(x_dot),
+            Uncreate(y_dot),
+            Uncreate(z_dot),
+        )
 
         self.wait(2)
 
@@ -4750,11 +4864,37 @@ class ImageTest(Scene):
         extent = [-max_vel, max_vel, ranges.min(), ranges.max()]
 
         img = (
-            ImageMobject(10 * np.log10(range_doppler))
-            .scale_to_fit_height(config.frame_height * 0.8)
-            .stretch_to_fit_width(config.frame_height * 0.8)
+            ImageMobject("./static/fmcw_doppler.png")
+            # .rotate(-PI / 2)
+            # .flip(UP)
+            # .scale_to_fit_height(config.frame_height * 0.8)
+            # .stretch_to_fit_width(config.frame_width * 0.7)
+            .set_z_index(-3)
         )
-        self.add(img)
+        box = (
+            Rectangle(
+                stroke_color=BACKGROUND_COLOR,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .stretch_to_fit_width(img.width)
+            .stretch_to_fit_height(img.height)
+            .move_to(img)
+        )
+
+        # img.flip(UP)
+
+        self.add(
+            img.set_z_index(-3),
+            # box.set_z_index(-2),
+        )
+
+        self.play(img.animate.rotate(-PI / 2))
+        self.play(img.animate.flip())
+
+        # self.play(box.animate.next_to([0, config.frame_height / 2, 0], UP), run_time=2)
+
+        self.wait(2)
 
         # fig, ax = plt.subplots(figsize=(8, 8))
         # range_doppler_plot = ax.imshow(
