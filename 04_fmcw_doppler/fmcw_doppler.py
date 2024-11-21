@@ -18,7 +18,7 @@ sys.path.insert(0, "..")
 
 from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR, IF_COLOR
 from props.helpers import get_plot_values
-from props import WeatherRadarTower, get_blocks
+from props import WeatherRadarTower, get_blocks, FMCWRadarCartoon
 
 config.background_color = BACKGROUND_COLOR
 
@@ -902,10 +902,11 @@ class TriangularIntro(MovingCameraScene):
         self.wait(2)
 
 
+# TODO: Not done
 class TriangularNotSufficient(Scene):
     def construct(self):
-        radar = WeatherRadarTower()
-        radar.vgroup.scale(0.7)
+        radar = FMCWRadarCartoon()
+        radar.vgroup.scale(0.6)
         gas_station = (
             SVGMobject("../props/static/Icon 10.svg")
             .set_color(WHITE)
@@ -927,37 +928,125 @@ class TriangularNotSufficient(Scene):
         self.wait(0.5)
 
         self.play(
-            radar.vgroup.animate.to_corner(DL, MED_LARGE_BUFF),
+            radar.vgroup.animate.to_edge(LEFT, MED_LARGE_BUFF).shift(DOWN),
             GrowFromCenter(gas_station),
             GrowFromCenter(car),
         )
 
         self.wait(0.5)
 
-        beam_pencil = Line(
-            radar.radome.get_right() + [0.1, 0, 0],
+        beam_pencil_1 = Line(
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
             car.get_left() + [-0.1, 0, 0],
             color=TX_COLOR,
         )
+        beam_pencil_2 = beam_pencil_1.copy()
         beam_u = Line(
-            radar.radome.get_right() + [0.1, 0, 0],
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
             gas_station.get_corner(UL) + [-0.1, 0, 0],
             color=TX_COLOR,
         )
         beam_l = Line(
-            radar.radome.get_right() + [0.1, 0, 0],
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
             car.get_corner(DL) + [-0.1, 0, 0],
             color=TX_COLOR,
         )
 
-        self.play(Create(beam_pencil))
+        self.play(Create(beam_pencil_1))
 
         self.wait(0.5)
 
+        beam_pencil_1.save_state()
+        beam_pencil_2.save_state()
         self.play(
-            TransformFromCopy(beam_pencil, beam_l),
-            ReplacementTransform(beam_pencil, beam_u),
+            Transform(beam_pencil_1, beam_l),
+            Transform(beam_pencil_2, beam_u),
         )
+
+        self.wait(0.5)
+
+        unknown = Tex("Unknown:", color=RED)
+        f_unknown_1 = MathTex(r"f_{d,1},\ f_{beat,1}", color=RED).next_to(
+            unknown, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        f_unknown_2 = MathTex(r"f_{d,2},\ f_{beat,2}", color=RED).next_to(
+            f_unknown_1, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        f_unknown_3 = MathTex(r"f_{d,3},\ f_{beat,3}", color=RED).next_to(
+            f_unknown_2, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        f_unknown_4 = MathTex(r"f_{d,4},\ f_{beat,4}", color=RED).next_to(
+            f_unknown_3, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        unknown_group = Group(
+            unknown, f_unknown_1, f_unknown_2, f_unknown_3, f_unknown_4
+        )
+
+        known = Tex("Known:", color=GREEN)
+        f_known_1 = MathTex(r"f_{up,1},\ f_{down,1}", color=GREEN).next_to(
+            known, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        known_group = Group(known, f_known_1)
+
+        labels = (
+            Group(unknown_group, known_group)
+            .arrange(RIGHT, LARGE_BUFF * 1.5, aligned_edge=UP)
+            .to_edge(UP, MED_LARGE_BUFF)
+        )
+
+        self.play(beam_pencil_1.animate.restore(), beam_pencil_2.animate.restore())
+        self.play(
+            Group(
+                beam_pencil_1, beam_pencil_2, radar.vgroup, car, gas_station
+            ).animate.to_edge(DOWN),
+            unknown.shift(LEFT * 8).animate.shift(RIGHT * 8),
+        )
+
+        self.wait(0.5)
+
+        self.play(f_unknown_1.shift(LEFT * 8).animate.shift(RIGHT * 8))
+
+        self.wait(0.5)
+
+        self.play(known.shift(RIGHT * 8).animate.shift(LEFT * 8))
+
+        self.wait(0.5)
+
+        self.play(f_known_1.shift(RIGHT * 8).animate.shift(LEFT * 8))
+
+        self.wait(0.5)
+
+        beam_u = Line(
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
+            gas_station.get_corner(UL) + [-0.1, 0, 0],
+            color=TX_COLOR,
+        )
+        beam_l = Line(
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
+            car.get_corner(DL) + [-0.1, 0, 0],
+            color=TX_COLOR,
+        )
+
+        self.play(
+            Transform(beam_pencil_1, beam_l),
+            Transform(beam_pencil_2, beam_u),
+            f_unknown_2.shift(LEFT * 8).animate.shift(RIGHT * 8),
+        )
+
+        self.wait(0.5)
+
+        person = SVGMobject(
+            "../props/static/person.svg", fill_color=WHITE, stroke_color=WHITE
+        ).next_to(car, LEFT)
+
+        self.play(
+            person.shift(DOWN * 4).animate.shift(UP * 4),
+            f_unknown_3.shift(LEFT * 8).animate.shift(RIGHT * 8),
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
@@ -1802,8 +1891,133 @@ class Phase(MovingCameraScene):
         self.wait(2)
 
 
+# TODO: Not done
 class StationaryTarget(Scene):
-    def construct(self): ...
+    def construct(self):
+        radar = FMCWRadarCartoon()
+        radar.vgroup.scale(0.6).to_edge(LEFT).shift(DOWN * 1.5)
+        car = (
+            SVGMobject("../props/static/car.svg")
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(DOWN)
+            .set_fill(WHITE)
+            .scale(0.8)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                radar.vgroup.shift(LEFT * 5).animate.shift(RIGHT * 5),
+                car.shift(RIGHT * 5).animate.shift(LEFT * 5),
+                lag_ratio=0.2,
+            )
+        )
+        beam_u = Line(
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
+            car.get_corner(UL) + [-0.1, 0, 0],
+            color=TX_COLOR,
+        )
+        beam_l = Line(
+            radar.antenna_tx.get_right() + [0.1, 0, 0],
+            car.get_corner(DL) + [-0.1, 0, 0],
+            color=TX_COLOR,
+        )
+        return_arrow = Arrow(
+            car.get_left(), radar.antenna_rx.get_right(), color=RX_COLOR
+        )
+
+        beat_sig_1 = MathTex(r"\sin{\left( 2 \pi f_{beat} t + \phi_1 \right)}")
+        beat_sig_1[0][6:11].set_color(IF_COLOR)
+        beat_sig_2 = MathTex(r"\sin{\left( 2 \pi f_{beat} t + \phi_2 \right)}")
+        beat_sig_2[0][6:11].set_color(IF_COLOR)
+        dots = Tex(". . .")
+
+        sigs = (
+            Group(beat_sig_1, dots, beat_sig_2)
+            .arrange(RIGHT, LARGE_BUFF)
+            .to_edge(UP, LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(beam_l), Create(beam_u)),
+                GrowArrow(return_arrow),
+                beat_sig_1.shift(UP * 5).animate.shift(DOWN * 5),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(return_arrow))
+
+        self.wait(0.5)
+
+        for dot in dots[0]:
+            self.add(dot)
+            self.wait(0.3)
+
+        tc = MathTex(r"T_c").next_to(dots, UP)
+
+        self.play(FadeIn(tc))
+
+        self.wait(0.5)
+
+        return_arrow = Arrow(
+            car.get_left(), radar.antenna_rx.get_right(), color=RX_COLOR
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(return_arrow),
+                beat_sig_2.shift(UP * 5).animate.shift(DOWN * 5),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(return_arrow))
+
+        self.wait(0.5)
+
+        phase_equal = MathTex(
+            r"\phi_1 = \phi_2", font_size=DEFAULT_FONT_SIZE * 2
+        ).next_to(sigs, DOWN, LARGE_BUFF)
+        phase_nequal = MathTex(
+            r"\phi_1 \ne \phi_2", font_size=DEFAULT_FONT_SIZE * 2
+        ).move_to(phase_equal)
+
+        self.play(
+            ReplacementTransform(
+                beat_sig_1[0][13:15].copy(), phase_equal[0][0:2], path_arc=PI / 3
+            ),
+            ReplacementTransform(
+                beat_sig_2[0][13:15].copy(), phase_equal[0][3:], path_arc=-PI / 3
+            ),
+            GrowFromCenter(phase_equal[0][2]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_equal,
+                phase_nequal,
+                ([0, 1], [0, 1]),
+                ([2], [3]),
+                (GrowFromCenter, [2]),
+                ([3, 4], [4, 5]),
+            ),
+            car.animate.shift(RIGHT * 5),
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
 
 
 class RealSystem(Scene):
