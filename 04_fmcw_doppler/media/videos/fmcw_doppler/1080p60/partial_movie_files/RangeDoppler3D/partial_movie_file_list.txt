@@ -6,3 +6,5 @@ file 'file:/home/marchall/documents/tech-videos/04_fmcw_doppler/media/videos/fmc
 file 'file:/home/marchall/documents/tech-videos/04_fmcw_doppler/media/videos/fmcw_doppler/1080p60/partial_movie_files/RangeDoppler3D/uncached_00004.mp4'
 file 'file:/home/marchall/documents/tech-videos/04_fmcw_doppler/media/videos/fmcw_doppler/1080p60/partial_movie_files/RangeDoppler3D/uncached_00005.mp4'
 file 'file:/home/marchall/documents/tech-videos/04_fmcw_doppler/media/videos/fmcw_doppler/1080p60/partial_movie_files/RangeDoppler3D/uncached_00006.mp4'
+file 'file:/home/marchall/documents/tech-videos/04_fmcw_doppler/media/videos/fmcw_doppler/1080p60/partial_movie_files/RangeDoppler3D/uncached_00007.mp4'
+file 'file:/home/marchall/documents/tech-videos/04_fmcw_doppler/media/videos/fmcw_doppler/1080p60/partial_movie_files/RangeDoppler3D/uncached_00008.mp4'
