@@ -38,6 +38,484 @@ def get_transform_func(from_var, func=TransformFromCopy):
     return transform_func
 
 
+class Intro(Scene):
+    def construct(self):
+        fmcw_radar = FMCWRadarCartoon()
+        fmcw_radar.vgroup.scale(0.7)
+        pulsed_radar = WeatherRadarTower()
+        pulsed_radar.vgroup.scale_to_fit_height(fmcw_radar.vgroup.height).next_to(
+            config.frame_width / 2, RIGHT
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(fmcw_radar.vgroup.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        duration = 1
+        fs = 1000
+        step = 1 / fs
+        x_len = config.frame_width * 0.4
+        y_len = config.frame_height * 0.35
+        fmcw_ax = Axes(
+            x_range=[0, duration, duration / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax_labels = fmcw_ax.get_axis_labels(MathTex("t"), MathTex("f"))
+
+        sawtooth_x1 = VT(0)
+        # sawtooth_f_graph = always_redraw(
+        #     lambda: fmcw_ax.plot(
+        #         lambda t: (signal.sawtooth(2 * PI * 2 * t) + 1) / 2,
+        #         x_range=[0, ~sawtooth_x1, step],
+        #         use_smoothing=False,
+        #         color=TX_COLOR,
+        #     )
+        # )
+        f_plot_group = (
+            VGroup(fmcw_ax, f_ax_labels)
+            .next_to([0, config.frame_height / 2, 0], UP)
+            .shift(RIGHT * 3)
+        )
+
+        """ Sawtooth """
+        carrier_freq = 10
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+        sawtooth_modulating_signal = (
+            lambda t: sawtooth_modulation_index
+            * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+            + sawtooth_carrier_freq
+        )
+        sawtooth_modulating_cumsum = (
+            lambda t: carrier_freq
+            + np.sum(sawtooth_modulating_signal(np.arange(0, t, 1 / fs))) / fs
+        )
+
+        sawtooth_amp_graph = always_redraw(
+            lambda: fmcw_ax.plot(
+                lambda t: np.sin(2 * PI * sawtooth_modulating_cumsum(t)),
+                x_range=[0, ~sawtooth_x1, step],
+                use_smoothing=False,
+                color=TX_COLOR,
+            )
+        )
+        self.add(sawtooth_amp_graph)
+
+        self.play(
+            LaggedStart(
+                Group(fmcw_radar.vgroup, f_plot_group).animate.arrange(
+                    RIGHT, LARGE_BUFF
+                ),
+                sawtooth_x1 @ (1 - step),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        pulsed_ax = Axes(
+            x_range=[-0.1, duration, duration / 4],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        pulsed_ax_labels = pulsed_ax.get_axis_labels(MathTex("t"), MathTex("f"))
+
+        f = 18
+        pulsed_x1 = VT(0)
+        pulsed_plot = always_redraw(
+            lambda: pulsed_ax.plot(
+                lambda t: (
+                    ((np.sin(2 * PI * f * t) + 1) / 2)
+                    * ((signal.square(2 * PI * 2 * t, duty=0.3) + 1) / 2)
+                ),
+                x_range=[0, ~pulsed_x1, step],
+                color=TX_COLOR,
+                use_smoothing=False,
+            )
+        )
+        self.add(pulsed_plot)
+
+        pulsed_plot_group = VGroup(pulsed_ax, pulsed_ax_labels).next_to(
+            [config.frame_width / 2, 0, 0], RIGHT
+        )
+
+        self.play(
+            LaggedStart(
+                Group(fmcw_radar.vgroup, f_plot_group)
+                .animate.arrange(DOWN)
+                .to_edge(LEFT, MED_SMALL_BUFF),
+                Group(pulsed_radar.vgroup, pulsed_plot_group)
+                .animate.arrange(DOWN)
+                .to_edge(RIGHT, MED_SMALL_BUFF),
+                pulsed_x1 @ (1 - step),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            f_plot_group.animate.shift(DOWN * 5),
+            pulsed_plot_group.animate.shift(DOWN * 5),
+            fmcw_radar.vgroup.animate.shift(UP * 5),
+            pulsed_radar.vgroup.animate.shift(UP * 5),
+        )
+
+        self.wait(2)
+
+
+class Refresher(Scene):
+    def construct(self):
+        part_1_thumbnail = ImageMobject(
+            "../01_fmcw/media/images/fmcw/thumbnails/comparison.png"
+        ).scale(0.4)
+        part_1_thumbnail_box = SurroundingRectangle(part_1_thumbnail, buff=0)
+        part_1_label = Tex("Intro to FMCW Radar").next_to(
+            part_1_thumbnail, direction=UP, buff=SMALL_BUFF
+        )
+        part_2_thumbnail = ImageMobject(
+            "../02_fmcw_implementation/media/images/fmcw_implementation/Thumbnail_Option_2.png"
+        ).scale(0.4)
+        part_2_thumbnail_box = SurroundingRectangle(part_2_thumbnail, buff=0)
+        part_2_label = Tex("Implementation").next_to(
+            part_2_thumbnail, direction=UP, buff=SMALL_BUFF
+        )
+        part_1 = Group(part_1_thumbnail_box, part_1_thumbnail, part_1_label)
+        part_2 = Group(part_2_thumbnail_box, part_2_thumbnail, part_2_label)
+        parts = Group(part_1, part_2).arrange(RIGHT, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(GrowFromCenter(part_1), GrowFromCenter(part_2), lag_ratio=0.3)
+        )
+
+        self.wait(0.5)
+
+        self.play(parts.animate.scale(0.8).to_edge(UP))
+
+        self.wait(0.5)
+
+        part_1_topics = BulletedList(
+            r"$R = \frac{c T_{c} f_{beat}}{2 B}$",
+            r"$f_{beat} = \lvert f_{TX} - f_{RX} \rvert$",
+            "Frequency modulation",
+        ).next_to(part_1, DOWN)
+        part_2_topics = BulletedList("Fourier Transform", "etc.").next_to(part_2, DOWN)
+
+        self.play(
+            LaggedStart(
+                *[FadeIn(m) for m in [*part_1_topics, *part_2_topics]], lag_ratio=0.2
+            )
+        )
+
+        self.wait(0.5)
+
+        objs = self.mobjects
+        shuffle(objs)
+        self.play(LaggedStart(*[FadeOut(m) for m in objs], lag_ratio=0.1))
+
+        self.wait(2)
+
+
+# TODO: Render
+class DopplerIntro(Scene):
+    def construct(self):
+        car = (
+            SVGMobject("../props/static/car.svg")
+            .to_edge(LEFT)
+            .set_fill(WHITE)
+            .scale(0.8)
+        )
+        car2 = SVGMobject("../props/static/car.svg").set_fill(WHITE).scale(0.8)
+        car3 = SVGMobject("../props/static/car.svg").set_fill(WHITE).scale(0.8)
+        car_targets = (
+            Group(car2, car3).arrange(DOWN, LARGE_BUFF).to_edge(RIGHT, LARGE_BUFF * 2)
+        )
+        car2.flip().shift(LEFT)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(car.shift(LEFT * 5).animate.shift(RIGHT * 5))
+
+        self.wait(0.5)
+
+        self.play(
+            car2.shift(RIGHT * 5).animate.shift(LEFT * 5),
+            car3.shift(LEFT * 10).animate.shift(RIGHT * 10),
+        )
+
+        self.wait(0.5)
+
+        beam_u = always_redraw(
+            lambda: Line(
+                car.get_right() + [0.1, 0, 0], car2.get_corner(UL), color=TX_COLOR
+            )
+        )
+        beam_l = always_redraw(
+            lambda: Line(
+                car.get_right() + [0.1, 0, 0], car3.get_corner(DL), color=TX_COLOR
+            )
+        )
+        car2_return = always_redraw(
+            lambda: Arrow(car2.get_left(), car.get_right(), color=RX_COLOR)
+        )
+        car3_return = always_redraw(
+            lambda: Arrow(car3.get_left(), car.get_right(), color=RX_COLOR)
+        )
+
+        self.play(Create(beam_u), Create(beam_l))
+        self.play(Create(car2_return), Create(car3_return))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(car2.animate.shift(LEFT), car3.animate.shift(RIGHT))
+        self.play(car2.animate.shift(RIGHT), car3.animate.shift(LEFT * 2))
+
+        self.wait(0.5)
+
+        f_d = MathTex(r"f_d").to_edge(UP, LARGE_BUFF)
+        f_d_eq = MathTex(r"f_d = \frac{2 v}{\lambda}").move_to(f_d)
+
+        self.play(
+            Group(car, car2, car3).animate.to_edge(DOWN, MED_LARGE_BUFF),
+            f_d.shift(UP * 4).animate.shift(DOWN * 4),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                f_d,
+                f_d_eq,
+                ([0, 1], [0, 1]),
+                (GrowFromCenter, [2], {"delay": 0.2}),
+                (GrowFromCenter, [3, 4], {"delay": 0.4}),
+                (Create, [5], {"delay": 0.6}),
+                (GrowFromCenter, [6], {"delay": 0.8}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        train = (
+            ImageMobject("../props/static/train_2.png")
+            .set_color(WHITE)
+            .scale_to_fit_height(config.frame_height)
+        )
+        train_box = (
+            SurroundingRectangle(
+                train,
+                color=BACKGROUND_COLOR,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .stretch_to_fit_width(config.frame_width * 1.2)
+            .move_to(train, RIGHT)
+        )
+        train_group = Group(train_box.set_z_index(2), train.set_z_index(3)).next_to(
+            [-config.frame_width / 2, 0, 0], LEFT
+        )
+
+        objs = self.mobjects
+        self.play(
+            LaggedStart(
+                train_group.animate(
+                    run_time=2, rate_func=rate_functions.linear
+                ).next_to([config.frame_width / 2, 0, 0], RIGHT),
+                FadeOut(*objs, run_time=0.1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(2)
+
+
+class RangeDopplerAmbiguity(MovingCameraScene):
+    def construct(self):
+        carrier_freq = 10
+        duration = 1
+        fs = 1000
+        step = 1 / fs
+        final_beat_time_shift = 0.2
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.4
+
+        f_ax = Axes(
+            x_range=[-0.1, duration + final_beat_time_shift, duration / 4],
+            y_range=[-2, 30, 5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax_labels = f_ax.get_axis_labels(MathTex("t"), MathTex("f"))
+        plot_group = Group(f_ax, f_ax_labels).next_to(
+            [0, config.frame_height / 2, 0], UP
+        )
+
+        sawtooth_carrier_freq = 14
+        sawtooth_modulation_index = 12
+        sawtooth_modulating_signal_f = 2
+
+        beat_time_shift = VT(0)  # s
+        doppler_f_shift = VT(0)  # Hz
+        x0 = VT(0.0)
+        x1 = VT(0.0)
+
+        tx_graph = always_redraw(
+            lambda: f_ax.plot(
+                lambda t: sawtooth_modulation_index
+                * signal.sawtooth(2 * PI * sawtooth_modulating_signal_f * t)
+                + sawtooth_carrier_freq,
+                x_range=[0, duration, step],
+                use_smoothing=False,
+                color=TX_COLOR,
+            )
+        )
+        rx_graph = always_redraw(
+            lambda: f_ax.plot(
+                lambda t: sawtooth_modulation_index
+                * signal.sawtooth(
+                    2 * PI * sawtooth_modulating_signal_f * (t - ~beat_time_shift)
+                )
+                + sawtooth_carrier_freq
+                + ~doppler_f_shift,
+                x_range=[~x0 + ~beat_time_shift, ~x1 + ~beat_time_shift, step],
+                use_smoothing=False,
+                color=RX_COLOR,
+            )
+        )
+
+        self.add(tx_graph, rx_graph)
+
+        self.play(plot_group.animate.move_to(ORIGIN))
+
+        self.wait(0.5)
+
+        self.play(x1 @ duration)
+
+        self.wait(0.5)
+
+        self.play(beat_time_shift @ final_beat_time_shift)
+
+        self.wait(0.5)
+
+        self.play(doppler_f_shift - 5)
+
+        self.wait(0.5)
+
+        self.play(doppler_f_shift + 10)
+
+        self.wait(0.5)
+
+        dot_x = VT(final_beat_time_shift)
+        f_dot = always_redraw(
+            lambda: Dot().move_to(f_ax.input_to_graph_point(~dot_x, rx_graph))
+        )
+
+        self.play(Create(f_dot))
+        self.play(dot_x @ (duration / 2 + 0.1))
+
+        self.wait(0.5)
+
+        f_func = MathTex("f(R)").next_to(f_dot, UP, LARGE_BUFF * 1.5).shift(RIGHT)
+        f_func_w_vel = MathTex("f(R, v)").move_to(f_func)
+
+        dot_to_func = CubicBezier(
+            f_dot.get_center() + [0, 0.1, 0],
+            f_dot.get_center() + [0, 1, 0],
+            f_func.get_bottom() + [0, -1, 0],
+            f_func.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(LaggedStart(Create(dot_to_func), FadeIn(f_func), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                f_func,
+                f_func_w_vel,
+                ([0, 1, 2], [0, 1, 2]),
+                ([3], [5]),
+                (GrowFromCenter, [3], {"delay": 0.3}),
+                ([], [4], {"delay": 0.3, "shift": DOWN}),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                f_func_w_vel.width * 4
+            ).move_to(f_func_w_vel),
+            FadeOut(f_ax, f_ax_labels, rx_graph, tx_graph, f_dot),
+            Uncreate(dot_to_func),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            f_func_w_vel[0][2]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 2)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            f_func_w_vel[0][4]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 2)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+        notebook_reminder = Tex(
+            r"fmcw\_range\_doppler.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder,
+            color=RED,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            stroke_width=DEFAULT_STROKE_WIDTH / 4,
+        )
+        notebook = (
+            Group(notebook_box, notebook_reminder)
+            .scale_to_fit_width(self.camera.frame.width * 0.8)
+            .next_to(self.camera.frame.get_bottom(), DOWN)
+        )
+
+        self.play(
+            Group(f_func_w_vel, notebook)
+            .animate.arrange(DOWN, LARGE_BUFF)
+            .move_to(self.camera.frame)
+        )
+
+        self.wait(0.5)
+
+        self.play(notebook.animate.shift(DOWN * 5), f_func_w_vel.animate.shift(UP * 5))
+
+        self.wait(2)
+
+
 # TODO: Re-render
 class TriangularIntro(MovingCameraScene):
     def construct(self):
@@ -3459,7 +3937,7 @@ class PeakPhase(MovingCameraScene):
 
         self.wait(0.5)
 
-        phase_eqn = MathTex(r"\phi_n = \phi_0 + m \Delta \phi").to_edge(
+        phase_eqn = MathTex(r"\phi_m = \phi_0 + m \Delta \phi").to_edge(
             RIGHT, LARGE_BUFF
         )
 
@@ -3476,7 +3954,7 @@ class PeakPhase(MovingCameraScene):
 
         self.wait(0.5)
 
-        phase_eqn_zero = MathTex(r"\phi_n = m \Delta \phi").move_to(phase_eqn)
+        phase_eqn_zero = MathTex(r"\phi_m = m \Delta \phi").move_to(phase_eqn)
 
         self.play(
             TransformByGlyphMap(
@@ -4073,16 +4551,56 @@ class Solution(MovingCameraScene):
 
         self.play(
             LaggedStart(
+                *[GrowFromCenter(rect) for rect in cpi_rects[0]],
+                lag_ratio=0.03,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
                 *[
                     LaggedStart(
                         *[GrowFromCenter(rect) for rect in row],
                         lag_ratio=0.03,
                     )
-                    for row in cpi_rects
+                    for row in cpi_rects[1:]
                 ],
                 fast_time_label.shift(DOWN * 5).animate.shift(UP * 5),
                 slow_time_label.shift(LEFT * 5).animate.shift(RIGHT * 5),
                 lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        cpi_full_label = Tex("Coherent Processing Interval").next_to(cpi_rects, UP)
+        cpi_label = Tex("CPI").move_to(cpi_full_label)
+
+        self.play(FadeIn(cpi_full_label))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                cpi_full_label,
+                cpi_label,
+                ([0], [0], {"delay": 0.3}),
+                ([8], [1], {"delay": 0.3}),
+                ([18], [2], {"delay": 0.3}),
+                (
+                    [9, 10, 11, 12, 13, 14, 15, 16, 17],
+                    ShrinkToCenter,
+                ),
+                (
+                    [1, 2, 3, 4, 5, 6, 7],
+                    ShrinkToCenter,
+                ),
+                (
+                    [19, 20, 21, 22, 23, 24, 25],
+                    ShrinkToCenter,
+                ),
             )
         )
 
@@ -4196,6 +4714,7 @@ class Solution(MovingCameraScene):
                 cpi_rects,
                 velocity_label,
                 range_label,
+                cpi_label,
             ),
         )
 
@@ -4526,6 +5045,10 @@ class RangeDoppler(Scene):
                 bw_label[0][:2],
             ).animate.shift(DOWN * 8),
         )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
@@ -5205,6 +5728,7 @@ class RangeDoppler3D(ThreeDScene):
         )
         res = 25
         u_min = VT(20)
+        s_shift = VT(0)
         surface = always_redraw(
             lambda: Surface(
                 lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
@@ -5215,6 +5739,7 @@ class RangeDoppler3D(ThreeDScene):
             .set_z(0)
             .set_style(fill_opacity=1)
             .set_fill_by_value(axes=axes, colorscale=[(BLUE, -20), (RED, 10)], axis=2)
+            .shift(~s_shift * OUT)
         )
         # self.add(surface)
 
@@ -5234,4 +5759,12 @@ class RangeDoppler3D(ThreeDScene):
 
         self.begin_ambient_camera_rotation(0.1)
 
-        self.wait(20)
+        self.wait(10)
+
+        self.play(s_shift @ 15, run_time=1.5)
+
+        self.wait(2)
+
+
+class NextSteps(Scene):
+    def construct(self): ...
