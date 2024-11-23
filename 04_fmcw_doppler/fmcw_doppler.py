@@ -225,7 +225,6 @@ class Refresher(Scene):
         self.wait(2)
 
 
-# TODO: Render
 class DopplerIntro(Scene):
     def construct(self):
         car = (
@@ -516,7 +515,6 @@ class RangeDopplerAmbiguity(MovingCameraScene):
         self.wait(2)
 
 
-# TODO: Re-render
 class TriangularIntro(MovingCameraScene):
     def construct(self):
         carrier_freq = 10
@@ -1380,7 +1378,6 @@ class TriangularIntro(MovingCameraScene):
         self.wait(2)
 
 
-# TODO: Not done
 class TriangularNotSufficient(Scene):
     def construct(self):
         radar = FMCWRadarCartoon()
@@ -1937,14 +1934,13 @@ Then taking the FFT on $b[l, m]$, you get
 
         self.play(Create(speed_label))
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         example_beat_signal = ImageMobject(
-            "../props/static/beat_signal_example.png"
+            "./static/beat_signal_example_2.png"
         ).to_corner(UL)
-        example_range_doppler = ImageMobject(
-            "../props/static/range_doppler_example.png"
-        ).to_corner(DR)
+        example_range_doppler = ImageMobject("./static/fmcw_doppler.png").to_corner(DR)
 
         self.play(
             LaggedStart(
@@ -1964,7 +1960,7 @@ Then taking the FFT on $b[l, m]$, you get
             FadeOut(example_beat_signal, shift=UP),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         tex_template = TexTemplate()
@@ -1991,7 +1987,7 @@ Then taking the FFT on $b[l, m]$, you get
         notebook_sc_group = Group(notebook_sc_box, notebook_sc)
 
         notebook_sc_2 = (
-            ImageMobject("./static/notebook_sc_2.png")
+            ImageMobject("./static/notebook_sc_4.png")
             .scale_to_fit_height(config.frame_height * 0.65)
             .to_edge(UP)
         )
@@ -2001,7 +1997,7 @@ Then taking the FFT on $b[l, m]$, you get
         notebook_sc_group_2 = Group(notebook_sc_box_2, notebook_sc_2)
 
         notebook_sc_3 = (
-            ImageMobject("./static/notebook_sc_3.png")
+            ImageMobject("./static/notebook_sc_5.png")
             .scale_to_fit_height(config.frame_height * 0.65)
             .to_edge(UP)
         )
@@ -2369,7 +2365,6 @@ class Phase(MovingCameraScene):
         self.wait(2)
 
 
-# TODO: Not done
 class StationaryTarget(Scene):
     def construct(self):
         radar = FMCWRadarCartoon()
@@ -5767,4 +5762,50 @@ class RangeDoppler3D(ThreeDScene):
 
 
 class NextSteps(Scene):
-    def construct(self): ...
+    def construct(self):
+        label = Tex("CFAR").scale(2)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(FadeIn(label, shift=UP))
+
+        self.wait(0.5)
+
+        label_spelled = Tex(
+            r"\raggedright Constant\\ \vspace{2mm} False\\ \vspace{2mm} Alarm\\ \vspace{2mm} Rate"
+        ).scale(1.7)
+
+        self.play(
+            TransformByGlyphMap(
+                label,
+                label_spelled,
+                ([0], [0]),
+                ([1], [8], {"delay": 0.1}),
+                ([2], [13], {"delay": 0.2}),
+                ([3], [18], {"delay": 0.3}),
+                ([], [1, 2, 3, 4, 5, 6, 7], {"shift": LEFT, "delay": 0.4}),
+                ([], [9, 10, 11, 12], {"shift": LEFT, "delay": 0.5}),
+                ([], [14, 15, 16, 17], {"shift": LEFT, "delay": 0.6}),
+                ([], [19, 20, 21], {"shift": LEFT, "delay": 0.7}),
+            )
+        )
+
+        self.wait(0.5)
+
+        cfar_thumbnail = ImageMobject(
+            "../03_cfar/media/images/cfar/thumbnails/Thumbnail_1.png"
+        ).scale(0.6)
+        cfar_thumbnail_box = SurroundingRectangle(cfar_thumbnail, buff=0)
+        cfar = Group(cfar_thumbnail_box, cfar_thumbnail).next_to(
+            [config.frame_width / 2, 0, 0], RIGHT
+        )
+
+        self.play(Group(label_spelled, cfar).animate.arrange(RIGHT, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        self.play(
+            label_spelled.animate.next_to([-config.frame_width / 2, 0, 0], LEFT),
+            cfar.animate.next_to([config.frame_width / 2, 0, 0], RIGHT),
+        )
+
+        self.wait(2)
