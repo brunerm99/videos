@@ -18,13 +18,13 @@ sys.path.insert(0, "..")
 
 from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR, IF_COLOR
 from props.helpers import get_plot_values
-from props import WeatherRadarTower, get_blocks, FMCWRadarCartoon
+from props import WeatherRadarTower, get_blocks, FMCWRadarCartoon, VideoMobject
 
 config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -246,8 +246,8 @@ class DopplerIntro(Scene):
         self.wait(0.5)
 
         self.play(
-            car2.shift(RIGHT * 5).animate.shift(LEFT * 5),
-            car3.shift(LEFT * 10).animate.shift(RIGHT * 10),
+            car2.shift(RIGHT * 8).animate.shift(LEFT * 8),
+            car3.shift(LEFT * 14).animate.shift(RIGHT * 14),
         )
 
         self.wait(0.5)
@@ -1378,7 +1378,7 @@ class TriangularIntro(MovingCameraScene):
         self.wait(2)
 
 
-class TriangularNotSufficient(Scene):
+class TriangularNotSufficient(MovingCameraScene):
     def construct(self):
         radar = FMCWRadarCartoon()
         radar.vgroup.scale(0.6)
@@ -1450,18 +1450,19 @@ class TriangularNotSufficient(Scene):
         f_unknown_3 = MathTex(r"f_{d,3},\ f_{beat,3}", color=RED).next_to(
             f_unknown_2, DOWN, MED_SMALL_BUFF, LEFT
         )
-        f_unknown_4 = MathTex(r"f_{d,4},\ f_{beat,4}", color=RED).next_to(
-            f_unknown_3, DOWN, MED_SMALL_BUFF, LEFT
-        )
-        unknown_group = Group(
-            unknown, f_unknown_1, f_unknown_2, f_unknown_3, f_unknown_4
-        )
+        unknown_group = Group(unknown, f_unknown_1, f_unknown_2, f_unknown_3)
 
         known = Tex("Known:", color=GREEN)
         f_known_1 = MathTex(r"f_{up,1},\ f_{down,1}", color=GREEN).next_to(
             known, DOWN, MED_SMALL_BUFF, LEFT
         )
-        known_group = Group(known, f_known_1)
+        f_known_2 = MathTex(r"f_{up,2},\ f_{down,2}", color=GREEN).next_to(
+            f_known_1, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        f_known_3 = MathTex(r"f_{up,3},\ f_{down,3}", color=GREEN).next_to(
+            f_known_2, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        known_group = Group(known, f_known_1, f_known_2, f_known_3)
 
         labels = (
             Group(unknown_group, known_group)
@@ -1521,7 +1522,134 @@ class TriangularNotSufficient(Scene):
 
         self.wait(0.5)
 
+        t = np.linspace(0, 1, 1000)
+        rates = np.array([1, 2, 0.5])
+        max_time = sum(1 / rates)
+        t_full = np.linspace(0, max_time, int(max_time * 1000))
+        chirps = (
+            np.concatenate(
+                [
+                    signal.sawtooth(2 * PI * f * np.linspace(0, 1 / f, int(1000 / f)))
+                    for f in rates
+                ]
+            )
+            + 1
+        ) / 2
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.4
+        ax = Axes(
+            x_range=[0, max_time, max_time / 4],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        labels = ax.get_axis_labels(MathTex("t"), MathTex("f"))
+
+        curr_time = VT(0)
+        f_plot = always_redraw(
+            lambda: ax.plot_line_graph(
+                t_full[t_full <= ~curr_time],
+                chirps[t_full <= ~curr_time],
+                line_color=TX_COLOR,
+                add_vertex_dots=False,
+            )
+        )
+
+        plot_group = Group(ax, labels, f_plot).next_to(self.camera.frame.get_top(), UP)
+
+        self.add(plot_group)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.shift(
+                UP
+                * (
+                    unknown_group.get_bottom()
+                    - (self.camera.frame.get_bottom() + MED_LARGE_BUFF)
+                )
+            )
+        )
+
+        self.wait(0.5)
+
+        chirp_label_1 = MathTex(r"\mu_1").move_to(ax.c2p(0.5, 0.8))
+        chirp_label_2 = MathTex(r"\mu_2").move_to(ax.c2p(1.25, 0.8))
+        chirp_label_3 = MathTex(r"\mu_3").move_to(ax.c2p(2.5, 0.8))
+
+        self.play(curr_time @ 1, FadeIn(chirp_label_1, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(curr_time @ 1.5, FadeIn(chirp_label_2, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(f_known_2.shift(RIGHT * 8).animate.shift(LEFT * 8))
+
+        self.wait(0.5)
+
+        self.play(curr_time @ 3.5, FadeIn(chirp_label_3, shift=DOWN))
+
+        self.wait(0.5)
+
+        self.play(f_known_3.shift(RIGHT * 8).animate.shift(LEFT * 8))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        car3 = (
+            SVGMobject("../props/static/car.svg")
+            .set_z_index(-1)
+            .set_fill(WHITE)
+            .scale(0.8)
+            .flip()
+            .move_to(person, DOWN)
+            .shift(LEFT)
+        )
+        cone = (
+            ImageMobject("../props/static/traffic_cone.png")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .set_z_index(-1)
+            .scale_to_fit_height(car.height * 0.8)
+            .move_to(car3, DOWN)
+            .shift(LEFT * 2)
+        )
+
+        f_unknown_4 = MathTex(r"f_{d,4},\ f_{beat,4}", color=RED).next_to(
+            f_unknown_3, DOWN, MED_SMALL_BUFF, LEFT
+        )
+        f_unknown_5 = MathTex(r"f_{d,5},\ f_{beat,5}", color=RED).next_to(
+            f_unknown_4, DOWN, MED_SMALL_BUFF, LEFT
+        )
+
+        self.play(
+            f_unknown_4.shift(LEFT * 8).animate.shift(RIGHT * 8),
+            car3.shift(DOWN * 5).animate.shift(UP * 5),
+        )
+        # self.add(car3, cone, f_unknown_4, f_unknown_5)
+
+        self.wait(0.5)
+
+        self.play(
+            f_unknown_5.shift(LEFT * 8).animate.shift(RIGHT * 8),
+            cone.shift(DOWN * 5).animate.shift(UP * 5),
+        )
+
+        self.wait(0.5)
+
+        # objs = self.mobjects
+        # shuffle(objs)
+
         self.play(FadeOut(*self.mobjects))
+
+        # self.play(LaggedStart(*[ShrinkToCenter(m) for m in objs], lag_ratio=0.08))
 
         self.wait(2)
 
@@ -4337,6 +4465,7 @@ class SlowTimeFFT(MovingCameraScene):
                 ]
             ]
         )
+        x_label = ax.get_x_axis_label(MathTex("v"))
 
         f_vel_fft = interpolate.interp1d(
             vels, 10 * np.log10(range_doppler[roi_idx]), fill_value="extrapolate"
@@ -4345,7 +4474,7 @@ class SlowTimeFFT(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                Create(ax),
+                AnimationGroup(Create(ax), FadeIn(x_label)),
                 LaggedStart(
                     *[GrowFromCenter(label) for label in ax_labels],
                     lag_ratio=0.2,
@@ -4375,7 +4504,7 @@ class SlowTimeFFT(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         x_len = config.frame_width * 0.25
@@ -4492,16 +4621,27 @@ class SlowTimeFFT(MovingCameraScene):
 
         self.play(Create(line_1), Create(dot_1), Create(line_2), Create(dot_2))
 
-        # angle_1.add_updater(phase_updater(vel_1))
-        # angle_2.add_updater(phase_updater(vel_2))
-
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
+        phase_delta_eqn = MathTex(
+            r"\Delta \phi \approx -2 \pi f \Delta \tau", font_size=DEFAULT_FONT_SIZE * 2
+        ).next_to(self.camera.frame.get_bottom(), UP, LARGE_BUFF * 2)
+
         self.play(
-            angle_1 @ (vel_1 * 8 * PI),
-            angle_2 @ (vel_2 * 8 * PI),
-            rate_func=rate_functions.linear,
-            run_time=10,
+            LaggedStart(
+                AnimationGroup(
+                    angle_1.animate(
+                        rate_func=rate_functions.linear, run_time=10
+                    ).set_value(vel_1 * 8 * PI),
+                    angle_2.animate(
+                        rate_func=rate_functions.linear, run_time=10
+                    ).set_value(vel_2 * 8 * PI),
+                ),
+                phase_delta_eqn[0][:2].shift(DOWN * 5).animate.shift(UP * 5),
+                phase_delta_eqn[0][2:].shift(DOWN * 5).animate.shift(UP * 5),
+                lag_ratio=0.25,
+            ),
         )
 
         self.wait(0.5)
@@ -5761,11 +5901,12 @@ class RangeDoppler3D(ThreeDScene):
         self.wait(2)
 
 
+# TODO: Finish with notebook mention
 class NextSteps(Scene):
     def construct(self):
         label = Tex("CFAR").scale(2)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(FadeIn(label, shift=UP))
 
         self.wait(0.5)
@@ -5808,4 +5949,328 @@ class NextSteps(Scene):
             cfar.animate.next_to([config.frame_width / 2, 0, 0], RIGHT),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        challenge_problem = ImageMobject(
+            "./static/challenge_problem.png"
+        ).scale_to_fit_height(config.frame_height * 0.7)
+
+        video = VideoMobject("./static/notebook.mp4", speed=2)
+
+        self.play(
+            video.next_to([0, -config.frame_height / 2, 0], DOWN).animate.move_to(
+                ORIGIN
+            )
+        )
+
+        self.wait(10, frozen_frame=False)
+
+        self.play(
+            video.animate.next_to([-config.frame_width / 2, 0, 0], LEFT),
+            challenge_problem.next_to(
+                [config.frame_width / 2, 0, 0], RIGHT
+            ).animate.move_to(ORIGIN),
+        )
+        self.remove(video)
+
+        self.wait(0.5)
+
+        self.play(
+            challenge_problem.animate.next_to([-config.frame_width / 2, 0, 0], LEFT)
+        )
+
         self.wait(2)
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Tex("Stats for Nerds")
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "6,277"],
+                    ["Script word count", "3,111"],
+                    ["Days to make", "18"],
+                    ["Git commits", "23"],
+                ]
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
+        thank_you_sabrina = (
+            Tex(r"Thank you, Sabrina, for\\editing the whole video :)")
+            .next_to(stats_group, DOWN)
+            .to_edge(DOWN)
+        )
+
+        marshall_bruner = Tex("Marshall Bruner").next_to(
+            [-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Create(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
+
+        self.wait(2)
+
+
+""" Thumbnail """
+
+
+class Thumbnail1(ThreeDScene):
+    def construct(self):
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+
+        sep = "\n\t"
+        print(
+            "Targets:",
+            sep
+            + sep.join(
+                [
+                    f"{idx}: distance = {r:.2f} m, velocity = {v:.2f} m/s"
+                    for idx, (r, v) in enumerate(targets, start=1)
+                ]
+            ),
+        )
+
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+
+        range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+
+        vels = np.linspace(-max_vel, max_vel, M)
+        rmax = c * Tc * fs / (2 * bw)
+
+        plot_vel = (-20, 20)  # m/s
+        plot_range = (0, 40)  # m
+
+        v_ind = np.where((vels > plot_vel[0]) & (vels < plot_vel[1]))[0]
+        vx = vels[v_ind[0] : v_ind[-1]]
+
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        r_ind = np.where((n_ranges > plot_range[0]) & (n_ranges < plot_range[1]))[0]
+        ry = n_ranges[r_ind[0] : r_ind[-1]]
+
+        rdz = range_doppler[r_ind[0] : r_ind[-1], v_ind[0] : v_ind[-1]]
+
+        X, Y = np.meshgrid(vx, ry, indexing="xy")
+        tck = bisplrep(X, Y, 10 * np.log10(rdz))
+
+        axes = ThreeDAxes(
+            x_range=[-20, 20, 20],
+            y_range=[0, 40, 20],
+            z_range=[-25, 10, 10],
+            x_length=8,
+        )
+        res = 25
+        surface = (
+            Surface(
+                lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
+                u_range=[-20, 20],
+                v_range=[0, 40],
+                resolution=(res, res),
+            )
+            .set_z(0)
+            .set_style(fill_opacity=1)
+            .set_fill_by_value(axes=axes, colorscale=[(BLUE, -20), (RED, 10)], axis=2)
+        )
+
+        self.add(surface)
+
+        self.set_camera_orientation(theta=-50 * DEGREES, phi=60 * DEGREES, zoom=0.45)
+
+        title = Tex("Range-Doppler Spectrum").scale(2).to_edge(UP)
+
+        arrow = CurvedArrow(
+            title.get_corner(DR) + LEFT,
+            title.get_corner(DR) + DOWN * 2.5 + LEFT * 3,
+            angle=-PI / 3,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.add_fixed_in_frame_mobjects(title, arrow)
+
+
+class Thumbnail2(ThreeDScene):
+    def construct(self):
+        targets = [
+            (20, 10),  # Target 1 @ 20 m with a velocity of 10 m/s
+            (20, -10),  # Target 2 @ 20 m with a velocity of -10 m/s
+            (10, 5),  # Target 3 @ 10 m with a velocity of 5 m/s
+        ]
+
+        sep = "\n\t"
+        print(
+            "Targets:",
+            sep
+            + sep.join(
+                [
+                    f"{idx}: distance = {r:.2f} m, velocity = {v:.2f} m/s"
+                    for idx, (r, v) in enumerate(targets, start=1)
+                ]
+            ),
+        )
+
+        f_beat = compute_f_beat(20)
+        max_time = 20 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+        window = signal.windows.blackman(N)
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            for r, v in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                * window
+                for m in range(M)
+            ]
+        )
+
+        range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+
+        vels = np.linspace(-max_vel, max_vel, M)
+        rmax = c * Tc * fs / (2 * bw)
+
+        plot_vel = (-20, 20)  # m/s
+        plot_range = (0, 40)  # m
+
+        v_ind = np.where((vels > plot_vel[0]) & (vels < plot_vel[1]))[0]
+        vx = vels[v_ind[0] : v_ind[-1]]
+
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        r_ind = np.where((n_ranges > plot_range[0]) & (n_ranges < plot_range[1]))[0]
+        ry = n_ranges[r_ind[0] : r_ind[-1]]
+
+        rdz = range_doppler[r_ind[0] : r_ind[-1], v_ind[0] : v_ind[-1]]
+
+        X, Y = np.meshgrid(vx, ry, indexing="xy")
+        tck = bisplrep(X, Y, 10 * np.log10(rdz))
+
+        axes = ThreeDAxes(
+            x_range=[-20, 20, 20],
+            y_range=[0, 40, 20],
+            z_range=[-25, 10, 10],
+            x_length=8,
+        )
+        res = 25
+        surface = (
+            Surface(
+                lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
+                u_range=[-20, 20],
+                v_range=[0, 40],
+                resolution=(res, res),
+            )
+            .set_z(0)
+            .set_style(fill_opacity=1)
+            .set_fill_by_value(axes=axes, colorscale=[(BLUE, -20), (RED, 10)], axis=2)
+        )
+
+        self.add(surface)
+
+        self.set_camera_orientation(
+            theta=-50 * DEGREES, phi=60 * DEGREES, zoom=0.45, frame_center=LEFT * 2
+        )
+
+        title = Tex("Range-Doppler Spectrum").scale(2).to_edge(UP).shift(LEFT * 2)
+
+        arrow = CurvedArrow(
+            title.get_corner(DR) + LEFT,
+            title.get_corner(DR) + DOWN * 2.5 + LEFT * 1,
+            angle=-PI / 3,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        example_range_doppler = ImageMobject("./static/fmcw_doppler.png")
+        img = (
+            ImageMobject("./static/fmcw_doppler.png")
+            .rotate(-PI / 2)
+            .to_edge(LEFT)
+            .shift(LEFT * 1 + DOWN / 2)
+        )
+        xnl = NumberLine(
+            x_range=[0, 40, 5], length=img.width, include_numbers=False
+        ).next_to(img, DOWN)
+        ynl = (
+            NumberLine(
+                x_range=[-max_vel, max_vel, 10],
+                length=img.height,
+                include_numbers=False,
+            )
+            .rotate(PI / 2)
+            .next_to(img, LEFT)
+        )
+        range_label = Tex("Range", font_size=DEFAULT_FONT_SIZE * 0.7).next_to(
+            xnl, DOWN, SMALL_BUFF
+        )
+        velocity_label = (
+            Tex("Velocity", font_size=DEFAULT_FONT_SIZE * 0.7)
+            .rotate(PI / 2)
+            .next_to(ynl, LEFT, SMALL_BUFF)
+        )
+
+        self.add_fixed_in_frame_mobjects(
+            title,
+            # arrow,
+            img,
+            xnl,
+            ynl,
+            range_label,
+            velocity_label,
+        )
