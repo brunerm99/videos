@@ -5889,6 +5889,8 @@ class RangeDoppler3D(ThreeDScene):
         self.wait(0.5)
 
         self.move_camera(theta=-50 * DEGREES, phi=60 * DEGREES, zoom=0.6)
+        # title = Tex("Range-Doppler Spectrum").scale(1.3).to_edge(UP, LARGE_BUFF)
+        # self.add_fixed_in_frame_mobjects(title)
 
         self.wait(0.5)
 
