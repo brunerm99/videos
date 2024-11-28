@@ -274,6 +274,8 @@ class FarField(ZoomedScene):
 
 class HeadOn(MovingCameraScene):
     def construct(self):
+        np.random.seed(0)
+
         plane_wave = Line(
             LEFT * (config.frame_width * 1.2 / 2),
             RIGHT * (config.frame_width * 1.2 / 2),
@@ -360,7 +362,7 @@ class HeadOn(MovingCameraScene):
         self.play(Create(sine_left), Create(sine_right))
 
         self.next_section(skip_animations=skip_animations(True))
-        self.wait(0.5)
+        self.wait(0.5, frozen_frame=False)
 
         lna_left = (
             BLOCKS.get("amp")
@@ -429,6 +431,7 @@ class HeadOn(MovingCameraScene):
         )
         self.add(bd[1:], combiner, from_combiner)
 
+        self.camera.frame.save_state()
         self.play(
             self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
         )
@@ -483,7 +486,7 @@ class HeadOn(MovingCameraScene):
 
         self.add(amp_sine_left, amp_sine_right)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         filt_sine_ax_left = (
             Axes(
@@ -573,10 +576,247 @@ class HeadOn(MovingCameraScene):
         )
         self.add(combined_sine)
 
+        self.play(filt_sine_x0 @ 1, combined_sine_x1 @ 1)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore(), combined_sine_x0 @ 1)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        angle = -PI / 6
+        angled_plane_wave = (
+            Line(
+                LEFT * 4,
+                RIGHT * 4,
+                color=TX_COLOR,
+            ).rotate(angle)
+        ).set_z_index(-2)
+        angled_plane_wave.shift(
+            self.camera.frame.get_corner(UR) - angled_plane_wave.get_center()
+        )
+
+        background_rect = (
+            Rectangle(
+                width=config.frame_width,
+                height=config.frame_height,
+                stroke_color=BACKGROUND_COLOR,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .move_to(antennas, UP)
+            .set_z_index(-1)
+        )
+
+        self.add(
+            angled_plane_wave,
+            background_rect,
+        )
+
+        phase_left = VT(2 * PI / 3)
+        phase_right = VT(0)
+
+        shifted_sine_left_x0 = VT(0)
+        shifted_sine_left_x1 = VT(0)
+        shifted_sine_right_x0 = VT(0)
+        shifted_sine_right_x1 = VT(0)
+
+        shifted_sine_left = always_redraw(
+            lambda: sine_ax_left.plot(
+                lambda t: np.sin(2 * PI * sine_f * t + ~phase_left)
+                + np.random.normal(loc=0, scale=noise_std),
+                x_range=[~shifted_sine_left_x0, ~shifted_sine_left_x1, 1 / 1000],
+                color=RX_COLOR,
+            )
+        )
+
+        shifted_sine_right = always_redraw(
+            lambda: sine_ax_right.plot(
+                lambda t: np.sin(2 * PI * sine_f * t + ~phase_right)
+                + np.random.normal(loc=0, scale=noise_std),
+                x_range=[~shifted_sine_right_x0, ~shifted_sine_right_x1, 1 / 1000],
+                color=RX_COLOR,
+            )
+        )
+
+        self.add(shifted_sine_left, shifted_sine_right)
+
         self.play(
-            filt_sine_x0 @ 1,
-            combined_sine_x1 @ 1,
+            LaggedStart(
+                angled_plane_wave.animate(run_time=3).shift(
+                    14 * (LEFT * np.cos(angle) + UP * np.sin(angle))
+                ),
+                shifted_sine_right_x1 @ 1,
+                shifted_sine_left_x1 @ 1,
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5, frozen_frame=False)
+
+        shifted_amp_sine_x0 = VT(0)
+        shifted_amp_sine_x1 = VT(0)
+
+        shifted_amp_sine_left = always_redraw(
+            lambda: amp_sine_ax_left.plot(
+                lambda t: 2 * np.sin(2 * PI * sine_f * t + ~phase_left)
+                + np.random.normal(loc=0, scale=noise_std),
+                x_range=[~shifted_amp_sine_x0, ~shifted_amp_sine_x1, 1 / 1000],
+                color=RX_COLOR,
+            )
+        )
+
+        shifted_amp_sine_right = always_redraw(
+            lambda: amp_sine_ax_right.plot(
+                lambda t: 2 * np.sin(2 * PI * sine_f * t + ~phase_right)
+                + np.random.normal(loc=0, scale=noise_std),
+                x_range=[~shifted_amp_sine_x0, ~shifted_amp_sine_x1, 1 / 1000],
+                color=RX_COLOR,
+            )
+        )
+
+        shifted_filt_sine_x0 = VT(0)
+        shifted_filt_sine_x1 = VT(0)
+
+        amp_scale = 1.5
+        shifted_filt_sine_left = always_redraw(
+            lambda: filt_sine_ax_left.plot(
+                lambda t: amp_scale * np.sin(2 * PI * sine_f * t + ~phase_left),
+                x_range=[~shifted_filt_sine_x0, ~shifted_filt_sine_x1, 1 / 1000],
+                color=RX_COLOR,
+            )
+        )
+
+        shifted_filt_sine_right = always_redraw(
+            lambda: filt_sine_ax_right.plot(
+                lambda t: amp_scale * np.sin(2 * PI * sine_f * t + ~phase_right),
+                x_range=[~shifted_filt_sine_x0, ~shifted_filt_sine_x1, 1 / 1000],
+                color=RX_COLOR,
+            )
+        )
+
+        shifted_combined_sine_x0 = VT(0)
+        shifted_combined_sine_x1 = VT(0)
+
+        shifted_combined_sine = always_redraw(
+            lambda: combined_ax.plot(
+                lambda t: amp_scale * np.sin(2 * PI * sine_f * t + ~phase_left)
+                + amp_scale * np.sin(2 * PI * sine_f * t + ~phase_right),
+                x_range=[
+                    ~shifted_combined_sine_x0,
+                    ~shifted_combined_sine_x1,
+                    1 / 1000,
+                ],
+                color=RX_COLOR,
+            )
+        )
+        self.add(
+            shifted_amp_sine_left,
+            shifted_amp_sine_right,
+            shifted_filt_sine_left,
+            shifted_filt_sine_right,
+            shifted_combined_sine,
+        )
+
+        self.remove(angled_plane_wave)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            shifted_sine_left_x0 @ 1,
+            shifted_sine_right_x0 @ 1,
+            shifted_amp_sine_x1 @ 1,
+            rate_func=rate_functions.ease_in_sine,
+        )
+        self.play(
+            shifted_amp_sine_x0 @ 1,
+            shifted_filt_sine_x1 @ 1,
             rate_func=rate_functions.ease_out_sine,
+        )
+
+        self.wait(0.5)
+
+        phase_delta_label = always_redraw(
+            lambda: MathTex(
+                f"\\Delta \\phi = {~phase_left * 180 / PI:.1f}^\\circ"
+            ).next_to(shifted_filt_sine_left, LEFT, MED_LARGE_BUFF)
+        )
+
+        self.play(GrowFromCenter(phase_delta_label))
+
+        self.wait(0.5)
+
+        self.play(shifted_combined_sine_x1 @ 1)
+
+        self.wait(0.5)
+
+        self.play(phase_left @ PI)
+
+        self.wait(0.5)
+
+        self.play(phase_left @ (2 * PI / 3))
+
+        self.wait(0.5)
+
+        phase_shifter_left_rect = Square(lna_left.width, color=WHITE).next_to(
+            lp_filter_to_combiner_left, DOWN, 0
+        )
+        phase_shifter_left_label = MathTex(
+            r"\Delta \phi", font_size=DEFAULT_FONT_SIZE * 2
+        ).move_to(phase_shifter_left_rect)
+        phase_shifter_to_combiner_left = Line(
+            phase_shifter_left_rect.get_bottom(),
+            phase_shifter_left_rect.get_bottom()
+            + DOWN * lp_filter_to_combiner_left.height,
+        )
+        phase_shifter_right_rect = Square(lna_right.width, color=WHITE).next_to(
+            lp_filter_to_combiner_right, DOWN, 0
+        )
+        phase_shifter_right_label = MathTex(
+            r"\Delta \phi", font_size=DEFAULT_FONT_SIZE * 2
+        ).move_to(phase_shifter_right_rect)
+        phase_shifter_to_combiner_right = Line(
+            phase_shifter_right_rect.get_bottom(),
+            phase_shifter_right_rect.get_bottom()
+            + DOWN * lp_filter_to_combiner_left.height,
+        )
+
+        phase_shifter_left = Group(phase_shifter_left_rect, phase_shifter_left_label)
+        phase_shifter_right = Group(phase_shifter_right_rect, phase_shifter_right_label)
+        phase_shifters = Group(
+            phase_shifter_left,
+            phase_shifter_right,
+            phase_shifter_to_combiner_left,
+            phase_shifter_to_combiner_right,
+        )
+
+        bd.add(phase_shifters)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Group(combiner, from_combiner, combined_ax).animate.next_to(
+                        phase_shifters, DOWN, 0
+                    ),
+                    shifted_combined_sine_x1 @ 0,
+                ),
+                AnimationGroup(
+                    GrowFromCenter(phase_shifter_left),
+                    GrowFromCenter(phase_shifter_right),
+                ),
+                AnimationGroup(
+                    Create(phase_shifter_to_combiner_left),
+                    Create(phase_shifter_to_combiner_right),
+                ),
+                lag_ratio=0.4,
+            )
+        )
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
         )
 
         self.wait(2)
