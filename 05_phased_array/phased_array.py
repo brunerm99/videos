@@ -4,7 +4,9 @@ import sys
 import warnings
 
 import numpy as np
+from numpy.fft import fft, fftshift
 from manim import *
+from scipy.interpolate import interp1d
 from MF_Tools import VT, TransformByGlyphMap
 
 
@@ -817,6 +819,169 @@ class HeadOn(MovingCameraScene):
         )
         self.play(
             self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
+        )
+
+        self.wait(2)
+
+
+class FourierAnalogy(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        max_time = 4
+        f_max = 8
+
+        x_len = config.frame_width * 0.8
+        y_len = config.frame_height * 0.3
+        amp_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax = Axes(
+            x_range=[-f_max, f_max, f_max / 4],
+            y_range=[0, 2, 1],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        amp_labels = amp_ax.get_x_axis_label(MathTex("t"))
+        f_labels = f_ax.get_x_axis_label(MathTex("f"))
+        amp_plot_group = Group(amp_ax, amp_labels)
+        f_plot_group = Group(f_ax, f_labels)
+        axes = Group(amp_plot_group, f_plot_group)
+
+        f = VT(5)
+        offset = VT(0)
+        fs = 200
+        amp_plot = always_redraw(
+            lambda: amp_ax.plot(
+                lambda t: np.sin(2 * PI * ~f * t) + ~offset,
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
+
+        def get_fft():
+            N = max_time * fs
+            t = np.linspace(0, max_time, N)
+            sig = np.sin(2 * PI * ~f * t) + ~offset
+
+            fft_len = N * 8
+            sig_fft = fftshift(np.abs(fft(sig, fft_len) / (N / 2)))
+            # fft_log = 10 * np.log10(np.abs(fftshift(sig_fft))) + 40
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+            f_fft_log = interp1d(freq, sig_fft)
+            return f_ax.plot(f_fft_log, x_range=[-f_max, f_max, 1 / fs], color=TX_COLOR)
+
+        f_plot = always_redraw(get_fft)
+
+        # self.add(amp_plot_group, amp_plot, f_plot_group, f_plot)
+
+        self.play(
+            amp_plot_group.next_to([0, config.frame_height / 2, 0], UP).animate.move_to(
+                ORIGIN
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(amp_plot))
+
+        self.wait(0.5)
+
+        f_plot_group.next_to([0, -config.frame_height / 2, 0], DOWN)
+        self.add(f_plot)
+        self.play(axes.animate.arrange(DOWN, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        peaks_label = Tex("Peaks").next_to(f_ax.c2p(0, 2.3), RIGHT)
+        peak_arrow_right = Arrow(
+            peaks_label.get_right(), f_ax.input_to_graph_point(~f, f_plot)
+        )
+        peak_arrow_left = Arrow(
+            peaks_label.get_left(), f_ax.input_to_graph_point(-(~f), f_plot)
+        )
+
+        self.play(
+            FadeIn(peaks_label),
+            GrowArrow(peak_arrow_left),
+            GrowArrow(peak_arrow_right),
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(peaks_label, peak_arrow_left, peak_arrow_right))
+
+        self.wait(0.5)
+
+        self.play(f @ 0, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(offset @ 1)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        num_samples = 8
+        samples = amp_ax.get_vertical_lines_to_graph(
+            amp_plot,
+            x_range=[0.0625, 1 - 0.0625],
+            num_lines=num_samples,
+            color=RED,
+            line_func=Line,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.8,
+        )
+        sample_dots = [Dot(sample.get_end(), color=RED) for sample in samples]
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(Create(sample), Create(sample_dot), lag_ratio=0.3)
+                    for sample, sample_dot in zip(samples, sample_dots)
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.move_to(
+                amp_ax.get_bottom() + DOWN * MED_LARGE_BUFF, DOWN
+            )
+        )
+
+        self.wait(0.5)
+
+        antennas = Group()
+        for sample in samples:
+            antenna_port = Line(DOWN, UP, color=WHITE).set_x(sample.get_x())
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+
+        antennas.next_to(amp_ax, UP, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(antenna) for antenna in antennas], lag_ratio=0.2
+            )
         )
 
         self.wait(2)
