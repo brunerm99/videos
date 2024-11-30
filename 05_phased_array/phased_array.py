@@ -1,5 +1,7 @@
 # phased_array.py
 
+import matplotlib.pyplot as plt
+
 import sys
 import warnings
 
@@ -7,6 +9,7 @@ import numpy as np
 from numpy.fft import fft, fftshift
 from manim import *
 from scipy.interpolate import interp1d
+from scipy.constants import c
 from MF_Tools import VT, TransformByGlyphMap
 
 
@@ -20,7 +23,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -985,3 +988,181 @@ class FourierAnalogy(MovingCameraScene):
         )
 
         self.wait(2)
+
+
+def compute_af_1d(weights, d_x, k_0, u, u_0):
+    n = np.arange(weights.size)
+    AF = np.sum(
+        weights[:, None] * np.exp(1j * n[:, None] * d_x * k_0 * (u - u_0)), axis=0
+    )
+    AF /= AF.max()
+    return AF
+
+
+class CircularCoords(Scene):
+    def construct(self):
+        a0, a1, a2, a3, a4 = VT(0), VT(0), VT(1), VT(0), VT(0)
+
+        n_elem = 21  # Must be odd
+        weight_trackers = [VT(0) for _ in range(n_elem)]
+        weight_trackers[n_elem // 2] @= 1
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+        theta = u * PI
+
+        r_min = -30
+        x_len = config.frame_height * 0.6
+        ax = Axes(
+            x_range=[r_min, -r_min, r_min / 8],
+            y_range=[r_min, -r_min, r_min / 8],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=x_len,
+        ).rotate(PI / 2)
+
+        def get_af():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+            f_AF = interp1d(
+                theta,
+                np.clip(20 * np.log10(np.abs(AF)) - r_min, 0, None),
+                fill_value="extrapolate",
+            )
+            plot = ax.plot_polar_graph(r_func=f_AF, theta_range=[-PI, PI, 2 * PI / 200])
+
+            return plot
+
+        AF_plot = always_redraw(get_af)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(ax, AF_plot)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n] @ 1,
+                        weight_trackers[n_elem // 2 + 1 :][n] @ 1,
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(steering_angle @ (10))
+
+        self.wait(2)
+
+
+class FourierTransformPolar(Scene):
+    def construct(self):
+        x_len = config.frame_height * 0.6
+        ax = Axes(
+            x_range=[-1, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=x_len,
+        )
+
+        X_N_COLOR = GREEN
+        EXP_COLOR = YELLOW
+        PRODUCT_COLOR = BLUE
+
+        f_x_n = 3
+        f_exp = VT(1)
+        theta_tracker = VT(0)
+
+        x_n_plot = always_redraw(
+            lambda: ax.plot_polar_graph(
+                r_func=lambda theta: np.sin(f_x_n * theta),
+                theta_range=[0, ~theta_tracker, 2 * PI / 200],
+                color=X_N_COLOR,
+            )
+        )
+        exp_plot = always_redraw(
+            lambda: ax.plot_polar_graph(
+                r_func=lambda theta: np.sin(~f_exp * theta),
+                theta_range=[0, ~theta_tracker, 2 * PI / 200],
+                color=EXP_COLOR,
+            )
+        )
+        product_plot = always_redraw(
+            lambda: ax.plot_polar_graph(
+                r_func=lambda theta: np.sin(f_x_n * theta) * np.sin(~f_exp * theta),
+                theta_range=[0, ~theta_tracker, 2 * PI / 200],
+                color=PRODUCT_COLOR,
+            )
+        )
+
+        x_n_line = always_redraw(
+            lambda: Line(
+                ax.c2p(0, 0),
+                ax.input_to_graph_point(~theta_tracker, x_n_plot),
+                color=X_N_COLOR,
+            )
+        )
+        exp_line = always_redraw(
+            lambda: Line(
+                ax.c2p(0, 0),
+                ax.input_to_graph_point(~theta_tracker, exp_plot),
+                color=EXP_COLOR,
+            )
+        )
+        product_line = always_redraw(
+            lambda: Line(
+                ax.c2p(0, 0),
+                ax.input_to_graph_point(~theta_tracker, product_plot),
+                color=PRODUCT_COLOR,
+            )
+        )
+        x_n_dot = always_redraw(
+            lambda: Dot(
+                ax.input_to_graph_point(~theta_tracker, x_n_plot), color=X_N_COLOR
+            )
+        )
+        exp_dot = always_redraw(
+            lambda: Dot(
+                ax.input_to_graph_point(~theta_tracker, exp_plot), color=EXP_COLOR
+            )
+        )
+        product_dot = always_redraw(
+            lambda: Dot(
+                ax.input_to_graph_point(~theta_tracker, product_plot),
+                color=PRODUCT_COLOR,
+            )
+        )
+
+        self.add(
+            ax,
+            x_n_line,
+            exp_line,
+            product_line,
+            x_n_dot,
+            exp_dot,
+            product_dot,
+            x_n_plot,
+            exp_plot,
+            product_plot,
+        )
+
+        self.play(theta_tracker @ (2 * PI), run_time=5, rate_func=rate_functions.linear)
