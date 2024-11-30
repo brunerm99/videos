@@ -33,3 +33,13 @@ This is due in part to its simplicity if implementation and relative effectivene
 In this video I go over the motivation, implementation, and some of the design knobs available when using CFAR.
 
 ![thumbnail](./03_cfar/media/images/cfar/thumbnails/Thumbnail_1.png)
+
+## [04 - How do FMCW RADARs measure velocity?](https://youtu.be/G_tmNtP0gw8)
+
+FMCW radars provide an excellent method for estimating range information of targets... but what about velocity? 
+
+The velocity of a target is often obtained using the Doppler frequency shift it incurs. This gets more challenging once you start using frequency information to determine range because it is ambiguous whether the frequency shift is due to the range or velocity. 
+
+In this video I introduce two methods for dealing with this issue and provide a python notebook to play around with the methods yourself.
+
+![thumbnail](./04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_2.png)
