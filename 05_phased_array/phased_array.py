@@ -23,7 +23,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -160,7 +160,7 @@ class FarField(ZoomedScene):
         self.wait(0.5)
 
         plane_wave_label = (
-            Tex("Plane wave").set_opacity(0).next_to(zoomed_display_frame)
+            Tex(r"$\approx$ Plane wave").set_opacity(0).next_to(zoomed_display_frame)
         )
 
         self.play(
@@ -936,6 +936,36 @@ class FourierAnalogy(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
+        sinc = Tex(r"$\lvert$sinc$\rvert = \frac{\sin{(x)}}{x}$").next_to(
+            f_ax.c2p(0, 2), RIGHT, MED_LARGE_BUFF
+        )
+
+        self.play(GrowFromCenter(sinc[0][1:5]))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(sinc[0][0]), GrowFromCenter(sinc[0][5]))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    GrowFromCenter(m)
+                    for m in [
+                        sinc[0][6],
+                        sinc[0][7:13],
+                        sinc[0][13],
+                        sinc[0][14],
+                    ]
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
         num_samples = 8
         samples = amp_ax.get_vertical_lines_to_graph(
             amp_plot,
@@ -1001,8 +1031,6 @@ def compute_af_1d(weights, d_x, k_0, u, u_0):
 
 class CircularCoords(Scene):
     def construct(self):
-        a0, a1, a2, a3, a4 = VT(0), VT(0), VT(1), VT(0), VT(0)
-
         n_elem = 21  # Must be odd
         weight_trackers = [VT(0) for _ in range(n_elem)]
         weight_trackers[n_elem // 2] @= 1
@@ -1015,7 +1043,6 @@ class CircularCoords(Scene):
         steering_angle = VT(0)
         theta = np.linspace(-PI, PI, 1000)
         u = np.sin(theta)
-        theta = u * PI
 
         r_min = -30
         x_len = config.frame_height * 0.6
@@ -1082,7 +1109,7 @@ class FourierTransformPolar(Scene):
             },
             x_length=x_len,
             y_length=x_len,
-        )
+        ).to_edge(LEFT)
 
         X_N_COLOR = GREEN
         EXP_COLOR = YELLOW
@@ -1152,6 +1179,35 @@ class FourierTransformPolar(Scene):
             )
         )
 
+        sine_ax = Axes(
+            x_range=[0, 4 * PI, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=config.frame_width * 0.7,
+            y_length=ax.height,
+        ).next_to(ax, RIGHT, 0)
+        sine_plot = always_redraw(
+            lambda: sine_ax.plot(
+                lambda theta: np.sqrt(
+                    np.cos(ax.input_to_graph_coords(theta, product_plot)[1]) ** 2
+                    + (1j * np.sin(ax.input_to_graph_coords(theta, product_plot)[1]))
+                    ** 2
+                ),
+                x_range=[0, ~theta_tracker, 1 / 100],
+                color=YELLOW,
+                use_smoothing=False,
+            )
+        )
+
+        sine_line = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(np.cos(~theta_tracker), np.sin(~theta_tracker)),
+                sine_ax.input_to_graph_point(~theta_tracker, sine_plot),
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+            )
+        )
+
         self.add(
             ax,
             x_n_line,
@@ -1163,6 +1219,8 @@ class FourierTransformPolar(Scene):
             x_n_plot,
             exp_plot,
             product_plot,
+            sine_plot,
+            # sine_line,
         )
 
         self.play(theta_tracker @ (2 * PI), run_time=5, rate_func=rate_functions.linear)
