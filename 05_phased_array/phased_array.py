@@ -937,7 +937,7 @@ class FourierAnalogy(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        sinc = Tex(r"$\lvert$sinc$\rvert = \frac{\sin{(x)}}{x}$").next_to(
+        sinc = Tex(r"$\lvert$sinc$\rvert = \lvert \frac{\sin{(x)}}{x} \rvert$").next_to(
             f_ax.c2p(0, 2), RIGHT, MED_LARGE_BUFF
         )
 
@@ -1183,10 +1183,10 @@ def compute_af_1d(weights, d_x, k_0, u, u_0):
     return AF
 
 
-class CircularCoords(Scene):
+class CircularCoords(MovingCameraScene):
     def construct(self):
-        n_elem = 7  # Must be odd
-        weight_trackers = [VT(1) for _ in range(n_elem)]
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(0) for _ in range(n_elem)]
         weight_trackers[n_elem // 2] @= 1
 
         f_0 = 10e9
@@ -1216,59 +1216,153 @@ class CircularCoords(Scene):
             weights = np.array([~w for w in weight_trackers])
             AF = compute_af_1d(weights, d_x, k_0, u, u_0)
             f_AF = interp1d(
-                theta,
+                u * PI,
                 np.clip(20 * np.log10(np.abs(AF)) - r_min, 0, None),
                 fill_value="extrapolate",
             )
-            plot = ax.plot_polar_graph(r_func=f_AF, theta_range=[-PI, PI, 2 * PI / 200])
-            plt.figure(figsize=(8, 6))
-            plt.polar(theta, 20 * np.log10(np.abs(AF)) + 30)
-            plt.ylim(0, 30)
-            plt.show()
-
+            plot = ax.plot_polar_graph(
+                r_func=f_AF, theta_range=[-PI, PI, 2 * PI / 200], color=TX_COLOR
+            )
             return plot
 
         AF_plot = always_redraw(get_af)
 
         self.next_section(skip_animations=skip_animations(False))
-        self.add(ax, AF_plot)
+        # self.add(ax, AF_plot)
 
-        # self.play(Create(ax), Create(AF_plot))
-
-        # self.wait(0.5)
-
-        # arrow_theta = VT(0)
-        # arrow = always_redraw(
-        #     lambda: Arrow(ax.c2p(0, 0), ax.input_to_graph_point(~arrow_theta, AF_plot))
-        # )
-
-        # self.play(GrowArrow(arrow))
-
-        # self.wait(0.5)
-
-        # self.play(arrow_theta @ (2 * PI))
-
-        # self.wait(0.5)
-
-        # self.play(ShrinkToCenter(arrow))
-
-        # self.wait(0.5)
-
-        # self.play(
-        #     LaggedStart(
-        #         *[
-        #             AnimationGroup(
-        #                 weight_trackers[: n_elem // 2][::-1][n] @ 1,
-        #                 weight_trackers[n_elem // 2 + 1 :][n] @ 1,
-        #             )
-        #             for n in range(n_elem // 2)
-        #         ],
-        #         lag_ratio=0.3,
-        #     ),
-        #     run_time=4,
-        # )
+        self.play(Create(ax), Create(AF_plot))
 
         self.wait(0.5)
+
+        arrow_theta = VT(0)
+        arrow = always_redraw(
+            lambda: Arrow(ax.c2p(0, 0), ax.input_to_graph_point(~arrow_theta, AF_plot))
+        )
+
+        self.play(GrowArrow(arrow))
+
+        self.wait(0.5)
+
+        self.play(arrow_theta @ (2 * PI), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n] @ 1,
+                        weight_trackers[n_elem // 2 + 1 :][n] @ 1,
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        ant_pattern_label = Tex(
+            r"Antenna\\Pattern", font_size=DEFAULT_FONT_SIZE * 1.5
+        ).next_to(ax, LEFT, LARGE_BUFF * 3)
+
+        self.play(
+            self.camera.frame.animate.move_to(Group(ant_pattern_label, ax, AF_plot)),
+            Write(ant_pattern_label),
+        )
+
+        self.wait(0.5)
+
+        ax_rad_labels = Group(
+            *[
+                MathTex(s).move_to(pos)
+                for s, pos in [
+                    (r"0", ax.c2p(-r_min, 0) + UP / 2),
+                    (r"\frac{\pi}{2}", ax.c2p(0, -r_min) + LEFT / 2),
+                    (r"\pi", ax.c2p(r_min, 0) + DOWN / 2),
+                    (r"\frac{3 \pi}{2}", ax.c2p(0, r_min) + RIGHT / 2),
+                ]
+            ]
+        )
+        ax_deg_labels = Group(
+            *[
+                MathTex(s).move_to(pos)
+                for s, pos in [
+                    (r"0^\circ", ax.c2p(-r_min, 0) + UP / 2),
+                    (r"90^\circ", ax.c2p(0, -r_min) + LEFT / 2),
+                    (r"180^\circ", ax.c2p(r_min, 0) + DOWN / 2),
+                    (r"270^\circ", ax.c2p(0, r_min) + RIGHT / 2),
+                ]
+            ]
+        )
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(label) for label in ax_rad_labels],
+                lag_ratio=0.25,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    Transform(rad, deg)
+                    for rad, deg in zip(ax_rad_labels, ax_deg_labels)
+                ],
+                lag_ratio=0.25,
+            )
+        )
+
+        self.wait(0.5)
+
+        dft_of = Tex(
+            r"$\mathcal{F}(?) \rightarrow$", font_size=DEFAULT_FONT_SIZE * 1.5
+        ).move_to(ant_pattern_label)
+
+        dft_y = ant_pattern_label.get_y()
+
+        self.play(
+            ant_pattern_label.animate.next_to(
+                [ant_pattern_label.get_x(), self.camera.frame.get_top()[1], 0], UP
+            ),
+            dft_of.next_to(
+                [dft_of.get_x(), self.camera.frame.get_bottom()[1], 0], DOWN
+            ).animate.set_y(dft_y),
+        )
+
+        self.wait(0.5)
+
+        dft_of_ant = Tex(
+            r"$\mathcal{F}(\text{antenna}?) \rightarrow$",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(dft_of)
+
+        self.play(
+            TransformByGlyphMap(
+                dft_of,
+                dft_of_ant,
+                ([0, 1], [0, 1]),
+                (GrowFromCenter, [2, 3, 4, 5, 6, 7, 8], {"delay": 0.3}),
+                ([2, 3, 4], [9, 10, 11]),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+
+        self.play(
+            self.camera.frame.animate.shift(
+                UP * (ax_deg_labels.get_bottom() - self.camera.frame.get_top()) + DOWN
+            )
+        )
 
         # two_pi_arrow = CurvedArrow(
         #     ax.c2p(0, -r_min) + UP / 2, ax.c2p(0, -r_min) + UP / 2, angle=TAU / 4
@@ -1280,6 +1374,392 @@ class CircularCoords(Scene):
         # self.wait(0.5)
 
         # self.play(steering_angle @ (10))
+
+        self.wait(2)
+
+
+class FourierExplanation(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        max_time = 4
+        f_max = 8
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.3
+        amp_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        f_ax = Axes(
+            x_range=[-f_max, f_max, f_max / 4],
+            y_range=[0, 1, 1],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        amp_labels = amp_ax.get_x_axis_label(MathTex("t"))
+        f_labels = f_ax.get_x_axis_label(MathTex("f"))
+        x_n_label = MathTex("x[n]").next_to(amp_ax, UP)
+        X_k_label = MathTex("X[k]").next_to(f_ax, DOWN)
+        amp_plot_group = Group(amp_ax, amp_labels, x_n_label)
+        f_plot_group = Group(f_ax, f_labels, X_k_label)
+        axes = (
+            Group(amp_plot_group, f_plot_group).arrange(DOWN, LARGE_BUFF).to_edge(LEFT)
+        )
+
+        f = VT(5)
+        offset = VT(0)
+        fs = 200
+        amp_plot = always_redraw(
+            lambda: amp_ax.plot(
+                lambda t: np.sin(2 * PI * ~f * t) + ~offset,
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
+
+        fft_f = VT(f_max)
+
+        def get_fft():
+            N = max_time * fs
+            t = np.linspace(0, max_time, N)
+            sig = np.sin(2 * PI * ~f * t) + ~offset
+
+            fft_len = N * 8
+            sig_fft = fftshift(np.abs(fft(sig, fft_len) / (N)))
+            # fft_log = 10 * np.log10(np.abs(fftshift(sig_fft))) + 40
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+            f_fft_log = interp1d(freq, sig_fft)
+            return f_ax.plot(
+                f_fft_log, x_range=[-~fft_f, ~fft_f, 1 / fs], color=TX_COLOR
+            )
+
+        f_plot = always_redraw(get_fft)
+
+        self.play(
+            Create(amp_ax),
+            Create(f_ax),
+            GrowFromCenter(amp_labels),
+            GrowFromCenter(f_labels),
+            GrowFromCenter(x_n_label),
+            GrowFromCenter(X_k_label),
+        )
+
+        self.wait(0.5)
+
+        dft_arrow = CurvedArrow(
+            amp_ax.get_right(), f_ax.get_right(), angle=-PI / 3
+        ).shift(RIGHT)
+        dft_label = MathTex(r"\mathcal{F}(x[n])").next_to(dft_arrow)
+
+        self.play(
+            Create(amp_plot), Create(f_plot), Create(dft_arrow), FadeIn(dft_label)
+        )
+
+        self.wait(0.5)
+
+        wave_amp_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        wave_amp_labels = wave_amp_ax.get_x_axis_label(MathTex("t"))
+        wave_eqn = MathTex(r"e^{-j 2 \pi f t}").next_to(wave_amp_ax, UP)
+        wave_amp_plot_group = Group(wave_amp_ax, wave_amp_labels, wave_eqn).next_to(
+            self.camera.frame.get_corner(UR), DL, LARGE_BUFF
+        )
+
+        wave_f = VT(2)
+        wave_offset = VT(0)
+        wave_amp_plot = always_redraw(
+            lambda: wave_amp_ax.plot(
+                lambda t: np.sin(2 * PI * ~wave_f * t) + ~wave_offset,
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
+
+        product_amp_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        product_amp_labels = product_amp_ax.get_x_axis_label(MathTex("t"))
+        product_amp_plot_group = Group(product_amp_ax, product_amp_labels).next_to(
+            self.camera.frame.get_corner(UR), DL, LARGE_BUFF
+        )
+
+        product_amp_plot = always_redraw(
+            lambda: product_amp_ax.plot(
+                lambda t: (np.sin(2 * PI * ~wave_f * t) + ~wave_offset)
+                * (np.sin(2 * PI * ~f * t) + ~offset),
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
+
+        plot_group = Group(
+            amp_plot_group.copy(),
+            wave_amp_plot_group,
+            product_amp_plot_group,
+            f_plot_group.copy(),
+        ).arrange_in_grid(2, 2, (LARGE_BUFF, LARGE_BUFF * 2))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    self.camera.frame.animate.scale_to_fit_width(
+                        plot_group.width * 1.1
+                    ).move_to(plot_group),
+                    Uncreate(dft_arrow),
+                    ShrinkToCenter(dft_label),
+                ),
+                AnimationGroup(
+                    amp_plot_group.animate.move_to(plot_group[0]),
+                    f_plot_group.animate.move_to(plot_group[3]),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        # self.play(
+        #     Group(amp_ax, amp_labels, x_n_label).animate.next_to(
+        #         self.camera.frame.get_corner(UL), DR, LARGE_BUFF
+        #     ),
+        #     Group(f_ax, f_labels, X_k_label).animate.next_to(
+        #         self.camera.frame.get_corner(DR), UL, LARGE_BUFF
+        #     ),
+        # )
+
+        self.wait(0.5)
+
+        self.play(
+            wave_amp_plot_group.shift(UP * 8).animate.shift(DOWN * 8),
+            fft_f @ 0,
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(wave_amp_plot))
+
+        self.wait(0.5)
+
+        self.play(product_amp_plot_group.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        mult = MathTex(r"x[n] \cdot e^{-j 2 \pi f t}").next_to(product_amp_ax, DOWN)
+        product_amp_plot_group.add(mult)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(x_n_label[0], mult[0][:4]),
+                GrowFromCenter(mult[0][4]),
+                TransformFromCopy(wave_eqn[0], mult[0][5:]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(product_amp_plot))
+
+        self.wait(0.5)
+
+        num_samples = 16
+        x_n_samples = always_redraw(
+            lambda: amp_ax.get_vertical_lines_to_graph(
+                amp_plot,
+                x_range=[0.0625, 1 - 0.0625],
+                num_lines=num_samples,
+                color=RED,
+                line_func=Line,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+            )
+        )
+        x_n_sample_dots = always_redraw(
+            lambda: Group(*[Dot(sample.get_end(), color=RED) for sample in x_n_samples])
+        )
+
+        product_samples = Group(
+            *[
+                always_redraw(
+                    lambda: Line(
+                        product_amp_ax.c2p(x, 0),
+                        product_amp_ax.input_to_graph_point(x, product_amp_plot),
+                        color=RED
+                        if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1]
+                        > 0
+                        else PURPLE,
+                    )
+                )
+                for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+            ]
+        )
+        product_sample_dots = Group(
+            *[
+                always_redraw(
+                    lambda: Dot(
+                        product_amp_ax.input_to_graph_point(x, product_amp_plot),
+                        color=RED
+                        if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1]
+                        > 0
+                        else PURPLE,
+                    )
+                )
+                for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+            ]
+        )
+
+        x_n_samples_pos = Group()
+        x_n_samples_neg = Group()
+        for sample, dot in zip(x_n_samples, x_n_sample_dots):
+            if sample.get_start()[1] > sample.get_end()[1]:
+                sample.set_color(PURPLE)
+                dot.set_color(PURPLE)
+                x_n_samples_neg.add(Group(sample, dot))
+            else:
+                x_n_samples_pos.add(Group(sample, dot))
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(Create(sample), Create(sample_dot), lag_ratio=0.3)
+                    for sample, sample_dot in zip(x_n_samples, x_n_sample_dots)
+                ],
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.add(product_samples, product_sample_dots)
+
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             LaggedStart(Create(sample), Create(sample_dot), lag_ratio=0.3)
+        #             for sample, sample_dot in zip(product_samples, product_sample_dots)
+        #         ],
+        #         lag_ratio=0.15,
+        #     )
+        # )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        product_samples_static = product_amp_ax.get_vertical_lines_to_graph(
+            product_amp_plot,
+            x_range=[0.0625, 1 - 0.0625],
+            num_lines=num_samples,
+            color=RED,
+            line_func=Line,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1,
+        )
+        product_sample_dots_static = Group(
+            *[Dot(sample.get_end(), color=RED) for sample in product_samples_static]
+        )
+        product_samples_pos_static = Group()
+        product_samples_neg_static = Group()
+        for sample, dot in zip(product_samples_static, product_sample_dots_static):
+            if sample.get_start()[1] > sample.get_end()[1]:
+                sample.set_color(PURPLE)
+                dot.set_color(PURPLE)
+                product_samples_neg_static.add(Group(sample, dot))
+            else:
+                product_samples_pos_static.add(Group(sample, dot))
+
+        samples_pos_stacked = (
+            Group(*[sample.copy() for sample in product_samples_pos_static])
+            .arrange(UP, 0)
+            .next_to(f_ax.c2p(~wave_f), UP, 0)
+        )
+        samples_neg_stacked = (
+            Group(*[sample.copy() for sample in product_samples_neg_static])
+            .arrange(DOWN, 0)
+            .next_to(f_ax.c2p(~wave_f), DOWN, 0)
+        )
+
+        self.add(
+            # samples_neg_stacked,
+            # samples_pos_stacked,
+            product_samples_pos_static,
+            product_samples_neg_static,
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    TransformFromCopy(sample, sample_stacked)
+                    for sample, sample_stacked in zip(
+                        product_samples_pos_static, samples_pos_stacked
+                    )
+                ],
+                lag_ratio=0.15,
+            ),
+            LaggedStart(
+                *[
+                    TransformFromCopy(sample, sample_stacked)
+                    for sample, sample_stacked in zip(
+                        product_samples_neg_static, samples_neg_stacked
+                    )
+                ],
+                lag_ratio=0.15,
+            ),
+        )
+
+        self.wait(0.5)
+
+        samples_stacked = Group(samples_pos_stacked, samples_neg_stacked)
+
+        sample_at_wave_f_line = always_redraw(
+            lambda: Line(
+                f_ax.c2p(~wave_f, 0),
+                f_ax.input_to_graph_point(~wave_f, f_plot),
+                color=RED
+                if f_ax.input_to_graph_coords(~wave_f, f_plot)[1] > 0
+                else PURPLE,
+            )
+        )
+        sample_at_wave_f_dot = always_redraw(
+            lambda: Dot(
+                f_ax.input_to_graph_point(~wave_f, f_plot),
+                color=RED
+                if f_ax.input_to_graph_coords(~wave_f, f_plot)[1] > 0
+                else PURPLE,
+            )
+        )
+        sample_at_wave_f = Group(sample_at_wave_f_line, sample_at_wave_f_dot)
+
+        self.play(
+            ShrinkToCenter(samples_stacked),
+            Create(sample_at_wave_f_line),
+            Create(sample_at_wave_f_dot),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(wave_f @ (~f))
 
         self.wait(2)
 
