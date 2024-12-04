@@ -23,7 +23,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -827,6 +827,7 @@ class HeadOn(MovingCameraScene):
         self.wait(2)
 
 
+# TODO: Re-render
 class FourierAnalogy(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -933,7 +934,7 @@ class FourierAnalogy(MovingCameraScene):
 
         self.play(offset @ 1)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         sinc = Tex(r"$\lvert$sinc$\rvert = \frac{\sin{(x)}}{x}$").next_to(
@@ -989,6 +990,7 @@ class FourierAnalogy(MovingCameraScene):
 
         self.wait(0.5)
 
+        self.camera.frame.save_state()
         self.play(
             self.camera.frame.animate.move_to(
                 amp_ax.get_bottom() + DOWN * MED_LARGE_BUFF, DOWN
@@ -1009,12 +1011,164 @@ class FourierAnalogy(MovingCameraScene):
             antenna = Group(antenna_port, antenna_tri)
             antennas.add(antenna)
 
-        antennas.next_to(amp_ax, UP, LARGE_BUFF)
+        antennas.next_to(amp_ax, UP, LARGE_BUFF * 1.5)
 
         self.play(
             LaggedStart(
                 *[GrowFromCenter(antenna) for antenna in antennas], lag_ratio=0.2
             )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        ts_line = Line(sample_dots[0].get_center(), sample_dots[1].get_center()).shift(
+            UP / 3
+        )
+        ts_line_l = Line(ts_line.get_start() + DOWN / 8, ts_line.get_start() + UP / 8)
+        ts_line_r = Line(ts_line.get_end() + DOWN / 8, ts_line.get_end() + UP / 8)
+        ts_label = MathTex("T_s").next_to(ts_line, UP)
+
+        self.play(
+            LaggedStart(
+                Create(ts_line_l),
+                Create(ts_line),
+                FadeIn(ts_label, shift=DOWN),
+                Create(ts_line_r),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        dx_line = Line(antennas[0].get_top(), antennas[1].get_top()).shift(UP / 3)
+        dx_line_l = Line(dx_line.get_start() + DOWN / 8, dx_line.get_start() + UP / 8)
+        dx_line_r = Line(dx_line.get_end() + DOWN / 8, dx_line.get_end() + UP / 8)
+        dx_label = MathTex("d_x").next_to(dx_line, UP)
+
+        self.play(
+            LaggedStart(
+                Create(dx_line_l),
+                Create(dx_line),
+                FadeIn(dx_label, shift=DOWN),
+                Create(dx_line_r),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        temporal_group = Group(
+            amp_ax,
+            ts_label,
+            amp_labels,
+            samples,
+            *sample_dots,
+            ts_line,
+            ts_line_l,
+            ts_line_r,
+        )
+        temporal_box = SurroundingRectangle(temporal_group)
+        temporal_label = Tex(r"Temporal\\Sampling").next_to(temporal_box, LEFT)
+
+        spatial_group = Group(antennas, dx_label, dx_line, dx_line_l, dx_line_r)
+        spatial_box = SurroundingRectangle(spatial_group)
+        spatial_label = Tex(r"Spatial\\Sampling").next_to(spatial_box, LEFT)
+
+        sampling_labels = Group(
+            temporal_box, temporal_label, spatial_box, spatial_label
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    sampling_labels.width * 1.1
+                )
+                .move_to(sampling_labels)
+                .shift(UP / 3),
+                Create(temporal_box),
+                FadeIn(temporal_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(spatial_box),
+                FadeIn(spatial_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        antennas_new_y = temporal_group.get_y()
+        self.play(
+            self.camera.frame.animate.restore(),
+            Group(temporal_group, temporal_box, temporal_label).animate.shift(
+                LEFT * 20
+            ),
+            Uncreate(spatial_box),
+            FadeOut(spatial_label),
+            spatial_group.animate.set_y(antennas_new_y).shift(DOWN / 3),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(*[ShrinkToCenter(m) for m in antennas], lag_ratio=0.1),
+            Uncreate(f_plot),
+            Uncreate(f_ax),
+            Uncreate(amp_plot),
+            Uncreate(amp_ax),
+            Uncreate(dx_line),
+            Uncreate(dx_line_r),
+            Uncreate(dx_line_l),
+            FadeOut(amp_labels, f_labels, dx_label, sinc),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        dft_eqn = MathTex(
+            r"X_k = \sum_{n=0}^{N-1} x_n \cdot e^{-j 2 \pi \frac{k}{N} n}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(dft_eqn[0][:2]),
+                GrowFromCenter(dft_eqn[0][2]),
+                GrowFromCenter(dft_eqn[0][3:10]),
+                GrowFromCenter(dft_eqn[0][10:12]),
+                GrowFromCenter(dft_eqn[0][12]),
+                GrowFromCenter(dft_eqn[0][13]),
+                GrowFromCenter(dft_eqn[0][14:16]),
+                GrowFromCenter(dft_eqn[0][16]),
+                GrowFromCenter(dft_eqn[0][17]),
+                GrowFromCenter(dft_eqn[0][18:21]),
+                GrowFromCenter(dft_eqn[0][21]),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        what_want = Tex(
+            "what do we actually want?", font_size=DEFAULT_FONT_SIZE * 1.5
+        ).next_to([0, config.frame_height / 2, 0], UP)
+
+        self.play(Group(what_want, dft_eqn).animate.arrange(DOWN, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(*[ShrinkToCenter(m) for m in dft_eqn[0][::-1]], lag_ratio=0.1),
+            LaggedStart(
+                *[ShrinkToCenter(m) for m in what_want[0][::-1]], lag_ratio=0.1
+            ),
         )
 
         self.wait(2)
@@ -1031,8 +1185,8 @@ def compute_af_1d(weights, d_x, k_0, u, u_0):
 
 class CircularCoords(Scene):
     def construct(self):
-        n_elem = 21  # Must be odd
-        weight_trackers = [VT(0) for _ in range(n_elem)]
+        n_elem = 7  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
         weight_trackers[n_elem // 2] @= 1
 
         f_0 = 10e9
@@ -1067,32 +1221,65 @@ class CircularCoords(Scene):
                 fill_value="extrapolate",
             )
             plot = ax.plot_polar_graph(r_func=f_AF, theta_range=[-PI, PI, 2 * PI / 200])
+            plt.figure(figsize=(8, 6))
+            plt.polar(theta, 20 * np.log10(np.abs(AF)) + 30)
+            plt.ylim(0, 30)
+            plt.show()
 
             return plot
 
         AF_plot = always_redraw(get_af)
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.add(ax, AF_plot)
 
-        self.play(
-            LaggedStart(
-                *[
-                    AnimationGroup(
-                        weight_trackers[: n_elem // 2][::-1][n] @ 1,
-                        weight_trackers[n_elem // 2 + 1 :][n] @ 1,
-                    )
-                    for n in range(n_elem // 2)
-                ],
-                lag_ratio=0.3,
-            ),
-            run_time=4,
-        )
+        # self.play(Create(ax), Create(AF_plot))
 
-        self.next_section(skip_animations=skip_animations(False))
+        # self.wait(0.5)
+
+        # arrow_theta = VT(0)
+        # arrow = always_redraw(
+        #     lambda: Arrow(ax.c2p(0, 0), ax.input_to_graph_point(~arrow_theta, AF_plot))
+        # )
+
+        # self.play(GrowArrow(arrow))
+
+        # self.wait(0.5)
+
+        # self.play(arrow_theta @ (2 * PI))
+
+        # self.wait(0.5)
+
+        # self.play(ShrinkToCenter(arrow))
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             AnimationGroup(
+        #                 weight_trackers[: n_elem // 2][::-1][n] @ 1,
+        #                 weight_trackers[n_elem // 2 + 1 :][n] @ 1,
+        #             )
+        #             for n in range(n_elem // 2)
+        #         ],
+        #         lag_ratio=0.3,
+        #     ),
+        #     run_time=4,
+        # )
+
         self.wait(0.5)
 
-        self.play(steering_angle @ (10))
+        # two_pi_arrow = CurvedArrow(
+        #     ax.c2p(0, -r_min) + UP / 2, ax.c2p(0, -r_min) + UP / 2, angle=TAU / 4
+        # )
+
+        # self.play(Create(two_pi_arrow))
+
+        # self.next_section(skip_animations=skip_animations(False))
+        # self.wait(0.5)
+
+        # self.play(steering_angle @ (10))
 
         self.wait(2)
 
