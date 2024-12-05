@@ -1486,13 +1486,6 @@ class FourierExplanation(MovingCameraScene):
 
         wave_f = VT(2)
         wave_offset = VT(0)
-        wave_amp_plot = always_redraw(
-            lambda: wave_amp_ax.plot(
-                lambda t: np.sin(2 * PI * ~wave_f * t) + ~wave_offset,
-                x_range=[0, 1, 1 / fs],
-                color=TX_COLOR,
-            )
-        )
 
         product_amp_ax = Axes(
             x_range=[0, 1, 0.25],
@@ -1509,6 +1502,20 @@ class FourierExplanation(MovingCameraScene):
             self.camera.frame.get_corner(UR), DL, LARGE_BUFF
         )
 
+        plot_group = Group(
+            amp_plot_group.copy(),
+            wave_amp_plot_group,
+            product_amp_plot_group,
+            f_plot_group.copy(),
+        ).arrange_in_grid(2, 2, (LARGE_BUFF, LARGE_BUFF * 2))
+
+        wave_amp_plot = always_redraw(
+            lambda: wave_amp_ax.plot(
+                lambda t: np.sin(2 * PI * ~wave_f * t) + ~wave_offset,
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
         product_amp_plot = always_redraw(
             lambda: product_amp_ax.plot(
                 lambda t: (np.sin(2 * PI * ~wave_f * t) + ~wave_offset)
@@ -1518,13 +1525,7 @@ class FourierExplanation(MovingCameraScene):
             )
         )
 
-        plot_group = Group(
-            amp_plot_group.copy(),
-            wave_amp_plot_group,
-            product_amp_plot_group,
-            f_plot_group.copy(),
-        ).arrange_in_grid(2, 2, (LARGE_BUFF, LARGE_BUFF * 2))
-
+        self.next_section(skip_animations=skip_animations(False))
         self.play(
             LaggedStart(
                 AnimationGroup(
@@ -1602,29 +1603,23 @@ class FourierExplanation(MovingCameraScene):
 
         product_samples = Group(
             *[
-                always_redraw(
-                    lambda: Line(
-                        product_amp_ax.c2p(x, 0),
-                        product_amp_ax.input_to_graph_point(x, product_amp_plot),
-                        color=RED
-                        if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1]
-                        > 0
-                        else PURPLE,
-                    )
+                Line(
+                    product_amp_ax.c2p(x, 0),
+                    product_amp_ax.input_to_graph_point(x, product_amp_plot),
+                    color=RED
+                    if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
+                    else PURPLE,
                 )
                 for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
             ]
         )
         product_sample_dots = Group(
             *[
-                always_redraw(
-                    lambda: Dot(
-                        product_amp_ax.input_to_graph_point(x, product_amp_plot),
-                        color=RED
-                        if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1]
-                        > 0
-                        else PURPLE,
-                    )
+                Dot(
+                    product_amp_ax.input_to_graph_point(x, product_amp_plot),
+                    color=RED
+                    if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
+                    else PURPLE,
                 )
                 for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
             ]
@@ -1652,75 +1647,61 @@ class FourierExplanation(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.add(product_samples, product_sample_dots)
+        # self.add(product_samples, product_sample_dots)
 
-        # self.play(
-        #     LaggedStart(
-        #         *[
-        #             LaggedStart(Create(sample), Create(sample_dot), lag_ratio=0.3)
-        #             for sample, sample_dot in zip(product_samples, product_sample_dots)
-        #         ],
-        #         lag_ratio=0.15,
-        #     )
-        # )
+        self.play(
+            *[
+                AnimationGroup(Create(sample), Create(sample_dot), lag_ratio=0.3)
+                for sample, sample_dot in zip(product_samples, product_sample_dots)
+            ],
+        )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        product_samples_static = product_amp_ax.get_vertical_lines_to_graph(
-            product_amp_plot,
-            x_range=[0.0625, 1 - 0.0625],
-            num_lines=num_samples,
-            color=RED,
-            line_func=Line,
-            stroke_width=DEFAULT_STROKE_WIDTH * 1,
-        )
-        product_sample_dots_static = Group(
-            *[Dot(sample.get_end(), color=RED) for sample in product_samples_static]
-        )
-        product_samples_pos_static = Group()
-        product_samples_neg_static = Group()
-        for sample, dot in zip(product_samples_static, product_sample_dots_static):
+        product_samples_pos = Group()
+        product_samples_neg = Group()
+        for sample, dot in zip(product_samples, product_sample_dots):
             if sample.get_start()[1] > sample.get_end()[1]:
                 sample.set_color(PURPLE)
                 dot.set_color(PURPLE)
-                product_samples_neg_static.add(Group(sample, dot))
+                product_samples_neg.add(Group(sample, dot))
             else:
-                product_samples_pos_static.add(Group(sample, dot))
+                product_samples_pos.add(Group(sample, dot))
 
         samples_pos_stacked = (
-            Group(*[sample.copy() for sample in product_samples_pos_static])
+            Group(*[sample.copy() for sample in product_samples_pos])
             .arrange(UP, 0)
             .next_to(f_ax.c2p(~wave_f), UP, 0)
         )
         samples_neg_stacked = (
-            Group(*[sample.copy() for sample in product_samples_neg_static])
+            Group(*[sample.copy() for sample in product_samples_neg])
             .arrange(DOWN, 0)
             .next_to(f_ax.c2p(~wave_f), DOWN, 0)
         )
 
-        self.add(
-            # samples_neg_stacked,
-            # samples_pos_stacked,
-            product_samples_pos_static,
-            product_samples_neg_static,
-        )
+        # self.add(
+        #     # samples_neg_stacked,
+        #     # samples_pos_stacked,
+        #     product_samples_pos_static,
+        #     product_samples_neg_static,
+        # )
 
         self.play(
             LaggedStart(
                 *[
-                    TransformFromCopy(sample, sample_stacked)
+                    ReplacementTransform(sample, sample_stacked)
                     for sample, sample_stacked in zip(
-                        product_samples_pos_static, samples_pos_stacked
+                        product_samples_pos, samples_pos_stacked
                     )
                 ],
                 lag_ratio=0.15,
             ),
             LaggedStart(
                 *[
-                    TransformFromCopy(sample, sample_stacked)
+                    ReplacementTransform(sample, sample_stacked)
                     for sample, sample_stacked in zip(
-                        product_samples_neg_static, samples_neg_stacked
+                        product_samples_neg, samples_neg_stacked
                     )
                 ],
                 lag_ratio=0.15,
@@ -1756,10 +1737,244 @@ class FourierExplanation(MovingCameraScene):
             Create(sample_at_wave_f_dot),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        self.play(wave_f @ (~f))
+        # def get_dot_updater(x):
+        #     def updater(m):
+        #         plot = product_amp_ax.plot(
+        #             lambda t: (np.sin(2 * PI * ~wave_f * t) + ~wave_offset)
+        #             * (np.sin(2 * PI * ~f * t) + ~offset),
+        #             x_range=[0, 1, 1 / fs],
+        #         )
+        #         m.become(
+        #             Dot(
+        #                 product_amp_ax.c2p(x, 0),
+        #                 product_amp_ax.input_to_graph_point(x, plot),
+        #                 color=RED
+        #                 if product_amp_ax.input_to_graph_coords(x, plot)[1] > 0
+        #                 else PURPLE,
+        #             )
+        #         )
+
+        #     return updater
+
+        # samples_updaters = []
+        # dots_updaters = [
+        #     get_dot_updater(x) for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        # ]
+
+        # for dot, updater in zip(product_sample_dots, dots_updaters):
+        #     dot.add_updater(updater)
+
+        # product_samples = Group(
+        #     *[
+        #         Line(
+        #             product_amp_ax.c2p(x, 0),
+        #             product_amp_ax.input_to_graph_point(x, product_amp_plot),
+        #             color=RED
+        #             if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
+        #             else PURPLE,
+        #         )
+        #         for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        #     ]
+        # )
+        # product_sample_dots = Group(
+        #     *[
+        #         Dot(
+        #             product_amp_ax.input_to_graph_point(x, product_amp_plot),
+        #             color=RED
+        #             if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
+        #             else PURPLE,
+        #         )
+        #         for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        #     ]
+        # )
+
+        # self.wait(.5)
+
+        self.play(Indicate(wave_amp_plot))
+
+        self.wait(0.5)
+
+        self.play(Indicate(product_amp_plot))
+
+        f_rad_xlabels = Group(
+            MathTex(r"-\pi").next_to(f_ax.c2p(-f_max, 0), DOWN),
+            MathTex(r"\frac{-\pi}{2}").next_to(f_ax.c2p(-f_max / 2, 0), DOWN),
+            MathTex(r"\frac{\pi}{2}").next_to(f_ax.c2p(f_max / 2, 0), DOWN),
+            MathTex(r"\pi").next_to(f_ax.c2p(f_max, 0), DOWN),
+        )
+
+        f_fs_xlabels = Group(
+            MathTex(r"-\frac{f_s}{2}").next_to(f_ax.c2p(-f_max, 0), DOWN),
+            MathTex(r"-\frac{f_s}{4}").next_to(f_ax.c2p(-f_max / 2, 0), DOWN),
+            MathTex(r"\frac{f_s}{4}").next_to(f_ax.c2p(f_max / 2, 0), DOWN),
+            MathTex(r"\frac{f_s}{2}").next_to(f_ax.c2p(f_max, 0), DOWN),
+        )
+
+        self.play(
+            LaggedStart(*[GrowFromCenter(m) for m in f_fs_xlabels], lag_ratio=0.2)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    ReplacementTransform(fs, rad)
+                    for rad, fs in zip(f_rad_xlabels, f_fs_xlabels)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        def get_line(x):
+            def updater():
+                p0 = product_amp_ax.c2p(x, 0)
+                p1 = product_amp_ax.input_to_graph_point(x, product_amp_plot)
+                c1 = product_amp_ax.input_to_graph_coords(x, product_amp_plot)
+                color = RED if c1[1] >= 0 else PURPLE
+                line = Line(p0, p1).set_color(color)
+                return line
+
+            return updater
+
+        def get_dot(x):
+            def updater():
+                p1 = product_amp_ax.input_to_graph_point(x, product_amp_plot)
+                c1 = product_amp_ax.input_to_graph_coords(x, product_amp_plot)
+                color = RED if c1[1] >= 0 else PURPLE
+                dot = Dot(p1).set_color(color)
+                return dot
+
+            return updater
+
+        product_samples_new = [
+            always_redraw(get_line(x))
+            for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        ]
+        product_sample_dots_new = [
+            always_redraw(get_dot(x))
+            for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        ]
+        # for x in np.linspace(0.0625, 1 - 0.0625, num_samples):
+        #     line_updater = get_line(x)
+        #     line = always_redraw(line_updater)
+        #     product_samples_new.append(line)
+
+        # x = 0.0625 * 2
+        # product_sample_dots_new = always_redraw(
+        #     lambda: Dot(
+        #         product_amp_ax.input_to_graph_point(x, product_amp_plot),
+        #         color=RED
+        #         if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
+        #         else PURPLE,
+        #     )
+        # )
+
+        self.play(
+            *[Create(m) for m in product_samples_new],
+            *[Create(m) for m in product_sample_dots_new],
+        )
+
+        self.wait(0.5)
+
+        self.play(wave_f @ 0, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(wave_f @ f_max, fft_f @ f_max, run_time=10)
+
+        self.wait(2)
+
+
+class AFToPolar(Scene):
+    def construct(self):
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+        weight_trackers[n_elem // 2] @= 1
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        r_min = -30
+        x_len = config.frame_height * 0.79  # i have no idea
+        y_len = config.frame_height * 0.6
+        ax = Axes(
+            x_range=[-PI, PI, 0.5],
+            y_range=[0, -r_min, 10],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+        polar_ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .rotate(PI / 2)
+            .move_to(ax)
+        )
+
+        def get_af():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = np.clip(
+                20 * np.log10(np.abs(compute_af_1d(weights, d_x, k_0, u, u_0))) - r_min,
+                0,
+                None,
+            )
+            f_AF = interp1d(u * PI, AF, fill_value="extrapolate")
+            return f_AF
+
+        def cartesian_to_polar(point):
+            r = point[1]
+            theta = point[0]
+            return [r * np.cos(-theta + PI / 2), r * np.sin(theta + PI / 2), 0]
+
+        def get_cart_plot():
+            f_AF = get_af()
+            plot = ax.plot(f_AF, x_range=[-PI, PI, 1 / 200], color=TX_COLOR)
+            return plot
+
+        def get_polar_updater(ref):
+            def get_polar_plot():
+                cart_plot = get_cart_plot()
+                plot = (
+                    cart_plot.move_to(ORIGIN, DOWN)
+                    .apply_function(cartesian_to_polar)
+                    .move_to(cart_plot, UP)
+                    .move_to(ref, UP)
+                )
+                return plot
+
+            return get_polar_plot
+
+        AF_plot = get_cart_plot()
+        AF_polar_plot = always_redraw(get_polar_updater(AF_plot.copy()))
+
+        self.add(ax, AF_plot)
+
+        self.play(Transform(AF_plot, AF_polar_plot), run_time=2)
 
         self.wait(2)
 
