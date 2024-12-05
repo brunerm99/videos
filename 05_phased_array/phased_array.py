@@ -23,7 +23,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -585,7 +585,7 @@ class HeadOn(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.restore(), combined_sine_x0 @ 1)
+        self.play(self.camera.frame.animate.restore(), combined_sine_x1 @ 0)
 
         self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
@@ -704,10 +704,15 @@ class HeadOn(MovingCameraScene):
         shifted_combined_sine_x0 = VT(0)
         shifted_combined_sine_x1 = VT(0)
 
+        phase_shifter_val_left = VT(0)
+        phase_shifter_val_right = VT(0)
+
         shifted_combined_sine = always_redraw(
             lambda: combined_ax.plot(
-                lambda t: amp_scale * np.sin(2 * PI * sine_f * t + ~phase_left)
-                + amp_scale * np.sin(2 * PI * sine_f * t + ~phase_right),
+                lambda t: amp_scale
+                * np.sin(2 * PI * sine_f * t + ~phase_left + ~phase_shifter_val_left)
+                + amp_scale
+                * np.sin(2 * PI * sine_f * t + ~phase_right + ~phase_shifter_val_right),
                 x_range=[
                     ~shifted_combined_sine_x0,
                     ~shifted_combined_sine_x1,
@@ -823,6 +828,115 @@ class HeadOn(MovingCameraScene):
         self.play(
             self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
         )
+
+        self.wait(0.5)
+
+        shifted_phase_label_left = always_redraw(
+            lambda: MathTex(
+                f"\\Delta \\phi = {~phase_shifter_val_left * 180 / PI:.1f}^\\circ"
+            ).next_to(phase_shifter_left, LEFT, MED_LARGE_BUFF)
+        )
+        shifted_phase_label_right = always_redraw(
+            lambda: MathTex(
+                f"\\Delta \\phi = {~phase_shifter_val_right * 180 / PI:.1f}^\\circ"
+            ).next_to(phase_shifter_right, RIGHT, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            FadeIn(shifted_phase_label_left, shift=RIGHT),
+            FadeIn(shifted_phase_label_right, shift=LEFT),
+        )
+
+        self.wait(0.5)
+
+        phase_shifter_left_ax = (
+            Axes(
+                x_range=[0, 1, 0.25],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False, "include_ticks": False},
+                x_length=x_len,
+                y_length=y_len,
+            )
+            .rotate(-PI / 2)
+            .next_to(phase_shifter_left, DOWN, 0)
+        )
+        phase_shifter_right_ax = (
+            Axes(
+                x_range=[0, 1, 0.25],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False, "include_ticks": False},
+                x_length=x_len,
+                y_length=y_len,
+            )
+            .rotate(-PI / 2)
+            .next_to(phase_shifter_right, DOWN, 0)
+        )
+
+        after_phase_shift_x0 = VT(0)
+        after_phase_shift_x1 = VT(0)
+        after_phase_shift_left = always_redraw(
+            lambda: phase_shifter_left_ax.plot(
+                lambda t: amp_scale
+                * np.sin(2 * PI * sine_f * t + ~phase_left + ~phase_shifter_val_left),
+                x_range=[
+                    ~after_phase_shift_x0,
+                    ~after_phase_shift_x1,
+                    1 / 1000,
+                ],
+                color=RX_COLOR,
+            )
+        )
+        after_phase_shift_right = always_redraw(
+            lambda: phase_shifter_right_ax.plot(
+                lambda t: amp_scale
+                * np.sin(2 * PI * sine_f * t + ~phase_right + ~phase_shifter_val_right),
+                x_range=[
+                    ~after_phase_shift_x0,
+                    ~after_phase_shift_x1,
+                    1 / 1000,
+                ],
+                color=RX_COLOR,
+            )
+        )
+
+        self.add(after_phase_shift_left, after_phase_shift_right)
+
+        self.play(after_phase_shift_x1 @ 1)
+
+        self.wait(0.5)
+
+        self.play(phase_shifter_val_left + PI, phase_shifter_val_right - PI)
+
+        self.wait(0.5)
+
+        self.play(phase_shifter_val_left - PI, phase_shifter_val_right + PI)
+
+        self.wait(0.5)
+
+        self.play(phase_shifter_val_left @ (-~phase_left))
+
+        self.wait(0.5)
+
+        self.play(shifted_combined_sine_x1 @ 1)
+
+        self.wait(0.5)
+
+        plane_wave = Line(
+            LEFT * (config.frame_width * 1.2 / 2),
+            RIGHT * (config.frame_width * 1.2 / 2),
+            color=TX_COLOR,
+        ).to_edge(UP)
+
+        self.add(plane_wave)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        self.play(plane_wave.animate.set_y(antennas.get_top()[1]))
+        self.play(FadeOut(plane_wave))
 
         self.wait(2)
 
