@@ -1,0 +1,5 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/tech-videos/06_radar_range_equation/media/videos/radar_equation/1080p60/partial_movie_files/Eqn/2465084616_3679816012_2358810818.mp4'
+file 'file:/home/marchall/documents/tech-videos/06_radar_range_equation/media/videos/radar_equation/1080p60/partial_movie_files/Eqn/3497492553_1959358871_3536887830.mp4'
+file 'file:/home/marchall/documents/tech-videos/06_radar_range_equation/media/videos/radar_equation/1080p60/partial_movie_files/Eqn/3497492553_83459847_2033954522.mp4'
+file 'file:/home/marchall/documents/tech-videos/06_radar_range_equation/media/videos/radar_equation/1080p60/partial_movie_files/Eqn/3497492553_1141282389_1427458371.mp4'
