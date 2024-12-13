@@ -43,3 +43,11 @@ The velocity of a target is often obtained using the Doppler frequency shift it 
 In this video I introduce two methods for dealing with this issue and provide a python notebook to play around with the methods yourself.
 
 ![thumbnail](./04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_2.png)
+
+## [06 - Explaining the Radar Range Equation | The Animated Radar Cheatsheet](https://youtu.be/UKbQcEZIKgc)
+
+The Radar Range Equation is easily one of the most important equations to understand when learning about radar systems.
+
+This video gives a brief overview of it and how to compute it with some real-world values. It's part of a larger series called "The Animated Radar Cheatsheet" which aims to be a good reference for radar engineers and make the equations more approachable.
+
+![thumbnail](./06_radar_range_equation/media/images/radar_equation/thumbnails/Thumbnail_1.png)
