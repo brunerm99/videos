@@ -1,0 +1,12 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/351877672_1837119014_2151884159.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_1959358871_3516775805.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_2713176694_4227516557.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_1959358871_1149374899.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_3805850835_360990762.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_1959358871_789147447.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_2363798088_3474277910.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_1959358871_1129960190.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_3190868659_482743976.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_1901173957_2150486868.mp4'
+file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/480p15/partial_movie_files/Signal/2569687712_1141282389_3783923266.mp4'
