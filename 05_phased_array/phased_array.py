@@ -8,8 +8,9 @@ import warnings
 import numpy as np
 from numpy.fft import fft, fftshift
 from manim import *
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, bisplrep, bisplev
 from scipy.constants import c
+from scipy import signal
 from MF_Tools import VT, TransformByGlyphMap
 
 
@@ -2220,3 +2221,120 @@ class FourierTransformPolar(Scene):
         )
 
         self.play(theta_tracker @ (2 * PI), run_time=5, rate_func=rate_functions.linear)
+
+
+def compute_af_2d(weights_n, weights_m, d_x, d_y, k_0, u_0, v_0, U, V, M, N, m, n):
+    AF_m = np.sum(
+        weights_n[:, None, None]
+        * np.exp(1j * n[:, None, None] * d_x * k_0 * (U - u_0)),
+        axis=0,
+    )
+    AF_n = np.sum(
+        weights_m[:, None, None]
+        * np.exp(1j * m[:, None, None] * d_y * k_0 * (V - v_0)),
+        axis=0,
+    )
+
+    AF = AF_m * AF_n / (M * N)
+    return AF
+
+
+class AF3D(ThreeDScene):
+    def construct(self):
+        plot_vel = (-20, 20)  # m/s
+        plot_range = (0, 40)  # m
+
+        # v_ind = np.where((vels > plot_vel[0]) & (vels < plot_vel[1]))[0]
+        # vx = vels[v_ind[0] : v_ind[-1]]
+
+        # n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        # r_ind = np.where((n_ranges > plot_range[0]) & (n_ranges < plot_range[1]))[0]
+        # ry = n_ranges[r_ind[0] : r_ind[-1]]
+
+        # rdz = range_doppler[r_ind[0] : r_ind[-1], v_ind[0] : v_ind[-1]]
+        N = 9
+        M = 9
+        nbar_n = 5
+        nbar_m = 5
+        sll_n = 40
+        sll_m = 40
+
+        n = np.arange(N)
+        m = np.arange(M)
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        steering_angle = 0
+        u_0 = np.sin(steering_angle * PI / 180)
+
+        d_x = wavelength_0 / 2
+        d_y = wavelength_0 / 2
+
+        steering_angle_theta = 0
+        steering_angle_phi = 0
+
+        u_0 = np.sin(steering_angle_theta * PI / 180)
+        v_0 = np.sin(steering_angle_phi * PI / 180)
+
+        window_n = np.ones(N)
+        window_m = np.ones(M)
+
+        # window_n = np.zeros(N)
+        # window_n[N // 2] = 1
+        # window_m = np.zeros(M)
+        # window_m[M // 2] = 1
+        window_n = signal.windows.taylor(N)
+        window_m = signal.windows.taylor(M)
+        U_vis = 40
+        V_vis = 40
+        u2 = np.linspace(-1, 1, U_vis)
+        v2 = np.linspace(-1, 1, V_vis)
+
+        U, V = np.meshgrid(u2, v2, indexing="xy")  # mesh grid of sine space
+        # X, Y = np.meshgrid(vx, ry, indexing="xy")
+
+        z_min = -40
+        AF = np.clip(
+            10
+            * np.log10(
+                np.abs(
+                    compute_af_2d(
+                        window_n, window_m, d_x, d_y, k_0, u_0, v_0, U, V, M, N, m, n
+                    )
+                )
+            )
+            - z_min,
+            0,
+            None,
+        )
+
+        tck = bisplrep(U, V, AF)
+
+        axes = ThreeDAxes(
+            x_range=[-1, 1, 1 / 2],
+            y_range=[-1, 1, 1 / 2],
+            z_range=[0, -z_min],
+            x_length=8,
+        )
+        surface = always_redraw(
+            lambda: Surface(
+                lambda u, v: axes.c2p(
+                    spherical_to_cartesian((bisplev(u, v, tck), u, v))
+                ),
+                # lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
+                u_range=[-1, 1],
+                v_range=[-1, 1],
+                resolution=(U_vis, V_vis),
+            )
+            .set_z(0)
+            .set_style(fill_opacity=1)
+            .set_fill_by_value(
+                axes=axes, colorscale=[(BLUE, 0), (RED, -z_min - 20)], axis=2
+            )
+        )
+
+        self.set_camera_orientation(theta=45 * DEGREES, phi=50 * DEGREES, zoom=0.7)
+
+        self.add(surface)
