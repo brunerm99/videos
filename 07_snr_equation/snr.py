@@ -2,6 +2,7 @@
 
 import sys
 import warnings
+import random
 
 from numpy.fft import fft, fftshift
 from manim import *
@@ -17,7 +18,7 @@ from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -319,7 +320,7 @@ class GasCollision(MovingCameraScene):
         collision_margin = 0.1
 
         for _ in range(num_particles):
-            particle = Dot(radius=0.1, color=YELLOW)
+            particle = Dot(radius=0.1, color=BLUE)
             particle.move_to(
                 box.get_center()
                 + [
@@ -421,6 +422,92 @@ class GasCollision(MovingCameraScene):
 
         self.camera.frame.add_updater(cam_updater)
         self.add(particle_trace)
+        self.camera.frame.save_state()
         self.play(self.camera.frame.animate.scale(0.3))
+
+        self.wait(3)
+
+        n_potentials = 16
+        for idx in range(n_potentials):
+            self.play(
+                MathTex(f"v_{{{idx}}}", color=YELLOW)
+                .scale(0.8)
+                .move_to(particle_to_follow)
+                .set_opacity(0)
+                .animate(rate_func=rate_functions.there_and_back, run_time=0.8)
+                .set_opacity(1)
+            )
+
+        self.wait(3)
+
+        self.camera.frame.remove_updater(cam_updater)
+        self.play(self.camera.frame.animate.restore())
+
+        traced_paths = Group(
+            *[
+                TracedPath(
+                    particle.get_center,
+                    dissipating_time=2,
+                    stroke_opacity=[0, 1],
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                ).set_z_index(-1)
+                for particle in particles
+            ]
+        )
+
+        self.add(traced_paths)
+        # self.remove(particle_trace)
+
+        for idx in range(n_potentials):
+            self.play(
+                *[
+                    MathTex(f"v_{{{pidx},{idx}}}", color=YELLOW)
+                    .scale(0.8)
+                    .move_to(particle)
+                    .set_opacity(0)
+                    .animate(rate_func=rate_functions.there_and_back, run_time=0.8)
+                    .set_opacity(1)
+                    for pidx, particle in enumerate(particles)
+                ]
+            )
+
+        particles.remove_updater(update_particles)
+        for traced_path in traced_paths:
+            traced_path.remove_updater(traced_path.update_path)
+
+        potential_labels = Group(
+            *[
+                MathTex(f"v_{{{pidx},{n_potentials}}}", color=YELLOW)
+                .scale(0.8)
+                .move_to(particle)
+                .set_opacity(0)
+                for pidx, particle in enumerate(particles)
+            ]
+        )
+        self.play(potential_labels.animate(run_time=0.8).set_opacity(1))
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.shift(
+                LEFT
+                * (
+                    (self.camera.frame.get_right()[0])
+                    - (box.get_right()[0] + LARGE_BUFF * 2)
+                )
+            )
+        )
+
+        total_pot = MathTex(
+            r"\text{Total potential} = \  &"
+            + r" \\ &+ ".join(
+                [
+                    f"v_{{{pidx},{n_potentials}}}"
+                    for pidx, particle in enumerate(particles)
+                ]
+            )
+        ).next_to(self.camera.frame.get_left(), RIGHT, LARGE_BUFF)
+
+        self.add(total_pot)
 
         self.wait(10)
