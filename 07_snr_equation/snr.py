@@ -10,11 +10,15 @@ import numpy as np
 from MF_Tools import TransformByGlyphMap, VT
 from scipy.interpolate import interp1d
 from scipy import signal
+from scipy.constants import c
 
 warnings.filterwarnings("ignore")
 sys.path.insert(0, "..")
 
 from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
+from props.block_diagram import get_blocks
+
+BLOCKS = get_blocks()
 
 config.background_color = BACKGROUND_COLOR
 
@@ -25,13 +29,22 @@ def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
 
 
+def compute_af_1d(weights, d_x, k_0, u, u_0):
+    n = np.arange(weights.size)
+    AF = np.sum(
+        weights[:, None] * np.exp(1j * n[:, None] * d_x * k_0 * (u - u_0)), axis=0
+    )
+    AF /= AF.max()
+    return AF
+
+
 class EqnIntro(Scene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         # snr_eqn = MathTex(r"\frac{P_t G_t }")
 
         snr_eqn = MathTex(
-            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4 k T_s B_n L}",
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4 k T_s B_n F}",
             font_size=DEFAULT_FONT_SIZE * 1.8,
         )
 
@@ -152,7 +165,7 @@ class EqnIntro(Scene):
         self.wait(0.5)
 
         snr_eqn_split = MathTex(
-            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n L}",
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n F}",
             font_size=DEFAULT_FONT_SIZE * 1.8,
         )
 
@@ -191,8 +204,9 @@ class EqnIntro(Scene):
 
 class Signal(Scene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         snr_eqn = MathTex(
-            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n L}",
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n F}",
             font_size=DEFAULT_FONT_SIZE * 1.8,
         )
         snr_eqn[0][0].set_color(BLUE)
@@ -295,6 +309,407 @@ class Signal(Scene):
         self.wait(0.5)
 
         self.play(amp @ 2)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(Group(signal_eqn, ax).animate.to_edge(UP, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        pt = (
+            MathTex("P_t", font_size=DEFAULT_FONT_SIZE * 2, color=YELLOW)
+            .to_edge(DOWN, LARGE_BUFF)
+            .set_x(signal_eqn.get_x())
+        )
+        pt_up = Arrow(pt.get_bottom(), pt.get_top(), buff=0).next_to(pt)
+        pt_group = Group(pt, pt_up)
+
+        cost = Tex(r"\$", font_size=DEFAULT_FONT_SIZE * 2).next_to(
+            pt_up, RIGHT, LARGE_BUFF * 2
+        )
+        cost_up = Arrow(cost.get_bottom(), cost.get_top(), buff=0).next_to(cost)
+        cost_group = Group(cost, cost_up)
+
+        power_icon = (
+            SVGMobject("../props/static/lightning.svg")
+            .set_fill(YELLOW)
+            .set_color(YELLOW)
+        )
+        power_circle = Circle(power_icon.get_height() * 1, color=WHITE).move_to(
+            power_icon
+        )
+        power = (
+            Group(power_icon, power_circle)
+            .scale_to_fit_height(cost.height * 1.1)
+            .next_to(cost_up, RIGHT, LARGE_BUFF * 2)
+        )
+        power_up = Arrow(power.get_bottom(), power.get_top(), buff=0).next_to(power)
+        power_group = Group(power, power_up)
+
+        heat = (
+            ImageMobject("../props/static/fire.png")
+            .scale_to_fit_height(power.get_height())
+            .next_to(power_up, RIGHT, LARGE_BUFF * 2)
+        )
+        heat_up = Arrow(heat.get_bottom(), heat.get_top(), buff=0).next_to(heat)
+        heat_group = Group(heat, heat_up)
+
+        pt_tradeoffs = (
+            Group(pt_group, cost_group, power_group, heat_group)
+            .arrange(RIGHT, LARGE_BUFF * 2)
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(signal_eqn[:2], pt[0], path_arc=-PI / 3),
+                GrowArrow(pt_up),
+                lag_ratio=0.4,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                cost.shift(DOWN * 5).animate.shift(UP * 5),
+                GrowArrow(cost_up),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                power.shift(DOWN * 5).animate.shift(UP * 5),
+                GrowArrow(power_up),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                heat.shift(DOWN * 5).animate.shift(UP * 5),
+                GrowArrow(heat_up),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pt_tradeoffs.animate.shift(DOWN * 6),
+            ax.animate.shift(RIGHT * 10),
+            signal_eqn.animate.set_y(0),
+        )
+        self.play(signal_eqn[:2].animate.set_color(BLUE))
+
+        self.remove(pt_tradeoffs, ax, plot)
+
+        self.wait(0.5)
+
+        self.play(signal_eqn[2:4].animate.set_color(YELLOW))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(0) for _ in range(n_elem)]
+        weight_trackers[n_elem // 2] @= 1
+        for wt in [
+            *weight_trackers[n_elem // 2 : n_elem // 2 + n_elem // 4],
+            *weight_trackers[n_elem // 2 - n_elem // 4 : n_elem // 2],
+        ]:
+            wt @= 1
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        r_min = -30
+
+        AF_scale = VT(1)
+
+        x_len = config.frame_width * 0.6
+        af_ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .next_to([config.frame_width / 2, 0, 0], RIGHT)
+        )
+
+        theta_min = VT(-PI / 2)
+        theta_max = VT(PI / 2)
+
+        def get_af():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+            AF_log = np.clip(20 * np.log10(np.abs(AF)) - r_min, 0, None) * ~AF_scale
+            f_AF = interp1d(u * PI, AF_log, fill_value="extrapolate")
+            plot = af_ax.plot_polar_graph(
+                r_func=f_AF,
+                theta_range=[~theta_min, ~theta_max, 2 * PI / 200],
+                color=TX_COLOR,
+            )
+            return plot
+
+        AF_plot = always_redraw(get_af)
+        self.add(AF_plot)
+
+        self.play(af_ax.animate.to_edge(RIGHT, LARGE_BUFF), run_time=2)
+
+        self.wait(0.5)
+
+        n_elem_disp = 8
+        phased_array = (
+            Group(*[Square(side_length=0.6) for _ in range(n_elem_disp)])
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(af_ax.c2p(0, 0), LEFT)
+        )
+
+        self.play(
+            # theta_min @ (-PI / 2),
+            # theta_max @ (PI / 2),
+            LaggedStart(
+                *[
+                    AnimationGroup(GrowFromCenter(m_up), GrowFromCenter(m_down))
+                    for m_up, m_down in zip(
+                        phased_array[2 : len(phased_array) // 2][::-1],
+                        phased_array[len(phased_array) // 2 : -2],
+                    )
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(GrowFromCenter(m_up), GrowFromCenter(m_down))
+                    for m_up, m_down in zip(
+                        phased_array[:2][::-1],
+                        phased_array[-2:],
+                    )
+                ],
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 4][::-1][n] @ 1,
+                        weight_trackers[-n_elem // 4 :][n] @ 1,
+                    )
+                    for n in range(n_elem // 4)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        size = MathTex(r"m^2", font_size=DEFAULT_FONT_SIZE * 2)
+        size_up = Arrow(size.get_bottom(), size.get_top(), buff=0).next_to(size)
+        size_group = Group(size, size_up)
+
+        cost = Tex(r"\$", font_size=DEFAULT_FONT_SIZE * 2).next_to(
+            size_up, RIGHT, LARGE_BUFF * 2
+        )
+        cost_up = Arrow(cost.get_bottom(), cost.get_top(), buff=0).next_to(cost)
+        cost_group = Group(cost, cost_up)
+
+        power_icon = (
+            SVGMobject("../props/static/lightning.svg")
+            .set_fill(YELLOW)
+            .set_color(YELLOW)
+        )
+        power_circle = Circle(power_icon.get_height() * 1, color=WHITE).move_to(
+            power_icon
+        )
+        power = (
+            Group(power_icon, power_circle)
+            .scale_to_fit_height(cost.height * 1.1)
+            .next_to(cost_up, RIGHT, LARGE_BUFF * 2)
+        )
+        power_up = Arrow(power.get_bottom(), power.get_top(), buff=0).next_to(power)
+        power_group = Group(power, power_up)
+
+        gt_tradeoffs = (
+            Group(size_group, cost_group, power_group)
+            .arrange(RIGHT, LARGE_BUFF)
+            .to_corner(DL, MED_LARGE_BUFF)
+            .shift(UP / 2)
+        )
+
+        self.play(
+            LaggedStart(
+                size.shift(DOWN * 5).animate.shift(UP * 5),
+                GrowArrow(size_up),
+                cost.shift(DOWN * 5).animate.shift(UP * 5),
+                GrowArrow(cost_up),
+                power.shift(DOWN * 5).animate.shift(UP * 5),
+                GrowArrow(power_up),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        ShrinkToCenter(phased_array[: n_elem_disp // 2][::-1][n]),
+                        ShrinkToCenter(phased_array[n_elem_disp // 2 :][n]),
+                    )
+                    for n in range(n_elem_disp // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            AF_scale @ 0,
+            gt_tradeoffs.animate.shift(DOWN * 6),
+            signal_eqn[2:4].animate.set_color(BLUE),
+        )
+        self.remove(af_ax, AF_plot, gt_tradeoffs)
+
+        self.wait(0.5)
+
+        self.play(signal_eqn[4:6].animate.set_color(YELLOW))
+
+        self.wait(0.5)
+
+        wavelength_eqn = MathTex(
+            r"\lambda = \frac{c}{f}", font_size=DEFAULT_FONT_SIZE * 2
+        ).shift(UP + RIGHT)
+        wavelength_eqn[0][0].set_color(YELLOW)
+
+        f_relation = MathTex(r"f \sim", font_size=DEFAULT_FONT_SIZE * 2).next_to(
+            wavelength_eqn, DOWN, LARGE_BUFF, LEFT
+        )
+        antenna = BLOCKS.get("antenna").copy().next_to(f_relation, RIGHT)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(signal_eqn[4], wavelength_eqn[0][0], path_arc=PI / 3),
+                *[GrowFromCenter(m) for m in wavelength_eqn[0][1:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(wavelength_eqn[0][-1], f_relation[0][0]),
+                GrowFromCenter(f_relation[0][1]),
+                GrowFromCenter(antenna),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    ShrinkToCenter(m)
+                    for m in [*wavelength_eqn[0], *f_relation[0], antenna]
+                ],
+                lag_ratio=0.1,
+            ),
+            signal_eqn[4:6].animate.set_color(BLUE),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        snr_eqn_new = MathTex(
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n F}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        signal_eqn_new = snr_eqn_new[0][4:-9]
+
+        self.play(signal_eqn.animate.move_to(signal_eqn_new))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                signal_eqn[:2]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(UP / 2),
+                signal_eqn[2:4]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(UP / 2),
+                signal_eqn[4:6]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(UP / 2),
+                signal_eqn[6]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(UP / 2),
+                signal_eqn[-2:]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(DOWN / 2),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            snr_eqn[0][:4].shift(LEFT * 10).animate.shift(RIGHT * 10),
+            snr_eqn[0][-9:].shift(RIGHT * 10).animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        noise = MathTex("k T_s B_n F", font_size=DEFAULT_FONT_SIZE * 1.8)
+
+        self.play(
+            LaggedStart(
+                snr_eqn[0][:4].animate.shift(LEFT * 10),
+                signal_eqn.animate.shift(LEFT * 12),
+                ShrinkToCenter(snr_eqn[0][-9]),
+                ShrinkToCenter(snr_eqn[0][-8]),
+                ShrinkToCenter(snr_eqn[0][-7]),
+                snr_eqn[0][-6:].animate.move_to(noise[0]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(snr_eqn[0][-6:].animate.scale(1.5))
 
         self.wait(2)
 
