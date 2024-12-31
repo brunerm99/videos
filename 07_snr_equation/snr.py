@@ -693,7 +693,7 @@ class Signal(Scene):
 
         self.wait(0.5)
 
-        noise = MathTex("k T_s B_n F", font_size=DEFAULT_FONT_SIZE * 1.8)
+        noise = MathTex("k T_s B_n F", color=RED, font_size=DEFAULT_FONT_SIZE * 1.8)
 
         self.play(
             LaggedStart(
@@ -714,8 +714,575 @@ class Signal(Scene):
         self.wait(2)
 
 
+class Noise(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        noise = MathTex(
+            "k T_s B_n F", color=RED, font_size=DEFAULT_FONT_SIZE * 1.8
+        ).scale(1.5)
+
+        noise_def = MathTex(
+            r"&k\  \text{| Boltzmann's constant} \\ &T_s\  \text{| System temperature} \\ &B_n\  \text{| Receiver bandwidth} \\ &F\  \text{| Noise factor}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).to_edge(DOWN, LARGE_BUFF)
+        noise_def[0][0].set_color(RED)
+        noise_def[0][21:23].set_color(RED)
+        noise_def[0][41:43].set_color(RED)
+        noise_def[0][61].set_color(RED)
+
+        self.add(noise)
+
+        # fmt:off
+        self.play(
+            TransformByGlyphMap(
+                noise,
+                noise_def,
+                ([0], [0]),
+                (FadeIn, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20], {"delay": 0.2, "shift": LEFT}),
+                ([1, 2], [21, 22],{"delay":.1}),
+                (FadeIn, [23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40], {"delay": 0.6, "shift": LEFT}),
+                ([3, 4], [41, 42],{"delay":.2}),
+                (FadeIn, [43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60], {"delay": 1, "shift": LEFT}),
+                ([5], [61],{"delay":.3}),
+                (FadeIn, [62,63,64,65,66,67,68,69,70,71,72,73], {"delay": 1.4, "shift": LEFT}),
+                from_copy=True,
+            ),
+            noise.animate.to_edge(UP,LARGE_BUFF)
+        )
+        # fmt:on
+
+        self.wait(0.5)
+
+        noise_sep = (
+            MathTex(r"k T_s B_n \cdot F", color=RED, font_size=DEFAULT_FONT_SIZE * 1.8)
+            .scale(1.5)
+            .set_y(noise.get_y())
+        )
+
+        self.play(
+            TransformByGlyphMap(
+                noise,
+                noise_sep,
+                ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
+                (GrowFromCenter, [5], {"delay": 0.4}),
+                ([5], [6]),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(noise_def.animate.shift(DOWN * 10))
+
+        self.wait(0.5)
+
+        thermal = (
+            Tex("Thermal noise", font_size=DEFAULT_FONT_SIZE * 1.5)
+            .to_edge(LEFT, LARGE_BUFF)
+            .shift(DOWN)
+        )
+        thermal_line = CubicBezier(
+            noise_sep[0][:5].get_bottom() + [0, -0.1, 0],
+            noise_sep[0][:5].get_bottom() + [0, -1, 0],
+            thermal.get_top() + [0, 1, 0],
+            thermal.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(LaggedStart(Create(thermal_line), FadeIn(thermal), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        nf_label = (
+            Tex("Noise factor", font_size=DEFAULT_FONT_SIZE * 1.5)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(DOWN)
+        )
+        nf_line = CubicBezier(
+            noise_sep[0][-1].get_bottom() + [0, -0.1, 0],
+            noise_sep[0][-1].get_bottom() + [0, -1, 0],
+            nf_label.get_top() + [0, 1, 0],
+            nf_label.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(LaggedStart(Create(nf_line), FadeIn(nf_label), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        title_group = (
+            Group(thermal.copy(), noise_sep[0][:5].copy().scale(1 / 1.5))
+            .arrange(RIGHT, LARGE_BUFF)
+            .to_edge(UP, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(thermal_line), Uncreate(nf_line), FadeOut(nf_label)
+                ),
+                noise_sep[0][-2].animate.shift(UP * 4),
+                noise_sep[0][-1].animate.shift(UP * 4),
+                AnimationGroup(
+                    thermal.animate.move_to(title_group[0]),
+                    noise_sep[0][:5].animate.scale(1 / 1.5).move_to(title_group[1]),
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(2)
+
+
+class Thermal(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        np.random.seed(0)
+
+        thermal = Tex("Thermal noise", font_size=DEFAULT_FONT_SIZE * 1.5)
+        noise_eqn = MathTex(r"k T_s B_n", color=RED, font_size=DEFAULT_FONT_SIZE * 1.8)
+        title_group = (
+            Group(thermal, noise_eqn)
+            .arrange(RIGHT, LARGE_BUFF)
+            .to_edge(UP, MED_LARGE_BUFF)
+        )
+
+        up_shift = VT(0)
+        right_shift = VT(0)
+        box = always_redraw(
+            lambda: Square(side_length=3, color=WHITE).shift(
+                UP * ~up_shift + RIGHT * ~right_shift
+            )
+        )
+        self.add(box)
+
+        num_particles = 10
+        particles = VGroup()
+        velocities = []
+        colliding = [False] * num_particles
+
+        max_vel = 1.5
+
+        collision_margin = 0.1
+
+        for _ in range(num_particles):
+            particle = Dot(radius=0.1, color=BLUE)
+            particle.move_to(
+                box.get_center()
+                + [
+                    np.random.uniform(
+                        -1.5 + collision_margin,
+                        1.5 - collision_margin,
+                    ),
+                    np.random.uniform(
+                        -1.5 + collision_margin,
+                        1.5 - collision_margin,
+                    ),
+                    0,
+                ]
+            )
+            particles.add(particle)
+            velocities.append(np.random.uniform(-max_vel, max_vel, size=2))
+
+        self.add(particles)
+
+        vel_mult = VT(1)
+
+        def update_particles(group, dt):
+            for i, particle in enumerate(group):
+                particle.shift(
+                    dt * velocities[i][0] * ~vel_mult * RIGHT
+                    + dt * velocities[i][1] * ~vel_mult * UP
+                )
+
+                if (
+                    particle.get_center()[0] >= box.get_right()[0] - collision_margin
+                    and not colliding[i]
+                ):
+                    velocities[i][0] *= -1
+                    colliding[i] = not colliding[i]
+                elif (
+                    particle.get_center()[0] <= box.get_left()[0] + collision_margin
+                    and not colliding[i]
+                ):
+                    velocities[i][0] *= -1
+                    colliding[i] = not colliding[i]
+                elif (
+                    particle.get_center()[1] >= box.get_top()[1] - collision_margin
+                    and not colliding[i]
+                ):
+                    velocities[i][1] *= -1
+                    colliding[i] = not colliding[i]
+                elif (
+                    particle.get_center()[1] <= box.get_bottom()[1] + collision_margin
+                    and not colliding[i]
+                ):
+                    velocities[i][1] *= -1
+                    colliding[i] = not colliding[i]
+                else:
+                    colliding[i] = False
+
+                for j, other_particle in enumerate(group):
+                    if (
+                        i != j
+                        and np.linalg.norm(
+                            particle.get_center() - other_particle.get_center()
+                        )
+                        < collision_margin * 2
+                    ):
+                        velocities[i], velocities[j] = (velocities[j], velocities[i])
+
+        particles.add_updater(update_particles)
+
+        self.add(title_group)
+
+        temp_label = Tex(r"Temp $\sim$").to_edge(LEFT)
+        fire = (
+            Group(*[ImageMobject("../props/static/fire.png") for _ in range(4)])
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .scale_to_fit_height(temp_label.height * 1.2)
+            .next_to(temp_label)
+        )
+        temp_group = Group(temp_label, fire)  # .next_to(box, LEFT, LARGE_BUFF)
+
+        self.add(temp_label, fire[0])
+
+        self.camera.frame.shift(
+            LEFT * (self.camera.frame.get_right()[0] - temp_label.get_left()[0]) + LEFT
+        )
+        title_group.next_to(self.camera.frame.get_top(), DOWN, MED_LARGE_BUFF)
+        title_group_x = title_group.get_x()
+        self.camera.frame.save_state()
+
+        right_screen_group = Group(temp_group, box)
+        self.play(
+            title_group.animate.set_x(right_screen_group.get_x()),
+            self.camera.frame.animate.set_x(right_screen_group.get_x()),
+            run_time=2,
+        )
+
+        self.wait(2)
+
+        self.play(
+            vel_mult @ 4,
+            LaggedStart(*[GrowFromCenter(m) for m in fire[1:]], lag_ratio=0.3),
+            run_time=5,
+        )
+
+        self.wait(2)
+
+        self.play(
+            self.camera.frame.animate.restore(),
+            title_group.animate.set_x(title_group_x),
+        )
+        self.remove(box, particles, temp_group)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        k_terms = Tex(r"$k$ | Energy / temperature").next_to(
+            self.camera.frame.get_left(), RIGHT, LARGE_BUFF
+        )
+        k_val = Tex(r"$k = 1.38 \cdot 10^{-23}$ J/K").move_to(k_terms, LEFT)
+        k_val[0][0].set_color(RED)
+        k_terms[0][0].set_color(RED)
+        k_units = Tex(r"Joules / Kelvin").next_to(
+            k_terms[0][2], DOWN, MED_SMALL_BUFF, LEFT
+        )
+        k_units_abbv = Tex(r"J/K").move_to(k_units, LEFT)
+        k_terms_bez = CubicBezier(
+            noise_eqn[0][0].get_bottom() + [0, -0.1, 0],
+            noise_eqn[0][0].get_bottom() + [0, -1, 0],
+            k_terms.get_top() + [0, 1, 0],
+            k_terms.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(noise_eqn[0][0], k_terms[0][0], path_arc=PI / 3),
+                Create(k_terms_bez),
+                FadeIn(k_terms[0][1:]),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(k_units))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                k_units,
+                k_units_abbv,
+                ([0], [0]),
+                ([6], [1], {"delay": 0.3}),
+                ([7], [2], {"delay": 0.5}),
+                ([1, 2, 3, 4, 5], ShrinkToCenter),
+                ([8, 9, 10, 11, 12], ShrinkToCenter),
+                shift_fades=False,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[ShrinkToCenter(m) for m in k_terms[0][2:]], lag_ratio=0.1
+                ),
+                ReplacementTransform(k_terms[0][0], k_val[0][0]),
+                ReplacementTransform(k_terms[0][1], k_val[0][1]),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in k_val[0][2:-3]], lag_ratio=0.1
+                ),
+                ReplacementTransform(k_units_abbv[0], k_val[0][-3:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        # TODO: move to center and add bez
+        temp_value_label = Tex(r"$T_s = 290$ K").next_to(k_terms, RIGHT, LARGE_BUFF)
+        temp_value_label[0][:2].set_color(RED)
+        temp_value_bez = CubicBezier(
+            noise_eqn[0][1:3].get_bottom() + [0, -0.1, 0],
+            noise_eqn[0][1:3].get_bottom() + [0, -1, 0],
+            temp_value_label.get_top() + [0, 1, 0],
+            temp_value_label.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    noise_eqn[0][1:3], temp_value_label[0][:2], path_arc=PI / 4
+                ),
+                Create(temp_value_bez),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in temp_value_label[0][2:]],
+                    lag_ratio=0.1,
+                ),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        kT = Tex(
+            r"$k \cdot T_s = 1.38 \cdot 10^{-23} \cdot 290 \  \frac{\text{J} \cdot \text{K}}{\text{K}}$ "
+        ).move_to(k_terms, LEFT)
+        kT[0][0].set_color(RED)
+        kT[0][2:4].set_color(RED)
+
+        # self.add(neweqn)
+        def get_transform_func(from_var, func=TransformFromCopy, path_arc=PI):
+            def transform_func(m, **kwargs):
+                return func(from_var, m, path_arc=path_arc, **kwargs)
+
+            return transform_func
+
+        self.play(Uncreate(temp_value_bez), Uncreate(k_terms_bez))
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                k_val,
+                kT,
+                ([0], [0]),
+                (GrowFromCenter, [1], {"delay": 2}),
+                (
+                    get_transform_func(
+                        temp_value_label[0][:2],
+                        func=ReplacementTransform,
+                        path_arc=-PI / 2,
+                    ),
+                    [2, 3],
+                    {"delay": 2.2},
+                ),
+                ([1], [4], {"delay": 1.8}),
+                (
+                    [2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+                    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
+                    {"delay": 1.6},
+                ),
+                (GrowFromCenter, [15], {"delay": 1.2}),
+                (
+                    get_transform_func(
+                        temp_value_label[0][3:6],
+                        func=ReplacementTransform,
+                        path_arc=-PI / 2,
+                    ),
+                    [16, 17, 18],
+                    {"delay": 1.4},
+                ),
+                ([12], [19], {"delay": 0.2}),
+                ([14], [23], {"delay": 0.4}),
+                ([13], [22], {"delay": 0.6}),
+                (GrowFromCenter, [20], {"delay": 0.8}),
+                (
+                    get_transform_func(
+                        temp_value_label[0][-1],
+                        func=ReplacementTransform,
+                        path_arc=PI / 2,
+                    ),
+                    [21],
+                    {"delay": 1},
+                ),
+                # ([0, 1], [2, 3], {"path_arc": PI / 3}),
+            ),
+            ShrinkToCenter(temp_value_label[0][2]),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                kT[0][21]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(UP / 3),
+                kT[0][23]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_color(YELLOW)
+                .shift(DOWN / 3),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        kT_val = Tex(r"$k \cdot T_s = 4 \cdot 10^{-21} \  \text{J}$ ").move_to(kT, LEFT)
+        kT_val[0][0].set_color(RED)
+        kT_val[0][2:4].set_color(RED)
+
+        self.play(
+            TransformByGlyphMap(
+                kT,
+                kT_val,
+                ([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]),
+                (
+                    [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18],
+                    [5, 6, 7, 8, 9, 10, 11],
+                ),
+                ([20], ShrinkToCenter, {"delay": 0.3}),
+                ([21], ShrinkToCenter, {"delay": 0.4}),
+                ([22], ShrinkToCenter, {"delay": 0.5}),
+                ([23], ShrinkToCenter, {"delay": 0.6}),
+                ([19], [12], {"delay": 0.8}),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        noise_std = VT(0.1)
+        fs = 200
+
+        x_len = config.frame_width * 0.7
+        y_len = config.frame_height * 0.35
+        y_max = 50
+
+        ax = Axes(
+            x_range=[0, fs / 2, fs / 8],
+            y_range=[y_max * 0.3, y_max, y_max / 2],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        )
+
+        stop_time = 4
+        N = stop_time * fs
+        t = np.linspace(0, stop_time, N)
+        fft_len = N * 8
+        freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+        def fft_updater():
+            np.random.seed(1)
+            noise = np.random.normal(loc=0, scale=~noise_std, size=N)
+            X_k = fftshift(fft(noise, fft_len))
+            X_k /= N / 2
+            X_k = np.abs(X_k)
+            X_k = np.clip(10 * np.log10(X_k) + y_max, 0, None)
+            f_X_k_log = interp1d(freq, X_k, fill_value="extrapolate")
+
+            plot = ax.plot(f_X_k_log, x_range=[0, fs / 2, 1 / 100], color=RX_COLOR)
+            return plot
+
+        X_k_plot = always_redraw(fft_updater)
+
+        self.add(ax.next_to([0, -config.frame_height / 2, 0], DOWN))
+        self.add(X_k_plot)
+
+        self.play(
+            kT_val.animate.next_to(title_group, DOWN, LARGE_BUFF),
+            ax.animate.next_to(self.camera.frame.get_bottom(), UP, LARGE_BUFF * 1.5),
+        )
+
+        self.wait(0.5)
+
+        f_label = MathTex("f = 0").next_to(
+            ax.c2p(0, y_max * 0.3), DOWN, MED_LARGE_BUFF, RIGHT
+        )
+
+        inf = (
+            MathTex(r"\infty")
+            .next_to(ax.c2p(fs / 2, y_max * 0.3), DOWN, MED_LARGE_BUFF)
+            .set_y(f_label.get_y())
+        )
+        f_arrow = Arrow(f_label.get_right(), inf.get_left())
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[GrowFromCenter(m) for m in f_label[0]], lag_ratio=0.1),
+                GrowArrow(f_arrow),
+                GrowFromCenter(inf),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        bw_disp = VT(25)
+        bw_center_disp = VT(fs / 4)
+        bw_box = always_redraw(
+            lambda: Rectangle(
+                height=ax.height * 0.6,
+                width=(ax.c2p(~bw_disp / 2, 0)[0] - ax.c2p(-~bw_disp / 2, 0)[0]),
+                color=YELLOW,
+                fill_color=YELLOW,
+                fill_opacity=0.3,
+            ).next_to(ax.c2p(~bw_center_disp, y_max * 0.3), UP, 0)
+        )
+        bw_label = MathTex("B_n", color=RED).next_to(bw_box, UP)
+        bw_label_updater = lambda m: m.next_to(bw_box, UP)
+
+        self.play(
+            TransformFromCopy(noise_eqn[0][-2:], bw_label[0], path_arc=-PI / 3),
+            GrowFromCenter(bw_box),
+        )
+        self.add(bw_label)
+        bw_label.add_updater(bw_label_updater)
+
+        self.wait(0.5)
+
+        self.play(bw_disp @ 40, bw_center_disp - 20)
+
+        self.wait(0.5)
+
+        self.play(bw_disp @ 10, bw_center_disp + 60)
+
+        self.wait(2)
+
+
 class GasCollision(MovingCameraScene):
     def construct(self):
+        np.random.seed(0)
+
         up_shift = VT(0)
         right_shift = VT(0)
         box = always_redraw(
@@ -755,10 +1322,13 @@ class GasCollision(MovingCameraScene):
 
         self.add(particles)
 
+        vel_mult = VT(1)
+
         def update_particles(group, dt):
             for i, particle in enumerate(group):
                 particle.shift(
-                    dt * velocities[i][0] * RIGHT + dt * velocities[i][1] * UP
+                    dt * velocities[i][0] * ~vel_mult * RIGHT
+                    + dt * velocities[i][1] * ~vel_mult * UP
                 )
 
                 if (
