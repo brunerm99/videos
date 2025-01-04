@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, "..")
 
 from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
-from props.block_diagram import get_blocks
+from props.block_diagram import get_blocks, get_diode
 
 BLOCKS = get_blocks()
 
@@ -36,6 +36,13 @@ def compute_af_1d(weights, d_x, k_0, u, u_0):
     )
     AF /= AF.max()
     return AF
+
+
+def get_transform_func(from_var, func=TransformFromCopy, path_arc=PI):
+    def transform_func(m, **kwargs):
+        return func(from_var, m, path_arc=path_arc, **kwargs)
+
+    return transform_func
 
 
 class EqnIntro(Scene):
@@ -130,11 +137,16 @@ class EqnIntro(Scene):
             )
         )
         snr_label = always_redraw(lambda: Tex("SNR").next_to(snr_line, RIGHT))
-        snr_db_label = always_redraw(
-            lambda: MathTex(
-                f" = {ax.input_to_graph_coords(f, fft_updater())[1] -16.16:.2f} \\text{{ dB}}"
-            ).next_to(snr_label)
-        )
+        snr_db_label = MathTex(
+            f" = {ax.input_to_graph_coords(f, fft_updater())[1] -16.16:.2f} \\text{{ dB}}"
+        ).next_to(snr_label)
+
+        def snr_updater(m):
+            m.become(
+                MathTex(
+                    f" = {ax.input_to_graph_coords(f, fft_updater())[1] -16.16:.2f} \\text{{ dB}}"
+                ).next_to(snr_label)
+            )
 
         self.play(
             Create(snr_line),
@@ -145,6 +157,7 @@ class EqnIntro(Scene):
         self.next_section(skip_animations=skip_animations(False))
         self.add(snr_label)
         self.play(FadeIn(snr_db_label))
+        snr_db_label.add_updater(snr_updater)
 
         self.wait(0.5, frozen_frame=False)
 
@@ -214,17 +227,30 @@ class Signal(Scene):
         snr_eqn[0][1].set_color(RED)
         snr_eqn[0][22:].set_color(RED)
 
-        thumbnail_1_img = ImageMobject(
-            "../06_radar_range_equation/media/images/radar_equation/thumbnails/Thumbnail_1.png"
-        ).scale_to_fit_width(config.frame_width * 0.3)
-        thumbnail_1_box = SurroundingRectangle(thumbnail_1_img, buff=0)
-        thumbnail_1 = Group(thumbnail_1_img, thumbnail_1_box)
-        title_1 = Tex(r"The Radar\\Range Equation")
-        thumbnail_1_group = (
-            Group(thumbnail_1, title_1)
-            .arrange(DOWN, MED_SMALL_BUFF)
-            .next_to([config.frame_width / 2, 0, 0], RIGHT)
+        radar_eqn = MathTex(
+            r"P_r = \frac{P_t G_t}{4 \pi R^2} \cdot \frac{\sigma}{4 \pi R^2} \cdot A_e",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).scale(1.5)
+        radar_eqn[0][3:12].set_color(GREEN)
+        radar_eqn[0][13:19].set_color(BLUE)
+        radar_eqn[0][20:22].set_color(YELLOW)
+
+        radar_eqn_title = Tex(
+            "The Radar Range Equation", font_size=DEFAULT_FONT_SIZE * 1.8
+        ).to_edge(UP, MED_LARGE_BUFF)
+
+        radar_eqn_group = (
+            Group(radar_eqn_title, radar_eqn)
+            .arrange(DOWN, LARGE_BUFF * 1.5)
+            .scale_to_fit_width(config.frame_width * 0.3)
         )
+
+        title_1 = Tex(r"Animated Radar Cheatsheet\\Episode 1")
+
+        thumbnail_1_box = SurroundingRectangle(radar_eqn_group, buff=MED_LARGE_BUFF)
+        radar_eqn_group.add(
+            thumbnail_1_box, title_1.next_to(thumbnail_1_box, DOWN)
+        ).next_to([config.frame_width / 2, 0, 0], RIGHT)
 
         self.add(snr_eqn)
 
@@ -235,18 +261,125 @@ class Signal(Scene):
         signal_eqn = snr_eqn[0][4:-9]
 
         self.play(
-            Group(signal_eqn, thumbnail_1_group).animate.arrange(
-                RIGHT, LARGE_BUFF * 1.5
+            Group(signal_eqn, radar_eqn_group).animate.arrange(RIGHT, LARGE_BUFF * 1.5)
+        )
+
+        self.wait(0.5)
+
+        both_eqn = MathTex(
+            r"P_r = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} = \frac{P_t G_t}{4 \pi R^2} \cdot \frac{\sigma}{4 \pi R^2} \cdot A_e",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        both_eqn[0][-19:-10].set_color(GREEN)
+        both_eqn[0][-9:-3].set_color(BLUE)
+        both_eqn[0][-2:].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                FadeOut(thumbnail_1_box, title_1, radar_eqn_title),
+                ShrinkToCenter(radar_eqn[0][2]),
+                Transform(radar_eqn[0][:2], both_eqn[0][:2], path_arc=PI / 2),
+                GrowFromCenter(both_eqn[0][2]),
+                signal_eqn.animate.move_to(both_eqn[0][3:18]),
+                GrowFromCenter(both_eqn[0][18]),
+                Transform(radar_eqn[0][3:], both_eqn[0][-19:]),
+                lag_ratio=0.3,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        ae_eqn = MathTex(
+            r"A_e = \frac{G \lambda^2}{4 \pi}",
+            color=YELLOW,
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).to_edge(DOWN, LARGE_BUFF)
+
+        self.play(
+            TransformFromCopy(both_eqn[0][-2:], ae_eqn[0][:2], path_arc=PI / 3),
+            Group(radar_eqn, signal_eqn, both_eqn[0][2], both_eqn[0][18]).animate.shift(
+                UP
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in ae_eqn[0][2:]],
+                lag_ratio=0.1,
             )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        both_eqn_simplified = MathTex(
+            r"P_r = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4}",
+            color=BLUE,
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        both_eqn_simplified[0][-15:].move_to(radar_eqn[0][3:], LEFT)
+
+        self.play(
+            TransformByGlyphMap(
+                # both_eqn[0][-19:],
+                radar_eqn[0][3:],
+                both_eqn_simplified[0][-15:],
+                ([0, 1], [0, 1], {"delay": 0}),
+                ([2], [2], {"delay": 0.1}),
+                ([3], ShrinkToCenter, {"delay": 0.2}),
+                ([4], [7], {"delay": 0.3}),
+                ([9], ShrinkToCenter, {"delay": 0.4}),
+                ([16], ShrinkToCenter, {"delay": 0.5}),
+                ([17, 18], ShrinkToCenter, {"delay": 0.6}),
+                ([10], [6], {"delay": 0.7}),
+                ([7, 14], [13], {"path_arc": PI / 3, "delay": 0.8}),
+                ([8, 15], [14], {"path_arc": PI / 3, "delay": 0.9}),
+                ([11], ShrinkToCenter, {"delay": 0.2}),
+                ([5, 6], [9, 10], {"delay": 1.2}),
+                ([12, 13], [9, 10], {"path_arc": -PI / 2, "delay": 1.8}),
+                (
+                    get_transform_func(ae_eqn[0][-2:], ReplacementTransform, PI / 3),
+                    [9, 10],
+                    {"delay": 1.6},
+                ),
+                (
+                    get_transform_func(ae_eqn[0][3], ReplacementTransform, PI / 3),
+                    [2],
+                    {"delay": 1.1},
+                ),
+                (GrowFromCenter, [3], {"delay": 1.3}),
+                (
+                    get_transform_func(ae_eqn[0][4:6], ReplacementTransform, PI),
+                    [4, 5],
+                    {"delay": 1.2},
+                ),
+                (GrowFromCenter, [8], {"delay": 1.3}),
+                (GrowFromCenter, [11], {"delay": 1.4}),
+                (GrowFromCenter, [12], {"delay": 1.5}),
+                mobA_submobject_index=[],
+                mobB_submobject_index=[],
+            ),
+            FadeOut(ae_eqn[0][:3], ae_eqn[0][6]),
+            run_time=4,
         )
 
         self.wait(0.5)
 
         self.play(
             signal_eqn.animate.move_to(ORIGIN),
-            thumbnail_1_group.animate.next_to([config.frame_width / 2, 0, 0], RIGHT),
+            FadeOut(
+                both_eqn_simplified[0][-15:],
+                radar_eqn[0][:2],
+                both_eqn[0][2],
+                both_eqn[0][18],
+            ),
+            # radar_eqn_group.animate.next_to([config.frame_width / 2, 0, 0], RIGHT),
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -310,7 +443,7 @@ class Signal(Scene):
 
         self.play(amp @ 2)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(Group(signal_eqn, ax).animate.to_edge(UP, LARGE_BUFF))
@@ -478,7 +611,56 @@ class Signal(Scene):
 
         self.play(af_ax.animate.to_edge(RIGHT, LARGE_BUFF), run_time=2)
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
+
+        car = (
+            SVGMobject("../props/static/car.svg", fill_color=WHITE, stroke_color=WHITE)
+            .scale_to_fit_width(config.frame_width * 0.2)
+            .to_edge(RIGHT)
+        )
+
+        self.play(
+            af_ax.animate.shift(LEFT * 3),
+            car.shift(RIGHT * 5).animate.shift(LEFT * 5),
+        )
+
+        self.wait(0.5)
+
+        up_ang = VT(0)
+        dn_ang = VT(0)
+
+        directivity_arrow = always_redraw(
+            lambda: Arrow(
+                af_ax.c2p(0, 0), af_ax.input_to_graph_point(~up_ang, AF_plot), buff=0
+            )
+        )
+
+        self.play(GrowArrow(directivity_arrow))
+
+        self.wait(0.5)
+
+        directivity_arrow_dn = always_redraw(
+            lambda: Arrow(
+                af_ax.c2p(0, 0), af_ax.input_to_graph_point(~dn_ang, AF_plot), buff=0
+            )
+        )
+        self.add(directivity_arrow_dn)
+
+        self.play(up_ang @ (-PI / 2), dn_ang @ (PI / 2), run_time=5)
+
+        self.wait(0.5)
+
+        self.play(
+            ShrinkToCenter(directivity_arrow_dn),
+            ShrinkToCenter(directivity_arrow),
+            af_ax.animate.shift(RIGHT * 3),
+            car.animate.shift(RIGHT * 5),
+        )
+        self.remove(car)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         n_elem_disp = 8
         phased_array = (
@@ -605,7 +787,7 @@ class Signal(Scene):
 
         wavelength_eqn = MathTex(
             r"\lambda = \frac{c}{f}", font_size=DEFAULT_FONT_SIZE * 2
-        ).shift(UP + RIGHT)
+        ).to_edge(UP, LARGE_BUFF)
         wavelength_eqn[0][0].set_color(YELLOW)
 
         f_relation = MathTex(r"f \sim", font_size=DEFAULT_FONT_SIZE * 2).next_to(
@@ -621,7 +803,89 @@ class Signal(Scene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
+
+        range_ax = (
+            Axes(
+                x_range=[1, 4, 1],
+                y_range=[0, 1, 0.5],
+                tips=False,
+                axis_config={"include_numbers": False},
+                x_length=config.frame_width * 0.6,
+                y_length=config.frame_height * 0.4,
+            )
+            .to_corner(DR, LARGE_BUFF)
+            .shift(DOWN * 7)
+        )
+
+        range_vt = VT(1)
+        f = 4
+
+        sine_graph = always_redraw(
+            lambda: range_ax.plot(
+                lambda r: (np.sin(2 * PI * f * r) + 1) / 2 / (r**2),
+                x_range=[1, ~range_vt, 1 / 100],
+                use_smoothing=False,
+                color=TX_COLOR,
+            )
+        )
+        exp_graph = always_redraw(
+            lambda: range_ax.plot(
+                lambda r: 1 / (r**2),
+                x_range=[1, ~range_vt, 1 / 100],
+                use_smoothing=False,
+                color=YELLOW,
+            )
+        )
+
+        range_arrow = always_redraw(
+            lambda: Arrow(range_ax.c2p(1, 0) + DOWN, range_ax.c2p(~range_vt, 0) + DOWN)
+        )
+        range_label = always_redraw(
+            lambda: MathTex("R").move_to(range_ax.c2p(~range_vt, 0) + DOWN)
+        )
+        power_dot = always_redraw(
+            lambda: Dot().move_to(range_ax.input_to_graph_point(~range_vt, exp_graph))
+        )
+        power_label = always_redraw(
+            lambda: MathTex("P").move_to(
+                range_ax.input_to_graph_point(~range_vt, exp_graph) + UP / 2
+            )
+        )
+
+        self.add(
+            range_ax,
+            sine_graph,
+            exp_graph,
+            range_arrow,
+            range_label,
+            power_dot,
+            power_label,
+        )
+
+        self.play(range_ax.animate.to_corner(DR, MED_LARGE_BUFF).shift(UP))
+
+        self.wait(0.5)
+
+        self.play(range_vt @ 4, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(range_ax.animate.shift(DOWN * 7))
+
+        self.remove(
+            range_ax,
+            sine_graph,
+            exp_graph,
+            range_arrow,
+            range_label,
+            power_dot,
+            power_label,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -833,7 +1097,7 @@ class Noise(Scene):
 
 class Thermal(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         np.random.seed(0)
 
         thermal = Tex("Thermal noise", font_size=DEFAULT_FONT_SIZE * 1.5)
@@ -958,7 +1222,16 @@ class Thermal(MovingCameraScene):
             run_time=2,
         )
 
-        self.wait(2)
+        self.wait(0.5)
+
+        # self.play(
+        #     noise_eqn[0][0]
+        #     .animate(rate_func=rate_functions.there_and_back)
+        #     .shift(DOWN / 3)
+        #     .set_color(YELLOW)
+        # )
+
+        # self.wait(0.5)
 
         self.play(
             vel_mult @ 4,
@@ -1075,11 +1348,6 @@ class Thermal(MovingCameraScene):
         kT[0][2:4].set_color(RED)
 
         # self.add(neweqn)
-        def get_transform_func(from_var, func=TransformFromCopy, path_arc=PI):
-            def transform_func(m, **kwargs):
-                return func(from_var, m, path_arc=path_arc, **kwargs)
-
-            return transform_func
 
         self.play(Uncreate(temp_value_bez), Uncreate(k_terms_bez))
 
@@ -1174,7 +1442,7 @@ class Thermal(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         noise_std = VT(0.1)
@@ -1213,7 +1481,9 @@ class Thermal(MovingCameraScene):
             plot = ax.plot(f_X_k_log, x_range=[0, fs / 2, 1 / 100], color=RX_COLOR)
             return plot
 
-        X_k_plot = always_redraw(fft_updater)
+        X_k_plot = fft_updater()
+        X_k_updater = lambda m: m.become(fft_updater())
+        X_k_plot.add_updater(X_k_updater)
 
         self.add(ax.next_to([0, -config.frame_height / 2, 0], DOWN))
         self.add(X_k_plot)
@@ -1249,15 +1519,25 @@ class Thermal(MovingCameraScene):
 
         bw_disp = VT(25)
         bw_center_disp = VT(fs / 4)
-        bw_box = always_redraw(
-            lambda: Rectangle(
-                height=ax.height * 0.6,
-                width=(ax.c2p(~bw_disp / 2, 0)[0] - ax.c2p(-~bw_disp / 2, 0)[0]),
-                color=YELLOW,
-                fill_color=YELLOW,
-                fill_opacity=0.3,
-            ).next_to(ax.c2p(~bw_center_disp, y_max * 0.3), UP, 0)
-        )
+        bw_box = Rectangle(
+            height=ax.height * 0.6,
+            width=(ax.c2p(~bw_disp / 2, 0)[0] - ax.c2p(-~bw_disp / 2, 0)[0]),
+            color=YELLOW,
+            fill_color=YELLOW,
+            fill_opacity=0.3,
+        ).next_to(ax.c2p(~bw_center_disp, y_max * 0.3), UP, 0)
+
+        def update_bw_box(m):
+            m.become(
+                Rectangle(
+                    height=ax.height * 0.6,
+                    width=(ax.c2p(~bw_disp / 2, 0)[0] - ax.c2p(-~bw_disp / 2, 0)[0]),
+                    color=YELLOW,
+                    fill_color=YELLOW,
+                    fill_opacity=0.3,
+                ).next_to(ax.c2p(~bw_center_disp, y_max * 0.3), UP, 0)
+            )
+
         bw_label = MathTex("B_n", color=RED).next_to(bw_box, UP)
         bw_label_updater = lambda m: m.next_to(bw_box, UP)
 
@@ -1267,6 +1547,7 @@ class Thermal(MovingCameraScene):
         )
         self.add(bw_label)
         bw_label.add_updater(bw_label_updater)
+        bw_box.add_updater(update_bw_box)
 
         self.wait(0.5)
 
@@ -1276,7 +1557,481 @@ class Thermal(MovingCameraScene):
 
         self.play(bw_disp @ 10, bw_center_disp + 60)
 
+        self.wait(0.5)
+
+        bw_label.remove_updater(bw_label_updater)
+        bw_box.remove_updater(update_bw_box)
+        X_k_plot.remove_updater(X_k_updater)
+        bw_label_val = MathTex(r"B_n = 1.6 \cdot 10^6 \text{Hz}").move_to(bw_label)
+        bw_label_val[0][:2].set_color(RED)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(bw_label[0], bw_label_val[0][:2]),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in bw_label_val[0][2:]], lag_ratio=0.1
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        kTB_eqn = MathTex(
+            r"k \cdot T_s \cdot B_n = 4 \cdot 10^{-21} \cdot 1.6 \cdot 10^6 \  \text{J} \cdot \text{Hz}"
+        ).move_to(kT_val)
+        kTB_eqn[0][0].set_color(RED)
+        kTB_eqn[0][2:4].set_color(RED)
+        kTB_eqn[0][5:7].set_color(RED)
+        kTB_val = MathTex(r"k T_s B_n = 6.4 \cdot 10^{-15} \  \text{W}").move_to(
+            kTB_eqn
+        )
+        kTB_val[0][0].set_color(RED)
+        kTB_val[0][1:3].set_color(RED)
+        kTB_val[0][3:5].set_color(RED)
+
+        self.play(
+            TransformByGlyphMap(
+                kT_val,
+                kTB_eqn,
+                ([0, 1, 2, 3], [0, 1, 2, 3]),
+                ([4], [7], {"delay": 0.6}),
+                (GrowFromCenter, [4], {"delay": 0.2}),
+                (
+                    get_transform_func(
+                        bw_label_val[0][:2],
+                        func=ReplacementTransform,
+                        path_arc=-PI / 3,
+                    ),
+                    [5, 6],
+                    {"delay": 0.4},
+                ),
+                (
+                    [5, 6, 7, 8, 9, 10, 11],
+                    [8, 9, 10, 11, 12, 13, 14],
+                    {"delay": 0.6},
+                ),
+                (GrowFromCenter, [15], {"delay": 0.8}),
+                (
+                    get_transform_func(
+                        bw_label_val[0][3:-2],
+                        func=ReplacementTransform,
+                        path_arc=-PI / 3,
+                    ),
+                    [16, 17, 18, 19, 20, 21, 22],
+                    {"delay": 0.8},
+                ),
+                ([12], [23], {"delay": 0.6}),
+                (GrowFromCenter, [24], {"delay": 0.6}),
+                (
+                    get_transform_func(
+                        bw_label_val[0][-2:],
+                        func=ReplacementTransform,
+                        path_arc=-PI / 3,
+                    ),
+                    [25, 26],
+                    {"delay": 1},
+                ),
+                run_time=3,
+            ),
+            ShrinkToCenter(bw_label_val[0][2], run_time=1),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                kTB_eqn,
+                kTB_val,
+                ([0], [0], {"delay": 0.3}),
+                ([1], ShrinkToCenter, {"delay": 0.3}),
+                ([2, 3], [1, 2], {"delay": 0.3}),
+                ([4], ShrinkToCenter, {"delay": 0.3}),
+                ([5, 6], [3, 4], {"delay": 0.3}),
+                ([7], [5]),
+                (
+                    [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22],
+                    [6, 7, 8, 9, 10, 11, 12, 13, 14],
+                    {"delay": 0},
+                ),
+                ([23, 24, 25, 26], [15], {"delay": 0.3}),
+            )
+        )
+
+        self.wait(0.5)
+
+        kTB_val_db = MathTex(r"k T_s B_n = -141.9 \  \text{dBW}").move_to(kTB_eqn)
+        kTB_val_db[0][0].set_color(RED)
+        kTB_val_db[0][1:3].set_color(RED)
+        kTB_val_db[0][3:5].set_color(RED)
+
+        self.play(
+            TransformByGlyphMap(
+                kTB_val,
+                kTB_val_db,
+                ([0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4, 5]),
+                (
+                    [6, 7, 8, 9, 10, 11, 12, 13, 14],
+                    [6, 7, 8, 9, 10, 11],
+                    {"delay": 0.2},
+                ),
+                ([15], [14], {"delay": 0.2}),
+                (GrowFromCenter, [12, 13], {"delay": 0.4}),
+            )
+        )
+
+        self.wait(0.5)
+
+        final_group = Group(kTB_val_db, title_group)
+        scale_factor = final_group.width * 1.3 / self.camera.frame.width
+        self.play(
+            FadeOut(ax, X_k_plot, f_arrow, f_label, inf, bw_box),
+            self.camera.frame.animate.scale(scale_factor).move_to(final_group),
+            kTB_val_db.animate.set_x(title_group.get_x()),
+        )
+
+        self.wait(0.5)
+
+        new_top = (
+            self.camera.frame.copy().scale(1 / scale_factor).shift(DOWN * 10).get_top()
+        )
+
+        nf = Tex("Noise Factor | F", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            new_top, DOWN, LARGE_BUFF
+        )
+        nf[0][-1].set_color(RED)
+        self.add(nf)
+
+        self.play(self.camera.frame.animate.scale(1 / scale_factor).shift(DOWN * 10))
+
         self.wait(2)
+
+
+class ReceiverNoise(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        rx_noise = Tex("Noise Factor | F", font_size=DEFAULT_FONT_SIZE * 1.5).to_edge(
+            UP, LARGE_BUFF
+        )
+        rx_noise[0][-1].set_color(RED)
+        self.add(rx_noise)
+
+        antenna_port = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri = Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port, UP)
+
+        antenna = (
+            Group(antenna_port, antenna_tri)
+            .scale(0.8)
+            .to_edge(RIGHT, LARGE_BUFF * 1.5)
+            .shift(UP)
+        )
+
+        path_buff = LARGE_BUFF * 2
+
+        switch = (
+            BLOCKS.get("spdt_switch")
+            .copy()
+            .flip()
+            .scale_to_fit_height(antenna_tri.get_height())
+            .next_to(antenna_port.get_bottom(), LEFT, path_buff)
+        )
+        antenna_to_switch = Line(antenna_port.get_bottom(), switch.get_right())
+
+        switch_to_lna = Line(
+            switch.get_left() + DOWN * switch.get_height() / 4,
+            switch.get_left() + DOWN * switch.get_height() / 4 + LEFT * path_buff * 2,
+        )
+
+        limiter_diode = (
+            get_diode()
+            .scale(0.5)
+            .set_stroke(color=WHITE, width=DEFAULT_STROKE_WIDTH * 1.5)
+        )
+        limiter_gnd = (
+            Group(
+                *[
+                    Line(stroke_width=DEFAULT_STROKE_WIDTH * 1.5).scale(scale)
+                    for scale in [1, 0.7, 0.7**2]
+                ]
+            )
+            .scale_to_fit_width(limiter_diode.width * 0.8)
+            .arrange(DOWN, SMALL_BUFF)
+            .next_to(limiter_diode, DOWN, 0)
+        )
+        limiter = Group(limiter_diode, limiter_gnd).next_to(
+            switch_to_lna.get_midpoint(), DOWN, 0
+        )
+
+        lna = (
+            Triangle(color=WHITE)
+            .scale_to_fit_height(switch.height)
+            .rotate(-PI / 6)
+            .next_to(switch_to_lna, LEFT, 0)
+        )
+
+        self.wait(0.5)
+
+        rx_arrow = Arrow(
+            antenna.get_top() + RIGHT * 5 + UP * 3, antenna.get_top(), color=RX_COLOR
+        )
+
+        self.play(
+            LaggedStart(GrowFromCenter(antenna), GrowArrow(rx_arrow), lag_ratio=0.3)
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(rx_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(antenna_to_switch),
+                GrowFromCenter(switch),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        tx_label = (
+            Tex("Transmitter", font_size=DEFAULT_FONT_SIZE * 1.2)
+            .next_to(switch, LEFT, path_buff)
+            .shift(UP * 2)
+        )
+        rx_label = (
+            Tex("Receiver", font_size=DEFAULT_FONT_SIZE * 1.2)
+            .next_to(switch, LEFT, path_buff)
+            .shift(DOWN * 2)
+        )
+        tx_box = SurroundingRectangle(tx_label, color=TX_COLOR)
+        rx_box = SurroundingRectangle(rx_label, color=TX_COLOR)
+        tx = Group(tx_box, tx_label)
+        rx = Group(rx_box, rx_label)
+        switch_to_tx = CubicBezier(
+            switch.get_left() + UP * switch.get_height() / 4,
+            switch.get_left() + UP * switch.get_height() / 4 + [-1, 0, 0],
+            tx.get_right() + [1, 0, 0],
+            tx.get_right(),
+        )
+        switch_to_rx = CubicBezier(
+            switch.get_left() + DOWN * switch.get_height() / 4,
+            switch.get_left() + DOWN * switch.get_height() / 4 + [-1, 0, 0],
+            rx.get_right() + [1, 0, 0],
+            rx.get_right(),
+        )
+
+        self.play(
+            LaggedStart(
+                Create(switch_to_tx),
+                GrowFromCenter(tx),
+                Create(switch_to_rx),
+                GrowFromCenter(rx),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(rx),
+                AnimationGroup(
+                    tx_box.animate.set_stroke(opacity=0.2),
+                    tx_label.animate.set_opacity(0.2),
+                    switch_to_tx.animate.set_stroke(opacity=0.2),
+                ),
+                Create(switch_to_lna),
+                FadeOut(switch_to_rx),
+                GrowFromCenter(limiter),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        limiter_loss = (
+            Tex(r"$G = -0.4$ dB", color=RED, font_size=DEFAULT_FONT_SIZE * 0.7)
+            .next_to(limiter, DOWN)
+            .set_opacity(0)
+            .shift(DOWN / 3)
+        )
+        switch_loss = (
+            Tex(r"$G = -1$ dB", color=RED, font_size=DEFAULT_FONT_SIZE * 0.7)
+            .next_to(switch, DOWN)
+            .set_opacity(0)
+            .shift(DOWN / 3)
+        )
+
+        self.play(
+            LaggedStart(
+                switch_loss.animate.set_opacity(1).shift(UP / 3),
+                limiter_loss.animate.set_opacity(1).shift(UP / 3),
+                lag_ratio=0.5,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(lna))
+
+        self.wait(0.5)
+
+        lna_gain = (
+            Tex("$G = 20$ dB", font_size=DEFAULT_FONT_SIZE * 0.7)
+            .set_color(GREEN)
+            .next_to(lna, DOWN)
+            .set_opacity(0)
+            .shift(DOWN / 3)
+        )
+        lna_nf = (
+            Tex("$NF = 2$ dB", font_size=DEFAULT_FONT_SIZE * 0.7)
+            .set_color(RED)
+            .next_to(lna_gain, DOWN, SMALL_BUFF)
+            .set_opacity(0)
+            .shift(DOWN / 3)
+        )
+
+        self.play(
+            LaggedStart(
+                lna_gain.animate.set_opacity(1).shift(UP / 3),
+                lna_nf.animate.set_opacity(1).shift(UP / 3),
+                lag_ratio=0.5,
+            ),
+        )
+
+        self.wait(0.5)
+
+        lna_spelled = Tex("Low Noise Amplifier").next_to(lna, UP)
+        lna_label = Tex("LNA").next_to(lna, UP)
+
+        self.play(
+            LaggedStart(*[GrowFromCenter(m) for m in lna_spelled[0]], lag_ratio=0.1)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            TransformByGlyphMap(
+                lna_spelled,
+                lna_label,
+                ([0], [0], {"delay": 0.3}),
+                ([3], [1], {"delay": 0.3}),
+                ([8], [2], {"delay": 0.3}),
+                ([1, 2], ShrinkToCenter),
+                ([4, 5, 6, 7], ShrinkToCenter),
+                ([9, 10, 11, 12, 13, 14, 15], ShrinkToCenter),
+                shift_fades=False,
+            )
+        )
+
+        self.wait(0.5)
+
+        lna_to_filter = Line(
+            lna.get_left(),
+            lna.get_left() + LEFT * path_buff,
+        )
+        lp_filter = (
+            BLOCKS.get("bp_filter_generic")
+            .copy()
+            .scale_to_fit_height(switch.height)
+            .next_to(lna_to_filter, LEFT, 0)
+        )
+
+        l_switch = (
+            BLOCKS.get("spdt_switch")
+            .copy()
+            .scale_to_fit_height(antenna_tri.height)
+            .next_to(lp_filter, LEFT, path_buff)
+            .shift(UP * antenna_tri.height / 4)
+        )
+        lp_filter_to_switch = Line(
+            l_switch.get_right() + DOWN * l_switch.get_height() / 4,
+            l_switch.get_right() + DOWN * l_switch.get_height() / 4 + RIGHT * path_buff,
+        )
+
+        filter_loss = (
+            Tex(r"$G = -0.5$ dB", color=RED, font_size=DEFAULT_FONT_SIZE * 0.7)
+            .next_to(lp_filter, DOWN)
+            .set_opacity(0)
+            .shift(DOWN / 3)
+        )
+        l_switch_loss = (
+            Tex(r"$G = -1$ dB", color=RED, font_size=DEFAULT_FONT_SIZE * 0.7)
+            .next_to(l_switch, DOWN)
+            .set_opacity(0)
+            .shift(DOWN / 3)
+        )
+
+        bd_group = Group(l_switch, lna_to_filter, lp_filter, lp_filter_to_switch).add(
+            *self.mobjects
+        )
+        self.add(l_switch, lna_to_filter, lp_filter, lp_filter_to_switch)
+        new_cam = (
+            self.camera.frame.copy()
+            .scale_to_fit_width(bd_group.width * 1.2)
+            .move_to(bd_group)
+            .shift(UP)
+        )
+
+        nf_eqn = MathTex(
+            r"NF_{\text{total}} = NF_1 + \frac{NF_2 - 1}{G_1} + \frac{NF_3 - 1}{G_1 G_2} + \cdots + \frac{NF_n - 1}{G_1 G_2 \dots G_{n-1}}"
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(bd_group.width * 1.2)
+                .move_to(bd_group)
+                .shift(UP),
+                rx_noise.animate.next_to(new_cam.get_top(), DOWN, LARGE_BUFF),
+                Create(lna_to_filter),
+                GrowFromCenter(lp_filter),
+                filter_loss.animate.set_opacity(1).shift(UP / 3),
+                Create(lp_filter_to_switch),
+                GrowFromCenter(l_switch),
+                l_switch_loss.animate.set_opacity(1).shift(UP / 3),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
+
+
+class WrapUp(Scene):
+    def construct(self):
+        snr_eqn = MathTex(
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4 k T_s B_n F}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        snr_eqn_split = MathTex(
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n F}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        snr_eqn_split[0][0].set_color(BLUE)
+        snr_eqn_split[0][4:19].set_color(BLUE)
+
+        self.play(
+            TransformByGlyphMap(
+                snr_eqn,
+                snr_eqn_split,
+                ([0, 1, 2, 3], [0, 1, 2, 3], {"delay": 0.4}),
+                ([4, 5, 6, 7, 8, 9, 10], [4, 5, 6, 7, 8, 9, 10], {"delay": 0.4}),
+                ([11], [11], {"delay": 0.4}),
+                (
+                    [12, 13, 14, 15, 16, 17, 18],
+                    [12, 13, 14, 15, 16, 17, 18],
+                    {"delay": 0.4},
+                ),
+                ([19], GrowFromCenter, {"delay": 0.2}),
+                ([12, 13, 14, 15, 16, 17, 18], [12, 13, 14, 15, 16, 17, 18]),
+                (GrowFromCenter, [20], {"delay": 0.4}),
+                (GrowFromCenter, [21], {"delay": 0.6}),
+                ([19, 20, 21, 22, 23, 24], [22, 23, 24, 25, 26, 27]),
+            )
+        )
 
 
 class GasCollision(MovingCameraScene):
@@ -1496,3 +2251,53 @@ class GasCollision(MovingCameraScene):
         self.add(total_pot)
 
         self.wait(10)
+
+
+class SignalTest(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        snr_eqn = MathTex(
+            r"\text{SNR} = \frac{P_t G^2 \lambda^2 \sigma}{(4 \pi)^3 R^4} \cdot \frac{1}{k T_s B_n F}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        snr_eqn[0][0].set_color(BLUE)
+        snr_eqn[0][4:19].set_color(BLUE)
+        snr_eqn[0][1].set_color(RED)
+        snr_eqn[0][22:].set_color(RED)
+
+        radar_eqn = MathTex(
+            r"P_r = \frac{P_t G_t}{4 \pi R^2} \cdot \frac{\sigma}{4 \pi R^2} \cdot A_e",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).scale(1.5)
+        radar_eqn[0][3:12].set_color(GREEN)
+        radar_eqn[0][13:19].set_color(BLUE)
+        radar_eqn[0][20:22].set_color(YELLOW)
+
+        radar_eqn_title = Tex(
+            "The Radar Range Equation", font_size=DEFAULT_FONT_SIZE * 1.8
+        ).to_edge(UP, MED_LARGE_BUFF)
+
+        radar_eqn_group = (
+            Group(radar_eqn_title, radar_eqn)
+            .arrange(DOWN, LARGE_BUFF * 1.5)
+            .scale_to_fit_width(config.frame_width * 0.3)
+        )
+
+        title_1 = Tex(r"Animated Radar Cheatsheet\\Episode 1")
+
+        thumbnail_1_box = SurroundingRectangle(radar_eqn_group, buff=MED_LARGE_BUFF)
+        radar_eqn_group.add(
+            thumbnail_1_box, title_1.next_to(thumbnail_1_box, DOWN)
+        ).next_to([config.frame_width / 2, 0, 0], RIGHT)
+
+        self.add(snr_eqn)
+
+        self.play(FadeOut(snr_eqn[0][:4], snr_eqn[0][-9:]))
+
+        self.wait(0.5)
+
+        signal_eqn = snr_eqn[0][4:-9]
+
+        self.play(
+            Group(signal_eqn, radar_eqn_group).animate.arrange(RIGHT, LARGE_BUFF * 1.5)
+        )
