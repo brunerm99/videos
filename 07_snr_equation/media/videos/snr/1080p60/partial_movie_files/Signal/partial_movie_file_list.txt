@@ -1,8 +1,0 @@
-# This file is used internally by FFMPEG.
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00057.mp4'
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00058.mp4'
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00059.mp4'
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00060.mp4'
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00061.mp4'
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00062.mp4'
-file 'file:/home/marchall/documents/tech-videos/07_snr_equation/media/videos/snr/1080p60/partial_movie_files/Signal/uncached_00063.mp4'
