@@ -31,6 +31,402 @@ def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
 
 
+class Intro(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        point_source = Dot(color=BLUE)
+
+        self.play(
+            point_source.next_to(
+                [0, -config.frame_height / 2, 0], DOWN
+            ).animate.move_to(ORIGIN)
+        )
+
+        self.wait(0.5)
+
+        x_len = config.frame_width
+        y_len = config.frame_height * 0.3
+        sine_x_width = 0.2
+
+        def get_plot(func, angle=0):
+            sine_ax = (
+                Axes(
+                    x_range=[0, 1, 0.25],
+                    y_range=[-1, 1, 0.5],
+                    tips=False,
+                    axis_config={
+                        "include_numbers": False,
+                    },
+                    x_length=x_len,
+                    y_length=y_len,
+                )
+                .next_to(point_source, LEFT, 0)
+                .rotate(angle, about_point=ORIGIN)
+            )
+
+            sine_x1 = VT(-sine_x_width)
+            sine_plot = always_redraw(
+                lambda: sine_ax.plot(
+                    func,
+                    color=RX_COLOR,
+                    x_range=[
+                        min(~sine_x1 - sine_x_width, 1),
+                        min(~sine_x1, 1),
+                        1 / 1000,
+                    ],
+                )
+            )
+            return sine_plot, sine_x1
+
+        plots = [
+            get_plot(func, angle)
+            for func, angle in [
+                (lambda t: np.sin(2 * PI * 10 * t) + np.random.normal(0, 0.1), -PI / 6),
+                (
+                    lambda t: np.sin(2 * PI * 6 * t) + np.random.normal(0, 0.1),
+                    PI * 0.55,
+                ),
+                (
+                    lambda t: np.sin(2 * PI * 12 * t) + np.random.normal(0, 0.3),
+                    PI * 0.3,
+                ),
+                (
+                    lambda t: np.sin(2 * PI * 2 * t) + np.random.normal(0, 0.4),
+                    -PI * 0.8,
+                ),
+                (lambda t: np.sin(2 * PI * 6 * t) + np.random.normal(0, 0.2), PI * 0.9),
+            ]
+        ]
+
+        for plot, _ in plots:
+            self.add(plot)
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(*[x1 @ (1.1 + sine_x_width) for _, x1 in plots], lag_ratio=0.2),
+            rate_func=rate_functions.linear,
+            run_time=4,
+        )
+        for plot, _ in plots:
+            self.remove(plot)
+
+        self.wait(0.5)
+
+        parabolic = Arc(radius=2, start_angle=PI * 0.75).move_to(point_source)
+
+        self.play(Create(parabolic), FadeOut(point_source))
+
+        self.wait(0.5)
+
+        plots = [
+            get_plot(func, angle)
+            for func, angle in [
+                (
+                    lambda t: 0.7 * np.sin(2 * PI * 6 * t) + np.random.normal(0, 0.1),
+                    PI * 0.8,
+                ),
+                (
+                    lambda t: 1 * np.sin(2 * PI * 12 * t) + np.random.normal(0, 0.3),
+                    PI,
+                ),
+                (
+                    lambda t: 0.6 * np.sin(2 * PI * 2 * t) + np.random.normal(0, 0.4),
+                    PI * 1.1,
+                ),
+                (
+                    lambda t: 0.3 * np.sin(2 * PI * 10 * t) + np.random.normal(0, 0.1),
+                    PI * 0.9,
+                ),
+                (
+                    lambda t: 0.8 * np.sin(2 * PI * 6 * t) + np.random.normal(0, 0.2),
+                    PI * 0.9,
+                ),
+            ]
+        ]
+
+        for plot, _ in plots:
+            self.add(plot)
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[x1 @ (1.1 + sine_x_width) for _, x1 in plots], lag_ratio=0.15
+            ),
+            rate_func=rate_functions.linear,
+            run_time=4,
+        )
+        for plot, _ in plots:
+            self.remove(plot)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        car = (
+            SVGMobject("../props/static/car.svg")
+            .set_color(WHITE)
+            .set_fill(WHITE)
+            .to_edge(RIGHT, LARGE_BUFF)
+        )
+
+        self.play(
+            parabolic.animate.to_edge(LEFT, LARGE_BUFF),
+            car.shift(RIGHT * 5).animate.shift(LEFT * 5),
+        )
+
+        self.wait(0.5)
+
+        sine_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=(car.get_left()[0] - parabolic.get_right()[0]),
+            y_length=y_len,
+        ).next_to(parabolic, RIGHT, -SMALL_BUFF)
+
+        sine_x1 = VT(-sine_x_width)
+        sine_plot = always_redraw(
+            lambda: sine_ax.plot(
+                lambda t: np.sin(2 * PI * 6 * t),
+                color=TX_COLOR,
+                x_range=[
+                    min(max(~sine_x1 - sine_x_width, 0), 1),
+                    min(max(~sine_x1, 0), 1),
+                    1 / 1000,
+                ],
+            )
+        )
+
+        self.add(sine_plot)
+
+        sine_ax_tx = (
+            Axes(
+                x_range=[0, 1, 0.25],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=(car.get_left()[0] - parabolic.get_right()[0]),
+                y_length=y_len,
+            )
+            .next_to(parabolic, RIGHT, -SMALL_BUFF)
+            .flip()
+        )
+
+        sine_x1_tx = VT(-sine_x_width)
+        sine_plot_tx = always_redraw(
+            lambda: sine_ax_tx.plot(
+                lambda t: np.sin(2 * PI * 6 * t),
+                color=RX_COLOR,
+                x_range=[
+                    min(max(~sine_x1_tx - sine_x_width, 0), 1),
+                    min(max(~sine_x1_tx, 0), 1),
+                    1 / 1000,
+                ],
+            )
+        )
+        self.add(sine_plot_tx)
+
+        self.play(
+            LaggedStart(
+                sine_x1 @ (1.1 + sine_x_width),
+                sine_x1_tx @ (1.1 + sine_x_width),
+                lag_ratio=0.3,
+            ),
+            rate_func=rate_functions.linear,
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        plane = (
+            SVGMobject("../props/static/plane.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .to_corner(UR)
+            .shift(LEFT * 3)
+        )
+
+        self.play(
+            plane.shift(UP * 5).animate.shift(DOWN * 5),
+            parabolic.animate.rotate(PI / 6),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        phased_array_title = Tex(
+            "Phased Array", font_size=DEFAULT_FONT_SIZE * 1.8
+        ).to_edge(UP, MED_LARGE_BUFF)
+
+        antennas = Group()
+        for _ in range(6):
+            antenna_port = Line(DOWN / 2, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+
+        antennas.arrange(RIGHT, MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    plane.animate.shift(UP * 5),
+                    car.animate.shift(RIGHT * 5),
+                    parabolic.animate.shift(LEFT * 5),
+                ),
+                LaggedStart(*[GrowFromCenter(m) for m in antennas], lag_ratio=0.15),
+                phased_array_title.shift(UP * 5).animate.shift(DOWN * 5),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=rate_functions.there_and_back)
+                    .scale(1.4)
+                    .set_color(YELLOW)
+                    for m in phased_array_title[0]
+                ],
+                lag_ratio=0.08,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            antennas.animate.to_edge(UP, LARGE_BUFF),
+            phased_array_title.animate.shift(UP * 5),
+        )
+
+        def get_phase_delay_plot(ant):
+            ax = (
+                Axes(
+                    x_range=[0, 1, 0.25],
+                    y_range=[-1, 1, 0.5],
+                    tips=False,
+                    axis_config={
+                        "include_numbers": False,
+                    },
+                    y_length=LARGE_BUFF,
+                    x_length=config.frame_height * 0.4,
+                )
+                .set_opacity(0)
+                .rotate(PI / 2)
+                .next_to(ant, DOWN)
+                .shift(DOWN * 8)
+            )
+
+            phase_shift = VT(0)
+            plot = always_redraw(
+                lambda: ax.plot(
+                    lambda t: np.sin(2 * PI * 2 * t + ~phase_shift),
+                    color=TX_COLOR,
+                    x_range=[0, 1, 1 / 200],
+                )
+            )
+            return ax, plot, phase_shift
+
+        phase_plots = [get_phase_delay_plot(ant) for ant in antennas]
+        for _, plot, _ in phase_plots:
+            self.add(plot)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[ax.animate.shift(UP * 8) for ax, _, _ in phase_plots], lag_ratio=0.2
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        np.random.seed(1)
+        self.play(
+            LaggedStart(
+                *[
+                    phase_shift @ (2 * np.random.rand() * 2 * PI - PI)
+                    for _, _, phase_shift in phase_plots
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_shift_labels = Group(
+            *[
+                MathTex(f"\\phi_{n}", font_size=DEFAULT_FONT_SIZE * 1.4).next_to(
+                    ax, DOWN
+                )
+                for n, (ax, _, _) in enumerate(phase_plots)
+            ]
+        )
+
+        self.play(
+            LaggedStart(
+                *[m.shift(DOWN * 8).animate.shift(UP * 8) for m in phase_shift_labels]
+            )
+        )
+
+        np.random.seed(2)
+        self.play(
+            LaggedStart(
+                *[
+                    phase_shift + (2 * np.random.rand() * 2 * PI - PI)
+                    for _, _, phase_shift in phase_plots
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        parabolic = Arc(radius=2, start_angle=PI * 0.75).to_edge(LEFT, MED_LARGE_BUFF)
+        arrow = Arrow(
+            parabolic.get_right(),
+            [
+                (phase_plots[0][1].get_left() + RIGHT * 2)[0],
+                parabolic.get_right()[1],
+                0,
+            ],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    antennas.animate.shift(RIGHT * 2),
+                    *[ax.animate.shift(RIGHT * 2) for ax, _, _ in phase_plots],
+                    phase_shift_labels.animate.shift(RIGHT * 2),
+                ),
+                parabolic.shift(LEFT * 4).animate.shift(RIGHT * 4),
+                GrowArrow(arrow),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[FadeOut(m) for m in self.mobjects], lag_ratio=0.08))
+
+        self.wait(2)
+
+
 class FarField(ZoomedScene):
     def __init__(self, **kwargs):
         ZoomedScene.__init__(
@@ -588,7 +984,7 @@ class HeadOn(MovingCameraScene):
 
         self.play(self.camera.frame.animate.restore(), combined_sine_x1 @ 0)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         angle = -PI / 6
@@ -934,10 +1330,39 @@ class HeadOn(MovingCameraScene):
 
         self.play(self.camera.frame.animate.restore())
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        self.play(plane_wave.animate.set_y(antennas.get_top()[1]))
-        self.play(FadeOut(plane_wave))
+        phase_left @= 0
+        shifted_sine_left_x0 @= 0
+        shifted_sine_right_x0 @= 0
+        shifted_amp_sine_x1 @= 0
+        shifted_amp_sine_x0 @= 0
+        shifted_filt_sine_x1 @= 0
+        shifted_sine_right_x1 @= 0
+        shifted_sine_left_x1 @= 0
+
+        self.play(
+            LaggedStart(
+                plane_wave.animate.set_y(antennas.get_top()[1]),
+                AnimationGroup(
+                    shifted_sine_right_x1 @ 1,
+                    shifted_sine_left_x1 @ 1,
+                ),
+                FadeOut(plane_wave),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5, frozen_frame=False)
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
+        )
+
+        self.wait(0.5)
 
         self.wait(2)
 
@@ -1066,16 +1491,8 @@ class FourierAnalogy(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                *[
-                    GrowFromCenter(m)
-                    for m in [
-                        sinc[0][6],
-                        sinc[0][7:13],
-                        sinc[0][13],
-                        sinc[0][14],
-                    ]
-                ],
-                lag_ratio=0.2,
+                *[GrowFromCenter(m) for m in sinc[0][6:]],
+                lag_ratio=0.15,
             )
         )
 
