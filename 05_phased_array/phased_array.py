@@ -24,7 +24,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -1723,7 +1723,7 @@ class PhaseCalc(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         phase_delta_full_eqn = MathTex(
@@ -1796,6 +1796,78 @@ class PhaseCalc(MovingCameraScene):
             FadeOut(psi, psi_angle, right_ang, wl_eqn, L_eqn),
             self.camera.frame.animate.scale(1 / 0.8),
             phase_delta_full_eqn.animate.to_edge(UP, MED_LARGE_BUFF),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        notebook_img = ImageMobject("./static/2d_taylor_taper.png").scale_to_fit_width(
+            config.frame_width * 0.4
+        )
+        code = (
+            Code(
+                code="""def compute_af_2d(weights_n, weights_m, d_x, d_y, k_0, u_0, v_0):
+    AF_m = np.sum(
+        weights_n[:, None, None]
+        * np.exp(1j * n[:, None, None] * d_x * k_0 * (U - u_0)),
+        axis=0,
+    )
+    AF_n = np.sum(
+        weights_m[:, None, None]
+        * np.exp(1j * m[:, None, None] * d_y * k_0 * (V - v_0)),
+        axis=0,
+    )
+
+    AF = AF_m * AF_n / (M * N)
+    return AF""",
+                tab_width=4,
+                background="window",
+                background_stroke_color=WHITE,
+                language="Python",
+                style="paraiso-dark",
+                insert_line_no=True,
+            )
+            .scale_to_fit_width(config.frame_width * 0.8)
+            .to_edge(DOWN, LARGE_BUFF)
+            .shift(DOWN * config.frame_height * 1.5)
+        )
+        for ln in code.line_numbers:
+            ln.set_color(WHITE)
+
+        myTemplate = TexTemplate()
+        myTemplate.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"cfar.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=myTemplate,
+            font_size=DEFAULT_FONT_SIZE * 2.5,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = Group(notebook_box, notebook_reminder).next_to(code, UP, LARGE_BUFF)
+        self.add(code, notebook)
+
+        self.play(self.camera.frame.animate.shift(DOWN * config.frame_height * 1.5))
+
+        self.wait(0.5)
+
+        self.play(
+            code.animate.scale_to_fit_width(config.frame_width * 0.5)
+            .next_to(self.camera.frame.get_left(), RIGHT, MED_LARGE_BUFF)
+            .shift(DOWN),
+            notebook_img.scale(0.7)
+            .next_to(self.camera.frame.get_right(), LEFT, MED_LARGE_BUFF)
+            .shift(DOWN + RIGHT * 7)
+            .animate.shift(LEFT * 7),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            code.animate.shift(LEFT * 10),
+            notebook_img.animate.shift(RIGHT * 10),
+            FadeOut(notebook),
         )
 
         self.wait(2)
