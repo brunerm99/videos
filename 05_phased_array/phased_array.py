@@ -24,11 +24,18 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+def get_transform_func(from_var, func=TransformFromCopy):
+    def transform_func(m, **kwargs):
+        return func(from_var, m, **kwargs)
+
+    return transform_func
 
 
 class Intro(Scene):
@@ -1363,6 +1370,433 @@ class HeadOn(MovingCameraScene):
         )
 
         self.wait(0.5)
+
+        self.wait(2)
+
+
+class PhaseCalc(MovingCameraScene):
+    def construct(self):
+        np.random.seed(0)
+        self.next_section(skip_animations=skip_animations(True))
+
+        antenna_port_left = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri_left = (
+            Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port_left, UP)
+        )
+        antenna_port_right = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri_right = (
+            Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port_right, UP)
+        )
+
+        antenna_left = Group(antenna_port_left, antenna_tri_left)
+        antenna_right = Group(antenna_port_right, antenna_tri_right)
+        antennas = (
+            Group(antenna_left, antenna_right)
+            .arrange(RIGHT, LARGE_BUFF * 3)
+            .to_edge(DOWN, -SMALL_BUFF)
+        )
+
+        angle = -PI / 6
+
+        background_rect = (
+            Rectangle(
+                width=config.frame_width,
+                height=config.frame_height,
+                stroke_color=BACKGROUND_COLOR,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+            )
+            .move_to(antennas, UP)
+            .set_z_index(-1)
+        )
+
+        self.add(background_rect)
+
+        plane_wave = Line(
+            antenna_right.get_top() - 8 * (LEFT * np.cos(angle) + DOWN * np.sin(angle)),
+            antenna_right.get_top() + 8 * (LEFT * np.cos(angle) + DOWN * np.sin(angle)),
+            color=RX_COLOR,
+        ).set_z_index(-2)
+
+        self.add(antennas, plane_wave)
+        # self.play(
+        #     angled_plane_wave.animate(run_time=3).shift(
+        #         7 * (LEFT * np.cos(angle) + UP * np.sin(angle))
+        #     )
+        # )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        x_len = antenna_right.get_top()[0] - antenna_left.get_top()[0]
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[0, 0.75, 0.25],
+            tips=False,
+            x_length=x_len,
+            y_length=x_len * 0.75,
+        )
+
+        ax.shift(antenna_left.get_top() - ax.c2p(0, 0))
+
+        L_line = Line(
+            ax.c2p(0, 0),
+            ax.c2p(
+                np.cos(PI / 2 + angle) / 2,
+                np.sin(PI / 2 + angle) / 2,
+            ),
+            color=YELLOW,
+        )
+
+        L_label = MathTex("L").next_to(L_line.get_midpoint(), RIGHT)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.8).shift(UP / 2),
+                Create(L_line),
+                GrowFromCenter(L_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(ax), run_time=2)
+
+        self.wait(0.5)
+
+        z_label = ax.get_y_axis_label(r"\hat{z}")
+
+        self.play(GrowFromCenter(z_label))
+
+        self.wait(0.5)
+
+        theta_angle = ArcBetweenPoints(
+            ax.c2p(0, 0.25),
+            ax.c2p(
+                0.5 * np.cos(PI / 2 + angle) / 2,
+                0.5 * np.sin(PI / 2 + angle) / 2,
+            ),
+            angle=-TAU / 4,
+        )
+
+        theta = MathTex(r"\theta").next_to(theta_angle, UP).shift(RIGHT / 8)
+
+        self.play(Create(theta_angle), FadeIn(theta))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        qmark_up = Tex("?").move_to(ax.c2p(0.125, 0.6))
+        qmark_left = Tex("?").next_to(ax.c2p(0, 0.25), LEFT)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(qmark_left), GrowFromCenter(qmark_up), lag_ratio=0.4
+            )
+        )
+
+        self.wait(0.5)
+
+        right_tri = Polygon(
+            ax.c2p(0, 0),
+            L_line.get_end(),
+            ax.c2p(1, 0),
+            fill_opacity=0.2,
+            fill_color=GREEN,
+            stroke_opacity=0,
+        ).set_z_index(-3)
+        right_ang = RightAngle(
+            Line(
+                ax.c2p(0, 0),
+                ax.c2p(
+                    np.cos(PI / 2 + angle),
+                    np.sin(PI / 2 + angle),
+                ),
+            ),
+            plane_wave,
+            quadrant=(-1, -1),
+        ).set_z_index(-3)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(right_tri.width * 1.3).move_to(
+                right_tri
+            ),
+            FadeIn(right_tri),
+            Create(right_ang),
+            FadeOut(qmark_up, qmark_left),
+        )
+
+        self.wait(0.5)
+
+        dx = Line(ax.c2p(0, 0), ax.c2p(1, 0), color=YELLOW)
+        dx_label = MathTex("d_x").next_to(dx, UP)
+
+        self.play(LaggedStart(Create(dx), FadeIn(dx_label), lag_ratio=0.4))
+
+        self.wait(0.5)
+
+        psi_angle = ArcBetweenPoints(
+            ax.c2p(
+                0.25 * np.cos(PI / 2 + angle) / 2,
+                0.25 * np.sin(PI / 2 + angle) / 2,
+            ),
+            ax.c2p(0.125, 0),
+            angle=-TAU / 4,
+        )
+        psi = MathTex(r"\psi").next_to(psi_angle, UR, SMALL_BUFF).shift(DOWN / 2)
+
+        self.play(LaggedStart(Create(psi_angle), GrowFromCenter(psi), lag_ratio=0.4))
+
+        self.wait(0.5)
+
+        self.play(
+            L_label.animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(UP / 3)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        cos_ang = (
+            MathTex(r"\cos{(\text{angle})} = \frac{\text{adjacent}}{\text{hypotenuse}}")
+            .to_edge(UP, LARGE_BUFF)
+            .shift(RIGHT * 2)
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    GrowFromCenter(m)
+                    for m in [
+                        *cos_ang[0][:4],
+                        cos_ang[0][4:9],
+                        *cos_ang[0][9:11],
+                        cos_ang[0][11:19],
+                        cos_ang[0][19],
+                        cos_ang[0][20:],
+                    ]
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        cos_ang_filled = MathTex(r"\cos{(\psi)} = \frac{L}{d_x}").move_to(cos_ang, LEFT)
+
+        self.play(
+            TransformByGlyphMap(
+                cos_ang,
+                cos_ang_filled,
+                ([0, 1, 2, 3], [0, 1, 2, 3]),
+                ([4, 5, 6, 7, 8], ShrinkToCenter),
+                (get_transform_func(psi[0]), [4], {"path_arc": -PI / 2}),
+                ([9, 10], [5, 6], {"delay": 0.3}),
+                ([11, 12, 13, 14, 15, 16, 17, 18], ShrinkToCenter, {"delay": 0.3}),
+                (
+                    [20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
+                    ShrinkToCenter,
+                    {"delay": 0.3},
+                ),
+                ([19], [8], {"delay": 0.5}),
+                (get_transform_func(L_label[0]), [7], {"path_arc": -PI / 3}),
+                (get_transform_func(dx_label[0]), [9, 10], {"path_arc": -PI / 3}),
+            )
+        )
+
+        self.wait(0.5)
+
+        right_ang_phi_theta = RightAngle(
+            Line(ax.c2p(0, -1), ax.c2p(0, 1)), Line(ax.c2p(-1, 0), ax.c2p(1, 0))
+        )
+
+        self.play(Create(right_ang_phi_theta))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        cos_ang_90 = MathTex(r"\cos{(90^\circ - \theta)} = \frac{L}{d_x}").move_to(
+            cos_ang_filled, LEFT
+        )
+
+        self.play(
+            TransformByGlyphMap(
+                cos_ang_filled,
+                cos_ang_90,
+                ([0, 1, 2], [0, 1, 2], {"delay": 0.4}),
+                ([3], [3], {"delay": 0}),
+                ([4], ShrinkToCenter),
+                (get_transform_func(theta[0]), [8], {"path_arc": -PI / 3}),
+                (GrowFromCenter, [4, 5, 6], {"delay": 0.1}),
+                (GrowFromCenter, [7], {"delay": 0.2}),
+                ([5], [9], {"delay": 0}),
+                ([6], [10], {"delay": 0}),
+                ([7, 8, 9, 10], [11, 12, 13, 14], {"delay": 0}),
+            ),
+            FadeOut(right_ang_phi_theta),
+        )
+
+        sin_ang = MathTex(r"\sin{(\theta)} = \frac{L}{d_x}").move_to(
+            cos_ang_filled, LEFT
+        )
+
+        self.play(
+            TransformByGlyphMap(
+                cos_ang_90,
+                sin_ang,
+                ([0, 1, 2], [0, 1, 2]),
+                ([3], [3]),
+                ([4, 5, 6, 7], ShrinkToCenter),
+                ([8], [4]),
+                ([9, 10], [5, 6]),
+                ([11, 12, 13, 14], [7, 8, 9, 10]),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        L_eqn = MathTex(r"L = d_x \cdot \sin{(\theta)}").move_to(cos_ang_filled, LEFT)
+
+        self.play(
+            TransformByGlyphMap(
+                sin_ang,
+                L_eqn,
+                ([7], [0], {"path_arc": PI / 2}),
+                ([0, 1, 2, 3, 4, 5], [5, 6, 7, 8, 9, 10], {"path_arc": PI / 2}),
+                (GrowFromCenter, [4], {"delay": 0.3}),
+                ([8], ShrinkToCenter),
+                ([9, 10], [2, 3], {"path_arc": -PI}),
+                ([6], [1]),
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        wl_eqn = MathTex(r"\lambda = \frac{c}{f}").next_to(sin_ang, DOWN)
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in wl_eqn[0]], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        phase_delta_eqn = MathTex(
+            r"\Delta \phi = \frac{L}{\lambda} \cdot 2 \pi"
+        ).move_to(sin_ang, LEFT)
+
+        fade_eqn_group = (
+            Group(L_eqn.copy(), wl_eqn.copy())
+            .arrange(DOWN, aligned_edge=RIGHT)
+            .next_to(self.camera.frame.get_corner(UR), DL)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    TransformFromCopy(L_eqn[0][0], phase_delta_eqn[0][3]),
+                    L_eqn.animate.set_opacity(0.2).move_to(fade_eqn_group[0][0]),
+                ),
+                *[GrowFromCenter(m) for m in phase_delta_eqn[0][:3]],
+                GrowFromCenter(phase_delta_eqn[0][4]),
+                AnimationGroup(
+                    TransformFromCopy(wl_eqn[0][0], phase_delta_eqn[0][5]),
+                    wl_eqn.animate.set_opacity(0.2).move_to(fade_eqn_group[1][0]),
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in phase_delta_eqn[0][-3:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        phase_delta_full_eqn = MathTex(
+            r"\Delta \phi = \frac{d_x \sin{(\theta)}}{\lambda} \cdot 2 \pi"
+        ).move_to(sin_ang, LEFT)
+
+        self.play(
+            TransformByGlyphMap(
+                phase_delta_eqn,
+                phase_delta_full_eqn,
+                ([0, 1], [0, 1]),
+                ([2], [2]),
+                ([3], ShrinkToCenter),
+                ([4], [11], {"delay": 0.3}),
+                ([5], [12]),
+                ([6], [13]),
+                ([7, 8], [14, 15]),
+                (
+                    get_transform_func(L_eqn[0][2:]),
+                    [3, 4, 5, 6, 7, 8, 9, 10],
+                    {"path_arc": -PI / 5},
+                ),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            phase_delta_full_eqn[0][3:5]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_color(YELLOW)
+            .shift(UP / 3),
+            dx_label[0]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_color(YELLOW)
+            .shift(UP / 3),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            wl_eqn[0]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_opacity(1),
+            phase_delta_full_eqn[0][12]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_color(YELLOW)
+            .shift(DOWN / 3),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            phase_delta_full_eqn[0][9]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_color(YELLOW)
+            .shift(UP / 3),
+            theta[0]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_color(YELLOW)
+            .shift(UP / 3),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(psi, psi_angle, right_ang, wl_eqn, L_eqn),
+            self.camera.frame.animate.scale(1 / 0.8),
+            phase_delta_full_eqn.animate.to_edge(UP, MED_LARGE_BUFF),
+        )
 
         self.wait(2)
 
