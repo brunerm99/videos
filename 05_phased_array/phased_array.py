@@ -38,6 +38,22 @@ def get_transform_func(from_var, func=TransformFromCopy):
     return transform_func
 
 
+def sinc_pattern(theta, phi, L, W, lambda_0):
+    k = 2 * np.pi / lambda_0
+    E_theta = np.sinc(k * L / 2 * np.sin(theta) * np.cos(phi))
+    E_phi = np.sinc(k * W / 2 * np.sin(theta) * np.sin(phi))
+    return np.abs(E_theta * E_phi)
+
+
+def compute_af_1d(weights, d_x, k_0, u, u_0):
+    n = np.arange(weights.size)
+    AF = np.sum(
+        weights[:, None] * np.exp(1j * n[:, None] * d_x * k_0 * (u - u_0)), axis=0
+    )
+    AF /= AF.max()
+    return AF
+
+
 class Intro(Scene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -1793,9 +1809,126 @@ class PhaseCalc(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            FadeOut(psi, psi_angle, right_ang, wl_eqn, L_eqn),
+            FadeOut(
+                psi,
+                psi_angle,
+                right_ang,
+                wl_eqn,
+                L_eqn,
+                ax,
+                z_label,
+                dx,
+                right_tri,
+                theta,
+                theta_angle,
+            ),
             self.camera.frame.animate.scale(1 / 0.8),
             phase_delta_full_eqn.animate.to_edge(UP, MED_LARGE_BUFF),
+            dx_label.animate.next_to(dx, DOWN),
+        )
+
+        antenna_port_left2 = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri_left2 = (
+            Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port_left2, UP)
+        )
+        antenna_left2 = Group(antenna_port_left2, antenna_tri_left2).next_to(
+            antenna_left, LEFT, LARGE_BUFF * 3
+        )
+        antenna_port_left3 = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri_left3 = (
+            Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port_left3, UP)
+        )
+        antenna_left3 = Group(antenna_port_left3, antenna_tri_left3).next_to(
+            antenna_left2, LEFT, LARGE_BUFF * 3
+        )
+        self.next_section(skip_animations=skip_animations(False))
+
+        L_line2 = Line(
+            ax.c2p(0, 0),
+            ax.c2p(
+                np.cos(PI / 2 + angle),
+                np.sin(PI / 2 + angle),
+            ),
+            color=YELLOW,
+        )
+        L_line2.shift((L_line2.get_start()[0] - antenna_left2.get_top()[0]) * LEFT)
+        L_label2 = MathTex("L_2").next_to(L_line2.get_midpoint(), RIGHT)
+
+        L_line3 = Line(
+            ax.c2p(0, 0),
+            ax.c2p(
+                np.cos(PI / 2 + angle) * 1.5,
+                np.sin(PI / 2 + angle) * 1.5,
+            ),
+            color=YELLOW,
+        )
+        L_line3.shift((L_line3.get_start()[0] - antenna_left3.get_top()[0]) * LEFT)
+        L_label3 = MathTex("L_3").next_to(L_line3.get_midpoint(), RIGHT)
+
+        plane_wave_longer = Line(
+            antenna_right.get_top()
+            - 16 * (LEFT * np.cos(angle) + DOWN * np.sin(angle)),
+            antenna_right.get_top()
+            + 16 * (LEFT * np.cos(angle) + DOWN * np.sin(angle)),
+            color=RX_COLOR,
+        ).set_z_index(-2)
+
+        dx_label2 = (
+            MathTex("d_x")
+            .move_to(dx_label)
+            .shift((antenna_right.get_top()[0] - antenna_left.get_top()[0]) * LEFT)
+        )
+        dx_label3 = (
+            MathTex("d_x")
+            .move_to(dx_label)
+            .shift((antenna_right.get_top()[0] - antenna_left.get_top()[0]) * LEFT * 2)
+        )
+
+        delta_phi_1 = MathTex(r"\Delta \phi").next_to(antenna_left, UP).shift(LEFT / 2)
+        delta_phi_2 = (
+            MathTex(r"2\Delta \phi").next_to(antenna_left2, UP).shift(LEFT / 2)
+        )
+        delta_phi_3 = (
+            MathTex(r"3\Delta \phi_3").next_to(antenna_left3, UP).shift(LEFT / 2)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(antenna_left3, antenna_right).width * 1.2
+                ).move_to(Group(antenna_left3, antenna_right), DOWN),
+                Transform(plane_wave, plane_wave_longer),
+                GrowFromCenter(antenna_left2),
+                GrowFromCenter(dx_label2),
+                Create(L_line2),
+                GrowFromCenter(L_label2),
+                GrowFromCenter(antenna_left3),
+                GrowFromCenter(dx_label3),
+                Create(L_line3),
+                GrowFromCenter(L_label3),
+                lag_ratio=0.2,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    phase_delta_full_eqn[0][:2], delta_phi_1[0], path_arc=-PI / 3
+                ),
+                TransformFromCopy(
+                    phase_delta_full_eqn[0][:2], delta_phi_2[0][1:], path_arc=-PI / 3
+                ),
+                GrowFromCenter(delta_phi_2[0][0]),
+                TransformFromCopy(
+                    phase_delta_full_eqn[0][:2], delta_phi_3[0][1:], path_arc=-PI / 3
+                ),
+                GrowFromCenter(delta_phi_3[0][0]),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
         )
 
         self.next_section(skip_animations=skip_animations(False))
@@ -1828,7 +1961,7 @@ class PhaseCalc(MovingCameraScene):
                 insert_line_no=True,
             )
             .scale_to_fit_width(config.frame_width * 0.8)
-            .to_edge(DOWN, LARGE_BUFF)
+            .next_to(self.camera.frame.get_bottom(), DOWN)
             .shift(DOWN * config.frame_height * 1.5)
         )
         for ln in code.line_numbers:
@@ -1848,7 +1981,11 @@ class PhaseCalc(MovingCameraScene):
         notebook = Group(notebook_box, notebook_reminder).next_to(code, UP, LARGE_BUFF)
         self.add(code, notebook)
 
-        self.play(self.camera.frame.animate.shift(DOWN * config.frame_height * 1.5))
+        self.play(
+            self.camera.frame.animate.scale(0.8)
+            .move_to(code, DOWN)
+            .shift(DOWN * LARGE_BUFF)
+        )
 
         self.wait(0.5)
 
@@ -1868,6 +2005,488 @@ class PhaseCalc(MovingCameraScene):
             code.animate.shift(LEFT * 10),
             notebook_img.animate.shift(RIGHT * 10),
             FadeOut(notebook),
+        )
+
+        self.wait(2)
+
+
+class Part2Transition(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        antenna_port_left = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri_left = (
+            Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port_left, UP)
+        )
+        antenna_port_right = Line(DOWN * 2, UP, color=WHITE)
+        antenna_tri_right = (
+            Triangle(color=WHITE).rotate(PI / 3).move_to(antenna_port_right, UP)
+        )
+
+        antenna_left = Group(antenna_port_left, antenna_tri_left)
+        antenna_right = Group(antenna_port_right, antenna_tri_right)
+        antennas = (
+            Group(antenna_left, antenna_right)
+            .arrange(RIGHT, LARGE_BUFF * 20)
+            .to_edge(DOWN, -SMALL_BUFF)
+        )
+
+        self.play(
+            antennas.animate.arrange(RIGHT, LARGE_BUFF * 3).to_edge(DOWN, -SMALL_BUFF)
+        )
+
+        self.wait(0.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .to_edge(UP, MED_LARGE_BUFF)
+            .shift(RIGHT * 2)
+        )
+
+        tx_up = Line(
+            antennas.get_top(),
+            [antennas.get_top()[0], cloud.get_bottom()[1], 0],
+            color=TX_COLOR,
+        )
+        tx_to_cloud = Line(antennas.get_top(), cloud.get_bottom(), color=TX_COLOR)
+
+        self.play(Create(tx_up))
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(tx_up, tx_to_cloud),
+            cloud.shift(UP * 5).animate.shift(DOWN * 5),
+        )
+
+        self.wait(0.5)
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+        # weight_trackers[n_elem // 2] @= 1
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        # patch parameters
+        f_patch = 10e9
+        lambda_patch_0 = c / f_patch
+
+        epsilon_r = 2.2
+        h = 1.6e-3
+
+        epsilon_eff = (epsilon_r + 1) / 2 + (epsilon_r - 1) / 2 * (
+            1 + 12 * h / lambda_patch_0
+        ) ** -0.5
+        L = lambda_patch_0 / (2 * np.sqrt(epsilon_eff))
+        W = lambda_patch_0 / 2 * np.sqrt(2 / (epsilon_r + 1))
+        # /patch parameters
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        r_min = -30
+        x_len = config.frame_height * 0.6
+        ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(tx_to_cloud.get_angle())
+        )
+        ax.shift(antennas.get_top() - ax.c2p(0, 0))
+
+        fnbw = 2 * PI * wavelength_0 / (n_elem * d_x)
+
+        theta_min = VT(0)
+        theta_max = VT(0)
+        af_opacity = VT(1)
+
+        ep_exp_scale = VT(0)
+
+        def get_ap():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+            EP = sinc_pattern(u, 0, L, W, wavelength_0)
+            AP = AF * (EP ** (~ep_exp_scale))
+            f_AP = interp1d(
+                u * PI,
+                1.3 * np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None),
+                fill_value="extrapolate",
+            )
+            plot = ax.plot_polar_graph(
+                r_func=f_AP,
+                theta_range=[~theta_min, ~theta_max, 2 * PI / 200],
+                color=TX_COLOR,
+                use_smoothing=False,
+                stroke_opacity=~af_opacity,
+            )
+            return plot
+
+        AF_plot = always_redraw(get_ap)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(AF_plot)
+
+        self.play(
+            FadeOut(tx_to_cloud),
+            theta_min @ (-fnbw / 2),
+            theta_max @ (fnbw / 2),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(theta_min @ (-PI), theta_max @ (PI), run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            ax.animate.rotate(PI / 2 - tx_to_cloud.get_angle()),
+            AnimationGroup(
+                *[
+                    m.animate.set_stroke(opacity=0.2)
+                    for m in [
+                        antenna_tri_left,
+                        antenna_port_left,
+                        antenna_tri_right,
+                        antenna_port_right,
+                    ]
+                ]
+            ),
+            cloud.animate.shift(UP * 5),
+            self.camera.frame.animate.scale(0.9).shift(UP),
+        )
+
+        self.wait(0.5)
+
+        ap_label = Tex(
+            "Antenna Pattern", r"\ $ = $ Element Pattern $\cdot$ Array Factor"
+        ).next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF)
+
+        ap_label[0].save_state()
+        self.play(
+            LaggedStart(
+                *[FadeIn(m) for m in ap_label[0].scale(1.8).set_x(0)], lag_ratio=0.1
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        scan_arrow_ang = VT(0)
+        scan_arrow_left = always_redraw(
+            lambda: Arrow(
+                ax.c2p(0, 0), ax.input_to_graph_point(-~scan_arrow_ang, AF_plot), buff=0
+            )
+        )
+        scan_arrow_right = always_redraw(
+            lambda: Arrow(
+                ax.c2p(0, 0), ax.input_to_graph_point(~scan_arrow_ang, AF_plot), buff=0
+            )
+        )
+
+        self.play(GrowArrow(scan_arrow_left), GrowArrow(scan_arrow_right))
+
+        self.wait(0.5)
+
+        self.play(scan_arrow_ang @ PI, run_time=3)
+        self.play(FadeOut(scan_arrow_left, scan_arrow_right))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ap_label[0].animate.restore(),
+                GrowFromCenter(ap_label[1][0]),
+                GrowFromCenter(ap_label[1][1:8]),
+                GrowFromCenter(ap_label[1][8:15]),
+                GrowFromCenter(ap_label[1][15]),
+                GrowFromCenter(ap_label[1][16:21]),
+                GrowFromCenter(ap_label[1][21:]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ap_label[1][1:15].animate.set_color(YELLOW), af_opacity @ 0.2)
+
+        self.wait(0.5)
+
+        EP_ax_left = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(PI / 2)
+        )
+        EP_ax_left.shift(antenna_left.get_top() - EP_ax_left.c2p(0, 0))
+
+        EP_ax_right = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(PI / 2)
+        )
+        EP_ax_right.shift(antenna_right.get_top() - EP_ax_right.c2p(0, 0))
+
+        theta = np.linspace(-PI, PI, 500)
+
+        ep_theta_min = VT(0)
+        ep_theta_max = VT(0)
+        ep_left_opacity = VT(1)
+        ep_right_opacity = VT(1)
+
+        def get_plot_ep_func(ax, opacity_vt):
+            def plot_ep():
+                EP = sinc_pattern(theta, 0, L, W, lambda_patch_0)
+                f_EP = interp1d(
+                    theta,
+                    np.clip(20 * np.log10(np.abs(EP)) - r_min, 0, None),
+                    fill_value="extrapolate",
+                )
+                EP_plot = ax.plot_polar_graph(
+                    r_func=f_EP,
+                    theta_range=[~ep_theta_min, ~ep_theta_max, 2 * PI / 200],
+                    color=TX_COLOR,
+                    use_smoothing=False,
+                    stroke_opacity=~opacity_vt,
+                )
+
+                return EP_plot
+
+            return plot_ep
+
+        EP_plot_left = always_redraw(get_plot_ep_func(EP_ax_left, ep_left_opacity))
+        EP_plot_right = always_redraw(get_plot_ep_func(EP_ax_right, ep_right_opacity))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.add(EP_plot_left, EP_plot_right)
+
+        self.play(ep_theta_min @ (-PI / 2), ep_theta_max @ (PI / 2))
+
+        self.wait(0.5)
+
+        self.play(
+            ep_left_opacity @ 0.2,
+            ep_right_opacity @ 0.2,
+            ap_label[1][1:15].animate.set_color(WHITE),
+            ap_label[1][16:].animate.set_color(YELLOW),
+            af_opacity @ 1,
+        )
+
+        self.wait(0.5)
+
+        self.play(ax.animate.rotate(-PI / 3))
+        self.play(ax.animate.rotate(2 * PI / 3))
+        self.play(ax.animate.rotate(-PI / 3))
+
+        self.wait(0.5)
+
+        taper = signal.windows.taylor(n_elem, nbar=5, sll=23)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n]
+                        @ taper[: n_elem // 2][::-1][n],
+                        weight_trackers[n_elem // 2 + 1 :][n]
+                        @ taper[n_elem // 2 + 1 :][n],
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n] @ 1,
+                        weight_trackers[n_elem // 2 + 1 :][n] @ 1,
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            ep_left_opacity @ 1,
+            ep_right_opacity @ 1,
+            ap_label[1][16:].animate.set_color(WHITE),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    EP_ax_left.animate.set_x(ax.get_x()),
+                    ep_left_opacity @ 0,
+                    lag_ratio=0.4,
+                ),
+                LaggedStart(
+                    EP_ax_right.animate.set_x(ax.get_x()),
+                    ep_right_opacity @ 0,
+                    lag_ratio=0.4,
+                ),
+                ep_exp_scale.animate(run_time=3).set_value(1),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        phased_array_box = (
+            Rectangle(
+                color=GRAY_BROWN,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                height=config.frame_height * 0.4,
+                width=config.frame_width * 0.6,
+            )
+            .set_z_index(1)
+            .next_to(antennas, DOWN, 0)
+        )
+
+        gears = SVGMobject("../props/static/Gears.svg").scale(3)
+        (red_gear, blue_gear) = gears.scale_to_fit_height(
+            phased_array_box.height * 0.8
+        ).move_to(phased_array_box)
+
+        gr = 24 / 12
+
+        RA = DecimalNumber(0, 3)
+        RV = DecimalNumber(0, 2)
+        BV = DecimalNumber(0, 2)
+
+        def Driver(m, dt):
+            RV.set_value(RV.get_value() + dt * RA.get_value())
+            BV.set_value(-RV.get_value() / gr)
+            m.rotate(dt * RV.get_value())
+
+        def Driven(m, dt):
+            m.rotate(dt * BV.get_value())
+
+        self.add(gears, phased_array_box)
+        red_gear.add_updater(Driver)
+        blue_gear.add_updater(Driven)
+
+        RA.set_value(PI / 6)
+
+        # for a, t in AccTime:
+        #     # self.add_sound("Click.wav")
+        #     self.play(Indicate(RA.set_value(a)), run_time=0.5)
+        #     corr = 2 / 60  # missed frame correction
+        #     self.wait(t + corr - 0.5)  # -0.5 for run_time=0.5
+
+        scene = Group(phased_array_box, AF_plot, antennas)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(scene.height * 1.1).move_to(
+                scene
+            ),
+            AnimationGroup(
+                *[
+                    m.animate.set_stroke(opacity=1)
+                    for m in [
+                        antenna_tri_left,
+                        antenna_port_left,
+                        antenna_tri_right,
+                        antenna_port_right,
+                    ]
+                ]
+            ),
+            run_time=2,
+        )
+
+        self.wait(6)
+
+        toolbox = (
+            ImageMobject("../props/static/toolbox.png")
+            .scale_to_fit_width(config.frame_width * 0.5)
+            .move_to(self.camera.frame.copy().shift(RIGHT * config.frame_width * 2))
+        )
+        self.add(toolbox)
+
+        self.play(self.camera.frame.animate.shift(RIGHT * config.frame_width * 2))
+
+        self.wait(0.5)
+
+        self.play(toolbox.animate(rate_func=rate_functions.ease_in_back).shift(UP * 8))
+
+        self.wait(0.5)
+
+        mailloux = ImageMobject("../props/static/mailloux.jpg").scale_to_fit_height(
+            config.frame_height * 0.7
+        )
+        adi = ImageMobject("./static/adi_phased_array_article.png").scale_to_fit_height(
+            config.frame_height * 0.7
+        )
+        notebook_sc = ImageMobject("./static/notebook_sc.png").scale_to_fit_height(
+            config.frame_height * 0.7
+        )
+        Group(mailloux, adi, notebook_sc).arrange(RIGHT, MED_LARGE_BUFF).move_to(
+            self.camera.frame
+        )
+
+        self.play(GrowFromCenter(mailloux))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(adi))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(notebook_sc))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(mailloux),
+                ShrinkToCenter(adi),
+                ShrinkToCenter(notebook_sc),
+                lag_ratio=0.2,
+            )
         )
 
         self.wait(2)
@@ -2210,15 +2829,6 @@ class FourierAnalogy(MovingCameraScene):
         )
 
         self.wait(2)
-
-
-def compute_af_1d(weights, d_x, k_0, u, u_0):
-    n = np.arange(weights.size)
-    AF = np.sum(
-        weights[:, None] * np.exp(1j * n[:, None] * d_x * k_0 * (u - u_0)), axis=0
-    )
-    AF /= AF.max()
-    return AF
 
 
 class CircularCoords(MovingCameraScene):
