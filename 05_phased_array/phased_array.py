@@ -3756,6 +3756,94 @@ class FourierTransformPolar(Scene):
         self.play(theta_tracker @ (2 * PI), run_time=5, rate_func=rate_functions.linear)
 
 
+class Equation2D(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        fourier_eqn_full = MathTex(
+            r"X[k] = \sum_{n=0}^{N-1} x[n] e^{-j 2 \pi \frac{k}{N} n}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+
+        fourier_eqn = fourier_eqn_full[0][5:]
+        fourier_eqn.save_state()
+        fourier_eqn.move_to(ORIGIN)
+        self.play(
+            LaggedStart(
+                *[GrowFromPoint(m, ORIGIN) for m in fourier_eqn[0]], lag_ratio=0.1
+            )
+        )
+
+        self.wait(0.5)
+
+        antennas = Group()
+        for _ in range(4):
+            antenna_port = Line(DOWN / 4, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+
+        antennas.arrange(RIGHT, MED_LARGE_BUFF).next_to(
+            [-config.frame_width / 2, 0, 0], LEFT
+        )
+
+        self.play(Group(antennas, fourier_eqn).animate.arrange(RIGHT, LARGE_BUFF))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        antennas_x = antennas.get_x()
+        antennas_2d = Group(
+            *[
+                antennas.copy().next_to([antennas_x, config.frame_height / 2, 0], UP)
+                for _ in range(3)
+            ]
+        )
+        self.add(*antennas_2d)
+        antennas_2d.add(antennas)
+
+        self.play(antennas_2d.animate.arrange(DOWN, MED_LARGE_BUFF).set_x(antennas_x))
+
+        self.wait(0.5)
+
+        self.play(
+            antennas_2d.animate.next_to([-config.frame_width / 2, 0, 0], LEFT),
+            fourier_eqn.animate.move_to(ORIGIN),
+        )
+        self.remove(antennas)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(ORANGE) for m in fourier_eqn[11:20]],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(BLUE) for m in fourier_eqn[7:11]],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(*[FadeIn(m) for m in fourier_eqn_full[0][:5]], lag_ratio=0.1),
+            fourier_eqn.animate.restore(),
+        )
+
+        self.wait(2)
+
+
 def compute_af_2d(weights_n, weights_m, d_x, d_y, k_0, u_0, v_0, U, V, M, N, m, n):
     AF_m = np.sum(
         weights_n[:, None, None]
