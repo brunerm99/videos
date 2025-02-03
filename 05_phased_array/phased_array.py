@@ -1353,7 +1353,7 @@ class HeadOn(MovingCameraScene):
 
         self.play(self.camera.frame.animate.restore())
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         phase_left @= 0
@@ -1361,9 +1361,15 @@ class HeadOn(MovingCameraScene):
         shifted_sine_right_x0 @= 0
         shifted_amp_sine_x1 @= 0
         shifted_amp_sine_x0 @= 0
-        shifted_filt_sine_x1 @= 0
+        shifted_filt_sine_x1 @= 0.01
         shifted_sine_right_x1 @= 0
         shifted_sine_left_x1 @= 0
+        combined_sine_x0 @= 0
+        combined_sine_x1 @= 0
+        shifted_combined_sine_x0 @= 0
+        shifted_combined_sine_x1 @= 0
+        after_phase_shift_x0 @= 0
+        after_phase_shift_x1 @= 0
 
         self.play(
             LaggedStart(
@@ -1372,20 +1378,93 @@ class HeadOn(MovingCameraScene):
                     shifted_sine_right_x1 @ 1,
                     shifted_sine_left_x1 @ 1,
                 ),
-                FadeOut(plane_wave),
                 lag_ratio=0.4,
             )
         )
+        self.play(FadeOut(plane_wave))
 
         self.wait(0.5, frozen_frame=False)
-
-        self.wait(0.5)
 
         self.play(
             self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
         )
 
         self.wait(0.5)
+
+        self.play(
+            shifted_sine_left_x0 @ 1,
+            shifted_sine_right_x0 @ 1,
+            shifted_amp_sine_x1 @ 1,
+            rate_func=rate_functions.ease_in_sine,
+        )
+        self.play(
+            shifted_amp_sine_x0 @ 1,
+            shifted_filt_sine_x1 @ 1,
+            rate_func=rate_functions.ease_out_sine,
+        )
+
+        self.wait(0.5)
+
+        self.play(after_phase_shift_x1 @ 1)
+
+        self.wait(0.5)
+
+        self.play(shifted_combined_sine_x1 @ 1)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        steering_arrow = Arrow(antennas.get_top(), self.camera.frame.get_top())
+
+        self.play(GrowArrow(steering_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            steering_arrow.animate.rotate(
+                angle, about_point=steering_arrow.get_bottom()
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_shifters_group = Group(
+            *phase_shifters, shifted_phase_label_left, shifted_phase_label_right
+        )
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                phase_shifters_group.width * 1.2
+            ).move_to(phase_shifters_group)
+        )
+
+        self.wait(0.5)
+
+        self.play(phase_shifter_val_left @ 0)
+        self.play(phase_shifter_val_left @ (PI / 2), phase_shifter_val_right @ (PI / 6))
+        self.play(phase_shifter_val_left @ (PI), phase_shifter_val_right @ (PI / 2))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.remove(steering_arrow)
+        delta_phi = MathTex(r"\Delta \phi", font_size=DEFAULT_FONT_SIZE * 2).move_to(
+            self.camera.frame
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(*self.mobjects),
+                GrowFromCenter(delta_phi),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(delta_phi))
 
         self.wait(2)
 
@@ -1441,7 +1520,13 @@ class PhaseCalc(MovingCameraScene):
         #     )
         # )
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.camera.frame.save_state()
+        self.camera.frame.shift(DOWN * config.frame_height * 2)
+
+        self.play(self.camera.frame.animate.restore())
+
         self.wait(0.5)
 
         x_len = antenna_right.get_top()[0] - antenna_left.get_top()[0]
@@ -1633,8 +1718,12 @@ class PhaseCalc(MovingCameraScene):
         right_ang_phi_theta = RightAngle(
             Line(ax.c2p(0, -1), ax.c2p(0, 1)), Line(ax.c2p(-1, 0), ax.c2p(1, 0))
         )
+        right_ang_arrow = Arrow(
+            right_ang_phi_theta.get_left() + LEFT * 2 + UP,
+            right_ang_phi_theta.get_left(),
+        )
 
-        self.play(Create(right_ang_phi_theta))
+        self.play(Create(right_ang_phi_theta), GrowArrow(right_ang_arrow))
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
@@ -1657,7 +1746,7 @@ class PhaseCalc(MovingCameraScene):
                 ([6], [10], {"delay": 0}),
                 ([7, 8, 9, 10], [11, 12, 13, 14], {"delay": 0}),
             ),
-            FadeOut(right_ang_phi_theta),
+            FadeOut(right_ang_phi_theta, right_ang_arrow),
         )
 
         sin_ang = MathTex(r"\sin{(\theta)} = \frac{L}{d_x}").move_to(
@@ -1841,7 +1930,7 @@ class PhaseCalc(MovingCameraScene):
         antenna_left3 = Group(antenna_port_left3, antenna_tri_left3).next_to(
             antenna_left2, LEFT, LARGE_BUFF * 3
         )
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         L_line2 = Line(
             ax.c2p(0, 0),
@@ -1931,7 +2020,7 @@ class PhaseCalc(MovingCameraScene):
             run_time=3,
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         notebook_img = ImageMobject("./static/2d_taylor_taper.png").scale_to_fit_width(
@@ -2495,7 +2584,7 @@ class Part2Transition(MovingCameraScene):
 # TODO: Re-render
 class FourierAnalogy(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         max_time = 4
         f_max = 8
 
@@ -2523,9 +2612,6 @@ class FourierAnalogy(MovingCameraScene):
         )
         amp_labels = amp_ax.get_x_axis_label(MathTex("t"))
         f_labels = f_ax.get_x_axis_label(MathTex("f"))
-        amp_plot_group = Group(amp_ax, amp_labels)
-        f_plot_group = Group(f_ax, f_labels)
-        axes = Group(amp_plot_group, f_plot_group)
 
         f = VT(5)
         offset = VT(0)
@@ -2537,6 +2623,10 @@ class FourierAnalogy(MovingCameraScene):
                 color=TX_COLOR,
             )
         )
+
+        amp_plot_group = Group(amp_ax, amp_labels, amp_plot)
+        f_plot_group = Group(f_ax, f_labels)
+        axes = Group(amp_plot_group, f_plot_group)
 
         def get_fft():
             N = max_time * fs
@@ -2555,15 +2645,28 @@ class FourierAnalogy(MovingCameraScene):
 
         # self.add(amp_plot_group, amp_plot, f_plot_group, f_plot)
 
+        ft_method = (
+            Tex("Fourier ", "Transform ", "Method", font_size=DEFAULT_FONT_SIZE * 1.8)
+            .set_opacity(0)
+            .shift(DOWN)
+        )
+
         self.play(
-            amp_plot_group.next_to([0, config.frame_height / 2, 0], UP).animate.move_to(
-                ORIGIN
+            LaggedStart(
+                *[m.animate.shift(UP).set_opacity(1) for m in ft_method], lag_ratio=0.2
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        self.play(Create(amp_plot))
+        self.play(
+            amp_plot_group.next_to([0, config.frame_height / 2, 0], UP).animate.move_to(
+                ORIGIN
+            ),
+            ft_method.animate.next_to([0, -config.frame_height / 2, 0], DOWN),
+        )
+        self.remove(ft_method)
 
         self.wait(0.5)
 
@@ -2786,47 +2889,47 @@ class FourierAnalogy(MovingCameraScene):
             FadeOut(amp_labels, f_labels, dx_label, sinc),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
-        self.wait(0.5)
+        # self.next_section(skip_animations=skip_animations(True))
+        # self.wait(0.5)
 
-        dft_eqn = MathTex(
-            r"X_k = \sum_{n=0}^{N-1} x_n \cdot e^{-j 2 \pi \frac{k}{N} n}",
-            font_size=DEFAULT_FONT_SIZE * 1.5,
-        )
+        # dft_eqn = MathTex(
+        #     r"X_k = \sum_{n=0}^{N-1} x_n \cdot e^{-j 2 \pi \frac{k}{N} n}",
+        #     font_size=DEFAULT_FONT_SIZE * 1.5,
+        # )
 
-        self.play(
-            LaggedStart(
-                GrowFromCenter(dft_eqn[0][:2]),
-                GrowFromCenter(dft_eqn[0][2]),
-                GrowFromCenter(dft_eqn[0][3:10]),
-                GrowFromCenter(dft_eqn[0][10:12]),
-                GrowFromCenter(dft_eqn[0][12]),
-                GrowFromCenter(dft_eqn[0][13]),
-                GrowFromCenter(dft_eqn[0][14:16]),
-                GrowFromCenter(dft_eqn[0][16]),
-                GrowFromCenter(dft_eqn[0][17]),
-                GrowFromCenter(dft_eqn[0][18:21]),
-                GrowFromCenter(dft_eqn[0][21]),
-                lag_ratio=0.1,
-            )
-        )
+        # self.play(
+        #     LaggedStart(
+        #         GrowFromCenter(dft_eqn[0][:2]),
+        #         GrowFromCenter(dft_eqn[0][2]),
+        #         GrowFromCenter(dft_eqn[0][3:10]),
+        #         GrowFromCenter(dft_eqn[0][10:12]),
+        #         GrowFromCenter(dft_eqn[0][12]),
+        #         GrowFromCenter(dft_eqn[0][13]),
+        #         GrowFromCenter(dft_eqn[0][14:16]),
+        #         GrowFromCenter(dft_eqn[0][16]),
+        #         GrowFromCenter(dft_eqn[0][17]),
+        #         GrowFromCenter(dft_eqn[0][18:21]),
+        #         GrowFromCenter(dft_eqn[0][21]),
+        #         lag_ratio=0.1,
+        #     )
+        # )
 
-        self.wait(0.5)
+        # self.wait(0.5)
 
-        what_want = Tex(
-            "what do we actually want?", font_size=DEFAULT_FONT_SIZE * 1.5
-        ).next_to([0, config.frame_height / 2, 0], UP)
+        # what_want = Tex(
+        #     "what do we actually want?", font_size=DEFAULT_FONT_SIZE * 1.5
+        # ).next_to([0, config.frame_height / 2, 0], UP)
 
-        self.play(Group(what_want, dft_eqn).animate.arrange(DOWN, LARGE_BUFF))
+        # self.play(Group(what_want, dft_eqn).animate.arrange(DOWN, LARGE_BUFF))
 
-        self.wait(0.5)
+        # self.wait(0.5)
 
-        self.play(
-            LaggedStart(*[ShrinkToCenter(m) for m in dft_eqn[0][::-1]], lag_ratio=0.1),
-            LaggedStart(
-                *[ShrinkToCenter(m) for m in what_want[0][::-1]], lag_ratio=0.1
-            ),
-        )
+        # self.play(
+        #     LaggedStart(*[ShrinkToCenter(m) for m in dft_eqn[0][::-1]], lag_ratio=0.1),
+        #     LaggedStart(
+        #         *[ShrinkToCenter(m) for m in what_want[0][::-1]], lag_ratio=0.1
+        #     ),
+        # )
 
         self.wait(2)
 
@@ -2875,7 +2978,7 @@ class CircularCoords(MovingCameraScene):
 
         AF_plot = always_redraw(get_af)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         # self.add(ax, AF_plot)
 
         self.play(Create(ax), Create(AF_plot))
@@ -3077,20 +3180,23 @@ class FourierExplanation(MovingCameraScene):
 
         fft_f = VT(f_max)
 
-        def get_fft():
+        def get_fft(log=False):
             N = max_time * fs
             t = np.linspace(0, max_time, N)
             sig = np.sin(2 * PI * ~f * t) + ~offset
 
             fft_len = N * 8
             sig_fft = fftshift(np.abs(fft(sig, fft_len) / (N)))
-            # fft_log = 10 * np.log10(np.abs(fftshift(sig_fft))) + 40
+            # sig_fft = (1 - ~log_interp) * sig_fft + ~log_interp * np.log10(
+            #     np.abs(sig_fft)
+            # )
+            if log:
+                sig_fft = np.clip(10 * np.log10(np.abs(sig_fft)) + 25, 0, None)
+                sig_fft /= sig_fft.max()
             freq = np.linspace(-fs / 2, fs / 2, fft_len)
 
-            f_fft_log = interp1d(freq, sig_fft)
-            return f_ax.plot(
-                f_fft_log, x_range=[-~fft_f, ~fft_f, 1 / fs], color=TX_COLOR
-            )
+            f_fft = interp1d(freq, sig_fft)
+            return f_ax.plot(f_fft, x_range=[-~fft_f, ~fft_f, 1 / fs], color=TX_COLOR)
 
         f_plot = always_redraw(get_fft)
 
@@ -3157,23 +3263,7 @@ class FourierExplanation(MovingCameraScene):
             f_plot_group.copy(),
         ).arrange_in_grid(2, 2, (LARGE_BUFF, LARGE_BUFF * 2))
 
-        wave_amp_plot = always_redraw(
-            lambda: wave_amp_ax.plot(
-                lambda t: np.sin(2 * PI * ~wave_f * t) + ~wave_offset,
-                x_range=[0, 1, 1 / fs],
-                color=TX_COLOR,
-            )
-        )
-        product_amp_plot = always_redraw(
-            lambda: product_amp_ax.plot(
-                lambda t: (np.sin(2 * PI * ~wave_f * t) + ~wave_offset)
-                * (np.sin(2 * PI * ~f * t) + ~offset),
-                x_range=[0, 1, 1 / fs],
-                color=TX_COLOR,
-            )
-        )
-
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(
             LaggedStart(
                 AnimationGroup(
@@ -3208,6 +3298,14 @@ class FourierExplanation(MovingCameraScene):
 
         self.wait(0.5)
 
+        wave_amp_plot = always_redraw(
+            lambda: wave_amp_ax.plot(
+                lambda t: np.sin(2 * PI * ~wave_f * t) + ~wave_offset,
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
+
         self.play(Create(wave_amp_plot))
 
         self.wait(0.5)
@@ -3215,6 +3313,15 @@ class FourierExplanation(MovingCameraScene):
         self.play(product_amp_plot_group.shift(DOWN * 8).animate.shift(UP * 8))
 
         self.wait(0.5)
+
+        product_amp_plot = always_redraw(
+            lambda: product_amp_ax.plot(
+                lambda t: (np.sin(2 * PI * ~wave_f * t) + ~wave_offset)
+                * (np.sin(2 * PI * ~f * t) + ~offset),
+                x_range=[0, 1, 1 / fs],
+                color=TX_COLOR,
+            )
+        )
 
         mult = MathTex(r"x[n] \cdot e^{-j 2 \pi f t}").next_to(product_amp_ax, DOWN)
         product_amp_plot_group.add(mult)
@@ -3328,13 +3435,6 @@ class FourierExplanation(MovingCameraScene):
             .next_to(f_ax.c2p(~wave_f), DOWN, 0)
         )
 
-        # self.add(
-        #     # samples_neg_stacked,
-        #     # samples_pos_stacked,
-        #     product_samples_pos_static,
-        #     product_samples_neg_static,
-        # )
-
         self.play(
             LaggedStart(
                 *[
@@ -3388,59 +3488,6 @@ class FourierExplanation(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        # def get_dot_updater(x):
-        #     def updater(m):
-        #         plot = product_amp_ax.plot(
-        #             lambda t: (np.sin(2 * PI * ~wave_f * t) + ~wave_offset)
-        #             * (np.sin(2 * PI * ~f * t) + ~offset),
-        #             x_range=[0, 1, 1 / fs],
-        #         )
-        #         m.become(
-        #             Dot(
-        #                 product_amp_ax.c2p(x, 0),
-        #                 product_amp_ax.input_to_graph_point(x, plot),
-        #                 color=RED
-        #                 if product_amp_ax.input_to_graph_coords(x, plot)[1] > 0
-        #                 else PURPLE,
-        #             )
-        #         )
-
-        #     return updater
-
-        # samples_updaters = []
-        # dots_updaters = [
-        #     get_dot_updater(x) for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
-        # ]
-
-        # for dot, updater in zip(product_sample_dots, dots_updaters):
-        #     dot.add_updater(updater)
-
-        # product_samples = Group(
-        #     *[
-        #         Line(
-        #             product_amp_ax.c2p(x, 0),
-        #             product_amp_ax.input_to_graph_point(x, product_amp_plot),
-        #             color=RED
-        #             if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
-        #             else PURPLE,
-        #         )
-        #         for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
-        #     ]
-        # )
-        # product_sample_dots = Group(
-        #     *[
-        #         Dot(
-        #             product_amp_ax.input_to_graph_point(x, product_amp_plot),
-        #             color=RED
-        #             if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
-        #             else PURPLE,
-        #         )
-        #         for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
-        #     ]
-        # )
-
-        # self.wait(.5)
-
         self.play(Indicate(wave_amp_plot))
 
         self.wait(0.5)
@@ -3480,21 +3527,21 @@ class FourierExplanation(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        def get_line(x):
+        def get_line(x, ax=product_amp_ax, plot=product_amp_plot):
             def updater():
-                p0 = product_amp_ax.c2p(x, 0)
-                p1 = product_amp_ax.input_to_graph_point(x, product_amp_plot)
-                c1 = product_amp_ax.input_to_graph_coords(x, product_amp_plot)
+                p0 = ax.c2p(x, 0)
+                p1 = ax.input_to_graph_point(x, plot)
+                c1 = ax.input_to_graph_coords(x, plot)
                 color = RED if c1[1] >= 0 else PURPLE
                 line = Line(p0, p1).set_color(color)
                 return line
 
             return updater
 
-        def get_dot(x):
+        def get_dot(x, ax=product_amp_ax, plot=product_amp_plot):
             def updater():
-                p1 = product_amp_ax.input_to_graph_point(x, product_amp_plot)
-                c1 = product_amp_ax.input_to_graph_coords(x, product_amp_plot)
+                p1 = ax.input_to_graph_point(x, plot)
+                c1 = ax.input_to_graph_coords(x, plot)
                 color = RED if c1[1] >= 0 else PURPLE
                 dot = Dot(p1).set_color(color)
                 return dot
@@ -3537,6 +3584,78 @@ class FourierExplanation(MovingCameraScene):
 
         self.play(wave_f @ f_max, fft_f @ f_max, run_time=10)
 
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        x_n_samples_new = [
+            always_redraw(get_line(x, ax=amp_ax, plot=amp_plot))
+            for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        ]
+        x_n_sample_dots_new = [
+            always_redraw(get_dot(x, ax=amp_ax, plot=amp_plot))
+            for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
+        ]
+
+        self.add(*x_n_samples_new, *x_n_sample_dots_new)
+        self.remove(*x_n_samples, *x_n_sample_dots)
+
+        sample_at_wave_f_dot_new = always_redraw(
+            lambda: Dot(
+                f_ax.input_to_graph_point(~wave_f, f_plot),
+                color=RED
+                if f_ax.input_to_graph_coords(~wave_f, f_plot)[1] > 0
+                else PURPLE,
+            )
+        )
+        self.add(sample_at_wave_f_dot_new)
+        self.remove(sample_at_wave_f_dot)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(wave_f @ 0, fft_f @ 0),
+                f @ 0,
+                offset @ 1,
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(wave_f @ f_max, fft_f @ f_max, run_time=3)
+
+        self.wait(0.5)
+
+        f_plot.save_state()
+        log_f_plot = get_fft(log=True)
+        self.play(ReplacementTransform(f_plot, log_f_plot), run_time=2)
+
+        self.wait(0.5)
+
+        fft_group = Group(f_ax, f_rad_xlabels, log_f_plot, X_k_label, f_labels)
+        self.play(
+            FadeOut(
+                amp_plot_group,
+                wave_amp_plot_group,
+                product_amp_plot_group,
+                amp_plot,
+                wave_amp_plot,
+                product_amp_plot,
+                mult,
+                wave_eqn,
+                *x_n_samples_new,
+                *product_samples_new,
+                *product_sample_dots_new,
+                *x_n_sample_dots_new,
+                sample_at_wave_f_dot_new,
+            ),
+            self.camera.frame.animate.scale_to_fit_width(config.frame_width).move_to(
+                ORIGIN
+            ),
+            fft_group.animate.scale_to_fit_width(config.frame_width * 0.8).move_to(
+                ORIGIN
+            ),
+        )
+
         self.wait(2)
 
 
@@ -3568,20 +3687,17 @@ class AFToPolar(Scene):
             x_length=x_len,
             y_length=y_len,
         )
-        polar_ax = (
-            Axes(
-                x_range=[r_min, -r_min, r_min / 8],
-                y_range=[r_min, -r_min, r_min / 8],
-                tips=False,
-                axis_config={
-                    "include_numbers": False,
-                },
-                x_length=x_len,
-                y_length=x_len,
-            )
-            .rotate(PI / 2)
-            .move_to(ax)
-        )
+        polar_ax = Axes(
+            x_range=[r_min, -r_min, r_min / 8],
+            y_range=[r_min, -r_min, r_min / 8],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).rotate(PI / 2)
+        polar_ax.shift(ax.c2p(0, 0) - polar_ax.c2p(0, 0))
 
         def get_af():
             u_0 = np.sin(~steering_angle * PI / 180)
@@ -3623,6 +3739,100 @@ class AFToPolar(Scene):
         self.add(ax, AF_plot)
 
         self.play(Transform(AF_plot, AF_polar_plot), run_time=2)
+
+        self.wait(0.5)
+        fnbw = 2 * wavelength_0 / (n_elem * d_x)
+
+        right_theta_0 = VT(-fnbw * 2)
+        right_theta_1 = VT(0)
+        left_theta_0 = VT(0)
+        left_theta_1 = VT(fnbw * 2)
+
+        r_min_amp = VT(1.55)
+        shade_left = always_redraw(
+            lambda: polar_ax.plot_polar_graph(
+                lambda theta: -r_min * ~r_min_amp,
+                theta_range=[~left_theta_0, ~left_theta_1],
+                stroke_opacity=0,
+            )
+        )
+        shade_right = always_redraw(
+            lambda: polar_ax.plot_polar_graph(
+                lambda theta: -r_min * ~r_min_amp,
+                theta_range=[~right_theta_0, ~right_theta_1],
+                stroke_opacity=0,
+            )
+        )
+
+        ap_left = always_redraw(
+            lambda: ArcPolygon(
+                shade_left.get_start(),
+                shade_left.get_end(),
+                polar_ax.c2p(0, 0),
+                fill_opacity=0.3,
+                fill_color=BLUE,
+                stroke_width=0,
+                arc_config=[
+                    {
+                        "angle": (~right_theta_1 - ~right_theta_0),
+                        "stroke_opacity": 0,
+                        "stroke_width": 0,
+                    },
+                    {"angle": 0, "stroke_opacity": 0, "stroke_width": 0},
+                    {"angle": 0, "stroke_opacity": 0, "stroke_width": 0},
+                ],
+            )
+        )
+        ap_right = always_redraw(
+            lambda: ArcPolygon(
+                shade_right.get_start(),
+                shade_right.get_end(),
+                polar_ax.c2p(0, 0),
+                fill_opacity=0.3,
+                fill_color=BLUE,
+                stroke_width=0,
+                arc_config=[
+                    {
+                        "angle": (~left_theta_1 - ~left_theta_0),
+                        "stroke_opacity": 0,
+                        "stroke_width": 0,
+                    },
+                    {"angle": 0, "stroke_opacity": 0, "stroke_width": 0},
+                    {"angle": 0, "stroke_opacity": 0, "stroke_width": 0},
+                ],
+            )
+        )
+
+        main_lobe_label = Tex("Main lobe").next_to(
+            ax.input_to_graph_point(0, AF_plot), UP
+        )
+        side_lobe_left_label = Tex("Side lobes").next_to(
+            ax.input_to_graph_point(-PI / 3, AF_polar_plot), UL, LARGE_BUFF
+        )
+        side_lobe_right_label = Tex("Side lobes").next_to(
+            ax.input_to_graph_point(PI / 3, AF_polar_plot), UR, LARGE_BUFF
+        )
+
+        self.add(shade_right, shade_left)
+        self.play(FadeIn(ap_left, ap_right))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(main_lobe_label))
+
+        self.wait(0.5)
+
+        self.play(
+            right_theta_0 @ (-PI),
+            right_theta_1 @ (-fnbw * 2),
+            left_theta_1 @ (PI),
+            left_theta_0 @ (fnbw * 2),
+            r_min_amp @ (0.95),
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(side_lobe_left_label, side_lobe_right_label))
 
         self.wait(2)
 
@@ -3765,12 +3975,10 @@ class Equation2D(Scene):
         )
 
         fourier_eqn = fourier_eqn_full[0][5:]
-        fourier_eqn.save_state()
+        fourier_x = fourier_eqn.get_x()
         fourier_eqn.move_to(ORIGIN)
         self.play(
-            LaggedStart(
-                *[GrowFromPoint(m, ORIGIN) for m in fourier_eqn[0]], lag_ratio=0.1
-            )
+            LaggedStart(*[GrowFromPoint(m, ORIGIN) for m in fourier_eqn], lag_ratio=0.1)
         )
 
         self.wait(0.5)
@@ -3818,10 +4026,28 @@ class Equation2D(Scene):
 
         self.wait(0.5)
 
+        ref_ax = (
+            Axes(
+                x_range=[0, 1, 0.25],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=config.frame_width * 0.5,
+                y_length=config.frame_height * 0.3,
+            )
+            .to_edge(DOWN, LARGE_BUFF)
+            .shift(RIGHT * 3)
+        )
+
+        ref_f = VT(3)
+        ref_sig = ref_ax.plot(lambda t: np.sin(2 * PI * ~ref_f * t), color=ORANGE)
+
         self.play(
             LaggedStart(
                 *[m.animate.set_color(ORANGE) for m in fourier_eqn[11:20]],
-                lag_ratio=0.3,
+                lag_ratio=0.1,
             )
         )
 
@@ -3830,15 +4056,24 @@ class Equation2D(Scene):
         self.play(
             LaggedStart(
                 *[m.animate.set_color(BLUE) for m in fourier_eqn[7:11]],
-                lag_ratio=0.3,
+                lag_ratio=0.1,
             )
         )
 
         self.wait(0.5)
 
         self.play(
+            fourier_eqn_full[0][-4]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        self.play(
             LaggedStart(*[FadeIn(m) for m in fourier_eqn_full[0][:5]], lag_ratio=0.1),
-            fourier_eqn.animate.restore(),
+            fourier_eqn.animate.set_x(fourier_x),
         )
 
         self.wait(2)
@@ -4068,3 +4303,82 @@ class AF3D_Polar(ThreeDScene):
         self.set_camera_orientation(theta=45 * DEGREES, phi=50 * DEGREES, zoom=0.3)
 
         self.add(surface)
+
+
+class FillExample(Scene):
+    def construct(self):
+        polar_ax = Axes(
+            x_range=[-1, 1, 1 / 8],
+            y_range=[-1, 1, 1 / 8],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=config.frame_height * 0.7,
+            y_length=config.frame_height * 0.7,
+        ).rotate(PI / 2)
+
+        shade_left = polar_ax.plot_polar_graph(
+            lambda theta: 1, theta_range=[-PI / 3, 0], color=BLUE
+        )
+        shade_right = polar_ax.plot_polar_graph(
+            lambda theta: 1, theta_range=[0, PI / 3], color=RED
+        )
+
+        right_fill = VGroup(
+            Line(
+                polar_ax.c2p(0, 0),
+                shade_left.get_start(),
+                color=BLUE,
+            ),
+            Line(
+                polar_ax.c2p(0, 0),
+                shade_left.get_end(),
+                color=BLUE,
+            ),
+            shade_left,
+        )
+        left_fill = VGroup(
+            Line(
+                polar_ax.c2p(0, 0),
+                shade_right.get_start(),
+                color=RED,
+            ),
+            Line(
+                polar_ax.c2p(0, 0),
+                shade_right.get_end(),
+                color=RED,
+            ),
+            shade_right,
+        )
+
+        # area = polar_ax.get_area(shade_left, x_range=[-PI / 3, 0])
+
+        ap_left = ArcPolygon(
+            shade_right.get_start(),
+            shade_right.get_end(),
+            polar_ax.c2p(0, 0),
+            color=RED,
+            # stroke_opacity=0,
+            fill_opacity=0.5,
+            arc_config=[
+                {"angle": PI / 3, "stroke_opacity": 0},
+                {"angle": 0, "stroke_opacity": 0},
+                {"angle": 0, "stroke_opacity": 0},
+            ],
+        )
+        ap_right = ArcPolygon(
+            shade_left.get_start(),
+            shade_left.get_end(),
+            polar_ax.c2p(0, 0),
+            color=BLUE,
+            # stroke_opacity=0,
+            fill_opacity=0.5,
+            arc_config=[
+                {"angle": PI / 3, "stroke_opacity": 0},
+                {"angle": 0, "stroke_opacity": 0},
+                {"angle": 0, "stroke_opacity": 0},
+            ],
+        )
+
+        self.add(polar_ax, *left_fill, *right_fill, ap_left, ap_right)
