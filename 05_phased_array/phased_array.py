@@ -3627,43 +3627,51 @@ class FourierExplanation(MovingCameraScene):
 
         f_plot.save_state()
         log_f_plot = get_fft(log=True)
-        self.play(ReplacementTransform(f_plot, log_f_plot), run_time=2)
+        lin2db_label = Tex("Linear ", r"$\rightarrow$ ", "dB").next_to(f_ax, UP)
+        self.play(
+            ReplacementTransform(f_plot, log_f_plot),
+            LaggedStart(*[GrowFromCenter(m) for m in lin2db_label], lag_ratio=0.2),
+            run_time=2,
+        )
 
         self.wait(0.5)
 
         fft_group = Group(f_ax, f_rad_xlabels, log_f_plot, X_k_label, f_labels)
         self.play(
-            FadeOut(
-                amp_plot_group,
-                wave_amp_plot_group,
-                product_amp_plot_group,
-                amp_plot,
-                wave_amp_plot,
-                product_amp_plot,
-                mult,
-                wave_eqn,
-                *x_n_samples_new,
-                *product_samples_new,
-                *product_sample_dots_new,
-                *x_n_sample_dots_new,
-                sample_at_wave_f_dot_new,
-            ),
-            self.camera.frame.animate.scale_to_fit_width(config.frame_width).move_to(
-                ORIGIN
-            ),
-            fft_group.animate.scale_to_fit_width(config.frame_width * 0.8).move_to(
-                ORIGIN
-            ),
+            FadeOut(*self.mobjects)
+            # FadeOut(
+            #     amp_plot_group,
+            #     wave_amp_plot_group,
+            #     product_amp_plot_group,
+            #     amp_plot,
+            #     wave_amp_plot,
+            #     product_amp_plot,
+            #     mult,
+            #     wave_eqn,
+            #     *x_n_samples_new,
+            #     *product_samples_new,
+            #     *product_sample_dots_new,
+            #     *x_n_sample_dots_new,
+            #     sample_at_wave_f_dot_new,
+            #     lin2db_label,
+            # ),
+            # self.camera.frame.animate.scale_to_fit_width(config.frame_width).move_to(
+            #     ORIGIN
+            # ),
+            # fft_group.animate.scale_to_fit_width(config.frame_width * 0.8).move_to(
+            #     ORIGIN
+            # ),
         )
 
         self.wait(2)
 
 
-class AFToPolar(Scene):
+class AFToPolar(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
         n_elem = 17  # Must be odd
         weight_trackers = [VT(1) for _ in range(n_elem)]
-        weight_trackers[n_elem // 2] @= 1
 
         f_0 = 10e9
         wavelength_0 = c / f_0
@@ -3736,17 +3744,19 @@ class AFToPolar(Scene):
         AF_plot = get_cart_plot()
         AF_polar_plot = always_redraw(get_polar_updater(AF_plot.copy()))
 
-        self.add(ax, AF_plot)
+        self.play(FadeIn(ax, AF_plot))
+
+        self.wait(0.5)
 
         self.play(Transform(AF_plot, AF_polar_plot), run_time=2)
 
         self.wait(0.5)
         fnbw = 2 * wavelength_0 / (n_elem * d_x)
 
-        right_theta_0 = VT(-fnbw * 2)
+        right_theta_0 = VT(-0.01)
         right_theta_1 = VT(0)
         left_theta_0 = VT(0)
-        left_theta_1 = VT(fnbw * 2)
+        left_theta_1 = VT(0.01)
 
         r_min_amp = VT(1.55)
         shade_left = always_redraw(
@@ -3806,33 +3816,379 @@ class AFToPolar(Scene):
         main_lobe_label = Tex("Main lobe").next_to(
             ax.input_to_graph_point(0, AF_plot), UP
         )
-        side_lobe_left_label = Tex("Side lobes").next_to(
-            ax.input_to_graph_point(-PI / 3, AF_polar_plot), UL, LARGE_BUFF
+        side_lobe_left_label = (
+            Tex("Side lobes")
+            .next_to(ax.input_to_graph_point(-PI / 3, AF_polar_plot), UL, LARGE_BUFF)
+            .shift(UP * 2)
         )
-        side_lobe_right_label = Tex("Side lobes").next_to(
-            ax.input_to_graph_point(PI / 3, AF_polar_plot), UR, LARGE_BUFF
+        side_lobe_right_label = (
+            Tex("Side lobes")
+            .next_to(ax.input_to_graph_point(PI / 3, AF_polar_plot), UR, LARGE_BUFF)
+            .shift(UP * 2)
         )
 
-        self.add(shade_right, shade_left)
-        self.play(FadeIn(ap_left, ap_right))
+        self.add(shade_left, shade_right, ap_left, ap_right)
+        self.play(right_theta_0 @ (-fnbw * 2), left_theta_1 @ (fnbw * 2))
 
         self.wait(0.5)
 
-        self.play(FadeIn(main_lobe_label))
+        self.play(FadeIn(main_lobe_label, shift=DOWN * 3))
+
+        self.wait(0.5)
+
+        null_label = (
+            Tex("Null").next_to(main_lobe_label, RIGHT, LARGE_BUFF * 1.5).shift(DOWN)
+        )
+
+        left_null_bez = CubicBezier(
+            polar_ax.c2p(0, 0)
+            + UP * 0.5 * np.cos(fnbw * 1.6)
+            + LEFT * 0.5 * np.sin(fnbw * 1.6),
+            polar_ax.c2p(0, 0)
+            + UP * 5 * np.cos(fnbw * 1.6)
+            + LEFT * 5 * np.sin(fnbw * 1.6),
+            null_label.get_left() + LEFT,
+            null_label.get_left(),
+        )
+        right_null_bez = CubicBezier(
+            polar_ax.c2p(0, 0)
+            + UP * 0.5 * np.cos(-fnbw * 1.6)
+            + RIGHT * 0.5 * np.sin(fnbw * 1.6),
+            polar_ax.c2p(0, 0)
+            + UP * 3 * np.cos(-fnbw * 1.6)
+            + RIGHT * 3 * np.sin(fnbw * 1.6),
+            null_label.get_left() + LEFT,
+            null_label.get_left(),
+        )
+
+        self.play(Create(right_null_bez), Create(left_null_bez), FadeIn(null_label))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(right_null_bez, left_null_bez, null_label))
 
         self.wait(0.5)
 
         self.play(
-            right_theta_0 @ (-PI),
-            right_theta_1 @ (-fnbw * 2),
-            left_theta_1 @ (PI),
-            left_theta_0 @ (fnbw * 2),
-            r_min_amp @ (0.95),
+            LaggedStart(
+                AnimationGroup(
+                    right_theta_0 @ (-PI),
+                    right_theta_1 @ (-fnbw * 2),
+                    left_theta_1 @ (PI),
+                    left_theta_0 @ (fnbw * 2),
+                ),
+                r_min_amp @ (0.95),
+                lag_ratio=0.6,
+            )
         )
 
         self.wait(0.5)
 
-        self.play(FadeIn(side_lobe_left_label, side_lobe_right_label))
+        side_lobe_left_bezs = [
+            CubicBezier(
+                polar_ax.c2p(0, 0) + offset,
+                polar_ax.c2p(0, 0) + offset + [-1, 0.5, 0],
+                side_lobe_left_label.get_bottom() + [0, -0.5, 0],
+                side_lobe_left_label.get_bottom() + [0, -0.1, 0],
+            )
+            for offset in [[-1.4, 2.4, 0], [-1.7, 1.3, 0], [-1.6, 0.5, 0]]
+        ]
+        side_lobe_right_bezs = [
+            CubicBezier(
+                polar_ax.c2p(0, 0) + offset,
+                polar_ax.c2p(0, 0) + offset + [1, 0.5, 0],
+                side_lobe_right_label.get_bottom() + [0, -0.5, 0],
+                side_lobe_right_label.get_bottom() + [0, -0.1, 0],
+            )
+            for offset in [[1.4, 2.4, 0], [1.7, 1.3, 0], [1.6, 0.5, 0]]
+        ]
+
+        self.play(
+            LaggedStart(*[Create(bez) for bez in side_lobe_left_bezs], lag_ratio=0.3),
+            LaggedStart(*[Create(bez) for bez in side_lobe_right_bezs], lag_ratio=0.3),
+            FadeIn(side_lobe_left_label, side_lobe_right_label),
+        )
+
+        self.wait(0.5)
+
+        antennas = Group()
+        weight_trackers_disp = [VT(1) for _ in range(8)]
+        for idx in range(8):
+            antenna_port = Line(DOWN / 4, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+
+        wt_disp = Group(
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[0]:.2f}").next_to(
+                    antennas[0], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[1]:.2f}").next_to(
+                    antennas[1], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[2]:.2f}").next_to(
+                    antennas[2], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[3]:.2f}").next_to(
+                    antennas[3], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[4]:.2f}").next_to(
+                    antennas[4], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[5]:.2f}").next_to(
+                    antennas[5], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[6]:.2f}").next_to(
+                    antennas[6], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{~weight_trackers_disp[7]:.2f}").next_to(
+                    antennas[7], RIGHT
+                )
+            ),
+        )
+
+        antennas.arrange(DOWN, MED_LARGE_BUFF).scale_to_fit_height(
+            config.frame_height * 0.8
+        ).next_to([-config.frame_width / 2, 0, 0], LEFT, LARGE_BUFF * 1.5)
+        self.add(antennas, wt_disp)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.camera.frame.save_state()
+        camera_shift = self.camera.frame.get_right()[0] - (
+            polar_ax.get_right()[0] + LARGE_BUFF
+        )
+        self.play(
+            *[Uncreate(bez) for bez in [*side_lobe_left_bezs, *side_lobe_right_bezs]],
+            FadeOut(
+                side_lobe_left_label,
+                side_lobe_right_label,
+                main_lobe_label,
+                ap_left,
+                ap_right,
+            ),
+            self.camera.frame.animate.shift(LEFT * camera_shift),
+        )
+
+        self.wait(0.5)
+
+        weights = np.array([~w for w in weight_trackers])
+        x = np.arange(weights.size) - weights.size // 2
+        taper_ax = (
+            Axes(
+                x_range=[x.min(), x.max(), 1],
+                y_range=[0.3, 1, 0.5],
+                tips=False,
+                x_length=antennas.height,
+                y_length=antennas.width * 3,
+            )
+            .rotate(-PI / 2)
+            .next_to(antennas, RIGHT, LARGE_BUFF * 1.6)
+        )
+
+        def plot_taper():
+            weights = np.array([~w for w in weight_trackers])
+            x = np.arange(weights.size) - weights.size // 2
+            f = interp1d(x, weights)
+            plot = taper_ax.plot(f, x_range=[x.min(), x.max(), 0.01], color=ORANGE)
+            return plot
+
+        taper_plot = always_redraw(plot_taper)
+
+        self.play(FadeIn(taper_ax, taper_plot))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        taper = signal.windows.taylor(n_elem, nbar=5, sll=23)
+        taper_disp = signal.windows.taylor(len(antennas), nbar=5, sll=23)
+
+        self.remove(AF_plot)
+        AF_polar_plot_new = always_redraw(get_polar_updater(AF_plot.copy()))
+        self.add(AF_polar_plot_new)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers_disp[:4][::-1][n] @ taper_disp[:4][::-1][n],
+                        weight_trackers_disp[4:][n] @ taper_disp[4:][n],
+                    )
+                    for n in range(4)
+                ],
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n]
+                        @ taper[: n_elem // 2][::-1][n],
+                        weight_trackers[n_elem // 2 + 1 :][n]
+                        @ taper[n_elem // 2 + 1 :][n],
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.shift(RIGHT * camera_shift + UP * 1.3),
+            FadeOut(taper_ax, taper_plot, wt_disp, antennas),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n] @ 1,
+                        weight_trackers[n_elem // 2 + 1 :][n] @ 1,
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .to_edge(UP, -LARGE_BUFF)
+        )
+
+        target_arrow = Arrow(polar_ax.c2p(0, 0), cloud.get_bottom())
+
+        self.play(GrowArrow(target_arrow), cloud.shift(UP * 5).animate.shift(DOWN * 5))
+
+        other_cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .set_y(cloud.get_y())
+        )
+        target_arrow_other = Arrow(polar_ax.c2p(0, 0), other_cloud.get_corner(DL))
+
+        self.wait(0.5)
+
+        target_arrow.save_state()
+        self.play(
+            Transform(target_arrow, target_arrow_other),
+            other_cloud.shift(RIGHT * 5).animate.shift(LEFT * 5),
+        )
+
+        self.wait(0.5)
+
+        self.play(target_arrow.animate.restore())
+
+        self.wait(0.5)
+
+        antennas_copy = (
+            antennas.copy()
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(AF_polar_plot_new, DOWN)
+            .scale(1.2)
+        )
+
+        self.play(
+            FadeOut(target_arrow, ax, cloud, other_cloud),
+            self.camera.frame.animate.shift(DOWN * 2),
+            FadeIn(antennas_copy),
+        )
+
+        self.wait(0.5)
+
+        scan_left_arrow = Arrow(ORIGIN, LEFT * 2, buff=0)
+        scan_right_arrow = Arrow(ORIGIN, RIGHT * 2, buff=0)
+        scan_up_arrow = Arrow(ORIGIN, UP * 2, buff=0)
+        scan_down_arrow = Arrow(ORIGIN, DOWN * 2, buff=0)
+
+        self.play(
+            FadeOut(AF_polar_plot_new, antennas_copy),
+            self.camera.frame.animate.restore(),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(scan_left_arrow),
+                GrowArrow(scan_right_arrow),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(scan_up_arrow),
+                GrowArrow(scan_down_arrow),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        theta_neg_label = MathTex(r"-\theta").next_to(scan_left_arrow.get_end(), DOWN)
+        theta_pos_label = MathTex(r"\theta").next_to(scan_right_arrow.get_end(), DOWN)
+        phi_pos_label = MathTex(r"\phi").next_to(scan_up_arrow.get_end(), RIGHT)
+        phi_neg_label = MathTex(r"-\phi").next_to(scan_down_arrow.get_end(), RIGHT)
+
+        self.play(
+            LaggedStart(
+                *[
+                    GrowFromCenter(m)
+                    for m in [
+                        theta_neg_label,
+                        theta_pos_label,
+                        phi_neg_label,
+                        phi_pos_label,
+                    ]
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ShrinkToCenter(
+                Group(
+                    scan_up_arrow,
+                    scan_down_arrow,
+                    scan_left_arrow,
+                    scan_right_arrow,
+                    theta_neg_label,
+                    theta_pos_label,
+                    phi_neg_label,
+                    phi_pos_label,
+                )
+            )
+        )
 
         self.wait(2)
 
@@ -3966,7 +4322,7 @@ class FourierTransformPolar(Scene):
         self.play(theta_tracker @ (2 * PI), run_time=5, rate_func=rate_functions.linear)
 
 
-class Equation2D(Scene):
+class Equation2D(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         fourier_eqn_full = MathTex(
@@ -4001,7 +4357,6 @@ class Equation2D(Scene):
 
         self.play(Group(antennas, fourier_eqn).animate.arrange(RIGHT, LARGE_BUFF))
 
-        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         antennas_x = antennas.get_x()
@@ -4060,7 +4415,29 @@ class Equation2D(Scene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                fourier_eqn[4]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(UP / 3)
+                .set_color(YELLOW),
+                fourier_eqn[9]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(UP / 3)
+                .set_color(YELLOW),
+                fourier_eqn[-1]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(UP / 3)
+                .set_color(YELLOW),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             fourier_eqn_full[0][-4]
@@ -4074,6 +4451,318 @@ class Equation2D(Scene):
         self.play(
             LaggedStart(*[FadeIn(m) for m in fourier_eqn_full[0][:5]], lag_ratio=0.1),
             fourier_eqn.animate.set_x(fourier_x),
+        )
+
+        self.wait(0.5)
+
+        uv_coords = MathTex("u,v", font_size=DEFAULT_FONT_SIZE * 1.8).next_to(
+            fourier_eqn_full[0][-1], UR, LARGE_BUFF
+        )
+
+        u_bez = CubicBezier(
+            fourier_eqn_full[0][-1].get_right() + [0.1, 0, 0],
+            fourier_eqn_full[0][-1].get_right() + [1, 0, 0],
+            uv_coords[0][0].get_bottom() + [0, -1, 0],
+            uv_coords[0][0].get_bottom() + [0, -0.1, 0],
+        )
+        v_bez = CubicBezier(
+            fourier_eqn_full[0][-1].get_right() + [0.1, 0, 0],
+            fourier_eqn_full[0][-1].get_right() + [1, 0, 0],
+            uv_coords[0][2].get_bottom() + [0, -1, 0],
+            uv_coords[0][2].get_bottom() + [0, -0.1, 0],
+        )
+
+        self.remove(*antennas_2d, *antennas)
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.set_x(Group(fourier_eqn_full, uv_coords).get_x()),
+            LaggedStart(
+                Create(u_bez),
+                FadeIn(uv_coords[0][0]),
+                FadeIn(uv_coords[0][1]),
+                Create(v_bez),
+                FadeIn(uv_coords[0][2]),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        antennas_new = Group()
+        for _ in range(16):
+            antenna_port = Line(DOWN / 4, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas_new.add(antenna)
+
+        antennas_new.arrange_in_grid(4, 4, MED_LARGE_BUFF).next_to(
+            self.camera.frame.get_left(), LEFT
+        )
+        self.add(antennas_new)
+
+        antennas_eqn_group = Group(fourier_eqn_full, antennas_new)
+        self.play(
+            Uncreate(u_bez),
+            FadeOut(uv_coords[0][0]),
+            FadeOut(uv_coords[0][1]),
+            Uncreate(v_bez),
+            FadeOut(uv_coords[0][2]),
+            self.camera.frame.animate.scale_to_fit_width(
+                antennas_eqn_group.width * 1.1
+            ).set_x(antennas_eqn_group.get_x()),
+        )
+
+        self.wait(0.5)
+
+        def set_ant_opacity(g, opacity):
+            return AnimationGroup(*[m.animate.set_stroke(opacity=opacity) for m in g])
+
+        dx_line = Line(antennas_new[-4].get_top(), antennas_new[-3].get_top()).shift(
+            UP / 3
+        )
+        dx_line_l = Line(dx_line.get_start() + DOWN / 8, dx_line.get_start() + UP / 8)
+        dx_line_r = Line(dx_line.get_end() + DOWN / 8, dx_line.get_end() + UP / 8)
+        dx_label = MathTex("d_x").next_to(dx_line, UP)
+
+        self.play(
+            LaggedStart(
+                *[set_ant_opacity(g, 0.1) for g in antennas_new[:-4]],
+                Create(dx_line_l),
+                Create(dx_line),
+                Create(dx_line_r),
+                FadeIn(dx_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.wait(2)
+
+
+class Equation2DV2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        fourier_eqn_full = MathTex(
+            r"X[k] = \sum_{n=0}^{N-1} x[n] e^{-j 2 \pi \frac{k}{N} n}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+
+        # fourier_eqn = fourier_eqn_full[0][5:]
+        self.play(
+            LaggedStart(
+                *[GrowFromPoint(m, ORIGIN) for m in fourier_eqn_full[0]], lag_ratio=0.1
+            )
+        )
+
+        self.wait(0.5)
+
+        x_n_ax = (
+            Axes(
+                x_range=[0, 1, 0.25],
+                y_range=[-2, 2, 1],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=config.frame_width * 0.35,
+                y_length=config.frame_height * 0.2,
+            )
+            .to_edge(DOWN, LARGE_BUFF)
+            .shift(LEFT * 3 + DOWN * 6)
+        )
+
+        x_n_plot = always_redraw(
+            lambda: x_n_ax.plot(
+                lambda t: np.sin(2 * PI * 3 * t) + np.sin(2 * PI * 10 * t),
+                x_range=[0, 1, 1 / 100],
+                color=BLUE,
+            )
+        )
+
+        ref_ax = (
+            Axes(
+                x_range=[0, 1, 0.25],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=config.frame_width * 0.35,
+                y_length=config.frame_height * 0.2,
+            )
+            .to_edge(DOWN, LARGE_BUFF)
+            .shift(RIGHT * 3 + DOWN * 6)
+        )
+
+        ref_f = VT(2)
+
+        ref_plot = always_redraw(
+            lambda: ref_ax.plot(
+                lambda t: np.sin(2 * PI * ~ref_f * t),
+                x_range=[0, 1, 1 / 100],
+                color=RED,
+            )
+        )
+
+        self.add(ref_ax, ref_plot, x_n_ax, x_n_plot)
+
+        x_n_bez = CubicBezier(
+            fourier_eqn_full.copy().to_edge(UP, LARGE_BUFF)[0][12:16].get_bottom()
+            + [0, -0.1, 0],
+            fourier_eqn_full.copy().to_edge(UP, LARGE_BUFF)[0][12:16].get_bottom()
+            + [0, -1.5, 0],
+            x_n_ax.copy().shift(UP * 6).get_top() + [0, 1, 0],
+            x_n_ax.copy().shift(UP * 6).get_top() + [0, 0.1, 0],
+        )
+        ref_bez = CubicBezier(
+            fourier_eqn_full.copy().to_edge(UP, LARGE_BUFF)[0][16:].get_bottom()
+            + [0, -0.1, 0],
+            fourier_eqn_full.copy().to_edge(UP, LARGE_BUFF)[0][16:].get_bottom()
+            + [0.5, -1, 0],
+            ref_ax.copy().shift(UP * 6).get_top() + [-0.5, 1, 0],
+            ref_ax.copy().shift(UP * 6).get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(BLUE) for m in fourier_eqn_full[0][12:16]],
+                lag_ratio=0.1,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                fourier_eqn_full.animate.to_edge(UP, LARGE_BUFF),
+                Create(x_n_bez),
+                x_n_ax.animate.shift(UP * 6),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(RED) for m in fourier_eqn_full[0][16:]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                fourier_eqn_full.animate.to_edge(UP, LARGE_BUFF),
+                Create(ref_bez),
+                ref_ax.animate.shift(UP * 6),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ref_f @ 10, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(ref_bez),
+            Uncreate(x_n_bez),
+            ref_ax.animate.shift(DOWN * 6),
+            x_n_ax.animate.shift(DOWN * 6),
+        )
+        self.remove(ref_ax, ref_plot, x_n_plot, x_n_ax)
+
+        self.wait(0.5)
+
+        antennas = Group()
+        for _ in range(6):
+            antenna_port = Line(DOWN / 4, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+        antennas.arrange(RIGHT, MED_LARGE_BUFF).to_edge(DOWN, MED_LARGE_BUFF).shift(
+            DOWN * 6
+        )
+
+        ones = Group(
+            *[
+                Tex("1", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(ant, UP)
+                for ant in antennas.copy().shift(UP * 6)
+            ]
+        )
+
+        w_n_eqn = Tex(
+            "$w[n] = [1,1,1,1,1,1]$", font_size=DEFAULT_FONT_SIZE * 1.5
+        ).next_to(ones, UP)
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(
+                        m.animate.shift(UP * 6), GrowFromCenter(one), lag_ratio=0.6
+                    )
+                    for m, one in zip(antennas, ones)
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        just_weights = w_n_eqn[0][5:]
+        just_weights.save_state()
+        just_weights.set_x(0)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(w_n_eqn[0][5]),
+                ReplacementTransform(ones[0], w_n_eqn[0][6]),
+                GrowFromCenter(w_n_eqn[0][7]),
+                ReplacementTransform(ones[1], w_n_eqn[0][8]),
+                GrowFromCenter(w_n_eqn[0][9]),
+                ReplacementTransform(ones[2], w_n_eqn[0][10]),
+                GrowFromCenter(w_n_eqn[0][11]),
+                ReplacementTransform(ones[3], w_n_eqn[0][12]),
+                GrowFromCenter(w_n_eqn[0][13]),
+                ReplacementTransform(ones[4], w_n_eqn[0][14]),
+                GrowFromCenter(w_n_eqn[0][15]),
+                ReplacementTransform(ones[5], w_n_eqn[0][16]),
+                GrowFromCenter(w_n_eqn[0][17]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                just_weights.animate.restore(),
+                *[GrowFromCenter(m) for m in w_n_eqn[0][:5]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        w_n = w_n_eqn[0][:4]
+        self.play(
+            w_n.copy().animate.move_to(fourier_eqn_full[0][12:16]),
+            fourier_eqn_full[0][12:16].animate.shift(UP * 6),
+            run_time=2,
         )
 
         self.wait(2)
