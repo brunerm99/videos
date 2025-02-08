@@ -1,7 +1,5 @@
 # phased_array.py
 
-import matplotlib.pyplot as plt
-
 import sys
 import warnings
 
@@ -24,7 +22,7 @@ config.background_color = BACKGROUND_COLOR
 
 BLOCKS = get_blocks()
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -4700,13 +4698,13 @@ class Equation2DV2(MovingCameraScene):
 
         ones = Group(
             *[
-                Tex("1", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(ant, UP)
+                Tex("1", font_size=DEFAULT_FONT_SIZE * 1.8).next_to(ant, UP)
                 for ant in antennas.copy().shift(UP * 6)
             ]
         )
 
         w_n_eqn = Tex(
-            "$w[n] = [1,1,1,1,1,1]$", font_size=DEFAULT_FONT_SIZE * 1.5
+            "$w[n] = [1,1,1,1,1,1]$", font_size=DEFAULT_FONT_SIZE * 1.8
         ).next_to(ones, UP)
 
         self.play(
@@ -4759,13 +4757,1160 @@ class Equation2DV2(MovingCameraScene):
         self.wait(0.5)
 
         w_n = w_n_eqn[0][:4]
+        w_n_copy = w_n.copy().set_color(BLUE).move_to(fourier_eqn_full[0][12:16], RIGHT)
         self.play(
-            w_n.copy().animate.move_to(fourier_eqn_full[0][12:16]),
+            TransformFromCopy(w_n, w_n_copy),
             fourier_eqn_full[0][12:16].animate.shift(UP * 6),
             run_time=2,
         )
 
+        self.wait(0.5)
+
+        ref_eqn = fourier_eqn_full[0][-9:]
+        self.play(
+            w_n_eqn.animate.shift(DOWN * 8),
+            antennas.animate.shift(DOWN * 8),
+            fourier_eqn_full[0][:-9].animate.set_opacity(0.2),
+            w_n_copy.animate.set_opacity(0.2),
+        )
+
+        self.wait(0.5)
+
+        new_fourier_eqn = Group(
+            fourier_eqn_full[0][:12], fourier_eqn_full[0][16:], w_n_copy
+        )
+        self.play(
+            Group(fourier_eqn_full[0][:12], w_n_copy).animate.scale(0.6).to_corner(UL),
+            ref_eqn.animate.move_to(ORIGIN).shift(DOWN),
+        )
+
+        self.wait(0.5)
+
+        eulers = MathTex(r"e^{-j \theta t}", font_size=DEFAULT_FONT_SIZE * 1.8).next_to(
+            [config.frame_width / 2, 0, 0], RIGHT
+        )
+        eulers_impl = MathTex(r"\implies", font_size=DEFAULT_FONT_SIZE * 1.8).next_to(
+            [config.frame_width / 2, 0, 0], RIGHT
+        )
+
+        eulers_group = Group(ref_eqn, eulers_impl, eulers)
+        self.play(eulers_group.animate.arrange(RIGHT, MED_LARGE_BUFF).shift(DOWN))
+
+        self.wait(0.5)
+
+        sqrt_neg = MathTex(r"\sqrt{-1}", font_size=DEFAULT_FONT_SIZE * 1.8).next_to(
+            eulers_group, UP, LARGE_BUFF
+        )
+        sqrt_neg_bez_l = CubicBezier(
+            ref_eqn[2].get_top() + [0, 0.1, 0],
+            ref_eqn[2].get_top() + [0, 1, 0],
+            sqrt_neg.get_bottom() + [0, -1, 0],
+            sqrt_neg.get_bottom() + [0, -0.1, 0],
+        )
+        sqrt_neg_bez_r = CubicBezier(
+            eulers[0][2].get_top() + [0, 0.1, 0],
+            eulers[0][2].get_top() + [0, 1, 0],
+            sqrt_neg.get_bottom() + [0, -1, 0],
+            sqrt_neg.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ref_eqn[2].animate.set_color(YELLOW),
+                    eulers[0][2].animate.set_color(YELLOW),
+                ),
+                AnimationGroup(Create(sqrt_neg_bez_l), Create(sqrt_neg_bez_r)),
+                GrowFromCenter(sqrt_neg),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        time_label = Tex(r"time", font_size=DEFAULT_FONT_SIZE * 1.8).next_to(
+            eulers_group, UP, LARGE_BUFF
+        )
+        time_label_bez_l = CubicBezier(
+            ref_eqn[-1].get_top() + [0, 0.1, 0],
+            ref_eqn[-1].get_top() + [0, 1, 0],
+            time_label.get_bottom() + [0, -1, 0],
+            time_label.get_bottom() + [0, -0.1, 0],
+        )
+        time_label_bez_r = CubicBezier(
+            eulers[0][4].get_top() + [0, 0.1, 0],
+            eulers[0][4].get_top() + [0, 1, 0],
+            time_label.get_bottom() + [0, -1, 0],
+            time_label.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ref_eqn[2].animate.set_color(RED),
+                    eulers[0][2].animate.set_color(WHITE),
+                ),
+                AnimationGroup(
+                    ReplacementTransform(sqrt_neg_bez_l, time_label_bez_l),
+                    ReplacementTransform(sqrt_neg_bez_r, time_label_bez_r),
+                ),
+                AnimationGroup(
+                    ref_eqn[-1].animate.set_color(YELLOW),
+                    eulers[0][4].animate.set_color(YELLOW),
+                ),
+                ReplacementTransform(sqrt_neg, time_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ref_eqn[-1].animate.set_color(RED),
+                    eulers[0][4].animate.set_color(WHITE),
+                    Uncreate(time_label_bez_l),
+                    Uncreate(time_label_bez_r),
+                    ShrinkToCenter(time_label),
+                ),
+                ref_eqn[3:-1].animate.set_color(YELLOW),
+                eulers[0][3].animate.set_color(YELLOW),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        x_len = config.frame_width * 0.25
+        y_len = config.frame_width * 0.25
+        unit_circle_ax = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=x_len,
+            y_length=y_len,
+        )
+        unit_circle_labels = Group(
+            *[
+                MathTex(s).next_to(unit_circle_ax.c2p(*a), d)
+                for s, a, d in [
+                    (r"0", (1, 0), RIGHT),
+                    (r"\pi / 2", (0, 1), UP),
+                    (r"\pi", (-1, 0), LEFT),
+                    (r"3 \pi / 2", (0, -1), DOWN),
+                ]
+            ]
+        )
+        unit_circle = Circle(unit_circle_ax.c2p(1, 0)[0], color=WHITE).move_to(
+            unit_circle_ax.c2p(0, 0)
+        )
+        unit_circle_group = Group(
+            unit_circle_ax, unit_circle_labels, unit_circle
+        ).to_edge(DOWN, MED_SMALL_BUFF)
+
+        n_counter = VT(0)
+        phase_delta = VT(PI / 4)
+        phase = VT(~n_counter * ~phase_delta)
+
+        phase_dot = always_redraw(
+            lambda: Dot(
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)), color=YELLOW
+            )
+        )
+        phase_line = always_redraw(
+            lambda: Line(
+                unit_circle_ax.c2p(0, 0),
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)),
+                color=YELLOW,
+            )
+        )
+
+        sine_ax = Axes(
+            x_range=[0, 4 * PI, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            axis_config={"include_numbers": False},
+            x_length=config.frame_width * 0.7,
+            y_length=unit_circle.height,
+        ).next_to(unit_circle, RIGHT, 0)
+        sine_plot = always_redraw(
+            lambda: sine_ax.plot(
+                lambda t: np.sin(t), x_range=[PI / 4, ~phase, 1 / 100], color=YELLOW
+            )
+        )
+
+        self.add(sine_plot, sine_plot)
+
+        self.play(
+            ref_eqn.animate.set_x(0).to_edge(UP),
+            FadeOut(eulers_impl),
+            eulers.animate.next_to(unit_circle_group, LEFT, LARGE_BUFF),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Create(unit_circle_ax),
+            Create(unit_circle),
+            LaggedStart(*[FadeIn(m) for m in unit_circle_labels], lag_ratio=0.3),
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(phase_dot), Create(phase_line))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            eulers[0][3].animate(rate_func=rate_functions.there_and_back).shift(UP / 2)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ref_eqn[3:-1]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(DOWN / 2)
+        )
+
+        self.wait(0.5)
+
+        theta_val = MathTex(
+            r"\theta = \frac{\pi}{4}", font_size=DEFAULT_FONT_SIZE * 1.2
+        ).next_to(eulers, UP, MED_SMALL_BUFF, LEFT)
+        theta_val[0][0].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(eulers[0][3], theta_val[0][0]),
+                Create(theta_val[0][1:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(phase @ (PI / 4))
+
+        self.wait(0.5)
+
+        sine_line = always_redraw(
+            lambda: DashedLine(
+                unit_circle_ax.c2p(np.cos(~phase), np.sin(~phase)),
+                sine_ax.input_to_graph_point(~phase, sine_plot),
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+            )
+        )
+
+        sine_dot = always_redraw(
+            lambda: Dot(sine_ax.input_to_graph_point(~phase, sine_plot), color=RED)
+        )
+
+        self.play(Create(sine_line), Create(sine_dot))
+
+        self.wait(0.5)
+
+        t_vt = VT(1)
+        t_tracker = always_redraw(
+            lambda: MathTex(
+                f"t = {~t_vt:.2f}", font_size=DEFAULT_FONT_SIZE * 1.2
+            ).next_to(theta_val, UP, MED_SMALL_BUFF, LEFT)
+        )
+
+        self.play(FadeIn(t_tracker))
+
+        self.wait(0.5)
+
+        t_final = 14
+        self.camera.frame.save_state()
+        self.play(
+            t_vt @ t_final,
+            phase @ (t_final * PI / 4),
+            self.camera.frame.animate.shift(RIGHT * 4.5),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        self.remove(w_n_eqn)
+        antennas.shift(DOWN)
+        self.camera.frame.save_state()
+        self.play(self.camera.frame.animate.shift(DOWN * config.frame_height * 1.2))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        background_box = (
+            Rectangle(
+                height=config.frame_height,
+                width=config.frame_width,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+                stroke_opacity=0,
+            )
+            .set_z_index(-1)
+            .move_to(antennas, UP)
+        )
+        self.add(background_box)
+
+        angle = -PI / 6
+        angled_plane_wave = (
+            Line(
+                LEFT * 4,
+                RIGHT * 4,
+                color=RX_COLOR,
+            ).rotate(angle)
+        ).set_z_index(-2)
+        angled_plane_wave.shift(
+            self.camera.frame.get_corner(UR) - angled_plane_wave.get_center()
+        )
+        # self.add(angled_plane_wave)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        plane_wave_longer = Line(
+            antennas[-1].get_top() - 16 * (LEFT * np.cos(angle) + DOWN * np.sin(angle)),
+            antennas[-1].get_top() + 16 * (LEFT * np.cos(angle) + DOWN * np.sin(angle)),
+            color=RX_COLOR,
+        ).set_z_index(-2)
+
+        self.play(
+            # Transform(angled_plane_wave, plane_wave_longer)
+            plane_wave_longer.shift(RIGHT * 20).animate.shift(LEFT * 20),
+            run_time=2,
+            # angled_plane_wave.animate(run_time=3).shift(
+            #     14 * (LEFT * np.cos(angle) + UP * np.sin(angle))
+            # ),
+        )
+
+        # self.add(plane_wave_longer)
+        self.next_section(skip_animations=skip_animations(True))
+
+        dx_disp = antennas[1].get_top()[0] - antennas[0].get_top()[0]
+        wave_to_ant_2 = Arrow(
+            antennas[-2].get_top()
+            + (LEFT * np.sin(angle) + UP * np.cos(angle)) / np.sqrt(2),
+            antennas[-2].get_top(),
+            buff=0,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            tip_length=DEFAULT_ARROW_TIP_LENGTH,
+        )
+        delta_t2 = MathTex(r"\Delta t", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_2.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        delta_phi2 = MathTex(r"\Delta \phi", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_2.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        delta_d2 = MathTex(r"\Delta d", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_2.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        wave_to_ant_3 = Arrow(
+            antennas[-3].get_top()
+            + dx_disp * (LEFT * np.sin(angle) + UP * np.cos(angle)) / np.sqrt(1),
+            antennas[-3].get_top(),
+            buff=0,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            tip_length=DEFAULT_ARROW_TIP_LENGTH,
+        )
+        delta_t3 = MathTex(r"2\Delta t", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_3.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        delta_phi3 = MathTex(
+            r"2\Delta \phi", font_size=DEFAULT_FONT_SIZE * 0.8
+        ).next_to(wave_to_ant_3.get_midpoint(), LEFT, MED_SMALL_BUFF)
+        delta_d3 = MathTex(r"2\Delta d", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_3.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        wave_to_ant_4 = Arrow(
+            antennas[-4].get_top()
+            + 1.5 * dx_disp * (LEFT * np.sin(angle) + UP * np.cos(angle)),
+            antennas[-4].get_top(),
+            buff=0,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            tip_length=DEFAULT_ARROW_TIP_LENGTH,
+        )
+        delta_t4 = MathTex(r"3\Delta t", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_4.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        delta_phi4 = MathTex(
+            r"3\Delta \phi", font_size=DEFAULT_FONT_SIZE * 0.8
+        ).next_to(wave_to_ant_4.get_midpoint(), LEFT, MED_SMALL_BUFF)
+        delta_d4 = MathTex(r"3\Delta d", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_4.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        wave_to_ant_5 = Arrow(
+            antennas[-5].get_top()
+            + 2 * dx_disp * (LEFT * np.sin(angle) + UP * np.cos(angle)),
+            antennas[-5].get_top(),
+            buff=0,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            tip_length=DEFAULT_ARROW_TIP_LENGTH,
+        )
+        delta_t5 = MathTex(r"4\Delta t", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_5.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        delta_phi5 = MathTex(
+            r"4\Delta \phi", font_size=DEFAULT_FONT_SIZE * 0.8
+        ).next_to(wave_to_ant_5.get_midpoint(), LEFT, MED_SMALL_BUFF)
+        delta_d5 = MathTex(r"4\Delta d", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_5.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        wave_to_ant_6 = Arrow(
+            antennas[-6].get_top()
+            + 2.5 * dx_disp * (LEFT * np.sin(angle) + UP * np.cos(angle)),
+            antennas[-6].get_top(),
+            buff=0,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            tip_length=DEFAULT_ARROW_TIP_LENGTH,
+        )
+        delta_t6 = MathTex(r"5\Delta t", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_6.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        delta_phi6 = MathTex(
+            r"5\Delta \phi", font_size=DEFAULT_FONT_SIZE * 0.8
+        ).next_to(wave_to_ant_6.get_midpoint(), LEFT, MED_SMALL_BUFF)
+        delta_d6 = MathTex(r"5\Delta d", font_size=DEFAULT_FONT_SIZE * 0.8).next_to(
+            wave_to_ant_6.get_midpoint(), LEFT, MED_SMALL_BUFF
+        )
+        self.play(
+            LaggedStart(
+                GrowArrow(wave_to_ant_2),
+                GrowFromCenter(delta_t2),
+                GrowArrow(wave_to_ant_3),
+                GrowFromCenter(delta_t3),
+                GrowArrow(wave_to_ant_4),
+                GrowFromCenter(delta_t4),
+                GrowArrow(wave_to_ant_5),
+                GrowFromCenter(delta_t5),
+                GrowArrow(wave_to_ant_6),
+                GrowFromCenter(delta_t6),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(delta_t2, delta_d2),
+                ReplacementTransform(delta_t3, delta_d3),
+                ReplacementTransform(delta_t4, delta_d4),
+                ReplacementTransform(delta_t5, delta_d5),
+                ReplacementTransform(delta_t6, delta_d6),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(delta_d2, delta_phi2),
+                ReplacementTransform(delta_d3, delta_phi3),
+                ReplacementTransform(delta_d4, delta_phi4),
+                ReplacementTransform(delta_d5, delta_phi5),
+                ReplacementTransform(delta_d6, delta_phi6),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        phase_delta_full_eqn = MathTex(
+            r"\Delta \phi = \frac{d_x \sin{(\theta)}}{\lambda} \cdot 2 \pi"
+        ).next_to(self.camera.frame.get_corner(UR), DL, LARGE_BUFF)
+
+        self.play(
+            TransformFromCopy(
+                delta_phi2[0], phase_delta_full_eqn[0][:2], path_arc=PI / 3
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(phase_delta_full_eqn[0][2]),
+                GrowFromCenter(phase_delta_full_eqn[0][3:5]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            GrowFromCenter(phase_delta_full_eqn[0][5:11]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(phase_delta_full_eqn[0][11]),
+                GrowFromCenter(phase_delta_full_eqn[0][12]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(phase_delta_full_eqn[0][13]),
+                GrowFromCenter(phase_delta_full_eqn[0][14:]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_delta_full_eqn_theta = MathTex(
+            r"\theta = \Delta \phi = \frac{d_x \sin{(\theta)}}{\lambda} \cdot 2 \pi"
+        ).next_to(eulers, RIGHT, LARGE_BUFF)
+        phase_delta_full_eqn_theta[0][0].set_color(YELLOW)
+
+        self.play(
+            self.camera.frame.animate.restore(),
+            ReplacementTransform(
+                phase_delta_full_eqn[0],
+                phase_delta_full_eqn_theta[0][2:],
+                path_arc=PI / 3,
+            ),
+            FadeOut(t_tracker, theta_val),
+            unit_circle_group.animate.shift(RIGHT * 10),
+            sine_ax.animate.shift(RIGHT * 10),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    eulers[0][3], phase_delta_full_eqn_theta[0][0], path_arc=PI / 2
+                ),
+                GrowFromCenter(phase_delta_full_eqn_theta[0][1]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        eulers_w_phase = MathTex(
+            r"e^{-j \tfrac{d_x \sin{(\theta)}}{\lambda} \cdot 2 \pi t}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).move_to(eulers, LEFT)
+
+        # self.add(
+        #     index_labels(phase_delta_full_eqn_theta[0]),
+        #     index_labels(eulers[0]),
+        #     index_labels(eulers_w_phase[0]).shift(DOWN),
+        #     eulers_w_phase.shift(DOWN),
+        # )
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(eulers[0][3]),
+                ReplacementTransform(eulers[0][:3], eulers_w_phase[0][:3]),
+                ShrinkToCenter(phase_delta_full_eqn_theta[0][:5]),
+                ReplacementTransform(eulers[0][-1], eulers_w_phase[0][-1]),
+                ReplacementTransform(
+                    phase_delta_full_eqn_theta[0][5:],
+                    eulers_w_phase[0][3:-1],
+                    path_arc=PI / 2,
+                ),
+            ),
+            run_time=2,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        eulers_w_phase_2pi = MathTex(
+            r"e^{-j \tfrac{2\pi}{\lambda} d_x \sin{(\theta) t}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).move_to(eulers, LEFT)
+
+        self.play(
+            TransformByGlyphMap(
+                eulers_w_phase,
+                eulers_w_phase_2pi,
+                ([0, 1, 2], [0, 1, 2]),
+                ([3, 4], [7, 8], {"delay": 0.2}),
+                ([5, 6, 7, 8, 9, 10], [9, 10, 11, 12, 13, 14], {"delay": 0.4}),
+                ([13], ShrinkToCenter, {"delay": 0}),
+                ([14, 15], [3, 4], {"path_arc": PI / 2, "delay": 0.2}),
+                ([11], [5], {"delay": 0}),
+                ([12], [6], {"delay": 0.4}),
+            )
+        )
+
+        self.wait(0.5)
+
+        eulers_w_phase_k = MathTex(
+            r"e^{-j k d_x \sin{(\theta) t}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).move_to(eulers, LEFT)
+
+        self.play(
+            TransformByGlyphMap(
+                eulers_w_phase_2pi,
+                eulers_w_phase_k,
+                ([0, 1, 2], [0, 1, 2]),
+                ([3, 4, 5, 6], ShrinkToCenter, {"delay": 0}),
+                (GrowFromCenter, [3], {"delay": 0.2}),
+                (
+                    [7, 8, 9, 10, 11, 12, 13, 14, 15],
+                    [4, 5, 6, 7, 8, 9, 10, 11, 12],
+                    {"delay": 0.4},
+                ),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            eulers_w_phase_k.animate.move_to(ORIGIN), ref_eqn.animate.set_opacity(0.2)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            eulers_w_phase_k[0][-1]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(UP / 3)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            eulers_w_phase_k.animate.next_to(
+                plane_wave_longer.get_midpoint(), RIGHT
+            ).shift(UP * 4 + LEFT * 3),
+            self.camera.frame.animate.shift(DOWN * config.frame_height * 1.2),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=rate_functions.there_and_back)
+                    .set_color(YELLOW)
+                    .shift(UP / 3)
+                    for m in [
+                        delta_phi2,
+                        delta_phi3,
+                        delta_phi4,
+                        delta_phi5,
+                        delta_phi6,
+                    ]
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        eulers_w_phase_m = MathTex(
+            r"e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).move_to(eulers_w_phase_k, LEFT)
+
+        self.play(
+            ReplacementTransform(eulers_w_phase_k[0][:-1], eulers_w_phase_m[0][:-1]),
+            FadeOut(eulers_w_phase_k[0][-1], shift=UP),
+            FadeIn(eulers_w_phase_m[0][-1], shift=UP),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    ant.animate(rate_func=rate_functions.there_and_back_with_pause)
+                    .set_color(YELLOW)
+                    .shift(DOWN / 3)
+                    for ant in antennas[::-1]
+                ],
+                lag_ratio=0.8,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            eulers_w_phase_m.animate.move_to(self.camera.frame),
+            FadeOut(
+                antennas,
+                plane_wave_longer,
+                wave_to_ant_2,
+                wave_to_ant_3,
+                wave_to_ant_4,
+                wave_to_ant_5,
+                wave_to_ant_6,
+                delta_phi2,
+                delta_phi3,
+                delta_phi4,
+                delta_phi5,
+                delta_phi6,
+            ),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        fourier_eqn_new = MathTex(
+            r"X[k] = \sum_{n=0}^{N-1} w[n] e^{-j 2 \pi \frac{k}{N} n}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).to_edge(UP, MED_SMALL_BUFF)
+        fourier_eqn_new[0][12:16].set_color(BLUE)
+        fourier_eqn_new[0][-9:].set_color(RED)
+        self.add(fourier_eqn_new)
+        self.remove(
+            *new_fourier_eqn, *fourier_eqn_full, ref_eqn, fourier_eqn_full[0][:-9]
+        )
+
+        self.play(fourier_eqn_new.animate.shift(DOWN * config.frame_height * 1.2))
+
+        self.wait(0.5)
+
+        pa_fourier_eqn_almost = MathTex(
+            r"X[k] = \sum_{n=0}^{N-1} w[n] e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).shift(DOWN * config.frame_height * 1.2)
+        pa_fourier_eqn_almost[0][12:16].set_color(BLUE)
+        pa_fourier_eqn_almost[0][-13:].set_color(RED)
+        pa_fourier_eqn = MathTex(
+            r"X[\theta] = \sum_{m=0}^{M-1} w[n] e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).shift(DOWN * config.frame_height * 1.2)
+        pa_fourier_eqn[0][12:16].set_color(BLUE)
+        pa_fourier_eqn[0][-13:].set_color(RED)
+
+        self.play(
+            fourier_eqn_new[0][-9:].animate.shift(UP * config.frame_width * 1.2),
+            ReplacementTransform(eulers_w_phase_m[0], pa_fourier_eqn_almost[0][-13:]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(
+                fourier_eqn_new[0][12:16], pa_fourier_eqn_almost[0][12:16]
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(fourier_eqn_new[0][:12], pa_fourier_eqn_almost[0][:12])
+        )
+
+        self.wait(0.5)
+
+        # fmt:off
+        self.play(
+            TransformByGlyphMap(
+                pa_fourier_eqn_almost,
+                pa_fourier_eqn,
+                ([0,1,3,4,6,7,8,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28],
+                 [0,1,3,4,6,7,8,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]),
+                ([9], [9], {"delay": .2}),
+                ([5], [5], {"delay": .8}),
+                ([2], [2], {"delay": 1.6}),
+            )
+        )
+        # fmt:on
+
         self.wait(2)
+
+
+class EquationTo2D(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(False))
+        pa_fourier_eqn = MathTex(
+            r"X[\theta] = \sum_{m=0}^{M-1} w[n] e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        )
+        pa_fourier_eqn[0][12:16].set_color(BLUE)
+        pa_fourier_eqn[0][-13:].set_color(RED)
+        self.add(pa_fourier_eqn)
+
+        self.play(pa_fourier_eqn.animate.scale(0.7).to_corner(UR, MED_LARGE_BUFF))
+
+        self.wait(0.5)
+
+        N = 9
+        M = 9
+        nbar_n = 5
+        nbar_m = 5
+        sll_n = 40
+        sll_m = 40
+
+        n = np.arange(N)
+        m = np.arange(M)
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        theta_min = VT(-PI)
+        theta_max = VT(0)
+        af_opacity = VT(1)
+
+        ep_exp_scale = VT(0)
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+
+        r_min = -30
+
+        f_patch = 10e9
+        lambda_patch_0 = c / f_patch
+
+        epsilon_r = 2.2
+        h = 1.6e-3
+
+        epsilon_eff = (epsilon_r + 1) / 2 + (epsilon_r - 1) / 2 * (
+            1 + 12 * h / lambda_patch_0
+        ) ** -0.5
+        L = lambda_patch_0 / (2 * np.sqrt(epsilon_eff))
+        W = lambda_patch_0 / 2 * np.sqrt(2 / (epsilon_r + 1))
+
+        x_len = config.frame_height * 0.6
+        ax = (
+            Axes(
+                x_range=[r_min, -r_min, -r_min / 4],
+                y_range=[r_min, -r_min, -r_min / 4],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .rotate(PI / 2)
+            .set_opacity(1)
+            .to_edge(LEFT)
+        )
+
+        def get_ap():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+            EP = sinc_pattern(u, 0, L, W, wavelength_0)
+            AP = AF * (EP ** (~ep_exp_scale))
+            f_AP = interp1d(
+                u * PI,
+                1.3 * np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None),
+                fill_value="extrapolate",
+            )
+            plot = ax.plot_polar_graph(
+                r_func=f_AP,
+                theta_range=[~theta_min, ~theta_max, 2 * PI / 200],
+                color=TX_COLOR,
+                use_smoothing=False,
+                stroke_opacity=~af_opacity,
+            )
+            return plot
+
+        AF_plot = always_redraw(get_ap)
+
+        theta_dot = always_redraw(
+            lambda: Dot().move_to(ax.input_to_graph_point(~theta_max, AF_plot))
+        )
+        theta_tracker = always_redraw(
+            lambda: MathTex(
+                f"\\theta = {~theta_max / PI:.2f} \\cdot \\pi",
+                font_size=DEFAULT_FONT_SIZE * 1.8,
+            )
+            .scale(0.7)
+            .next_to(pa_fourier_eqn, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        self.play(FadeIn(theta_tracker))
+
+        self.wait(0.5)
+
+        self.play(Create(ax))
+
+        self.wait(0.5)
+
+        self.play(Create(theta_dot))
+
+        self.wait(0.5)
+
+        self.play(theta_max @ (-PI))
+
+        self.wait(0.5)
+
+        self.add(AF_plot)
+        self.play(theta_max @ PI, run_time=8, rate_func=rate_functions.ease_in_out_quad)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(0.5)
+
+        one_d = Tex("1D", font_size=DEFAULT_FONT_SIZE * 3)
+        two_d = Tex("2D", font_size=DEFAULT_FONT_SIZE * 3)
+        Group(one_d, two_d).arrange(RIGHT, LARGE_BUFF * 2)
+        one_to_two = Arrow(one_d.get_right(), two_d.get_left())
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(one_d),
+                GrowArrow(one_to_two),
+                GrowFromCenter(two_d),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(ShrinkToCenter(one_d), FadeOut(one_to_two), ShrinkToCenter(two_d))
+
+        self.wait(2)
+
+
+class TwoD(ThreeDScene):
+    def construct(self):
+        self.set_camera_orientation(
+            phi=90 * DEGREES,
+            theta=0 * DEGREES,
+            zoom=0.7,
+        )
+
+        N = 17
+        M = 17
+        nbar_n = 5
+        nbar_m = 5
+        sll_n = 40
+        sll_m = 40
+
+        n = np.arange(N)
+        m = np.arange(M)
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+        d_y = wavelength_0 / 2
+
+        steering_angle_theta = 0
+        steering_angle_phi = 0
+
+        u_0 = np.sin(steering_angle_theta * PI / 180)
+        v_0 = np.sin(steering_angle_phi * PI / 180)
+
+        theta_min = VT(-PI)
+        theta_max = VT(0)
+        af_opacity = VT(1)
+
+        ep_exp_scale = VT(0)
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+
+        r_min = -50
+
+        f_patch = 10e9
+        lambda_patch_0 = c / f_patch
+
+        epsilon_r = 2.2
+        h = 1.6e-3
+
+        epsilon_eff = (epsilon_r + 1) / 2 + (epsilon_r - 1) / 2 * (
+            1 + 12 * h / lambda_patch_0
+        ) ** -0.5
+        L = lambda_patch_0 / (2 * np.sqrt(epsilon_eff))
+        W = lambda_patch_0 / 2 * np.sqrt(2 / (epsilon_r + 1))
+
+        axes = ThreeDAxes(
+            tips=False,
+            # x_range=(-PI, PI, PI / 2),
+            x_range=(-0.5, 0.5, 1 / 4),
+            y_range=(-0.5, 0.5, 1 / 4),
+            z_range=(-0.5, 0.5, 1 / 4),
+            # x_range=[-1, 1, 1 / 2],
+            # y_range=[-1, 1, 1 / 2],
+            # z_range=[0, -r_min],
+            # x_length=8,
+        )
+        axes_labels = axes.get_axis_labels("x", "y", "z")
+
+        # def get_ap(color=BLUE):
+        u_0 = np.sin(~steering_angle * PI / 180)
+        weights = np.array([~w for w in weight_trackers])
+        AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+        EP = sinc_pattern(u, 0, L, W, wavelength_0)
+        AP = AF * (EP ** (~ep_exp_scale))
+        AP_log = np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None)
+        AP_log /= AP_log.max()
+        f_AP = interp1d(u * PI, AP_log, fill_value="extrapolate")
+        AF_theta_plot = (
+            ParametricFunction(
+                lambda t: (t, f_AP(t), 0),
+                t_range=(-PI, PI),
+                color=BLUE,
+            )
+            .stretch_to_fit_height(axes.height)
+            .stretch_to_fit_width(axes.width)
+            .move_to(axes)
+            .rotate_about_origin(PI / 2, axis=[0, 1, 0])
+            .rotate_about_origin(PI / 2, axis=[1, 0, 0])
+        )
+        AF_phi_plot = (
+            ParametricFunction(
+                lambda t: (t, f_AP(t), 0),
+                t_range=(-PI, PI),
+                color=RED,
+            )
+            .stretch_to_fit_height(axes.height)
+            .stretch_to_fit_width(axes.width)
+            .move_to(axes)
+            .rotate_about_origin(PI / 2, axis=[0, 1, 0])
+            .rotate_about_origin(PI / 2, axis=[1, 0, 0])
+        )
+
+        self.play(
+            Create(axes),
+            # FadeIn(axes_labels),
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(AF_theta_plot))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(AF_phi_plot))
+        # self.move_camera(
+        #     phi=0 * DEGREES,
+        #     theta=0 * DEGREES,
+        #     gamma=10 * DEGREES,
+        #     # added_anims=[AF_phi_plot.animate.rotate_about_origin(PI / 2, UP)],
+        # )
+        self.move_camera(
+            phi=75 * DEGREES,
+            theta=30 * DEGREES,
+            zoom=0.7,
+            added_anims=[AF_phi_plot.animate.rotate_about_origin(PI / 2, [0, 0, 1])],
+            run_time=2,
+        )
+        self.begin_ambient_camera_rotation(rate=0.1, about="theta")
+
+        self.wait(5)
+
+        window_n = np.ones(N)
+        window_m = np.ones(M)
+
+        U_vis = 40
+        V_vis = 40
+        u2 = np.linspace(-1, 1, U_vis)
+        v2 = np.linspace(-1, 1, V_vis)
+
+        U, V = np.meshgrid(u2, v2, indexing="xy")  # mesh grid of sine space
+        # X, Y = np.meshgrid(vx, ry, indexing="xy")
+
+        z_min = -40
+        AF = np.clip(
+            10
+            * np.log10(
+                np.abs(
+                    compute_af_2d(
+                        window_n, window_m, d_x, d_y, k_0, u_0, v_0, U, V, M, N, m, n
+                    )
+                )
+            )
+            - r_min,
+            0,
+            None,
+        )
+        # AF /= AF.max()
+        print(AP_log.max() - AF.max())
+        AF -= AP_log.max() - AF.max()
+
+        tck = bisplrep(U, V, AF)
+
+        umax = VT(0.01)
+        vmax = VT(0.01)
+
+        axes = ThreeDAxes(
+            x_range=[-1, 1, 1 / 2],
+            y_range=[-1, 1, 1 / 2],
+            z_range=[0, -z_min],
+            x_length=8,
+        )
+
+        def get_surface():
+            surf = (
+                Surface(
+                    lambda u, v: axes.c2p(u, v, bisplev(u, v, tck)),
+                    u_range=[-~umax, ~umax],
+                    v_range=[-~vmax, ~vmax],
+                    resolution=(U_vis, V_vis),
+                )
+                .set_z(0)
+                .set_style(fill_opacity=1)
+                .set_fill_by_value(
+                    axes=axes, colorscale=[(BLUE, 0), (RED, -z_min - 20)], axis=2
+                )
+            )
+            surf.shift(
+                AF_theta_plot.get_boundary_point([0, 0, 1])
+                - surf.get_boundary_point([0, 0, 1])
+            )
+            print(
+                AF_theta_plot.get_boundary_point([0, 0, 1])
+                - surf.get_boundary_point([0, 0, 1])
+            )
+            return surf
+
+        surface = always_redraw(get_surface)
+
+        # self.stop_ambient_camera_rotation()
+
+        # self.move_camera(
+        #     phi=0 * DEGREES,
+        #     theta=0 * DEGREES,
+        #     zoom=0.6,
+        #     run_time=2,
+        # )
+
+        self.wait(0.5)
+
+        self.add(surface)
+        self.play(
+            LaggedStart(
+                FadeOut(AF_theta_plot, AF_phi_plot),
+                AnimationGroup(umax @ 1, vmax @ 1),
+                lag_ratio=0.5,
+            ),
+            run_time=8,
+        )
+
+        # self.add(surface)
+        self.wait(10)
 
 
 def compute_af_2d(weights_n, weights_m, d_x, d_y, k_0, u_0, v_0, U, V, M, N, m, n):
