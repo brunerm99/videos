@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore")
 sys.path.insert(0, "..")
 
 from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
-from props import WeatherRadarTower, get_blocks
+from props import WeatherRadarTower, get_blocks, VideoMobject
 
 config.background_color = BACKGROUND_COLOR
 
@@ -134,7 +134,9 @@ class Intro(Scene):
 
         self.wait(0.5)
 
-        parabolic = Arc(radius=2, start_angle=PI * 0.75).move_to(point_source)
+        parabolic = Arc(radius=2, start_angle=PI * 0.75, color=BLUE).move_to(
+            point_source
+        )
 
         self.play(Create(parabolic), FadeOut(point_source))
 
@@ -2058,7 +2060,7 @@ class PhaseCalc(MovingCameraScene):
         myTemplate.add_to_preamble(r"\usepackage{graphicx}")
 
         notebook_reminder = Tex(
-            r"cfar.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
+            r"phased\_arrays.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
             tex_template=myTemplate,
             font_size=DEFAULT_FONT_SIZE * 2.5,
         )
@@ -3492,37 +3494,7 @@ class FourierExplanation(MovingCameraScene):
 
         self.play(Indicate(product_amp_plot))
 
-        f_rad_xlabels = Group(
-            MathTex(r"-\pi").next_to(f_ax.c2p(-f_max, 0), DOWN),
-            MathTex(r"\frac{-\pi}{2}").next_to(f_ax.c2p(-f_max / 2, 0), DOWN),
-            MathTex(r"\frac{\pi}{2}").next_to(f_ax.c2p(f_max / 2, 0), DOWN),
-            MathTex(r"\pi").next_to(f_ax.c2p(f_max, 0), DOWN),
-        )
-
-        f_fs_xlabels = Group(
-            MathTex(r"-\frac{f_s}{2}").next_to(f_ax.c2p(-f_max, 0), DOWN),
-            MathTex(r"-\frac{f_s}{4}").next_to(f_ax.c2p(-f_max / 2, 0), DOWN),
-            MathTex(r"\frac{f_s}{4}").next_to(f_ax.c2p(f_max / 2, 0), DOWN),
-            MathTex(r"\frac{f_s}{2}").next_to(f_ax.c2p(f_max, 0), DOWN),
-        )
-
-        self.play(
-            LaggedStart(*[GrowFromCenter(m) for m in f_fs_xlabels], lag_ratio=0.2)
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                *[
-                    ReplacementTransform(fs, rad)
-                    for rad, fs in zip(f_rad_xlabels, f_fs_xlabels)
-                ],
-                lag_ratio=0.2,
-            )
-        )
-
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         def get_line(x, ax=product_amp_ax, plot=product_amp_plot):
@@ -3554,20 +3526,6 @@ class FourierExplanation(MovingCameraScene):
             always_redraw(get_dot(x))
             for x in np.linspace(0.0625, 1 - 0.0625, num_samples)
         ]
-        # for x in np.linspace(0.0625, 1 - 0.0625, num_samples):
-        #     line_updater = get_line(x)
-        #     line = always_redraw(line_updater)
-        #     product_samples_new.append(line)
-
-        # x = 0.0625 * 2
-        # product_sample_dots_new = always_redraw(
-        #     lambda: Dot(
-        #         product_amp_ax.input_to_graph_point(x, product_amp_plot),
-        #         color=RED
-        #         if product_amp_ax.input_to_graph_coords(x, product_amp_plot)[1] > 0
-        #         else PURPLE,
-        #     )
-        # )
 
         self.play(
             *[Create(m) for m in product_samples_new],
@@ -3580,9 +3538,43 @@ class FourierExplanation(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(wave_f @ f_max, fft_f @ f_max, run_time=10)
+        f_rad_xlabels = Group(
+            MathTex(r"-\pi").next_to(f_ax.c2p(-f_max, 0), DOWN),
+            MathTex(r"\frac{-\pi}{2}").next_to(f_ax.c2p(-f_max / 2, 0), DOWN),
+            MathTex(r"\frac{\pi}{2}").next_to(f_ax.c2p(f_max / 2, 0), DOWN),
+            MathTex(r"\pi").next_to(f_ax.c2p(f_max, 0), DOWN),
+        )
+
+        f_fs_xlabels = Group(
+            MathTex(r"-\frac{f_s}{2}").next_to(f_ax.c2p(-f_max, 0), DOWN),
+            MathTex(r"-\frac{f_s}{4}").next_to(f_ax.c2p(-f_max / 2, 0), DOWN),
+            MathTex(r"\frac{f_s}{4}").next_to(f_ax.c2p(f_max / 2, 0), DOWN),
+            MathTex(r"\frac{f_s}{2}").next_to(f_ax.c2p(f_max, 0), DOWN),
+        )
+
+        self.play(
+            LaggedStart(*[GrowFromCenter(m) for m in f_fs_xlabels], lag_ratio=0.2)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    ReplacementTransform(fs, rad)
+                    for rad, fs in zip(f_rad_xlabels, f_fs_xlabels)
+                ],
+                lag_ratio=0.2,
+            )
+        )
 
         self.next_section(skip_animations=skip_animations(False))
+
+        self.wait(0.5)
+
+        self.play(wave_f @ f_max, fft_f @ f_max, run_time=10)
+
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         x_n_samples_new = [
@@ -5303,7 +5295,7 @@ class Equation2DV2(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         eulers_w_phase = MathTex(
@@ -5335,10 +5327,19 @@ class Equation2DV2(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
+        self.play(
+            eulers_w_phase[0][12].animate.set_color(YELLOW),
+            eulers_w_phase[0][14:16].animate.set_color(YELLOW),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
         eulers_w_phase_2pi = MathTex(
             r"e^{-j \tfrac{2\pi}{\lambda} d_x \sin{(\theta) t}",
             font_size=DEFAULT_FONT_SIZE * 1.8,
         ).move_to(eulers, LEFT)
+        eulers_w_phase_2pi[0][3:7].set_color(YELLOW)
 
         self.play(
             TransformByGlyphMap(
@@ -5353,6 +5354,9 @@ class Equation2DV2(MovingCameraScene):
                 ([12], [6], {"delay": 0.4}),
             )
         )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
 
         self.wait(0.5)
 
@@ -5376,12 +5380,56 @@ class Equation2DV2(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        not_equal = (
+            MathTex(r"\neq", font_size=DEFAULT_FONT_SIZE * 2)
+            .next_to(eulers_w_phase_k, UP, LARGE_BUFF)
+            .shift(RIGHT)
+        )
+        freq_k_bez = CubicBezier(
+            not_equal.get_top() + [0, 0.1, 0],
+            not_equal.get_top() + [0, 1, 0],
+            ref_eqn[5].get_bottom() + [0, -1, 0],
+            ref_eqn[5].get_bottom() + [0, -0.1, 0],
+        )
+        wave_k_bez = CubicBezier(
+            not_equal.get_bottom() + [0, -0.1, 0],
+            not_equal.get_bottom() + [0, -1, 0],
+            eulers_w_phase_k[0][3].get_top() + [0, 1, 0],
+            eulers_w_phase_k[0][3].get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    eulers_w_phase_k[0][3].animate.set_color(YELLOW),
+                    ref_eqn[:5].animate.set_color(WHITE),
+                    ref_eqn[6:].animate.set_color(WHITE),
+                ),
+                GrowFromCenter(not_equal),
+                AnimationGroup(Create(freq_k_bez), Create(wave_k_bez)),
+                lag_ratio=0.3,
+            )
+        )
+
         self.wait(0.5)
 
         self.play(
-            eulers_w_phase_k.animate.move_to(ORIGIN), ref_eqn.animate.set_opacity(0.2)
+            Uncreate(freq_k_bez),
+            Uncreate(wave_k_bez),
+            FadeOut(not_equal),
+            eulers_w_phase_k[0][3].animate.set_color(WHITE),
+            ref_eqn[5].animate.set_color(WHITE),
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(eulers_w_phase_k.animate.move_to(ORIGIN))
+
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -5394,13 +5442,23 @@ class Equation2DV2(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
+            ref_eqn[-1]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(DOWN / 3)
+        )
+
+        self.wait(0.5)
+
+        self.play(
             eulers_w_phase_k.animate.next_to(
                 plane_wave_longer.get_midpoint(), RIGHT
             ).shift(UP * 4 + LEFT * 3),
             self.camera.frame.animate.shift(DOWN * config.frame_height * 1.2),
+            ref_eqn.animate.set_opacity(0.2),
         )
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(
@@ -5436,6 +5494,24 @@ class Equation2DV2(MovingCameraScene):
 
         self.wait(0.5)
 
+        ms = Group(
+            *[
+                MathTex(f"{5 - m}", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+                    ant, DOWN, MED_SMALL_BUFF
+                )
+                for m, ant in enumerate(antennas)
+            ]
+        )
+        m_eq = MathTex("m = ", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            ms, LEFT, MED_LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(*[GrowFromCenter(m) for m in [*m_eq[0], *ms]], lag_ratio=0.2)
+        )
+
+        self.wait(0.5)
+
         self.play(
             LaggedStart(
                 *[
@@ -5453,6 +5529,8 @@ class Equation2DV2(MovingCameraScene):
         self.play(
             eulers_w_phase_m.animate.move_to(self.camera.frame),
             FadeOut(
+                ms,
+                m_eq,
                 antennas,
                 plane_wave_longer,
                 wave_to_ant_2,
@@ -5468,7 +5546,7 @@ class Equation2DV2(MovingCameraScene):
             ),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         fourier_eqn_new = MathTex(
@@ -5493,7 +5571,7 @@ class Equation2DV2(MovingCameraScene):
         pa_fourier_eqn_almost[0][12:16].set_color(BLUE)
         pa_fourier_eqn_almost[0][-13:].set_color(RED)
         pa_fourier_eqn = MathTex(
-            r"X[\theta] = \sum_{m=0}^{M-1} w[n] e^{-j k d_x \sin{(\theta) m}",
+            r"X[\theta] = \sum_{m=0}^{M-1} w[m] e^{-j k d_x \sin{(\theta) m}",
             font_size=DEFAULT_FONT_SIZE * 1.8,
         ).shift(DOWN * config.frame_height * 1.2)
         pa_fourier_eqn[0][12:16].set_color(BLUE)
@@ -5528,8 +5606,30 @@ class Equation2DV2(MovingCameraScene):
                 ([0,1,3,4,6,7,8,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28],
                  [0,1,3,4,6,7,8,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]),
                 ([9], [9], {"delay": .2}),
+                ([14], [14], {"delay": .2}),
                 ([5], [5], {"delay": .8}),
                 ([2], [2], {"delay": 1.6}),
+            )
+        )
+        # fmt:on
+
+        self.wait(0.5)
+
+        af_eqn = MathTex(
+            r"F[\theta] = \sum_{m=0}^{M-1} w[m] e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).move_to(pa_fourier_eqn)
+        af_eqn[0][12:16].set_color(BLUE)
+        af_eqn[0][-13:].set_color(RED)
+
+        # fmt:off
+        self.play(
+            TransformByGlyphMap(
+                pa_fourier_eqn,
+                af_eqn,
+                ([1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28],
+                 [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]),
+                ([0], [0]),
             )
         )
         # fmt:on
@@ -5540,24 +5640,20 @@ class Equation2DV2(MovingCameraScene):
 class EquationTo2D(Scene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(False))
-        pa_fourier_eqn = MathTex(
-            r"X[\theta] = \sum_{m=0}^{M-1} w[n] e^{-j k d_x \sin{(\theta) m}",
+        af_eqn = MathTex(
+            r"F[\theta] = \sum_{m=0}^{M-1} w[m] e^{-j k d_x \sin{(\theta) m}",
             font_size=DEFAULT_FONT_SIZE * 1.8,
         )
-        pa_fourier_eqn[0][12:16].set_color(BLUE)
-        pa_fourier_eqn[0][-13:].set_color(RED)
-        self.add(pa_fourier_eqn)
+        af_eqn[0][12:16].set_color(BLUE)
+        af_eqn[0][-13:].set_color(RED)
+        self.add(af_eqn)
 
-        self.play(pa_fourier_eqn.animate.scale(0.7).to_corner(UR, MED_LARGE_BUFF))
+        self.play(af_eqn.animate.scale(0.7).to_corner(UR, MED_LARGE_BUFF))
 
         self.wait(0.5)
 
         N = 9
         M = 9
-        nbar_n = 5
-        nbar_m = 5
-        sll_n = 40
-        sll_m = 40
 
         n = np.arange(N)
         m = np.arange(M)
@@ -5641,13 +5737,9 @@ class EquationTo2D(Scene):
                 font_size=DEFAULT_FONT_SIZE * 1.8,
             )
             .scale(0.7)
-            .next_to(pa_fourier_eqn, DOWN, MED_SMALL_BUFF, LEFT)
+            .next_to(af_eqn, DOWN, MED_SMALL_BUFF, LEFT)
         )
-        self.play(FadeIn(theta_tracker))
-
-        self.wait(0.5)
-
-        self.play(Create(ax))
+        self.play(FadeIn(theta_tracker), Create(ax), run_time=2)
 
         self.wait(0.5)
 
@@ -5664,7 +5756,7 @@ class EquationTo2D(Scene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(*self.mobjects))
+        self.play(FadeOut(ax, AF_plot, theta_tracker, theta_dot))
 
         self.wait(0.5)
 
@@ -5672,9 +5764,11 @@ class EquationTo2D(Scene):
         two_d = Tex("2D", font_size=DEFAULT_FONT_SIZE * 3)
         Group(one_d, two_d).arrange(RIGHT, LARGE_BUFF * 2)
         one_to_two = Arrow(one_d.get_right(), two_d.get_left())
+        Group(one_d, one_to_two, two_d).to_edge(UP, LARGE_BUFF)
 
         self.play(
             LaggedStart(
+                af_eqn.animate.to_edge(DOWN, LARGE_BUFF).set_x(0),
                 GrowFromCenter(one_d),
                 GrowArrow(one_to_two),
                 GrowFromCenter(two_d),
@@ -5684,7 +5778,369 @@ class EquationTo2D(Scene):
 
         self.wait(0.5)
 
-        self.play(ShrinkToCenter(one_d), FadeOut(one_to_two), ShrinkToCenter(two_d))
+        self.play(
+            ShrinkToCenter(one_d),
+            FadeOut(one_to_two),
+            ShrinkToCenter(two_d),
+            af_eqn.animate.move_to(ORIGIN),
+        )
+
+        self.wait(2)
+
+
+class TwoDSpacing(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        af_eqn = MathTex(
+            r"F[\theta] = \sum_{m=0}^{M-1} w[m] e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).scale(0.7)
+        af_eqn[0][12:16].set_color(BLUE)
+        af_eqn[0][-13:].set_color(RED)
+
+        self.add(af_eqn)
+
+        self.wait(0.5)
+
+        antennas = Group()
+        for _ in range(16):
+            antenna_port = Line(ORIGIN, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.4)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+        antennas.arrange_in_grid(4, 4, buff=MED_LARGE_BUFF).to_edge(
+            LEFT, LARGE_BUFF * 1.8
+        )
+
+        dx_line = Line(antennas[-4].get_bottom(), antennas[-3].get_bottom()).shift(
+            DOWN / 3
+        )
+        dx_line_l = Line(dx_line.get_start() + DOWN / 8, dx_line.get_start() + UP / 8)
+        dx_line_r = Line(dx_line.get_end() + DOWN / 8, dx_line.get_end() + UP / 8)
+        dx_label = MathTex("d_x").next_to(dx_line_r, RIGHT)
+
+        dy_line = Line(antennas[-4].get_corner(UL), antennas[-8].get_corner(UL)).shift(
+            LEFT / 3
+        )
+        dy_line_l = Line(
+            dy_line.get_start() + LEFT / 8, dy_line.get_start() + RIGHT / 8
+        )
+        dy_line_r = Line(dy_line.get_end() + LEFT / 8, dy_line.get_end() + RIGHT / 8)
+        dy_label = MathTex("d_y").next_to(dy_line_r, UP)
+
+        theta = MathTex(r"\theta", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            antennas, DOWN, LARGE_BUFF * 0.8
+        )
+        theta_l = Arrow(
+            theta.get_left(), [antennas.get_corner(DL)[0], theta.get_left()[1], 0]
+        )
+        theta_r = Arrow(
+            theta.get_right(), [antennas.get_corner(DR)[0], theta.get_right()[1], 0]
+        )
+        phi = MathTex(r"\phi", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            antennas, LEFT, LARGE_BUFF
+        )
+        phi_l = Arrow(
+            phi.get_bottom(),
+            [phi.get_bottom()[0], antennas.get_corner(DL)[1], 0],
+        )
+        phi_r = Arrow(
+            phi.get_top(),
+            [phi.get_top()[0], antennas.get_corner(UL)[1], 0],
+        )
+
+        self.play(
+            af_eqn.animate.scale(0.8).to_corner(UR, MED_LARGE_BUFF),
+            LaggedStart(*[GrowFromCenter(m) for m in antennas[-4:]]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(dx_line_l),
+                Create(dx_line),
+                Create(dx_line_r),
+                GrowFromCenter(dx_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(theta),
+                AnimationGroup(GrowArrow(theta_l), GrowArrow(theta_r)),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in antennas[:-4]]))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(dy_line_l),
+                Create(dy_line),
+                Create(dy_line_r),
+                GrowFromCenter(dy_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(phi),
+                AnimationGroup(GrowArrow(phi_l), GrowArrow(phi_r)),
+            )
+        )
+
+        self.wait(0.5)
+
+        m_brace = Brace(antennas, DOWN, LARGE_BUFF * 0.6)
+        n_brace = Brace(antennas, LEFT, LARGE_BUFF * 0.6)
+        m_label = MathTex("m").next_to(m_brace, DOWN, SMALL_BUFF)
+        n_label = MathTex("n").next_to(n_brace, LEFT, SMALL_BUFF)
+        m_group = Group(m_brace, m_label)
+        n_group = Group(n_brace, n_label)
+
+        self.play(
+            LaggedStart(
+                Group(theta, theta_l, theta_r).animate.shift(DOWN * 5),
+                m_group.shift(DOWN * 6).animate.shift(UP * 6),
+                Group(phi, phi_l, phi_r).animate.shift(LEFT * 5),
+                n_group.shift(LEFT * 6).animate.shift(RIGHT * 6),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        bm = MathTex("b_m", font_size=DEFAULT_FONT_SIZE * 1.5, color=BLUE)
+        cn = MathTex("c_n", font_size=DEFAULT_FONT_SIZE * 1.5, color=BLUE)
+        w_n_copy = af_eqn[0][12:16].copy().shift(DOWN * 3 + LEFT)
+        amn = MathTex(
+            r"a_{m,n}", font_size=DEFAULT_FONT_SIZE * 1.5, color=BLUE
+        ).move_to(w_n_copy, RIGHT)
+        weights = (
+            Group(bm, cn)
+            .arrange(DOWN, LARGE_BUFF)
+            .next_to(w_n_copy, RIGHT, LARGE_BUFF * 1.5)
+        )
+        bm_bez = CubicBezier(
+            w_n_copy.get_right() + [0.1, 0, 0],
+            w_n_copy.get_right() + [1, 0, 0],
+            bm.get_left() + [-1, 0, 0],
+            bm.get_left() + [-0.1, 0, 0],
+        )
+        cn_bez = CubicBezier(
+            w_n_copy.get_right() + [0.1, 0, 0],
+            w_n_copy.get_right() + [1, 0, 0],
+            cn.get_left() + [-1, 0, 0],
+            cn.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(TransformFromCopy(af_eqn[0][12:16], w_n_copy, path_arc=PI / 2))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(bm_bez),
+                GrowFromCenter(bm),
+                Create(cn_bez),
+                GrowFromCenter(cn),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ReplacementTransform(w_n_copy, amn))
+
+        self.wait(0.5)
+
+        af_theta_eqn = MathTex(
+            r"F[\theta] = \sum_{m=0}^{M-1} b_m e^{-j k d_x \sin{(\theta) m}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).scale(0.7)
+        af_phi_eqn = MathTex(
+            r"F[\phi] = \sum_{n=0}^{N-1} c_n e^{-j k d_y \sin{(\phi) n}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).scale(0.7)
+        Group(af_theta_eqn, af_phi_eqn).arrange(DOWN, LARGE_BUFF)
+
+        af_2d_eqn = MathTex(
+            r"F[\theta, \phi] = \sum_{m=0}^{M-1} b_m e^{-j k d_x \sin{(\theta) m}} \sum_{n=0}^{N-1} c_n e^{-j k d_y \sin{(\phi) n}}",
+            font_size=DEFAULT_FONT_SIZE * 1.8,
+        ).scale(0.7)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Group(
+                        antennas,
+                        m_group,
+                        n_group,
+                        dx_label,
+                        dx_line,
+                        dx_line_l,
+                        dx_line_r,
+                        dy_label,
+                        dy_line,
+                        dy_line_l,
+                        dy_line_r,
+                    ).animate.shift(LEFT * 10),
+                    Group(amn, bm, cn, cn_bez, bm_bez).animate.shift(RIGHT * 10),
+                ),
+                AnimationGroup(
+                    ReplacementTransform(af_eqn, af_theta_eqn, path_arc=-PI / 3),
+                    TransformFromCopy(af_eqn, af_phi_eqn, path_arc=PI / 3),
+                ),
+                lag_ratio=0.4,
+            ),
+            run_time=3,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        # fmt:off
+        self.play(
+            TransformByGlyphMap(
+                af_theta_eqn,
+                af_2d_eqn,
+                ([0, 1, 2], [0, 1, 2]),
+                ([3], [5]),
+                ([4], [6]),
+                ([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26],
+                 [7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28]),
+                (GrowFromCenter, [3]),
+                (get_transform_func(af_phi_eqn[0][3], ReplacementTransform),
+                 [4]),
+                (get_transform_func(af_phi_eqn[0][6:], ReplacementTransform),
+                 [29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50]),
+            ),
+            FadeOut(af_phi_eqn[0][:3], af_phi_eqn[0][4:6]),
+            run_time=1.5
+        )
+        # fmt:on
+
+        self.wait(0.5)
+
+        mailloux = (
+            ImageMobject("../props/static/mailloux.jpg")
+            .scale_to_fit_height(config.frame_height * 0.7)
+            .to_edge(DOWN, -MED_SMALL_BUFF)
+        )
+
+        self.play(mailloux.shift(DOWN * 10).animate.shift(UP * 10))
+
+        self.wait(0.5)
+
+        self.play(mailloux.animate.shift(DOWN * 10))
+
+        self.wait(0.5)
+
+        dot = (
+            MathTex(r"\cdot", font_size=DEFAULT_FONT_SIZE * 1.8)
+            .scale(0.7)
+            .next_to(
+                af_2d_eqn[0][:-22].copy().scale(0.7).to_edge(LEFT), RIGHT, SMALL_BUFF
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                af_2d_eqn[0][:-22].animate.scale(0.7).to_edge(LEFT),
+                Create(dot),
+                af_2d_eqn[0][-22:]
+                .animate.scale(0.7)
+                .next_to(
+                    af_2d_eqn[0][:-22].copy().scale(0.7).to_edge(LEFT)[7],
+                    DOWN,
+                    LARGE_BUFF * 1.5,
+                    LEFT,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        theta_vals = MathTex(
+            r"-\pi \le \theta \le \pi", font_size=DEFAULT_FONT_SIZE * 1.5
+        )
+        phi_vals = MathTex(r"-\pi \le \phi \le \pi", font_size=DEFAULT_FONT_SIZE * 1.5)
+        Group(theta_vals, phi_vals).arrange(DOWN, LARGE_BUFF).to_edge(RIGHT, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in [*theta_vals[0], *phi_vals[0]]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        video = (
+            VideoMobject("./static/af_2d_anim_rotating.mp4", speed=1, loop=False)
+            .scale_to_fit_width(config.frame_width * 0.7)
+            .next_to([config.frame_width / 2, 0, 0], RIGHT)
+            .set_z_index(-1)
+        )
+        self.add(video)
+
+        self.play(
+            LaggedStart(
+                FadeOut(theta_vals, phi_vals),
+                video.animate.move_to([config.frame_width * 0.25, 0, 0]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(15, frozen_frame=False)
+
+        self.play(
+            Group(af_2d_eqn, dot).animate.shift(LEFT * 12),
+            video.animate.move_to([-config.frame_width * 0.25, 0, 0]),
+        )
+
+        self.wait(0.5)
+
+        sim = MathTex(r"\sim", font_size=DEFAULT_FONT_SIZE * 1.5)
+
+        list = (
+            BulletedList(
+                "$M, N$",
+                "$b_m, c_n$",
+                "$d_x, d_y$",
+            )
+            .scale_to_fit_width(config.frame_width * 0.15)
+            .next_to(sim, RIGHT, LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(sim),
+                *[GrowFromCenter(m) for m in list],
+                lag_ratio=0.8,
+            )
+        )
+
+        self.wait(5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
@@ -6216,3 +6672,356 @@ class FillExample(Scene):
         )
 
         self.add(polar_ax, *left_fill, *right_fill, ap_left, ap_right)
+
+
+class Thumbnail(Scene):
+    def construct(self):
+        title = (
+            Tex("Phased Arrays")
+            .scale_to_fit_width(config.frame_width * 0.5)
+            .to_edge(UP, LARGE_BUFF)
+        )
+        rect_pattern = ImageMobject("./static/rect.png").scale_to_fit_width(
+            config.frame_width * 0.6
+        )
+
+        antennas = Group()
+        for _ in range(16):
+            antenna_port = Line(ORIGIN, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.4)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+        antennas.arrange_in_grid(4, 4, buff=MED_LARGE_BUFF).scale(0.8)
+        Group(antennas, rect_pattern).arrange(RIGHT, LARGE_BUFF).to_edge(
+            DOWN, LARGE_BUFF
+        ).shift(RIGHT + DOWN * 2)
+        self.add(title, rect_pattern, antennas)
+
+
+class Thumbnail2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        antenna_port_left = Line(DOWN * 2, UP, color=GREEN)
+        antenna_tri_left = (
+            Triangle(color=GREEN).rotate(PI / 3).move_to(antenna_port_left, UP)
+        )
+        antenna_port_right = Line(DOWN * 2, UP, color=GREEN)
+        antenna_tri_right = (
+            Triangle(color=GREEN).rotate(PI / 3).move_to(antenna_port_right, UP)
+        )
+
+        antenna_left = Group(antenna_port_left, antenna_tri_left)
+        antenna_right = Group(antenna_port_right, antenna_tri_right)
+        antennas = (
+            Group(antenna_left, antenna_right)
+            .arrange(RIGHT, LARGE_BUFF * 20)
+            .to_edge(DOWN, -SMALL_BUFF)
+        )
+
+        self.play(
+            antennas.animate.arrange(RIGHT, LARGE_BUFF * 5).to_edge(DOWN, -SMALL_BUFF)
+        )
+
+        self.wait(0.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .to_edge(UP, MED_LARGE_BUFF)
+            .shift(RIGHT * 2)
+        )
+
+        tx_up = Line(
+            antennas.get_top(),
+            [antennas.get_top()[0], cloud.get_bottom()[1], 0],
+            color=TX_COLOR,
+        )
+        tx_to_cloud = Line(antennas.get_top(), cloud.get_bottom(), color=TX_COLOR)
+
+        self.play(Create(tx_up))
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(tx_up, tx_to_cloud),
+            cloud.shift(UP * 5).animate.shift(DOWN * 5),
+        )
+
+        self.wait(0.5)
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+        # weight_trackers[n_elem // 2] @= 1
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        # patch parameters
+        f_patch = 10e9
+        lambda_patch_0 = c / f_patch
+
+        epsilon_r = 2.2
+        h = 1.6e-3
+
+        epsilon_eff = (epsilon_r + 1) / 2 + (epsilon_r - 1) / 2 * (
+            1 + 12 * h / lambda_patch_0
+        ) ** -0.5
+        L = lambda_patch_0 / (2 * np.sqrt(epsilon_eff))
+        W = lambda_patch_0 / 2 * np.sqrt(2 / (epsilon_r + 1))
+        # /patch parameters
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        r_min = -30
+        x_len = config.frame_height * 0.6
+        ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(tx_to_cloud.get_angle())
+        )
+        ax.shift(antennas.get_top() - ax.c2p(0, 0))
+
+        fnbw = 2 * PI * wavelength_0 / (n_elem * d_x)
+
+        theta_min = VT(0)
+        theta_max = VT(0)
+        af_opacity = VT(1)
+
+        ep_exp_scale = VT(0)
+
+        def get_ap():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+            EP = sinc_pattern(u, 0, L, W, wavelength_0)
+            AP = AF * (EP ** (~ep_exp_scale))
+            f_AP = interp1d(
+                u * PI,
+                1.3 * np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None),
+                fill_value="extrapolate",
+            )
+            plot = ax.plot_polar_graph(
+                r_func=f_AP,
+                theta_range=[~theta_min, ~theta_max, 2 * PI / 200],
+                color=TX_COLOR,
+                use_smoothing=False,
+                stroke_opacity=~af_opacity,
+            )
+            return plot
+
+        AF_plot = always_redraw(get_ap)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(AF_plot)
+
+        self.play(
+            FadeOut(tx_to_cloud),
+            theta_min @ (-fnbw / 2),
+            theta_max @ (fnbw / 2),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(theta_min @ (-PI), theta_max @ (PI), run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            ax.animate.rotate(PI / 2 - tx_to_cloud.get_angle()),
+            AnimationGroup(
+                *[
+                    m.animate.set_stroke(opacity=1)
+                    for m in [
+                        antenna_tri_left,
+                        antenna_port_left,
+                        antenna_tri_right,
+                        antenna_port_right,
+                    ]
+                ]
+            ),
+            cloud.animate.shift(UP * 5),
+            self.camera.frame.animate.scale(0.9).shift(UP / 2),
+        )
+
+        self.wait(0.5)
+
+        ap_label = (
+            Tex("Phased Arrays")
+            .next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF)
+            .scale(2)
+        )
+        self.add(ap_label)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        scan_arrow_ang = VT(0)
+        scan_arrow_left = always_redraw(
+            lambda: Arrow(
+                ax.c2p(0, 0), ax.input_to_graph_point(-~scan_arrow_ang, AF_plot), buff=0
+            )
+        )
+        scan_arrow_right = always_redraw(
+            lambda: Arrow(
+                ax.c2p(0, 0), ax.input_to_graph_point(~scan_arrow_ang, AF_plot), buff=0
+            )
+        )
+
+        self.play(GrowArrow(scan_arrow_left), GrowArrow(scan_arrow_right))
+
+        self.wait(0.5)
+
+        self.play(scan_arrow_ang @ PI, run_time=3)
+        self.play(FadeOut(scan_arrow_left, scan_arrow_right))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.wait(0.5)
+
+        self.wait(0.5)
+
+        EP_ax_left = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(PI / 2)
+        )
+        EP_ax_left.shift(antenna_left.get_top() - EP_ax_left.c2p(0, 0))
+
+        EP_ax_right = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(PI / 2)
+        )
+        EP_ax_right.shift(antenna_right.get_top() - EP_ax_right.c2p(0, 0))
+
+        theta = np.linspace(-PI, PI, 500)
+
+        ep_theta_min = VT(0)
+        ep_theta_max = VT(0)
+        ep_left_opacity = VT(1)
+        ep_right_opacity = VT(1)
+
+        def get_plot_ep_func(ax, opacity_vt):
+            def plot_ep():
+                EP = sinc_pattern(theta, 0, L, W, lambda_patch_0)
+                f_EP = interp1d(
+                    theta,
+                    np.clip(20 * np.log10(np.abs(EP)) - r_min, 0, None),
+                    fill_value="extrapolate",
+                )
+                EP_plot = ax.plot_polar_graph(
+                    r_func=f_EP,
+                    theta_range=[~ep_theta_min, ~ep_theta_max, 2 * PI / 200],
+                    color=TX_COLOR,
+                    use_smoothing=False,
+                    stroke_opacity=~opacity_vt,
+                )
+
+                return EP_plot
+
+            return plot_ep
+
+        EP_plot_left = always_redraw(get_plot_ep_func(EP_ax_left, ep_left_opacity))
+        EP_plot_right = always_redraw(get_plot_ep_func(EP_ax_right, ep_right_opacity))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.add(EP_plot_left, EP_plot_right)
+
+        self.play(ep_theta_min @ (-PI / 2), ep_theta_max @ (PI / 2))
+
+        self.wait(0.5)
+
+        self.play(
+            ep_left_opacity @ 0.2,
+            ep_right_opacity @ 0.2,
+            af_opacity @ 1,
+        )
+
+        self.wait(0.5)
+
+        self.play(ax.animate.rotate(-PI / 3))
+        self.play(ax.animate.rotate(2 * PI / 3))
+        self.play(ax.animate.rotate(-PI / 3))
+
+        self.wait(0.5)
+
+        taper = signal.windows.taylor(n_elem, nbar=5, sll=23)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n]
+                        @ taper[: n_elem // 2][::-1][n],
+                        weight_trackers[n_elem // 2 + 1 :][n]
+                        @ taper[n_elem // 2 + 1 :][n],
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n] @ 1,
+                        weight_trackers[n_elem // 2 + 1 :][n] @ 1,
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            ep_left_opacity @ 1,
+            ep_right_opacity @ 1,
+        )
