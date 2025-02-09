@@ -6676,20 +6676,17 @@ class FillExample(Scene):
 
 class Thumbnail(Scene):
     def construct(self):
-        title = (
-            Tex("Phased Arrays")
-            .scale_to_fit_width(config.frame_width * 0.5)
-            .to_edge(UP, LARGE_BUFF)
-        )
+        title = Tex("Intro to ", "Phased Arrays").scale(2).to_edge(UP, LARGE_BUFF)
+        title[1].set_color(ORANGE)
         rect_pattern = ImageMobject("./static/rect.png").scale_to_fit_width(
             config.frame_width * 0.6
         )
 
         antennas = Group()
         for _ in range(16):
-            antenna_port = Line(ORIGIN, UP, color=WHITE)
+            antenna_port = Line(ORIGIN, UP, color=GREEN)
             antenna_tri = (
-                Triangle(color=WHITE)
+                Triangle(color=GREEN)
                 .scale(0.4)
                 .rotate(PI / 3)
                 .move_to(antenna_port, UP)
@@ -6697,7 +6694,7 @@ class Thumbnail(Scene):
             antenna = Group(antenna_port, antenna_tri)
             antennas.add(antenna)
         antennas.arrange_in_grid(4, 4, buff=MED_LARGE_BUFF).scale(0.8)
-        Group(antennas, rect_pattern).arrange(RIGHT, LARGE_BUFF).to_edge(
+        Group(antennas, rect_pattern).arrange(RIGHT, MED_SMALL_BUFF).to_edge(
             DOWN, LARGE_BUFF
         ).shift(RIGHT + DOWN * 2)
         self.add(title, rect_pattern, antennas)
@@ -6866,10 +6863,11 @@ class Thumbnail2(MovingCameraScene):
         self.wait(0.5)
 
         ap_label = (
-            Tex("Phased Arrays")
+            Tex("Intro to ", "Phased Arrays")
             .next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF)
             .scale(2)
         )
+        ap_label[1].set_color(ORANGE)
         self.add(ap_label)
 
         self.next_section(skip_animations=skip_animations(True))
