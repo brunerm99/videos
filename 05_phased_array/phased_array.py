@@ -420,6 +420,32 @@ class Intro(Scene):
 
         self.wait(0.5)
 
+        np.random.seed(3)
+        self.play(
+            LaggedStart(
+                *[
+                    phase_shift + (2 * np.random.rand() * 2 * PI - PI)
+                    for _, _, phase_shift in phase_plots
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        np.random.seed(4)
+        self.play(
+            LaggedStart(
+                *[
+                    phase_shift + (2 * np.random.rand() * 2 * PI - PI)
+                    for _, _, phase_shift in phase_plots
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
         parabolic = Arc(radius=2, start_angle=PI * 0.75).to_edge(LEFT, MED_LARGE_BUFF)
         arrow = Arrow(
             parabolic.get_right(),
@@ -1432,11 +1458,13 @@ class HeadOn(MovingCameraScene):
             rate_func=rate_functions.ease_out_sine,
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         phase_delta_label = always_redraw(
             lambda: MathTex(
-                f"\\Delta \\phi = {~phase_left * 180 / PI:.1f}^\\circ"
+                f"\\Delta \\phi = {~phase_left * 180 / PI:.1f}^\\circ",
+                font_size=DEFAULT_FONT_SIZE * 2,
             ).next_to(shifted_filt_sine_left, LEFT, MED_LARGE_BUFF)
         )
 
@@ -1513,16 +1541,19 @@ class HeadOn(MovingCameraScene):
             self.camera.frame.animate.scale_to_fit_height(bd.height * 1.3).move_to(bd)
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         shifted_phase_label_left = always_redraw(
             lambda: MathTex(
-                f"\\Delta \\phi = {~phase_shifter_val_left * 180 / PI:.1f}^\\circ"
+                f"\\Delta \\phi = {~phase_shifter_val_left * 180 / PI:.1f}^\\circ",
+                font_size=DEFAULT_FONT_SIZE * 2,
             ).next_to(phase_shifter_left, LEFT, MED_LARGE_BUFF)
         )
         shifted_phase_label_right = always_redraw(
             lambda: MathTex(
-                f"\\Delta \\phi = {~phase_shifter_val_right * 180 / PI:.1f}^\\circ"
+                f"\\Delta \\phi = {~phase_shifter_val_right * 180 / PI:.1f}^\\circ",
+                font_size=DEFAULT_FONT_SIZE * 2,
             ).next_to(phase_shifter_right, RIGHT, MED_LARGE_BUFF)
         )
 
@@ -1710,7 +1741,7 @@ class HeadOn(MovingCameraScene):
         self.play(phase_shifter_val_left @ (PI / 2), phase_shifter_val_right @ (PI / 6))
         self.play(phase_shifter_val_left @ (PI), phase_shifter_val_right @ (PI / 2))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.remove(steering_arrow)
@@ -1784,7 +1815,7 @@ class PhaseCalc(MovingCameraScene):
         #     )
         # )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.camera.frame.save_state()
         self.camera.frame.shift(DOWN * config.frame_height * 2)
@@ -2558,7 +2589,7 @@ class Part2Transition(MovingCameraScene):
         self.play(scan_arrow_ang @ PI, run_time=3)
         self.play(FadeOut(scan_arrow_left, scan_arrow_right))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -5722,7 +5753,7 @@ class Equation2DV2(MovingCameraScene):
             ref_eqn.animate.set_opacity(0.2),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -5876,6 +5907,16 @@ class Equation2DV2(MovingCameraScene):
             )
         )
         # fmt:on
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            pa_fourier_eqn[0][-10]
+            .animate(run_time=2, rate_func=rate_functions.there_and_back_with_pause)
+            .shift(UP / 2)
+            .set_color(YELLOW)
+        )
 
         self.wait(0.5)
 
@@ -6729,69 +6770,65 @@ class WrapUp(MovingCameraScene):
 
 class PluggingJonsVid(Scene):
     def construct(self):
-        script = Tex("Script").scale(2)
-        animations = (
-            Tex("Animations").scale(2).next_to(script, DOWN, MED_SMALL_BUFF, LEFT)
-        )
-        recording = (
-            Tex("Recording").scale(2).next_to(animations, DOWN, MED_SMALL_BUFF, LEFT)
-        )
-        nb = (
-            Tex("Python notebook")
-            .scale(2)
-            .next_to(recording, DOWN, MED_SMALL_BUFF, LEFT)
-        )
-        editing = (
-            Tex("Sabrina editing").scale(2).next_to(nb, DOWN, MED_SMALL_BUFF, LEFT)
-        )
-        script_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(script, LEFT)
-        animations_check = (
-            Tex(r"\checkmark", color=GREEN).scale(2).next_to(animations, LEFT)
-        )
-        recording_check = (
-            Tex(r"\checkmark", color=GREEN).scale(2).next_to(recording, LEFT)
-        )
-        nb_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(nb, LEFT)
-        editing_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(editing, LEFT)
-        Group(
-            script,
-            script_check,
-            animations,
-            animations_check,
-            recording,
-            recording_check,
-            nb,
-            nb_check,
-            editing,
-            editing_check,
-        ).move_to(ORIGIN)
+        # script = Tex("Script").scale(2)
+        # animations = (
+        #     Tex("Animations").scale(2).next_to(script, DOWN, MED_SMALL_BUFF, LEFT)
+        # )
+        # recording = (
+        #     Tex("Recording").scale(2).next_to(animations, DOWN, MED_SMALL_BUFF, LEFT)
+        # )
+        # nb = (
+        #     Tex("Python notebook")
+        #     .scale(2)
+        #     .next_to(recording, DOWN, MED_SMALL_BUFF, LEFT)
+        # )
+        # editing = (
+        #     Tex("Sabrina editing").scale(2).next_to(nb, DOWN, MED_SMALL_BUFF, LEFT)
+        # )
+        # script_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(script, LEFT)
+        # animations_check = (
+        #     Tex(r"\checkmark", color=GREEN).scale(2).next_to(animations, LEFT)
+        # )
+        # recording_check = (
+        #     Tex(r"\checkmark", color=GREEN).scale(2).next_to(recording, LEFT)
+        # )
+        # nb_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(nb, LEFT)
+        # editing_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(editing, LEFT)
+        # Group(
+        #     script,
+        #     script_check,
+        #     animations,
+        #     animations_check,
+        #     recording,
+        #     recording_check,
+        #     nb,
+        #     nb_check,
+        #     editing,
+        #     editing_check,
+        # ).move_to(ORIGIN)
 
-        self.play(
-            LaggedStart(
-                Write(script),
-                GrowFromCenter(script_check),
-                Write(animations),
-                GrowFromCenter(animations_check),
-                Write(recording),
-                GrowFromCenter(recording_check),
-                Write(nb),
-                GrowFromCenter(nb_check),
-                Write(editing),
-                GrowFromCenter(editing_check),
-                lag_ratio=0.3,
-            )
-        )
+        # self.play(
+        #     LaggedStart(
+        #         Write(script),
+        #         GrowFromCenter(script_check),
+        #         Write(animations),
+        #         GrowFromCenter(animations_check),
+        #         Write(recording),
+        #         GrowFromCenter(recording_check),
+        #         Write(nb),
+        #         GrowFromCenter(nb_check),
+        #         Write(editing),
+        #         GrowFromCenter(editing_check),
+        #         lag_ratio=0.3,
+        #     )
+        # )
 
         thumbnail = ImageMobject(
             "./static/jon_beamforming_video.png"
         ).scale_to_fit_width(config.frame_width * 0.6)
 
         self.play(
-            LaggedStart(
-                FadeOut(*self.mobjects),
-                GrowFromCenter(thumbnail),
-                lag_ratio=0.4,
-            )
+            GrowFromCenter(thumbnail),
         )
 
         self.wait(0.5)
@@ -7764,10 +7801,10 @@ class EndScreen(Scene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "7,730"],
+                    ["Lines of code", "7,847"],
                     ["Script word count", "3,731"],
-                    ["Days to make", "20"],
-                    ["Git commits", "17"],
+                    ["Days to make", "71"],
+                    ["Git commits", "19"],
                 ]
             )
             .scale(0.5)
