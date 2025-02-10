@@ -44,18 +44,31 @@ In this video I introduce two methods for dealing with this issue and provide a 
 
 ![thumbnail](./04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_2.png)
 
+## [05 - Phased Arrays - Steering and the Antenna Pattern](https://tinyurl.com/phased-array-part1-vid)
+
+Traditional antennas need to physically move to track signals, but phased arrays change the game by steering beams electronically. How does this work? 
+
+In this video, I’ll break down some key concepts:
+- Near vs. far field
+- How phased arrays steer signals using phase shifters
+- The math behind beamforming and antenna patterns  
+- 1D vs. 2D arrays 
+
+![thumbnail](./05_phased_array/media/images/phased_array/thumbnails/Thumbnail1.png)
+
 ## [06 - Explaining the Radar Range Equation | The Animated Radar Cheatsheet](https://youtu.be/UKbQcEZIKgc)
 
 The Radar Range Equation is easily one of the most important equations to understand when learning about radar systems.
 
 This video gives a brief overview of it and how to compute it with some real-world values. It's part of a larger series called "The Animated Radar Cheatsheet" which aims to be a good reference for radar engineers and make the equations more approachable.
 
+
 ![thumbnail](./06_radar_range_equation/media/images/radar_equation/thumbnails/Thumbnail_1.png)
 
 ## [07 - What is Radar Signal-to-Noise Ratio? | The Animated Radar Cheatsheet](https://youtu.be/e0M7FiU0NeI)
 
-![thumbnail](./07_snr_equation/media/images/snr/Thumbnail2_ManimCE_v0.18.1.png)
-
 A radar's signal-to-noise ratio (SNR) is integral in determining which targets it can detect. 
 
 This video gives an animated description of the equation and a Python notebook is provided to test your knowledge.
+
+![thumbnail](./07_snr_equation/media/images/snr/Thumbnail2_ManimCE_v0.18.1.png)
