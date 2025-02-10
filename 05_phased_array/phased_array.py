@@ -450,6 +450,270 @@ class Intro(Scene):
         self.wait(2)
 
 
+class VideoOverview(Scene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        part_1 = Tex("Part 1:", font_size=DEFAULT_FONT_SIZE * 1.5)
+        part_2 = Tex("Part 2:", font_size=DEFAULT_FONT_SIZE * 1.5)
+        Group(part_1, part_2).arrange(RIGHT, LARGE_BUFF * 5).to_edge(UP, LARGE_BUFF)
+        steering = Tex("Steering", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            part_1, DOWN
+        )
+        pattern = Tex("Antenna Pattern", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            part_2, DOWN
+        )
+
+        antennas = Group()
+        for _ in range(12):
+            antenna_port = Line(DOWN / 2, UP, color=WHITE).set_opacity(0)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+                .set_stroke(opacity=0)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+        antennas.arrange(RIGHT, MED_LARGE_BUFF).move_to(part_1).to_edge(
+            DOWN, LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                part_1.shift(UP * 5).animate.shift(DOWN * 5),
+                LaggedStart(
+                    *[
+                        AnimationGroup(
+                            m[1].animate.set_stroke(opacity=1),
+                            m[0].animate.set_opacity(1),
+                        )
+                        for m in antennas[
+                            len(antennas) // 2 - 2 : len(antennas) // 2 + 2
+                        ]
+                    ],
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        beam = Line(
+            antennas.get_top(), antennas.get_top() + UP * 3, buff=SMALL_BUFF, color=BLUE
+        )
+
+        self.play(FadeIn(steering), Create(beam))
+
+        self.wait(0.5)
+
+        self.play(beam.animate.rotate(PI / 3, about_point=beam.get_start()))
+
+        self.wait(0.5)
+
+        self.play(beam.animate.rotate(-2 * PI / 3, about_point=beam.get_start()))
+
+        self.wait(0.5)
+
+        self.play(beam.animate.rotate(PI / 3, about_point=beam.get_start()))
+
+        self.wait(0.5)
+
+        antennas_p = Group()
+        for _ in range(4):
+            antenna_port = Line(DOWN / 2, UP, color=WHITE).set_opacity(0)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+                .set_stroke(opacity=0)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas_p.add(antenna)
+        antennas_p.arrange(RIGHT, MED_LARGE_BUFF).move_to(part_2).to_edge(
+            DOWN, LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                part_2.shift(UP * 5).animate.shift(DOWN * 5),
+                LaggedStart(
+                    *[
+                        AnimationGroup(
+                            m[1].animate.set_stroke(opacity=1),
+                            m[0].animate.set_opacity(1),
+                        )
+                        for m in antennas_p
+                    ],
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+        # weight_trackers[n_elem // 2] @= 1
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        # patch parameters
+        f_patch = 10e9
+        lambda_patch_0 = c / f_patch
+
+        epsilon_r = 2.2
+        h = 1.6e-3
+
+        epsilon_eff = (epsilon_r + 1) / 2 + (epsilon_r - 1) / 2 * (
+            1 + 12 * h / lambda_patch_0
+        ) ** -0.5
+        L = lambda_patch_0 / (2 * np.sqrt(epsilon_eff))
+        W = lambda_patch_0 / 2 * np.sqrt(2 / (epsilon_r + 1))
+        # /patch parameters
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        r_min = -30
+        x_len = config.frame_height * 0.6
+        ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(PI / 2)
+        )
+        ax.shift(antennas_p.get_top() - ax.c2p(0, 0))
+
+        theta_min = VT(0)
+        theta_max = VT(0)
+        af_opacity = VT(1)
+
+        ep_exp_scale = VT(0)
+
+        def get_ap():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+            EP = sinc_pattern(u, 0, L, W, wavelength_0)
+            AP = AF * (EP ** (~ep_exp_scale))
+            f_AP = interp1d(
+                u * PI,
+                1.3 * np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None),
+                fill_value="extrapolate",
+            )
+            plot = ax.plot_polar_graph(
+                r_func=f_AP,
+                theta_range=[~theta_min, ~theta_max, 2 * PI / 200],
+                color=TX_COLOR,
+                use_smoothing=False,
+                stroke_opacity=~af_opacity,
+            )
+            return plot
+
+        AF_plot = always_redraw(get_ap)
+
+        self.add(AF_plot)
+
+        self.play(
+            LaggedStart(
+                FadeIn(pattern),
+                AnimationGroup(theta_max @ (PI / 2), theta_min @ (-PI / 2)),
+                lag_ratio=0.4,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        taper = signal.windows.taylor(n_elem, nbar=5, sll=23)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][::-1][n]
+                        @ taper[: n_elem // 2][::-1][n],
+                        weight_trackers[n_elem // 2 + 1 :][n]
+                        @ taper[n_elem // 2 + 1 :][n],
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(ax, part_2, pattern, antennas_p).animate.shift(RIGHT * 10),
+            Group(antennas, part_1, steering, beam).animate.set_x(0),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            *[
+                AnimationGroup(
+                    m[1].animate.set_stroke(opacity=0.2),
+                    m[0].animate.set_opacity(0.2),
+                )
+                for m in [
+                    antennas[len(antennas) // 2 - 2],
+                    antennas[len(antennas) // 2 + 1],
+                ]
+            ],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        antennas[: len(antennas) // 2][::-1][n][1].animate.set_stroke(
+                            opacity=1
+                        ),
+                        antennas[: len(antennas) // 2][::-1][n][0].animate.set_opacity(
+                            1
+                        ),
+                        antennas[len(antennas) // 2 :][n][1].animate.set_stroke(
+                            opacity=1
+                        ),
+                        antennas[len(antennas) // 2 :][n][0].animate.set_opacity(1),
+                        # weight_trackers[: n_elem // 2][::-1][n]
+                        # @ taper[: n_elem // 2][::-1][n],
+                        # weight_trackers[n_elem // 2 + 1 :][n]
+                        # @ taper[n_elem // 2 + 1 :][n],
+                    )
+                    for n in range(len(antennas) // 2)
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
 class FarField(ZoomedScene):
     def __init__(self, **kwargs):
         ZoomedScene.__init__(
@@ -6145,6 +6409,478 @@ class TwoDSpacing(Scene):
         self.wait(2)
 
 
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        n_elem = 17  # Must be odd
+        weight_trackers = [VT(1) for _ in range(n_elem)]
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+
+        r_min = -80
+        x_len = config.frame_height * 0.79  # i have no idea
+        y_len = config.frame_height * 0.6
+        ax = Axes(
+            x_range=[-PI, PI, 0.5],
+            y_range=[0, -r_min, 10],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).to_edge(RIGHT, LARGE_BUFF)
+        polar_ax = Axes(
+            x_range=[r_min, -r_min, r_min / 8],
+            y_range=[r_min, -r_min, r_min / 8],
+            tips=False,
+            axis_config={
+                "include_numbers": False,
+            },
+            x_length=x_len,
+            y_length=y_len,
+        ).rotate(PI / 2)
+        polar_ax.shift(ax.c2p(0, 0) - polar_ax.c2p(0, 0))
+
+        def get_af():
+            u_0 = np.sin(~steering_angle * PI / 180)
+            weights = np.array([~w for w in weight_trackers])
+            AF = 20 * np.log10(np.abs(compute_af_1d(weights, d_x, k_0, u, u_0))) - r_min
+            f_AF = interp1d(u * PI, AF, fill_value="extrapolate")
+            return f_AF
+
+        def cartesian_to_polar(point):
+            r = point[1]
+            theta = point[0]
+            return [r * np.cos(-theta + PI / 2), r * np.sin(theta + PI / 2), 0]
+
+        def get_cart_plot():
+            f_AF = get_af()
+            plot = ax.plot(f_AF, x_range=[-PI, PI, 1 / 200], color=TX_COLOR)
+            return plot
+
+        AF_plot = always_redraw(get_cart_plot)
+
+        self.wait(0.5)
+
+        antennas = Group()
+        weight_trackers_disp = [VT(1) for _ in range(8)]
+        for idx in range(8):
+            antenna_port = Line(DOWN / 4, UP, color=WHITE)
+            antenna_tri = (
+                Triangle(color=WHITE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+
+        antennas.arrange(DOWN, MED_LARGE_BUFF).scale_to_fit_height(
+            config.frame_height * 0.8
+        ).to_edge(LEFT, LARGE_BUFF)
+
+        wt_disp = Group(
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[0]):.2f}").next_to(
+                    antennas[0], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[1]):.2f}").next_to(
+                    antennas[1], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[2]):.2f}").next_to(
+                    antennas[2], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[3]):.2f}").next_to(
+                    antennas[3], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[4]):.2f}").next_to(
+                    antennas[4], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[5]):.2f}").next_to(
+                    antennas[5], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[6]):.2f}").next_to(
+                    antennas[6], RIGHT
+                )
+            ),
+            always_redraw(
+                lambda: Tex(f"{np.abs(~weight_trackers_disp[7]):.2f}").next_to(
+                    antennas[7], RIGHT
+                )
+            ),
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.wait(0.5)
+
+        weights = np.array([~w for w in weight_trackers])
+        x = np.arange(weights.size) - weights.size // 2
+        taper_ax = (
+            Axes(
+                x_range=[x.min(), x.max(), 1],
+                y_range=[0, 1, 0.5],
+                tips=False,
+                x_length=antennas.height,
+                y_length=antennas.width * 3,
+            )
+            .rotate(-PI / 2)
+            .next_to(antennas, RIGHT, LARGE_BUFF * 1.6)
+        )
+
+        def plot_taper():
+            weights = np.array([~w for w in weight_trackers])
+            x = np.arange(weights.size) - weights.size // 2
+            f = interp1d(x, weights)
+            plot = taper_ax.plot(f, x_range=[x.min(), x.max(), 0.01], color=ORANGE)
+            return plot
+
+        taper_plot = always_redraw(plot_taper)
+
+        self.play(FadeIn(ax, AF_plot, antennas, wt_disp, taper_ax, taper_plot))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        # taper = signal.windows.taylor(n_elem, nbar=5, sll=23)
+        taper = signal.windows.blackman(n_elem)
+        # taper_disp = signal.windows.taylor(len(antennas), nbar=5, sll=23)
+        taper_disp = signal.windows.blackman(len(antennas))
+
+        blackman_label = Tex(
+            "Blackman Taper", font_size=DEFAULT_FONT_SIZE * 1.5
+        ).to_edge(UP, LARGE_BUFF)
+        hann_label = Tex("Hann Taper", font_size=DEFAULT_FONT_SIZE * 1.5).move_to(
+            blackman_label
+        )
+
+        self.play(
+            blackman_label.shift(UP * 5).animate.shift(DOWN * 5),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers_disp[:4][n] @ taper_disp[:4][n],
+                        weight_trackers_disp[4:][::-1][n] @ taper_disp[4:][::-1][n],
+                    )
+                    for n in range(4)
+                ],
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][n] @ taper[: n_elem // 2][n],
+                        weight_trackers[n_elem // 2 + 1 :][::-1][n]
+                        @ taper[n_elem // 2 + 1 :][::-1][n],
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        # taper = signal.windows.taylor(n_elem, nbar=5, sll=23)
+        taper = signal.windows.hamming(n_elem)
+        # taper_disp = signal.windows.taylor(len(antennas), nbar=5, sll=23)
+        taper_disp = signal.windows.hamming(len(antennas))
+
+        self.play(
+            LaggedStart(
+                blackman_label.animate.shift(UP * 5),
+                hann_label.shift(UP * 5).animate.shift(DOWN * 5),
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers_disp[:4][n] @ taper_disp[:4][n],
+                        weight_trackers_disp[4:][::-1][n] @ taper_disp[4:][::-1][n],
+                    )
+                    for n in range(4)
+                ],
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        weight_trackers[: n_elem // 2][n] @ taper[: n_elem // 2][n],
+                        weight_trackers[n_elem // 2 + 1 :][::-1][n]
+                        @ taper[n_elem // 2 + 1 :][::-1][n],
+                    )
+                    for n in range(n_elem // 2)
+                ],
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.remove(blackman_label)
+
+        beamforming_title = (
+            Tex("Beamforming")
+            .scale_to_fit_width(config.frame_width * 0.6)
+            .next_to([0, config.frame_height / 2, 0], UP)
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(*self.mobjects, beamforming_title).height * 1.2
+            ).move_to(Group(*self.mobjects, beamforming_title)),
+            Write(beamforming_title),
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects), self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        notebook_img1 = (
+            ImageMobject("./static/2d_taylor_taper.png")
+            .scale_to_fit_width(config.frame_height * 0.6)
+            .to_edge(DOWN, MED_LARGE_BUFF)
+        )
+        notebook_img2 = (
+            ImageMobject("./static/notebook_sc.png")
+            .scale_to_fit_height(config.frame_height * 0.6)
+            .to_edge(DOWN, MED_LARGE_BUFF)
+            .shift(RIGHT * 12)
+        )
+        notebook_img3 = (
+            ImageMobject("./static/notebook_sc2.png")
+            .scale_to_fit_height(config.frame_height * 0.6)
+            .to_edge(DOWN, MED_LARGE_BUFF)
+            .shift(RIGHT * 12)
+        )
+
+        myTemplate = TexTemplate()
+        myTemplate.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"phased\_arrays.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=myTemplate,
+            font_size=DEFAULT_FONT_SIZE * 2.5,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = (
+            Group(notebook_box, notebook_reminder).scale(0.7).to_edge(UP, LARGE_BUFF)
+        )
+        self.play(
+            notebook.shift(UP * 6).animate.shift(DOWN * 6),
+            notebook_img1.shift(LEFT * 12).animate.shift(RIGHT * 12),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(notebook_img1, notebook_img2)
+            .animate.arrange(RIGHT, LARGE_BUFF)
+            .to_edge(DOWN, MED_LARGE_BUFF)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            notebook_img1.animate.shift(LEFT * 10),
+            Group(notebook_img2, notebook_img3)
+            .animate.arrange(RIGHT, LARGE_BUFF)
+            .to_edge(DOWN, MED_LARGE_BUFF),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ShrinkToCenter(notebook_img2),
+            ShrinkToCenter(notebook_img3),
+            FadeOut(notebook),
+        )
+
+        self.wait(2)
+
+
+class PluggingJonsVid(Scene):
+    def construct(self):
+        script = Tex("Script").scale(2)
+        animations = (
+            Tex("Animations").scale(2).next_to(script, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        recording = (
+            Tex("Recording").scale(2).next_to(animations, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        nb = (
+            Tex("Python notebook")
+            .scale(2)
+            .next_to(recording, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        editing = (
+            Tex("Sabrina editing").scale(2).next_to(nb, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        script_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(script, LEFT)
+        animations_check = (
+            Tex(r"\checkmark", color=GREEN).scale(2).next_to(animations, LEFT)
+        )
+        recording_check = (
+            Tex(r"\checkmark", color=GREEN).scale(2).next_to(recording, LEFT)
+        )
+        nb_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(nb, LEFT)
+        editing_check = Tex(r"\checkmark", color=GREEN).scale(2).next_to(editing, LEFT)
+        Group(
+            script,
+            script_check,
+            animations,
+            animations_check,
+            recording,
+            recording_check,
+            nb,
+            nb_check,
+            editing,
+            editing_check,
+        ).move_to(ORIGIN)
+
+        self.play(
+            LaggedStart(
+                Write(script),
+                GrowFromCenter(script_check),
+                Write(animations),
+                GrowFromCenter(animations_check),
+                Write(recording),
+                GrowFromCenter(recording_check),
+                Write(nb),
+                GrowFromCenter(nb_check),
+                Write(editing),
+                GrowFromCenter(editing_check),
+                lag_ratio=0.3,
+            )
+        )
+
+        thumbnail = ImageMobject(
+            "./static/jon_beamforming_video.png"
+        ).scale_to_fit_width(config.frame_width * 0.6)
+
+        self.play(
+            LaggedStart(
+                FadeOut(*self.mobjects),
+                GrowFromCenter(thumbnail),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ShrinkToCenter(thumbnail))
+
+        self.wait(2)
+
+
+class InTheDescription(Scene):
+    def construct(self):
+        text_scale = 0.8
+
+        thanks = Text("Thanks for watching!")
+
+        resources = Text("resources").scale(text_scale)
+        caveats = Text("caveats").scale(text_scale)
+        source_code = Text(
+            "// source code", font="FiraCode Nerd Font Mono", color=GRAY_C
+        ).scale(text_scale)
+        VGroup(resources, caveats, source_code).arrange(RIGHT, MED_LARGE_BUFF)
+
+        resources_p2 = resources.get_bottom() + [0, -0.1, 0]
+        caveats_p2 = caveats.get_bottom() + [0, -0.1, 0]
+        source_code_p2 = source_code.get_bottom() + [0, -0.1, 0]
+
+        tip = (
+            Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+            .scale(0.3)
+            .to_edge(DOWN)
+            .rotate(PI / 3)
+        )
+        tip_p1 = tip.get_top()
+
+        resources_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            resources_p2 + [0, -1, 0],
+            resources_p2,
+        )
+        caveats_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            caveats_p2 + [0, -1, 0],
+            caveats_p2,
+        )
+        source_code_bez = CubicBezier(
+            tip_p1,
+            tip_p1 + [0, 1, 0],
+            source_code_p2 + [0, -1, 0],
+            source_code_p2,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(tip),
+                Create(resources_bez),
+                GrowFromCenter(resources),
+                lag_ratio=0.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                Create(caveats_bez),
+                GrowFromCenter(caveats),
+                lag_ratio=0.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                Create(source_code_bez),
+                GrowFromCenter(source_code),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(thanks.to_edge(UP, LARGE_BUFF).shift(UP * 5).animate.shift(DOWN * 5))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
 class TwoD(ThreeDScene):
     def construct(self):
         self.set_camera_orientation(
@@ -6684,12 +7420,9 @@ class Thumbnail(Scene):
 
         antennas = Group()
         for _ in range(16):
-            antenna_port = Line(ORIGIN, UP, color=GREEN)
+            antenna_port = Line(ORIGIN, UP, color=BLUE)
             antenna_tri = (
-                Triangle(color=GREEN)
-                .scale(0.4)
-                .rotate(PI / 3)
-                .move_to(antenna_port, UP)
+                Triangle(color=BLUE).scale(0.4).rotate(PI / 3).move_to(antenna_port, UP)
             )
             antenna = Group(antenna_port, antenna_tri)
             antennas.add(antenna)
@@ -7023,3 +7756,50 @@ class Thumbnail2(MovingCameraScene):
             ep_left_opacity @ 1,
             ep_right_opacity @ 1,
         )
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Tex("Stats for Nerds")
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "7,730"],
+                    ["Script word count", "3,731"],
+                    ["Days to make", "20"],
+                    ["Git commits", "17"],
+                ]
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
+        thank_you_sabrina = (
+            Tex(r"Thank you, Sabrina, for\\editing the whole video :)")
+            .next_to(stats_group, DOWN)
+            .to_edge(DOWN)
+        )
+
+        marshall_bruner = Tex("Marshall Bruner").next_to(
+            [-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Create(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
+
+        self.wait(2)
