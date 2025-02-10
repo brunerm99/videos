@@ -29,6 +29,7 @@ def get_blocks(color=WHITE):
             "antenna",
             "splitter",
             "oscillator",
+            "limiter",
         ]
     }
 
