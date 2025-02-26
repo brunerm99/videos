@@ -1,5 +1,6 @@
 # beamforming.py
 
+from copy import deepcopy
 import warnings
 import sys
 from manim import *
@@ -16,7 +17,7 @@ from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -30,11 +31,18 @@ def get_transform_func(from_var, func=TransformFromCopy):
     return transform_func
 
 
+def square_wave_fourier(x, N, f=1, phi=0):
+    sum_terms = np.zeros_like(x)
+    for n in range(1, N + 1, 2):
+        sum_terms += np.sin(f * n * x + phi) / n
+    return (4 / np.pi) * sum_terms
+
+
 class Intro(Scene):
     def construct(self): ...
 
 
-class Discontinuity(Scene):
+class Discontinuity(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         ax = Axes(
@@ -117,6 +125,173 @@ class Discontinuity(Scene):
 
         self.wait(0.5)
 
+        spike = Line(
+            f_ax.c2p(0, 0),
+            f_ax.c2p(0, 1),
+            color=ORANGE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.8,
+        )
+        spike_dot = Dot(spike.get_end(), color=ORANGE)
+
+        self.play(LaggedStart(Create(spike), Create(spike_dot), lag_ratio=0.4))
+
+        self.wait(0.5)
+
+        sinc_x0 = VT(0)
+        sinc_x1 = VT(0)
+        sinc = always_redraw(
+            lambda: f_ax.plot(
+                lambda t: np.sinc(2 * PI * t),
+                x_range=[~sinc_x0, ~sinc_x1, 1 / 100],
+                color=ORANGE,
+            )
+        )
+        self.add(sinc)
+
+        self.play(
+            LaggedStart(
+                FadeOut(spike, spike_dot),
+                AnimationGroup(
+                    sinc_x0 @ (-PI),
+                    sinc_x1 @ (PI),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        window_x0 = VT(-1)
+        window_x1 = VT(1)
+        plot_windowed = always_redraw(
+            lambda: ax.plot(
+                lambda t: 1 if np.abs(t) <= 1 else 0,
+                x_range=[~window_x0, ~window_x1, 1 / 1000],
+                color=BLUE,
+                use_smoothing=False,
+            )
+        ).set_z_index(-1)
+        self.add(plot_windowed)
+        self.remove(plot)
+
+        sampled_region = Polygon(
+            ax.c2p(-1, 0),
+            ax.c2p(-1, 1),
+            ax.c2p(1, 1),
+            ax.c2p(1, 0),
+            fill_color=GREEN,
+            fill_opacity=0.3,
+            stroke_opacity=0,
+        ).set_z_index(-2)
+
+        self.play(FadeIn(sampled_region))
+
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(config.frame_width * 1.5),
+            window_x0 @ (-3),
+            window_x1 @ (3),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                config.frame_width / 2
+            ).move_to(ax.c2p(-1, 0.5))
+        )
+
+        self.wait(0.5)
+
+        zero_to = MathTex("0").next_to(ax.c2p(-1.2, 0), UP)
+        to_one = MathTex("1").next_to(ax.c2p(-1, 1), UP)
+        to_zero = MathTex("0").next_to(ax.c2p(1.2, 0), UP)
+        one_to = MathTex("1").next_to(ax.c2p(1, 1), UP)
+        zero_to_one = Arrow(zero_to, to_one)
+        one_to_zero = Arrow(one_to, to_zero)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(zero_to),
+                GrowArrow(zero_to_one),
+                GrowFromCenter(to_one),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.move_to(ax.c2p(1, 0.5)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(one_to),
+                GrowArrow(one_to_zero),
+                GrowFromCenter(to_zero),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(config.frame_width * 1.6)
+            .move_to(ax)
+            .shift(UP * 4.5),
+            FadeOut(
+                one_to,
+                to_one,
+                to_zero,
+                zero_to,
+                one_to_zero,
+                zero_to_one,
+                sampled_region,
+            ),
+        )
+
+        self.wait(0.5)
+
+        comp_shift_lr = ax.c2p(-1, 0) - ax.c2p(0, 0)
+        comp_shift_ud = ax.c2p(0, 1) - ax.c2p(0, 0)
+        t_inp = np.linspace(-1, 3, 1000)
+        Ns = [1, 5, 9, 13, 17]
+
+        square_comps = Group()
+        for N in Ns:
+            square_comp = square_wave_fourier(t_inp, N, f=PI / 2)
+            f_square_comp = interp1d(t_inp, square_comp)
+            square_comp_plot = ax.plot(
+                f_square_comp,
+                x_range=[t_inp.min(), t_inp.max(), 1 / 1000],
+                color=GREEN,
+            ).shift(comp_shift_lr)
+            square_comps.add(square_comp_plot)
+
+        square_comps_copy = (
+            deepcopy(square_comps).arrange(UP).next_to(plot_windowed, UP)
+        )
+
+        self.play(*[Create(sc) for sc in square_comps])
+
+        self.wait(0.5)
+
+        self.play(
+            square_comps.animate.arrange(UP, buff=-LARGE_BUFF * 1.7).next_to(
+                self.camera.frame.get_top(), DOWN, MED_LARGE_BUFF
+            )
+        )
+        # for idx, sc in enumerate(square_comps):
+        #     self.play(Create(sc))
+        #     self.play(sc.animate.shift(UP * (idx + 1) * comp_shift_ud))
+
+        self.wait(0.5)
+
+        # self.play()
+
         self.wait(2)
 
 
@@ -138,12 +313,6 @@ class SquareApprox(Scene):
             line_color=BLUE,
             add_vertex_dots=False,
         )
-
-        def square_wave_fourier(x, N, f=1):
-            sum_terms = np.zeros_like(x)
-            for n in range(1, N + 1, 2):
-                sum_terms += np.sin(f * n * x) / n
-            return (4 / np.pi) * sum_terms
 
         sinc = ax.plot_line_graph(
             x,
