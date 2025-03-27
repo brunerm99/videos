@@ -30,6 +30,7 @@ def get_blocks(color=WHITE):
             "splitter",
             "oscillator",
             "limiter",
+            "attenuator",
         ]
     }
 
