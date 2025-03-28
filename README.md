@@ -72,3 +72,11 @@ A radar's signal-to-noise ratio (SNR) is integral in determining which targets i
 This video gives an animated description of the equation and a Python notebook is provided to test your knowledge.
 
 ![thumbnail](./07_snr_equation/media/images/snr/Thumbnail2_ManimCE_v0.18.1.png)
+
+## [08 - What is Phased Array Tapering and Why is it Important?](https://youtu.be/Gc4y4B27PDM)
+
+Side lobes in a phased array can cause unwanted interference and distort signals—but what if we could control them? 
+
+In this video, we explore how tapering (or windowing) helps shape the array factor, reducing side lobes at the cost of widening the main lobe. Using animations, we break down the connection between Fourier transforms, spatial sampling, and phased array beamforming.
+
+![thumbnail](./08_beamforming/media/images/beamforming/Thumbnail_ManimCE_v0.18.1.png)
