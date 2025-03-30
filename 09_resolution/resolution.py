@@ -76,6 +76,20 @@ class RangeResolution(Scene):
             .set_opacity(0)
         )
         target1_ax.shift(target1.get_left() - target1_ax.c2p(0, 0))
+
+        target2_line = Line(target2.get_left(), radar.radome.get_right())
+        target2_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=target2_line.get_length(),
+                y_length=radar.radome.height,
+            )
+            .rotate(target2_line.get_angle())
+            .set_opacity(0)
+        )
+        target2_ax.shift(target2.get_left() - target2_ax.c2p(0, 0))
         # self.add(target1_ax)
         # self.add(ax, target)
         xmax = VT(0)
@@ -92,12 +106,19 @@ class RangeResolution(Scene):
         )
         rx1 = always_redraw(
             lambda: target1_ax.plot(
-                lambda t: np.sin(2 * PI * f * t),
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
                 x_range=[max(0, ~xmax_t1 - pw), ~xmax_t1, 1 / 200],
                 color=RX_COLOR,
             )
         )
-        self.add(tx, rx1)
+        rx2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax_t2 - pw), ~xmax_t2, 1 / 200],
+                color=RX_COLOR,
+            )
+        )
+        self.add(tx, rx1, rx2)
 
         radar.vgroup.set_z_index(1)
 
@@ -154,6 +175,24 @@ class RangeResolution(Scene):
                 lag_ratio=0.15,
             ),
         )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(pw_line, pw_line_l, pw_line_r, pw_label_val))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                xmax @ (ax.p2c(target2.get_left())[0]),
+                xmax_t1 @ (pw / 2),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(target2.shift(RIGHT * 8).animate.shift(LEFT * 8), xmax_t2 @ (pw / 2))
 
         # self.add(pw_label_val)
 
