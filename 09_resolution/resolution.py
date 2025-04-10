@@ -17,7 +17,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -448,6 +448,7 @@ class RangeResolution(MovingCameraScene):
                     color=TARGET1_COLOR,
                 ),
             ),
+            run_time=2,
         )
 
         self.wait(0.5)
@@ -469,6 +470,7 @@ class RangeResolution(MovingCameraScene):
                     color=TARGET1_COLOR,
                 ),
             ),
+            run_time=2,
         )
 
         self.wait(0.5)
@@ -671,7 +673,7 @@ class RangeResolution(MovingCameraScene):
             run_time=3,
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         target2_line_new = Line(target2.get_left(), radar.radome.get_right())
@@ -729,10 +731,381 @@ class RangeResolution(MovingCameraScene):
             run_time=2,
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        roundtrip_time = MathTex(
+            r"\frac{2 \Delta R}{c} \left[ s \right]",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(delta_r_over_c_cunit)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    xmax_t1 @ (1 + pw + target_dist_large),
+                    xmax_t2 @ (1 + pw),
+                ),
+                ReplacementTransform(delta_r_over_c_cunit[0], roundtrip_time[0][1:]),
+                GrowFromCenter(roundtrip_time[0][0]),
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        # TODO: make the < Transform smoother
+        inequality = MathTex(
+            r"\tau < \frac{2 \Delta R}{c}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(roundtrip_time)
+        inequality[0][1].set_color(YELLOW)
+        inequality_rearr = MathTex(
+            r"\Delta R > \frac{c \tau}{2}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(roundtrip_time)
+        inequality_rearr[0][2].set_color(YELLOW)
+
+        # self.play(tau_gt[0][1].animate.set_color(WHITE))
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ShrinkToCenter(roundtrip_time[0][-3:]),
+                    ShrinkToCenter(tau_gt[0][2:]),
+                ),
+                ReplacementTransform(roundtrip_time[0][:-3], inequality[0][2:]),
+                ReplacementTransform(tau_gt[0][1], inequality[0][1], path_arc=-PI),
+                ReplacementTransform(tau_gt[0][0], inequality[0][0], path_arc=-PI),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(
+                    inequality[0][3:5], inequality_rearr[0][:2], path_arc=PI
+                ),
+                ReplacementTransform(
+                    inequality[0][0], inequality_rearr[0][4], path_arc=PI
+                ),
+                inequality[0][1].animate.rotate(PI).move_to(inequality_rearr[0][2]),
+                ReplacementTransform(
+                    inequality[0][2], inequality_rearr[0][6], path_arc=PI
+                ),
+                ReplacementTransform(
+                    inequality[0][6], inequality_rearr[0][3], path_arc=PI
+                ),
+                ReplacementTransform(inequality[0][5], inequality_rearr[0][5]),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        rres_eq = MathTex(
+            r"\Delta R = \frac{c \tau}{2}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(roundtrip_time)
+
+        self.play(
+            ReplacementTransform(inequality_rearr[0][:2], rres_eq[0][:2]),
+            ReplacementTransform(inequality[0][1], rres_eq[0][2]),
+            ReplacementTransform(inequality_rearr[0][3:], rres_eq[0][3:]),
+        )
+
+        self.wait(0.5)
+
+        rres_box = SurroundingRectangle(
+            rres_eq, color=GREEN, buff=MED_SMALL_BUFF, corner_radius=0.2
+        )
+
+        self.play(
+            Create(rres_box),
+            self.camera.frame.animate.scale_to_fit_width(rres_box.width * 2.5).move_to(
+                rres_box
+            ),
+            pw_label.animate.set_x(rres_box.get_x()),
+            FadeOut(
+                target1,
+                target2,
+                delta_r_line,
+                delta_r_line_l,
+                delta_r_line_r,
+                delta_r,
+                qmark,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            inequality_rearr[0][4]
+            .animate(rate_func=rate_functions.there_and_back_with_pause)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pw_label.animate.set_color(YELLOW),
+        )
+
+        self.wait(0.5)
+
+        rres_eq_val = MathTex(
+            r"\Delta R = \frac{c \tau}{2} = 150 m",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(rres_eq, LEFT)
+        rres_box_val = SurroundingRectangle(
+            rres_eq_val, color=GREEN, buff=MED_SMALL_BUFF, corner_radius=0.2
+        )
+
+        rres_box.save_state()
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                Transform(rres_box, rres_box_val),
+                self.camera.frame.animate.set_x(rres_box_val.get_x()),
+                Write(rres_eq_val[0][-5:]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            rres_box.animate.restore(),
+            self.camera.frame.animate.restore(),
+            Unwrite(rres_eq_val[0][-5:]),
+            FadeOut(pw_label),
+        )
+
+        self.wait(0.5)
+
+        f_bw = MathTex(r"f(B)", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            rres_eq, DOWN, LARGE_BUFF * 1.5
+        )
+
+        bl_bez = CubicBezier(
+            rres_eq.get_corner(DL) + [-0.1, -0.1, 0],
+            rres_eq.get_corner(DL) + [-0.1, -1, 0],
+            f_bw.get_top() + [0, 1, 0],
+            f_bw.get_top() + [0, 0.1, 0],
+        )
+        br_bez = CubicBezier(
+            rres_eq.get_corner(DR) + [0.1, -0.1, 0],
+            rres_eq.get_corner(DR) + [0.1, -1, 0],
+            f_bw.get_top() + [0, 1, 0],
+            f_bw.get_top() + [0, 0.1, 0],
+        )
+
+        f_bw_group = Group(f_bw, rres_eq)
+
+        self.play(
+            LaggedStart(
+                Uncreate(rres_box),
+                self.camera.frame.animate.scale_to_fit_height(
+                    f_bw_group.height * 1.3
+                ).move_to(f_bw_group),
+                AnimationGroup(Create(br_bez), Create(bl_bez)),
+                Write(f_bw),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        time_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.8,
+            y_length=config.frame_height * 0.55,
+        )
+        f_ax = Axes(
+            x_range=[0, 20, 5],
+            y_range=[0, 30, 20],
+            tips=False,
+            x_length=config.frame_width * 0.8,
+            y_length=config.frame_height * 0.55,
+        )
+        ax_group = (
+            Group(time_ax, f_ax)
+            .arrange(RIGHT, LARGE_BUFF)
+            .next_to(f_bw, DOWN, LARGE_BUFF * 2)
+        )
+        time_ax_label = time_ax.get_axis_labels(
+            MathTex("t", font_size=DEFAULT_FONT_SIZE * 1.4), ""
+        )
+        f_ax_label = f_ax.get_axis_labels(
+            MathTex("f", font_size=DEFAULT_FONT_SIZE * 1.4), ""
+        )
+        f_ax_label[0].next_to(f_ax.c2p(20, 0), RIGHT)
+        self.add(ax_group, time_ax_label, f_ax_label)
+        self.remove(radar.vgroup, tx_12, tx)
+
+        fs = 400
+        t_new = np.arange(0, 1, 1 / fs)
+        # N_new = t_new.size
+        fft_len = 2**14
+
+        f = 10
+
+        t_max = VT(0.1)
+
+        def get_sig():
+            sig = np.sin(2 * PI * f * t_new)
+            sig[(t_new > ~t_max / 2 + 0.5) | (t_new < 0.5 - ~t_max / 2)] = 0
+            return sig
+
+        def get_time_plot():
+            sig = get_sig()
+            f_sig = interp1d(t_new, sig, fill_value="extrapolate")
+            return time_ax.plot(
+                f_sig,
+                x_range=[0, 1, 1 / 400],
+                color=BLUE,
+                use_smoothing=False,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+
+        def get_fft_plot():
+            sig = get_sig()
+            X_k = 10 * np.log10(np.abs(fft(sig, fft_len)) / (t_new.size / 2)) + 30
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+            f_X_k = interp1d(freq, np.clip(fftshift(X_k), 0, None))
+            return f_ax.plot(
+                f_X_k,
+                x_range=[0, 20, 20 / 400],
+                color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+
+        time_plot = always_redraw(get_time_plot)
+        f_plot = always_redraw(get_fft_plot)
+        self.add(time_plot, f_plot)
+
+        time_label = Tex("Time", font_size=DEFAULT_FONT_SIZE * 1.5).next_to(
+            time_ax, UP, MED_LARGE_BUFF
+        )
+        bw_label = (
+            Tex("Bandwidth", font_size=DEFAULT_FONT_SIZE * 1.5)
+            .next_to(f_ax, UP, MED_LARGE_BUFF)
+            .set_y(time_label.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(ax_group, f_bw_group).width * 1.12
+                ).move_to(Group(ax_group, f_bw_group)),
+                AnimationGroup(Uncreate(bl_bez), Uncreate(br_bez)),
+                FadeOut(f_bw[0][:2], f_bw[0][-1]),
+                ReplacementTransform(f_bw[0][2], bw_label[0][0], path_arc=PI / 3),
+                AnimationGroup(Write(bw_label[0][1:]), Write(time_label)),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            bw_label.animate.set_color(ORANGE),
+            time_label.animate.set_color(BLUE),
+        )
+
+        self.wait(0.5)
+
+        self.play(t_max @ 1, run_time=4)
+
+        self.wait(0.5)
+
+        self.play(t_max @ 0.1, run_time=4)
+
+        self.wait(0.5)
+
+        time_bw_prod = MathTex(
+            r"\tau \approx \frac{1}{B}", font_size=DEFAULT_FONT_SIZE * 1.5
+        ).next_to(rres_eq, DOWN, LARGE_BUFF)
+
+        # self.play(TransformFromCopy(rres_eq[0][4], time_bw_prod[0][0], path_arc=PI / 3))
+        self.add(time_bw_prod[0][0])
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in time_bw_prod[0][1:]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                time_ax,
+                f_ax,
+                time_plot,
+                f_plot,
+                time_label,
+                bw_label,
+                time_ax_label,
+                f_ax_label,
+            ),
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(rres_eq, time_bw_prod).height * 2
+            ).move_to(Group(rres_eq, time_bw_prod)),
+        )
+
+        self.wait(0.5)
+
+        rres_eq_bw = MathTex(
+            r"\Delta R \approx \frac{c}{2 B}",
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        ).move_to(rres_eq)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                ReplacementTransform(rres_eq[0][:2], rres_eq_bw[0][:2]),
+                AnimationGroup(
+                    ReplacementTransform(time_bw_prod[0][1], rres_eq_bw[0][2]),
+                    FadeOut(rres_eq[0][2], shift=UP),
+                ),
+                ReplacementTransform(rres_eq[0][3], rres_eq_bw[0][3]),
+                ReplacementTransform(rres_eq[0][5], rres_eq_bw[0][4]),
+                FadeOut(rres_eq[0][4], shift=UP),
+                FadeOut(time_bw_prod[0][0], time_bw_prod[0][2:4]),
+                ReplacementTransform(
+                    time_bw_prod[0][-1], rres_eq_bw[0][-1], path_arc=PI / 3
+                ),
+                # ReplacementTransform(rres_eq[0][-2:], rres_eq_bw[0][-3:-1]),
+                ReplacementTransform(rres_eq[0][-1], rres_eq_bw[0][-2]),
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+        # self.add(index_labels(rres_eq[0]))
+
         self.wait(2)
 
 
-class FontTest(Scene):
-    def construct(self):
-        tex = Text("Hello", font="Maple Mono")
-        self.add(tex)
+class AngularResolution(Scene):
+    def construct(self): ...
+
+
+class VelocityResolution(Scene):
+    def construct(self): ...
+
+
+class TradeOff(Scene):
+    def construct(self): ...
