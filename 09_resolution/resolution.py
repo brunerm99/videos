@@ -17,11 +17,20 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+def compute_af_1d(weights, d_x, k_0, u, u_0):
+    n = np.arange(weights.size)
+    AF = np.sum(
+        weights[:, None] * np.exp(1j * n[:, None] * d_x * k_0 * (u - u_0)), axis=0
+    )
+    AF /= AF.max()
+    return AF
 
 
 class Intro(Scene):
@@ -1036,8 +1045,8 @@ class RangeResolution(MovingCameraScene):
             r"\tau \approx \frac{1}{B}", font_size=DEFAULT_FONT_SIZE * 1.5
         ).next_to(rres_eq, DOWN, LARGE_BUFF)
 
-        # self.play(TransformFromCopy(rres_eq[0][4], time_bw_prod[0][0], path_arc=PI / 3))
-        self.add(time_bw_prod[0][0])
+        self.play(TransformFromCopy(rres_eq[0][4], time_bw_prod[0][0], path_arc=PI / 3))
+        # self.add(time_bw_prod[0][0])
 
         self.wait(0.5)
 
@@ -1073,6 +1082,9 @@ class RangeResolution(MovingCameraScene):
             font_size=DEFAULT_FONT_SIZE * 1.5,
         ).move_to(rres_eq)
 
+        # self.remove(*rres_eq[0])
+        self.remove(*inequality[0], *inequality_rearr[0])
+
         self.next_section(skip_animations=skip_animations(False))
         self.play(
             LaggedStart(
@@ -1082,25 +1094,290 @@ class RangeResolution(MovingCameraScene):
                     FadeOut(rres_eq[0][2], shift=UP),
                 ),
                 ReplacementTransform(rres_eq[0][3], rres_eq_bw[0][3]),
-                ReplacementTransform(rres_eq[0][5], rres_eq_bw[0][4]),
                 FadeOut(rres_eq[0][4], shift=UP),
+                ReplacementTransform(rres_eq[0][5], rres_eq_bw[0][4]),
                 FadeOut(time_bw_prod[0][0], time_bw_prod[0][2:4]),
                 ReplacementTransform(
                     time_bw_prod[0][-1], rres_eq_bw[0][-1], path_arc=PI / 3
                 ),
                 # ReplacementTransform(rres_eq[0][-2:], rres_eq_bw[0][-3:-1]),
                 ReplacementTransform(rres_eq[0][-1], rres_eq_bw[0][-2]),
+                self.camera.frame.animate.move_to(rres_eq_bw),
                 lag_ratio=0.3,
             ),
             run_time=4,
         )
-        # self.add(index_labels(rres_eq[0]))
+
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(config.frame_height * 0.4).next_to(
+            rres_eq_bw, DOWN, LARGE_BUFF * 2
+        ).shift(LEFT * 5)
+
+        self.add(radar.vgroup)
+
+        beam_group = Group(radar.vgroup, rres_eq_bw)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(beam_group.height * 1.5)
+            .move_to(beam_group)
+            .set_x(rres_eq_bw.get_x())
+        )
+
+        self.wait(0.5)
+
+        target1_new = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .set_fill(TARGET1_COLOR)
+            .set_color(TARGET1_COLOR)
+            .next_to(radar.radome, RIGHT, LARGE_BUFF * 3)
+            .shift(UP * 1.5)
+        )
+        target2_new = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .set_fill(TARGET2_COLOR)
+            .set_color(TARGET2_COLOR)
+            .next_to(radar.radome, RIGHT, LARGE_BUFF * 1.5)
+            # .shift(DOWN)
+        )
+
+        r_min = -60
+
+        x_len = config.frame_height * 0.6
+        target_line = Line(
+            radar.radome.get_right(), Group(target1_new, target2_new).get_center()
+        )
+        polar_ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(target_line.get_angle())
+        )
+        polar_ax.shift(radar.radome.get_center() - polar_ax.c2p(0, 0))
+        radome_circ = (
+            radar.radome.copy()
+            .set_fill(color=BACKGROUND_COLOR, opacity=1)
+            .set_z_index(-1)
+        )
+        radar_box = (
+            Rectangle(
+                width=(
+                    radar.left_leg.get_edge_center(RIGHT)
+                    - radar.right_leg.get_edge_center(LEFT)
+                )[0],
+                height=radar.vgroup.height * 0.9,
+                fill_opacity=1,
+                fill_color=BACKGROUND_COLOR,
+                stroke_opacity=0,
+            )
+            .set_z_index(-1)
+            .move_to(radar.vgroup, DOWN)
+        )
+        self.add(radome_circ, radar_box)
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+        n_elem = 17  # Must be odd
+        n_elem_full = 51
+        weight_trackers = [VT(0) for _ in range(n_elem_full)]
+        X_weights = np.linspace(-n_elem / 2 + 1 / 2, n_elem / 2 - 1 / 2, n_elem)
+        for wt in weight_trackers[
+            n_elem_full // 2 - n_elem // 2 : n_elem_full // 2 + n_elem // 2
+        ]:
+            wt @= 1
+        theta_min = VT(-0.001)
+        theta_max = VT(0.001)
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+        fnbw = 2 * wavelength_0 / (n_elem * d_x)
+
+        theta_min = VT(0.01)
+        theta_max = VT(0.01)
+
+        X = np.linspace(-n_elem / 2 - 0.05, n_elem / 2 + 0.05, 2**10)
+
+        def get_f_window():
+            window = np.clip(signal.windows.kaiser(2**10, beta=3), 0, None)
+            f_window = interp1d(X, window, fill_value="extrapolate", kind="nearest")
+            return f_window
+
+        def get_ap_polar(polar_ax=polar_ax):
+            def updater():
+                u_0 = np.sin(~steering_angle * PI / 180)
+                # weights = np.array([~w for w in weight_trackers])
+                weights = np.array([get_f_window()(x) for x in X_weights])
+                AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+                AP = AF
+                AP = np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None)
+                # AP /= AP.max()
+                f_AP = interp1d(u * PI, AP, fill_value="extrapolate")
+                plot = polar_ax.plot_polar_graph(
+                    r_func=f_AP,
+                    theta_range=[~theta_min, ~theta_max, 1 / 400],
+                    color=TX_COLOR,
+                    use_smoothing=False,
+                ).set_z_index(-2)
+                return plot
+
+            return updater
+
+        AF_polar_plot = always_redraw(get_ap_polar())
+        self.add(AF_polar_plot)
+
+        self.play(
+            LaggedStart(
+                target2_new.shift(RIGHT * 18).animate.shift(LEFT * 18),
+                target1_new.shift(RIGHT * 18).animate.shift(LEFT * 18),
+                AnimationGroup(theta_min @ (-PI), theta_max @ (PI)),
+                lag_ratio=0.4,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        target1_bez = CubicBezier(
+            target1_new.get_top() + [0, 0.1, 0],
+            target1_new.get_top() + [0, 1, 0],
+            rres_eq_bw.copy().shift(RIGHT * 2.5).get_left() + [-1, 0, 0],
+            rres_eq_bw.copy().shift(RIGHT * 2.5).get_left() + [-0.1, 0, 0],
+        )
+        target2_bez = CubicBezier(
+            target2_new.get_top() + [0, 0.1, 0],
+            target2_new.get_top() + [0, 3, 0],
+            rres_eq_bw.copy().shift(RIGHT * 2.5).get_left() + [-1, 0, 0],
+            rres_eq_bw.copy().shift(RIGHT * 2.5).get_left() + [-0.1, 0, 0],
+        )
+        self.play(
+            Create(target1_bez),
+            Create(target2_bez),
+            rres_eq_bw.animate.shift(RIGHT * 2.5),
+        )
+
+        self.wait(0.5)
+
+        self.play(steering_angle - 10)
+
+        self.wait(0.5)
+
+        self.play(steering_angle + 20)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    radar.vgroup,
+                    radar_box,
+                    radome_circ,
+                    target1_new,
+                    target1_bez,
+                    target2_new,
+                    target2_bez,
+                    rres_eq_bw,
+                ),
+                AnimationGroup(
+                    steering_angle @ 0,
+                    polar_ax.animate.rotate(-target_line.get_angle() + PI / 2).shift(
+                        -polar_ax.c2p(0, 0)
+                    ),
+                    self.camera.frame.animate.scale_to_fit_width(
+                        config.frame_width
+                    ).move_to(ORIGIN),
+                ),
+                lag_ratio=0.5,
+            )
+        )
 
         self.wait(2)
 
 
 class AngularResolution(Scene):
-    def construct(self): ...
+    def construct(self):
+        r_min = -60
+
+        x_len = config.frame_height * 0.6
+        polar_ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(PI / 2)
+        )
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+        n_elem = 17  # Must be odd
+        n_elem_full = 51
+        weight_trackers = [VT(0) for _ in range(n_elem_full)]
+        X_weights = np.linspace(-n_elem / 2 + 1 / 2, n_elem / 2 - 1 / 2, n_elem)
+        for wt in weight_trackers[
+            n_elem_full // 2 - n_elem // 2 : n_elem_full // 2 + n_elem // 2
+        ]:
+            wt @= 1
+        theta_min = VT(-0.001)
+        theta_max = VT(0.001)
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+        fnbw = 2 * wavelength_0 / (n_elem * d_x)
+
+        theta_min = VT(-PI)
+        theta_max = VT(PI)
+
+        X = np.linspace(-n_elem / 2 - 0.05, n_elem / 2 + 0.05, 2**10)
+
+        def get_f_window():
+            window = np.clip(signal.windows.kaiser(2**10, beta=3), 0, None)
+            f_window = interp1d(X, window, fill_value="extrapolate", kind="nearest")
+            return f_window
+
+        def get_ap_polar(polar_ax=polar_ax):
+            def updater():
+                u_0 = np.sin(~steering_angle * PI / 180)
+                # weights = np.array([~w for w in weight_trackers])
+                weights = np.array([get_f_window()(x) for x in X_weights])
+                AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+                AP = AF
+                AP = np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None)
+                # AP /= AP.max()
+                f_AP = interp1d(u * PI, AP, fill_value="extrapolate")
+                plot = polar_ax.plot_polar_graph(
+                    r_func=f_AP,
+                    theta_range=[~theta_min, ~theta_max, 1 / 400],
+                    color=TX_COLOR,
+                    use_smoothing=False,
+                ).set_z_index(-2)
+                return plot
+
+            return updater
+
+        AF_polar_plot = always_redraw(get_ap_polar())
+        self.add(AF_polar_plot)
 
 
 class VelocityResolution(Scene):
