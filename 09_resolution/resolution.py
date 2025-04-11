@@ -8,11 +8,16 @@ from scipy.constants import c
 from scipy.interpolate import interp1d
 import sys
 from MF_Tools import VT, TransformByGlyphMap
-from numpy.fft import fft, fftshift
+from numpy.fft import fft, fftshift, fft2
+
+import matplotlib
+
+matplotlib.use("Agg")
+from matplotlib.pyplot import get_cmap
 
 sys.path.insert(0, "..")
 
-from props import WeatherRadarTower
+from props import WeatherRadarTower, VideoMobject
 from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
@@ -31,6 +36,39 @@ def compute_af_1d(weights, d_x, k_0, u, u_0):
     )
     AF /= AF.max()
     return AF
+
+
+def compute_phase_diff(v):
+    time_from_vel = 2 * (v * Tc) / c
+    return 2 * PI * f * time_from_vel
+
+
+def compute_f_beat(R):
+    return (2 * R * bw) / (c * Tc)
+
+
+def db_to_lin(x):
+    return 10 ** (x / 10)
+
+
+# Radar setup for doppler stuff
+f = 77e9  # Hz
+Tc = 40e-6  # chirp time - s
+bw = 1.6e9  # bandwidth - Hz
+chirp_rate = bw / Tc  # Hz/s
+
+wavelength = c / f
+M = 40  # number of chirps in coherent processing interval (CPI)
+
+# Target
+R = 20  # m
+v = 10  # m/s
+f_beat = compute_f_beat(R)
+phase_diff = compute_phase_diff(v)
+max_time = 15 / f_beat
+N = 10000
+Ts = max_time / N
+fs = 1 / Ts
 
 
 class Intro(Scene):
@@ -1380,9 +1418,1134 @@ class AngularResolution(Scene):
         self.add(AF_polar_plot)
 
 
-class VelocityResolution(Scene):
-    def construct(self): ...
+class VelocityResolution(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        title = Text(
+            "Velocity Resolution", font_size=DEFAULT_FONT_SIZE * 1, font="Maple Mono"
+        )
+
+        self.play(
+            title.next_to(self.camera.frame.get_bottom(), DOWN).animate.move_to(ORIGIN)
+        )
+
+        self.wait(0.5)
+
+        TARGET1_COLOR = GREEN
+        TARGET2_COLOR = BLUE
+        car1 = (
+            SVGMobject("../props/static/car.svg")
+            .to_edge(LEFT, LARGE_BUFF)
+            .shift(UP * 1.5)
+            .set_fill(TARGET1_COLOR)
+            .scale(0.8)
+        )
+        car2 = (
+            SVGMobject("../props/static/car.svg")
+            .to_edge(LEFT, LARGE_BUFF * 0.3)
+            .shift(DOWN * 1.5)
+            .set_fill(TARGET2_COLOR)
+            .scale(0.8)
+        )
+
+        self.play(
+            LaggedStart(
+                title.animate.next_to(self.camera.frame.get_top(), UP),
+                car1.shift(LEFT * 10).animate.shift(RIGHT * 10),
+                car2.shift(LEFT * 10).animate.shift(RIGHT * 10),
+                lag_ratio=0.3,
+            )
+        )
+        self.remove(title)
+
+        self.wait(0.5)
+
+        vel1_dot = Dot(color=TARGET1_COLOR).next_to(car1, DOWN, SMALL_BUFF)
+        vel1_arrow = Arrow(
+            vel1_dot.get_center(),
+            vel1_dot.get_center() + RIGHT * 2,
+            buff=0,
+            color=TARGET1_COLOR,
+        )
+        vel1_label = MathTex(
+            r"v_1 = 100 \text{km} / \text{hr}", color=TARGET1_COLOR
+        ).next_to(vel1_arrow, DOWN, SMALL_BUFF)
+        vel2_dot = Dot(color=TARGET2_COLOR).next_to(car2, DOWN, SMALL_BUFF)
+        vel2_arrow = Arrow(
+            vel2_dot.get_center(),
+            vel2_dot.get_center() + RIGHT * 2.2,
+            buff=0,
+            color=TARGET2_COLOR,
+        )
+        vel2_label = MathTex(
+            r"v_2 = 105 \text{km} / \text{hr}", color=TARGET2_COLOR
+        ).next_to(vel2_arrow, DOWN, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(vel1_dot), Create(vel2_dot)),
+                AnimationGroup(GrowArrow(vel1_arrow), GrowArrow(vel2_arrow)),
+                AnimationGroup(Write(vel1_label[0][:2]), Write(vel2_label[0][:2])),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Write(vel1_label[0][2:]),
+                Write(vel2_label[0][2:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        t = np.arange(0, max_time, 1 / fs)
+
+        window = signal.windows.blackman(N)
+        fft_len = N * 8
+        max_vel = wavelength / (4 * Tc)
+        vel_res = wavelength / (2 * M * Tc)
+        rmax = c * Tc * fs / (2 * bw)
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+
+        target2_pos = VT(17)
+
+        def plot_rd():
+            targets = [(20, 8, 0), (~target2_pos, 10, 0)]
+            cpi = np.array(
+                [
+                    (
+                        np.sum(
+                            [
+                                np.sin(
+                                    2 * PI * compute_f_beat(r) * t
+                                    + m * compute_phase_diff(v)
+                                )
+                                * db_to_lin(p)
+                                for r, v, p in targets
+                            ],
+                            axis=0,
+                        )
+                        + np.random.normal(0, 0.1, N)
+                    )
+                    * window
+                    for m in range(M)
+                ]
+            )
+
+            ranges_n = np.linspace(-rmax / 2, rmax / 2, N)
+            range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+            range_doppler = range_doppler[(ranges_n >= 0) & (ranges_n <= 40), :]
+            range_doppler -= range_doppler.min()
+            range_doppler /= range_doppler.max()
+
+            cmap = get_cmap("viridis")
+            range_doppler_fmt = np.uint8(cmap(10 * np.log10(range_doppler + 1)) * 255)
+            range_doppler_fmt[range_doppler < 0.05] = [0, 0, 0, 0]
+
+            rd_img = (
+                ImageMobject(range_doppler_fmt, image_mode="RGBA")
+                .stretch_to_fit_width(config.frame_width * 0.4)
+                .stretch_to_fit_height(config.frame_width * 0.4)
+                .to_edge(RIGHT, LARGE_BUFF)
+            )
+            rd_img.set_resampling_algorithm(RESAMPLING_ALGORITHMS["box"])
+            return rd_img
+
+        rd_img = always_redraw(plot_rd)
+
+        rd_ax = Axes(
+            x_range=[-0.5, 10, 2],
+            y_range=[-0.5, 10, 2],
+            tips=False,
+            x_length=rd_img.width,
+            y_length=rd_img.height,
+            axis_config=dict(stroke_width=DEFAULT_STROKE_WIDTH * 1.2),
+        )
+        rd_ax.shift(rd_img.get_corner(DL) - rd_ax.c2p(0, 0))
+        range_label = (
+            Text("Range", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.5)
+            .rotate(PI / 2)
+            .next_to(rd_ax.c2p(0, 5), LEFT)
+        )
+        vel_label = Text(
+            "Velocity", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(rd_ax.c2p(5, 0), DOWN)
+
+        self.play(
+            FadeIn(rd_img),
+            Create(rd_ax),
+            Write(vel_label),
+            Write(range_label),
+        )
+
+        self.play(
+            Group(car2, vel2_arrow, vel2_dot, vel2_label)
+            .animate(run_time=6)
+            .shift(RIGHT * (LARGE_BUFF * 1.4)),
+            target2_pos + 6,
+            run_time=8,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate(
+                run_time=0.5, rate_func=rate_functions.ease_in_sine
+            ).shift(DOWN * config.frame_height)
+        )
+
+        self.wait(2)
+
+
+class SigProc(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(config.frame_height * 0.4).to_corner(
+            DL, LARGE_BUFF
+        ).shift(RIGHT * 4).set_z_index(3)
+
+        self.play(radar.vgroup.shift(LEFT * 10).animate.shift(RIGHT * 10))
+
+        self.wait(0.5)
+
+        sigproc = (
+            Rectangle(
+                height=radar.vgroup.height * 1.2,
+                width=radar.vgroup.width * 2,
+                color=BLUE,
+                fill_opacity=1,
+                fill_color=BACKGROUND_COLOR,
+            )
+            .next_to(radar.vgroup, LEFT, LARGE_BUFF, DOWN)
+            .set_z_index(-2)
+        )
+        sigproc_right_box = (
+            Rectangle(
+                height=radar.vgroup.height * 1.2,
+                width=radar.vgroup.width * 2,
+                stroke_opacity=0,
+                fill_opacity=1,
+                fill_color=BACKGROUND_COLOR,
+            )
+            .next_to(sigproc, RIGHT, 0.02)
+            .set_z_index(1)
+        )
+        sigproc_conn = CubicBezier(
+            radar.radome.get_left(),
+            radar.radome.get_left() + [-1, 0, 0],
+            sigproc.get_corner(UR) + [1, -0.3, 0],
+            sigproc.get_corner(UR) + [0, -0.3, 0],
+        ).set_z_index(2)
+        proc_label = Text(
+            "Processor",
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+            font="Maple Mono",
+        ).next_to(sigproc, UP)
+        sig_label = Text(
+            "Signal",
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+            font="Maple Mono",
+        ).next_to(proc_label, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                Create(sigproc_conn),
+                Create(sigproc),
+                AnimationGroup(Write(sig_label), Write(proc_label)),
+            )
+        )
+        self.add(sigproc_right_box)
+
+        self.wait(0.5)
+
+        TARGET1_COLOR = RED
+        TARGET2_COLOR = PURPLE
+        target1 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .to_edge(RIGHT, LARGE_BUFF * 2)
+            .shift(UP / 2)
+            .set_fill(TARGET1_COLOR)
+            .set_color(TARGET1_COLOR)
+        )
+        target2 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .to_edge(RIGHT, LARGE_BUFF * 1.3)
+            .shift(DOWN)
+            .set_fill(TARGET2_COLOR)
+            .set_color(TARGET2_COLOR)
+        )
+
+        ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=config.frame_width * 0.8,
+                y_length=radar.radome.height,
+            )
+            .set_opacity(0)
+            .next_to(radar.radome, RIGHT, 0)
+        )
+        target1_line = Line(target1.get_left(), radar.radome.get_right())
+        target1_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=target1_line.get_length(),
+                y_length=radar.radome.height,
+            )
+            .rotate(target1_line.get_angle())
+            .set_opacity(0)
+        )
+        target1_ax.shift(target1.get_left() - target1_ax.c2p(0, 0))
+
+        target2_line = Line(target2.get_left(), radar.radome.get_right())
+        target2_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=target2_line.get_length(),
+                y_length=radar.radome.height,
+            )
+            .rotate(target2_line.get_angle())
+            .set_opacity(0)
+        )
+        target2_ax.shift(target2.get_left() - target2_ax.c2p(0, 0))
+        # self.add(target1_ax)
+        # self.add(ax, target)
+        pw = 0.2
+        f = 10
+
+        xmax1 = VT(0)
+        xmax1_t1 = VT(0)
+        xmax1_t2 = VT(0)
+        tx1 = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax1 - pw), ~xmax1, 1 / 200],
+                color=TX_COLOR,
+            )
+        )
+        rx1_1 = always_redraw(
+            lambda: target1_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax1_t1 - pw), min(~xmax1_t1, 1), 1 / 200],
+                color=TARGET1_COLOR,
+            )
+        )
+        rx1_2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax1_t2 - pw), min(~xmax1_t2, 1), 1 / 200],
+                color=TARGET2_COLOR,
+            )
+        )
+
+        xmax2 = VT(0)
+        xmax2_t1 = VT(0)
+        xmax2_t2 = VT(0)
+        tx2 = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax2 - pw), ~xmax2, 1 / 200],
+                color=TX_COLOR,
+            )
+        )
+        rx2_1 = always_redraw(
+            lambda: target1_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax2_t1 - pw), min(~xmax2_t1, 1), 1 / 200],
+                color=TARGET1_COLOR,
+            )
+        )
+        rx2_2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax2_t2 - pw), min(~xmax2_t2, 1), 1 / 200],
+                color=TARGET2_COLOR,
+            )
+        )
+
+        xmax3 = VT(0)
+        xmax3_t1 = VT(0)
+        xmax3_t2 = VT(0)
+        tx3 = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax3 - pw), ~xmax3, 1 / 200],
+                color=TX_COLOR,
+            )
+        )
+        rx3_1 = always_redraw(
+            lambda: target1_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax3_t1 - pw), min(~xmax3_t1, 1), 1 / 200],
+                color=TARGET1_COLOR,
+            )
+        )
+        rx3_2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax3_t2 - pw), min(~xmax3_t2, 1), 1 / 200],
+                color=TARGET2_COLOR,
+            )
+        )
+
+        xmax4 = VT(0)
+        xmax4_t1 = VT(0)
+        xmax4_t2 = VT(0)
+        tx4 = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax4 - pw), ~xmax4, 1 / 200],
+                color=TX_COLOR,
+            )
+        )
+        rx4_1 = always_redraw(
+            lambda: target1_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax4_t1 - pw), min(~xmax4_t1, 1), 1 / 200],
+                color=TARGET1_COLOR,
+            )
+        )
+        rx4_2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax4_t2 - pw), min(~xmax4_t2, 1), 1 / 200],
+                color=TARGET2_COLOR,
+            )
+        )
+
+        xmax5 = VT(0)
+        xmax5_t1 = VT(0)
+        xmax5_t2 = VT(0)
+        tx5 = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax5 - pw), ~xmax5, 1 / 200],
+                color=TX_COLOR,
+            )
+        )
+        rx5_1 = always_redraw(
+            lambda: target1_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax5_t1 - pw), min(~xmax5_t1, 1), 1 / 200],
+                color=TARGET1_COLOR,
+            )
+        )
+        rx5_2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax5_t2 - pw), min(~xmax5_t2, 1), 1 / 200],
+                color=TARGET2_COLOR,
+            )
+        )
+
+        self.add(
+            tx1,
+            tx2,
+            tx3,
+            tx4,
+            tx5,
+            rx1_1,
+            rx2_1,
+            rx3_1,
+            rx4_1,
+            rx5_1,
+            rx1_2,
+            rx2_2,
+            rx3_2,
+            rx4_2,
+            rx5_2,
+        )
+
+        self.play(
+            LaggedStart(
+                target1.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        data1 = Dot(color=ORANGE).move_to(sigproc_conn.get_start()).set_z_index(2)
+        data2 = Dot(color=ORANGE).move_to(sigproc_conn.get_start()).set_z_index(2)
+        data3 = Dot(color=ORANGE).move_to(sigproc_conn.get_start()).set_z_index(2)
+        data4 = Dot(color=ORANGE).move_to(sigproc_conn.get_start()).set_z_index(2)
+        data5 = Dot(color=ORANGE).move_to(sigproc_conn.get_start()).set_z_index(2)
+        self.add(data1, data2, data3, data4, data5)
+
+        t = np.arange(0, max_time, 1 / fs)
+
+        window = signal.windows.blackman(N)
+        fft_len = N * 8
+        rmax = c * Tc * fs / (2 * bw)
+
+        targets = [(20, 8, 0), (12, 20, -3)]
+        cpi = np.array(
+            [
+                (
+                    np.sum(
+                        [
+                            np.sin(
+                                2 * PI * compute_f_beat(r) * t
+                                + m * compute_phase_diff(v)
+                            )
+                            * db_to_lin(p)
+                            for r, v, p in targets
+                        ],
+                        axis=0,
+                    )
+                    + np.random.normal(0, 0.1, N)
+                )
+                # * window
+                for m in range(M)
+            ]
+        )
+        cpi -= cpi.min()
+        cpi /= cpi.max()
+
+        ax1 = (
+            Axes(
+                x_range=[0, max_time / 2, max_time],
+                y_range=[0, 1, 2],
+                tips=False,
+                x_length=sigproc.width * 0.9,
+                y_length=sigproc.height / 5 * 0.8,
+            )
+            .set_z_index(2)
+            .set_opacity(0)
+        )
+        ax2 = (
+            Axes(
+                x_range=[0, max_time / 2, max_time],
+                y_range=[0, 1, 2],
+                tips=False,
+                x_length=sigproc.width * 0.9,
+                y_length=sigproc.height / 5 * 0.8,
+            )
+            .set_z_index(2)
+            .set_opacity(0)
+        )
+        ax3 = (
+            Axes(
+                x_range=[0, max_time / 2, max_time],
+                y_range=[0, 1, 2],
+                tips=False,
+                x_length=sigproc.width * 0.9,
+                y_length=sigproc.height / 5 * 0.8,
+            )
+            .set_z_index(2)
+            .set_opacity(0)
+        )
+        ax4 = (
+            Axes(
+                x_range=[0, max_time / 2, max_time],
+                y_range=[0, 1, 2],
+                tips=False,
+                x_length=sigproc.width * 0.9,
+                y_length=sigproc.height / 5 * 0.8,
+            )
+            .set_z_index(2)
+            .set_opacity(0)
+        )
+        ax5 = (
+            Axes(
+                x_range=[0, max_time / 2, max_time],
+                y_range=[0, 1, 2],
+                tips=False,
+                x_length=sigproc.width * 0.9,
+                y_length=sigproc.height / 5 * 0.8,
+            )
+            .set_z_index(2)
+            .set_opacity(0)
+        )
+        axes = (
+            Group(ax1, ax2, ax3, ax4, ax5)
+            .arrange(DOWN, SMALL_BUFF * 0.5)
+            .move_to(sigproc)
+        )
+        plot1 = (
+            ax1.plot(
+                interp1d(t, cpi[0], fill_value="extrapolate"),
+                x_range=[0, max_time / 2, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            )
+            .shift(RIGHT * sigproc.width)
+            .set_z_index(-2)
+        )
+        plot2 = (
+            ax2.plot(
+                interp1d(t, cpi[1], fill_value="extrapolate"),
+                x_range=[0, max_time / 2, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            )
+            .shift(RIGHT * sigproc.width)
+            .set_z_index(-2)
+        )
+        plot3 = (
+            ax3.plot(
+                interp1d(t, cpi[2], fill_value="extrapolate"),
+                x_range=[0, max_time / 2, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            )
+            .shift(RIGHT * sigproc.width)
+            .set_z_index(-2)
+        )
+        plot4 = (
+            ax4.plot(
+                interp1d(t, cpi[3], fill_value="extrapolate"),
+                x_range=[0, max_time / 2, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            )
+            .shift(RIGHT * sigproc.width)
+            .set_z_index(-2)
+        )
+        plot5 = (
+            ax5.plot(
+                interp1d(t, cpi[4], fill_value="extrapolate"),
+                x_range=[0, max_time / 2, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            )
+            .shift(RIGHT * sigproc.width)
+            .set_z_index(-2)
+        )
+        self.add(axes, plot1, plot2, plot3, plot4, plot5)
+
+        target_dist = abs(
+            (ax.p2c(target1.get_left()[0]) - ax.p2c(target2.get_left()[0]))[0]
+        )
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    LaggedStart(
+                        xmax1 @ (1 + pw),
+                        LaggedStart(
+                            xmax1_t1 @ (1 + pw + target_dist),
+                            xmax1_t2 @ (1 + pw),
+                            lag_ratio=0.2,
+                        ),
+                        lag_ratio=0.35,
+                        run_time=2.5,
+                    ),
+                    MoveAlongPath(data1, sigproc_conn),
+                    plot1.set_z_index(-2).animate.shift(LEFT * sigproc.width),
+                    lag_ratio=0.6,
+                ),
+                LaggedStart(
+                    LaggedStart(
+                        xmax2 @ (1 + pw),
+                        LaggedStart(
+                            xmax2_t1 @ (1 + pw + target_dist),
+                            xmax2_t2 @ (1 + pw),
+                            lag_ratio=0.2,
+                        ),
+                        lag_ratio=0.35,
+                        run_time=2.5,
+                    ),
+                    MoveAlongPath(data2, sigproc_conn),
+                    plot2.set_z_index(-2).animate.shift(LEFT * sigproc.width),
+                    lag_ratio=0.6,
+                ),
+                LaggedStart(
+                    LaggedStart(
+                        xmax3 @ (1 + pw),
+                        LaggedStart(
+                            xmax3_t1 @ (1 + pw + target_dist),
+                            xmax3_t2 @ (1 + pw),
+                            lag_ratio=0.2,
+                        ),
+                        lag_ratio=0.35,
+                        run_time=2.5,
+                    ),
+                    MoveAlongPath(data3, sigproc_conn),
+                    plot3.set_z_index(-2).animate.shift(LEFT * sigproc.width),
+                    lag_ratio=0.6,
+                ),
+                LaggedStart(
+                    LaggedStart(
+                        xmax4 @ (1 + pw),
+                        LaggedStart(
+                            xmax4_t1 @ (1 + pw + target_dist),
+                            xmax4_t2 @ (1 + pw),
+                            lag_ratio=0.2,
+                        ),
+                        lag_ratio=0.35,
+                        run_time=2.5,
+                    ),
+                    MoveAlongPath(data4, sigproc_conn),
+                    plot4.set_z_index(-2).animate.shift(LEFT * sigproc.width),
+                    lag_ratio=0.6,
+                ),
+                LaggedStart(
+                    LaggedStart(
+                        xmax5 @ (1 + pw),
+                        LaggedStart(
+                            xmax5_t1 @ (1 + pw + target_dist),
+                            xmax5_t2 @ (1 + pw),
+                            lag_ratio=0.2,
+                        ),
+                        lag_ratio=0.35,
+                        run_time=2.5,
+                    ),
+                    MoveAlongPath(data5, sigproc_conn),
+                    plot5.set_z_index(-2).animate.shift(LEFT * sigproc.width),
+                    lag_ratio=0.6,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        self.play(FadeOut(data1, data2, data3, data4, data5))
+
+        self.wait(0.5)
+
+        sigproc_new = (
+            sigproc.copy()
+            .stretch_to_fit_width(config.frame_width * 0.9)
+            .stretch_to_fit_height(config.frame_height * 0.85)
+            .move_to(sigproc, UR)
+        )
+        sigproc_label = Text(
+            "Signal Processor",
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+            font="Maple Mono",
+        ).next_to(sigproc_new, UP, SMALL_BUFF)
+        plots = Group(plot1, plot2, plot3, plot4, plot5)
+
+        cpi_xmax = VT(max_time / 2)
+
+        plot1_ud = always_redraw(
+            lambda: ax1.plot(
+                interp1d(t, cpi[0], fill_value="extrapolate"),
+                x_range=[0, ~cpi_xmax, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            ).set_z_index(1)
+        )
+        plot2_ud = always_redraw(
+            lambda: ax2.plot(
+                interp1d(t, cpi[1], fill_value="extrapolate"),
+                x_range=[0, ~cpi_xmax, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            ).set_z_index(1)
+        )
+        plot3_ud = always_redraw(
+            lambda: ax3.plot(
+                interp1d(t, cpi[2], fill_value="extrapolate"),
+                x_range=[0, ~cpi_xmax, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            ).set_z_index(1)
+        )
+        plot4_ud = always_redraw(
+            lambda: ax4.plot(
+                interp1d(t, cpi[3], fill_value="extrapolate"),
+                x_range=[0, ~cpi_xmax, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            ).set_z_index(1)
+        )
+        plot5_ud = always_redraw(
+            lambda: ax5.plot(
+                interp1d(t, cpi[4], fill_value="extrapolate"),
+                x_range=[0, ~cpi_xmax, max_time / 200],
+                color=ORANGE,
+                use_smoothing=True,
+            ).set_z_index(1)
+        )
+        self.add(plot1_ud, plot2_ud, plot3_ud, plot4_ud, plot5_ud)
+        self.remove(plot1, plot2, plot3, plot4, plot5)
+
+        self.play(
+            Transform(sigproc, sigproc_new),
+            self.camera.frame.animate.move_to(sigproc_new, DOWN).shift(DOWN / 3),
+            ReplacementTransform(sig_label, sigproc_label[:7]),
+            ReplacementTransform(proc_label, sigproc_label[7:]),
+            axes.animate.scale_to_fit_height(sigproc_new.height * 0.8).move_to(
+                sigproc_new
+            ),
+        )
+
+        self.wait(0.5)
+
+        num_samples = 10
+        sample_rects1 = ax1.get_riemann_rectangles(
+            plot1,
+            input_sample_type="center",
+            x_range=[0, max_time / 2],
+            dx=max_time / (2 * num_samples),
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+        sample_rects2 = ax2.get_riemann_rectangles(
+            plot2,
+            input_sample_type="center",
+            x_range=[0, max_time / 2],
+            dx=max_time / (2 * num_samples),
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+        sample_rects3 = ax3.get_riemann_rectangles(
+            plot3,
+            input_sample_type="center",
+            x_range=[0, max_time / 2],
+            dx=max_time / (2 * num_samples),
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+        sample_rects4 = ax4.get_riemann_rectangles(
+            plot4,
+            input_sample_type="center",
+            x_range=[0, max_time / 2],
+            dx=max_time / (2 * num_samples),
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+        sample_rects5 = ax5.get_riemann_rectangles(
+            plot5,
+            input_sample_type="center",
+            x_range=[0, max_time / 2],
+            dx=max_time / (2 * num_samples),
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        ).set_z_index(1)
+
+        colors = [
+            ManimColor.from_hex("#00FFFF"),
+            ManimColor.from_hex("#CCFF00"),
+            ManimColor.from_hex("#FF69B4"),
+            ManimColor.from_hex("#FFA500"),
+            ManimColor.from_hex("#FF3333"),
+            ManimColor.from_hex("#FFFF00"),
+            ManimColor.from_hex("#BF00FF"),
+            ManimColor.from_hex("#00BFFF"),
+            ManimColor.from_hex("#FFFFFF"),
+            ManimColor.from_hex("#FFDAB9"),
+        ]
+        colors_pastel = [
+            ManimColor.from_hex("#A8E6CF"),
+            ManimColor.from_hex("#DCE775"),
+            ManimColor.from_hex("#FFB3BA"),
+            ManimColor.from_hex("#FFD580"),
+            ManimColor.from_hex("#FF9AA2"),
+            ManimColor.from_hex("#FFFFB3"),
+            ManimColor.from_hex("#D5AAFF"),
+            ManimColor.from_hex("#B3E5FC"),
+            ManimColor.from_hex("#F8F8FF"),
+            ManimColor.from_hex("#FFE5B4"),
+        ]
+        colors_vibrant = [
+            ManimColor.from_hex("#4DD0E1"),
+            ManimColor.from_hex("#81C784"),
+            ManimColor.from_hex("#FFD54F"),
+            ManimColor.from_hex("#FF8A65"),
+            ManimColor.from_hex("#BA68C8"),
+            ManimColor.from_hex("#4FC3F7"),
+            ManimColor.from_hex("#AED581"),
+            ManimColor.from_hex("#FFF176"),
+            ManimColor.from_hex("#64B5F6"),
+            ManimColor.from_hex("#FFB74D"),
+        ]
+        sample_rects_all = VGroup(
+            [
+                sample_rects1,
+                sample_rects2,
+                sample_rects3,
+                sample_rects4,
+                sample_rects5,
+            ]
+        )
+        for sample_rects in sample_rects_all:
+            for sample_rect, color in zip(sample_rects, colors_vibrant):
+                sample_rect.set_fill(color=color)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(*[FadeIn(sr) for sr in srs], lag_ratio=0.15)
+                    for srs in sample_rects_all
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        down_arrow = Arrow(
+            sample_rects_all[0][0].get_center(),
+            sample_rects_all[-1][0].get_center(),
+            buff=0,
+        ).set_z_index(3)
+
+        phis = Group(
+            *[
+                MathTex(r"0").next_to(srs[0], LEFT)
+                if n == 0
+                else MathTex(r"\phi").next_to(srs[0], LEFT)
+                if n == 1
+                else MathTex(f"{n}\\phi").next_to(srs[0], LEFT)
+                for n, srs in enumerate(sample_rects_all)
+            ]
+        )
+
+        self.play(
+            GrowArrow(down_arrow),
+            LaggedStart(*[GrowFromCenter(phi) for phi in phis], lag_ratio=0.2),
+        )
+
+        self.wait(0.5)
+
+        fft_arrow = Arrow(
+            self.camera.frame.get_center() + LEFT * 0.4,
+            self.camera.frame.get_center() + RIGHT,
+            buff=0,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+        )
+        fft_label = MathTex(r"\mathcal{F}").next_to(fft_arrow, UP)
+        fft_line_top = CubicBezier(
+            sample_rects_all[0][0].get_corner(UR) + [0.1, 0, 0],
+            sample_rects_all[0][0].get_corner(UR) + [1, 0, 0],
+            fft_arrow.get_left() + [-1, 0, 0],
+            fft_arrow.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH,
+        )
+        fft_line_bot = CubicBezier(
+            sample_rects_all[-1][0].get_corner(DR) + [0.1, 0, 0],
+            sample_rects_all[-1][0].get_corner(DR) + [1, 0, 0],
+            fft_arrow.get_left() + [-1, 0, 0],
+            fft_arrow.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH,
+        )
+
+        self.play(
+            cpi_xmax @ (max_time / (num_samples * 2)),
+            *[
+                LaggedStart(
+                    *[sr.animate.set_opacity(0) for sr in srs[1:][::-1]], lag_ratio=0.15
+                )
+                for srs in sample_rects_all
+            ],
+            FadeOut(down_arrow),
+        )
+
+        self.wait(0.5)
+
+        vel_ax = Axes(
+            x_range=[0, 20, 5],
+            y_range=[0, 30, 10],
+            tips=False,
+            x_length=config.frame_width * 0.3,
+            y_length=config.frame_height * 0.4,
+        ).next_to(fft_arrow, RIGHT, MED_LARGE_BUFF)
+
+        fs_new = 400
+        t_new = np.arange(0, 1, 1 / fs_new)
+        fft_len = 2**14
+
+        f1 = 9
+        f2 = 15
+
+        np.random.seed(0)
+        window_new = signal.windows.kaiser(t_new.size, beta=3)
+
+        def get_sig():
+            sig = (
+                np.sin(2 * PI * f1 * t_new)
+                + 0.4 * np.sin(2 * PI * f2 * t_new)
+                + np.random.normal(0, 0.3, t_new.size)
+            ) * window_new
+            return sig
+
+        def get_fft_plot():
+            sig = get_sig()
+            X_k = 10 * np.log10(np.abs(fft(sig, fft_len)) / (t_new.size / 2)) + 30
+            freq = np.linspace(-fs_new / 2, fs_new / 2, fft_len)
+            f_X_k = interp1d(freq, np.clip(fftshift(X_k), 0, None))
+            return vel_ax.plot(
+                f_X_k,
+                x_range=[0, 20, 20 / 400],
+                color=ORANGE,
+                # stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+
+        vel_plot = get_fft_plot()
+        vel_ax_y_label = (
+            Text("Magnitude", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.4)
+            .rotate(PI / 2)
+            .next_to(vel_ax, LEFT, SMALL_BUFF)
+        )
+        vel_ax_x_label = Text(
+            "Velocity", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.4
+        ).next_to(vel_ax, DOWN, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(fft_line_top),
+                    Create(fft_line_bot),
+                ),
+                AnimationGroup(GrowArrow(fft_arrow), Write(fft_label)),
+                LaggedStart(
+                    Create(vel_ax),
+                    AnimationGroup(Write(vel_ax_y_label), Write(vel_ax_x_label)),
+                    Create(vel_plot),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        doppler_thumbnail = (
+            ImageMobject(
+                "../04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_1.png"
+            )
+            .scale_to_fit_width(config.frame_width * 0.7)
+            .move_to(self.camera.frame)
+        ).set_z_index(5)
+        thumbnail_box = SurroundingRectangle(
+            doppler_thumbnail, color=RED, buff=0
+        ).set_z_index(5)
+        thumbnail = Group(doppler_thumbnail, thumbnail_box)
+
+        self.play(
+            thumbnail.next_to(self.camera.frame, DOWN).animate.move_to(
+                self.camera.frame
+            )
+        )
+
+        self.wait(0.5)
+
+        axes_copy = axes.copy().next_to(
+            self.camera.frame.get_left(), RIGHT, LARGE_BUFF * 2
+        )
+
+        self.play(
+            LaggedStart(
+                thumbnail.animate.shift(UP * 10),
+                FadeOut(
+                    phis,
+                    sigproc,
+                    sigproc_label,
+                    fft_line_top,
+                    fft_line_bot,
+                    fft_arrow,
+                    fft_label,
+                    sigproc_conn,
+                ),
+                axes.animate.move_to(axes_copy),
+                sample_rects_all.animate.shift(
+                    axes_copy.get_center() - axes.get_center()
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            cpi_xmax @ (max_time / 2),
+            *[
+                LaggedStart(
+                    *[
+                        sr.animate.set_stroke(opacity=1).set_fill(opacity=0.7)
+                        for sr in srs[1:]
+                    ],
+                    lag_ratio=0.15,
+                )
+                for srs in sample_rects_all
+            ],
+        )
+
+        self.wait(0.5)
+
+        n_ts_disp = 3
+        ts_label = MathTex("T_s").next_to(sample_rects_all[0][0], UP)
+        n_ts = Group(
+            *[
+                MathTex(
+                    f"{idx if idx > 1 else ''}T_s", font_size=DEFAULT_FONT_SIZE * 0.5
+                )
+                .next_to(sample_rects[idx - 1], DOWN)
+                .set_y(ts_label.get_y())
+                # .shift(UP * (0.5 if idx % 2 == 0 else 0))
+                for idx in range(1, n_ts_disp + 2)
+            ],
+            MathTex(r"\cdots")
+            .next_to(sample_rects[len(sample_rects) // 2], DOWN)
+            .set_y(ts_label.get_y()),
+            MathTex(f"NT_s", font_size=DEFAULT_FONT_SIZE * 0.5)
+            .next_to(sample_rects[-1], DOWN)
+            .set_y(ts_label.get_y()),
+        )
+
+        self.play(LaggedStart(FadeIn(*[ts for ts in n_ts], lag_ratio=0.2)))
+
+        self.wait(0.5)
+
+        ts_eqn = MathTex(r"T_s = \frac{1}{f_s}").next_to(n_ts[-1], RIGHT, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(n_ts[-1][0][1:], ts_eqn[0][:2]),
+                *[GrowFromCenter(m) for m in ts_eqn[0][2:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(2)
 
 
 class TradeOff(Scene):
     def construct(self): ...
+
+
+class ImgTest(Scene):
+    def construct(self):
+        cmap = get_cmap("viridis")
+        image = ImageMobject(
+            cmap(
+                np.uint8(
+                    [
+                        [0, 100, 30, 200],
+                        [255, 0, 5, 33],
+                    ]
+                )
+            )
+        )
+        image.set_resampling_algorithm(RESAMPLING_ALGORITHMS["box"])
+        image.height = 7
+        self.add(image)
