@@ -2290,7 +2290,7 @@ class SigProc(MovingCameraScene):
             for sample_rect, color in zip(sample_rects, colors_vibrant):
                 sample_rect.set_fill(color=color)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(
             LaggedStart(
                 *[
@@ -2525,6 +2525,72 @@ class SigProc(MovingCameraScene):
                 lag_ratio=0.2,
             )
         )
+
+        self.wait(0.5)
+
+        prt_label = Tex("PRT").next_to(axes[0], LEFT)
+        n_prt = Group(
+            *[
+                Tex(f"{idx if idx > 1 else ''}PRT", font_size=DEFAULT_FONT_SIZE * 0.5)
+                .next_to(ax, LEFT)
+                .set_x(prt_label.get_x())
+                for idx, ax in enumerate(axes, start=1)
+            ],
+        )
+
+        self.play(LaggedStart(FadeIn(*[prt for prt in n_prt], lag_ratio=0.2)))
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        prt_eqn = MathTex(r"\text{PRT} = \frac{1}{\text{PRF}}").next_to(ts_eqn, RIGHT)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(n_prt[-1][1:], prt_eqn[0][:3], path_arc=PI / 3),
+                *[GrowFromCenter(m) for m in prt_eqn[0][3:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.remove(sigproc_right_box)
+        fs_ge_prf = (
+            MathTex(r"f_s \gg \text{PRF}")
+            .next_to(ts_eqn[0][0], DOWN, LARGE_BUFF, LEFT)
+            .set_z_index(6)
+        )
+
+        prt_ge_ts = MathTex(r"T_s \ll \text{PRT}").next_to(
+            fs_ge_prf, DOWN, MED_SMALL_BUFF, LEFT
+        )
+
+        vel_plot_group = VGroup(vel_plot, vel_ax, vel_ax_x_label, vel_ax_y_label)
+        self.play(
+            LaggedStart(
+                vel_plot_group.animate.shift(DOWN),
+                TransformFromCopy(ts_eqn[0][-2:], fs_ge_prf[0][:2], path_arc=-PI / 2),
+                GrowFromCenter(fs_ge_prf[0][2]),
+                TransformFromCopy(prt_eqn[0][-3:], fs_ge_prf[0][-3:], path_arc=PI / 2),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        # TODO: something weird is happening here
+        self.play(
+            LaggedStart(
+                # GrowFromCenter(fs_ge_prf[1]),
+                TransformFromCopy(ts_eqn[0][:2], prt_ge_ts[0][:2], path_arc=PI / 2),
+                GrowFromCenter(prt_ge_ts[0][2]),
+                TransformFromCopy(prt_eqn[0][:3], prt_ge_ts[0][:3], path_arc=-PI / 2),
+                lag_ratio=0.3,
+            )
+        )
+        # self.add(fs_ge_prf[2])
 
         self.wait(2)
 
