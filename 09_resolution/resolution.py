@@ -22,7 +22,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -1657,8 +1657,9 @@ class SigProc(MovingCameraScene):
         self.play(
             LaggedStart(
                 Create(sigproc_conn),
-                Create(sigproc),
+                FadeIn(sigproc),
                 AnimationGroup(Write(sig_label), Write(proc_label)),
+                lag_ratio=0.3,
             )
         )
         self.add(sigproc_right_box)
@@ -2374,19 +2375,22 @@ class SigProc(MovingCameraScene):
         t_new = np.arange(0, 1, 1 / fs_new)
         fft_len = 2**14
 
-        f1 = 9
-        f2 = 15
+        f1 = VT(8.3)
+        f2 = VT(15)
 
         np.random.seed(0)
+        noise = np.random.normal(0, 0.3, t_new.size)
         window_new = signal.windows.kaiser(t_new.size, beta=3)
 
         def get_sig():
             sig = (
-                np.sin(2 * PI * f1 * t_new)
-                + 0.4 * np.sin(2 * PI * f2 * t_new)
-                + np.random.normal(0, 0.3, t_new.size)
+                np.sin(2 * PI * ~f1 * t_new)
+                + 0.8 * np.sin(2 * PI * ~f2 * t_new)
+                + noise
             ) * window_new
             return sig
+
+        vel_opacity = VT(1)
 
         def get_fft_plot():
             sig = get_sig()
@@ -2397,10 +2401,11 @@ class SigProc(MovingCameraScene):
                 f_X_k,
                 x_range=[0, 20, 20 / 400],
                 color=ORANGE,
+                stroke_opacity=~vel_opacity,
                 # stroke_width=DEFAULT_STROKE_WIDTH * 2,
             )
 
-        vel_plot = get_fft_plot()
+        vel_plot = always_redraw(get_fft_plot)
         vel_ax_y_label = (
             Text("Magnitude", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.4)
             .rotate(PI / 2)
@@ -2557,16 +2562,12 @@ class SigProc(MovingCameraScene):
 
         self.remove(sigproc_right_box)
         fs_ge_prf = (
-            MathTex(r"f_s \gg \text{PRF}")
+            MathTex(r"f_s \gg \text{PRF}", r"\rightarrow", r"T_s \ll \text{PRT}")
             .next_to(ts_eqn[0][0], DOWN, LARGE_BUFF, LEFT)
             .set_z_index(6)
         )
 
-        prt_ge_ts = MathTex(r"T_s \ll \text{PRT}").next_to(
-            fs_ge_prf, DOWN, MED_SMALL_BUFF, LEFT
-        )
-
-        vel_plot_group = VGroup(vel_plot, vel_ax, vel_ax_x_label, vel_ax_y_label)
+        vel_plot_group = VGroup(vel_ax, vel_ax_x_label, vel_ax_y_label)
         self.play(
             LaggedStart(
                 vel_plot_group.animate.shift(DOWN),
@@ -2577,20 +2578,253 @@ class SigProc(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
-        # TODO: something weird is happening here
         self.play(
             LaggedStart(
-                # GrowFromCenter(fs_ge_prf[1]),
-                TransformFromCopy(ts_eqn[0][:2], prt_ge_ts[0][:2], path_arc=PI / 2),
-                GrowFromCenter(prt_ge_ts[0][2]),
-                TransformFromCopy(prt_eqn[0][:3], prt_ge_ts[0][:3], path_arc=-PI / 2),
+                GrowFromCenter(fs_ge_prf[1]),
+                TransformFromCopy(ts_eqn[0][:2], fs_ge_prf[2][:2], path_arc=PI / 2),
+                GrowFromCenter(fs_ge_prf[2][2]),
+                TransformFromCopy(prt_eqn[0][:3], fs_ge_prf[2][-3:], path_arc=-PI / 2),
                 lag_ratio=0.3,
             )
         )
         # self.add(fs_ge_prf[2])
+
+        self.wait(0.5)
+
+        fast_time_label = Text(
+            "Fast Time", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.4
+        ).next_to(axes, UP)
+        slow_time_label = (
+            Text("Slow Time", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.4)
+            .rotate(PI / 2)
+            .next_to(axes, LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeOut(m) for m in n_ts], lag_ratio=0.1),
+                Write(fast_time_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeOut(m) for m in n_prt], lag_ratio=0.1),
+                Write(slow_time_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.remove(radar.vgroup)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(vel_plot_group.width * 2)
+            .move_to(vel_plot_group)
+            .shift(UP / 2),
+            Group(
+                axes, sample_rects_all, fast_time_label, slow_time_label
+            ).animate.shift(LEFT * 2),
+            Group(fs_ge_prf, ts_eqn, prt_eqn).animate.shift(UP),
+        )
+
+        self.wait(0.5)
+
+        M_disp = 8
+        vel_sample_rects = vel_ax.get_riemann_rectangles(
+            vel_plot,
+            input_sample_type="center",
+            x_range=[0, 20],
+            dx=20 / M_disp,
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.4,
+        ).set_z_index(1)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in vel_sample_rects], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        target1_label = (
+            Text(
+                "Target 1",
+                color=TARGET1_COLOR,
+                font="Maple Mono",
+                font_size=DEFAULT_FONT_SIZE * 0.4,
+            )
+            .next_to(vel_ax.c2p(9), UP, LARGE_BUFF * 4)
+            .shift(LEFT * 2)
+        )
+        target2_label = (
+            Text(
+                "Target 2",
+                color=TARGET2_COLOR,
+                font="Maple Mono",
+                font_size=DEFAULT_FONT_SIZE * 0.4,
+            )
+            .next_to(vel_ax.c2p(10), UP, LARGE_BUFF * 4)
+            .shift(RIGHT * 2)
+        )
+
+        def create_target_bez(label: Text, x, side, color, offset=0):
+            def updater():
+                vel_plot_temp = get_fft_plot()
+                bez = CubicBezier(
+                    label.get_edge_center(side) + [side[0] * 0.1, 0, 0],
+                    label.get_edge_center(side) + [side[0] * 0.5, 0, 0],
+                    vel_ax.input_to_graph_point(~x + offset, vel_plot_temp) + [0, 1, 0],
+                    vel_ax.input_to_graph_point(~x + offset, vel_plot_temp)
+                    + [0, 0.1, 0],
+                    color=color,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 0.6,
+                )
+                return bez
+
+            return updater
+
+        new_vel = 9.3
+        target1_bez = always_redraw(
+            create_target_bez(target1_label, f1, RIGHT, TARGET1_COLOR)
+        )
+        target2_bez = always_redraw(
+            create_target_bez(target2_label, f2, LEFT, TARGET2_COLOR, 0.2)
+        )
+
+        target1_bez_new = CubicBezier(
+            target1_label.get_edge_center(RIGHT) + [0.1, 0, 0],
+            target1_label.get_edge_center(RIGHT) + [0.5, 0, 0],
+            vel_sample_rects[3].get_top() + [0, 1, 0],
+            vel_sample_rects[3].get_top() + [0, 0.1, 0],
+            color=TARGET1_COLOR,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.6,
+        )
+        target2_bez_new = CubicBezier(
+            target2_label.get_edge_center(LEFT) + [-0.1, 0, 0],
+            target2_label.get_edge_center(LEFT) + [-0.5, 0, 0],
+            vel_sample_rects[3].get_top() + [0, 1, 0],
+            vel_sample_rects[3].get_top() + [0, 0.1, 0],
+            color=TARGET2_COLOR,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.6,
+        )
+
+        self.play(Write(target1_label), FadeIn(target1_bez))
+
+        self.wait(0.5)
+
+        self.play(Write(target2_label), FadeIn(target2_bez))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(f2 @ (new_vel - 0.2), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                vel_opacity @ 0,
+                AnimationGroup(
+                    ReplacementTransform(target1_bez, target1_bez_new),
+                    ReplacementTransform(target2_bez, target2_bez_new),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(target1_label, target2_label, target1_bez_new, target2_bez_new),
+            vel_opacity @ 1,
+        )
+
+        self.wait(0.5)
+
+        M_disp_init = 3
+        ms = [
+            *[
+                MathTex(f"{n}", font_size=DEFAULT_FONT_SIZE).next_to(
+                    vel_sample_rects[n - 1], UP
+                )
+                for n in range(1, M_disp_init + 2)
+            ],
+            MathTex(r"\cdots").next_to(vel_sample_rects[5], UP),
+            MathTex("M").next_to(vel_sample_rects[-1], UP),
+        ]
+        ms = Group(
+            *[m.set_y(sorted(ms, key=lambda x: x.get_y())[-1].get_y()) for m in ms]
+        )
+
+        self.play(LaggedStart(*[FadeIn(m) for m in ms], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        extent_line = Line(
+            [vel_sample_rects[0].get_corner(UL)[0], vel_ax.get_corner(UL)[1], 0],
+            [vel_sample_rects[-1].get_corner(UR)[0], vel_ax.get_corner(UL)[1], 0],
+        )
+        extent_line_l = Line(
+            extent_line.get_start() + DOWN / 8,
+            extent_line.get_start() + UP / 8,
+        )
+        extent_line_r = Line(
+            extent_line.get_end() + DOWN / 8,
+            extent_line.get_end() + UP / 8,
+        )
+
+        extent_label = Tex("extent").next_to(extent_line_r, RIGHT)
+
+        self.play(
+            LaggedStart(
+                ms.animate.shift(UP / 2),
+                Create(extent_line_l),
+                Create(extent_line),
+                Create(extent_line_r),
+                Write(extent_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        extent_over_m = (
+            MathTex(r"\Delta f_d = \frac{\text{extent}}{M}")
+            .move_to(extent_label, LEFT)
+            .shift(DOWN)
+        )
+
+        self.play(
+            self.camera.frame.animate.shift(RIGHT * 1.5),
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(extent_label[0], extent_over_m[0][4:10]),
+                    FadeOut(extent_line, extent_line_l, extent_line_r),
+                ),
+                Create(extent_over_m[0][-2]),
+                AnimationGroup(
+                    ReplacementTransform(ms[-1][0], extent_over_m[0][-1], path_arc=PI),
+                    FadeOut(ms[:-1]),
+                ),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in extent_over_m[:4][::-1]],
+                lag_ratio=0.1,
+            )
+        )
 
         self.wait(2)
 
