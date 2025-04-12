@@ -22,7 +22,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -49,6 +49,18 @@ def compute_f_beat(R):
 
 def db_to_lin(x):
     return 10 ** (x / 10)
+
+
+def pad2d(x, target_shape):
+    pad_rows = target_shape[0] - x.shape[0]
+    pad_cols = target_shape[1] - x.shape[1]
+
+    pad_top = pad_rows // 2
+    pad_bottom = pad_rows - pad_top
+    pad_left = pad_cols // 2
+    pad_right = pad_cols - pad_left
+
+    return np.pad(x, ((pad_top, pad_bottom), (pad_left, pad_right)), mode="constant")
 
 
 # Radar setup for doppler stuff
@@ -2721,7 +2733,7 @@ class SigProc(MovingCameraScene):
 
         self.play(Write(target2_label), FadeIn(target2_bez))
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(f2 @ (new_vel - 0.2), run_time=2)
@@ -2793,6 +2805,7 @@ class SigProc(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         extent_over_m = (
@@ -2806,7 +2819,6 @@ class SigProc(MovingCameraScene):
             LaggedStart(
                 AnimationGroup(
                     ReplacementTransform(extent_label[0], extent_over_m[0][4:10]),
-                    FadeOut(extent_line, extent_line_l, extent_line_r),
                 ),
                 Create(extent_over_m[0][-2]),
                 AnimationGroup(
@@ -2821,16 +2833,449 @@ class SigProc(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                *[GrowFromCenter(m) for m in extent_over_m[:4][::-1]],
+                *[GrowFromCenter(m) for m in extent_over_m[0][:4][::-1]],
                 lag_ratio=0.1,
             )
         )
 
+        self.wait(0.5)
+
+        doppler_eqn = MathTex(r"v = \frac{f_d \lambda}{2}").next_to(
+            extent_over_m, DOWN, MED_SMALL_BUFF, LEFT
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    extent_over_m[0][1:3], doppler_eqn[0][2:4], path_arc=PI / 2
+                ),
+                *[
+                    GrowFromCenter(m)
+                    for m in [*doppler_eqn[0][4:], *doppler_eqn[0][:2]]
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        extent_l = MathTex(
+            r"\frac{-\text{PRF}}{2}", font_size=DEFAULT_FONT_SIZE * 0.6
+        ).next_to(extent_line_l, UP, SMALL_BUFF)
+        extent_r = MathTex(
+            r"\frac{\text{PRF}}{2}", font_size=DEFAULT_FONT_SIZE * 0.6
+        ).next_to(extent_line_r, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[GrowFromCenter(m) for m in extent_l[0]], lag_ratio=0.1),
+                LaggedStart(*[GrowFromCenter(m) for m in extent_r[0]], lag_ratio=0.1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        extent_over_m_pli = (
+            MathTex(
+                r"\Delta f_d = \frac{\frac{\text{PRF}}{2} - \frac{-\text{PRF}}{2}}{M}"
+            )
+            .move_to(extent_over_m, LEFT)
+            .shift(UP / 2 + LEFT / 3)
+        )
+
+        extent_over_m_pli_simp = MathTex(r"\Delta f_d = \frac{\text{PRF}}{M}").move_to(
+            extent_over_m_pli, LEFT
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(RIGHT * 0.5),
+                FadeOut(extent_line, extent_line_l, extent_line_r),
+                # TransformByGlyphMap(extent_over_m.shift(UP), extent_over_m_pli),
+                ReplacementTransform(extent_over_m[0][:4], extent_over_m_pli[0][:4]),
+                ReplacementTransform(extent_over_m[0][10:], extent_over_m_pli[0][16:]),
+                ShrinkToCenter(extent_over_m[0][4:10]),
+                ReplacementTransform(
+                    extent_r[0], extent_over_m_pli[0][4:9], path_arc=-PI / 3
+                ),
+                GrowFromCenter(extent_over_m_pli[0][9]),
+                ReplacementTransform(
+                    extent_l[0], extent_over_m_pli[0][10:16], path_arc=-PI / 2
+                ),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(
+                    extent_over_m_pli[0][:4], extent_over_m_pli_simp[0][:4]
+                ),
+                ReplacementTransform(
+                    extent_over_m_pli[0][4:7], extent_over_m_pli_simp[0][4:7]
+                ),
+                ShrinkToCenter(extent_over_m_pli[0][7:9]),
+                ShrinkToCenter(extent_over_m_pli[0][9]),
+                ShrinkToCenter(extent_over_m_pli[0][10:16]),
+                ReplacementTransform(
+                    extent_over_m_pli[0][16], extent_over_m_pli_simp[0][7]
+                ),
+                ReplacementTransform(
+                    extent_over_m_pli[0][17], extent_over_m_pli_simp[0][8]
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        vel_res_eqn = (
+            MathTex(r"\Delta v = \frac{\text{PRF} \lambda}{2 M}")
+            .next_to(extent_over_m_pli_simp, DOWN, MED_SMALL_BUFF, LEFT)
+            .shift(RIGHT / 2)
+        )
+
+        self.play(
+            # TransformByGlyphMap(extent_over_m_pli_simp.shift(UP / 2), vel_res_eqn),
+            LaggedStart(
+                ReplacementTransform(extent_over_m_pli_simp[0][0], vel_res_eqn[0][0]),
+                ShrinkToCenter(extent_over_m_pli_simp[0][1:3]),
+                ShrinkToCenter(extent_over_m_pli_simp[0][3]),
+                ShrinkToCenter(extent_over_m_pli_simp[0][7]),
+                ReplacementTransform(doppler_eqn[0][0], vel_res_eqn[0][1]),
+                ReplacementTransform(doppler_eqn[0][1], vel_res_eqn[0][2]),
+                ReplacementTransform(
+                    extent_over_m_pli_simp[0][4:7], vel_res_eqn[0][3:6]
+                ),
+                ShrinkToCenter(doppler_eqn[0][2:4]),
+                ReplacementTransform(doppler_eqn[0][4], vel_res_eqn[0][6]),
+                ReplacementTransform(doppler_eqn[0][5], vel_res_eqn[0][7]),
+                ReplacementTransform(doppler_eqn[0][6], vel_res_eqn[0][8]),
+                ReplacementTransform(
+                    extent_over_m_pli_simp[0][8], vel_res_eqn[0][9], path_arc=-PI
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            vel_res_eqn[0][:2]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+        self.wait(0.5)
+
+        self.play(
+            vel_res_eqn[0][6]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+        self.wait(0.5)
+
+        self.play(
+            vel_res_eqn[0][3:6]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+        self.wait(0.5)
+
+        self.play(
+            vel_res_eqn[0][8]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+        self.wait(0.5)
+
+        self.play(
+            vel_res_eqn[0][9]
+            .animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        rres_eqn = MathTex(
+            r"\Delta R = \frac{c \tau}{2} \approx \frac{c}{2 B}",
+            color=RED,
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+        ares_eqn = MathTex(
+            r"\Delta \theta \sim \frac{\lambda}{D}",
+            color=BLUE,
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+
+        eqn_group = Group(rres_eqn, ares_eqn, vel_res_eqn.copy().scale(1.5)).arrange(
+            RIGHT, LARGE_BUFF
+        )
+
+        rres_label = Text(
+            "Range", font_size=DEFAULT_FONT_SIZE * 1, font="Maple Mono", color=RED
+        ).next_to(rres_eqn, UP, LARGE_BUFF)
+        rres_group = Group(rres_label, rres_eqn)
+        ares_label = (
+            Text(
+                "Angular",
+                font_size=DEFAULT_FONT_SIZE * 1,
+                font="Maple Mono",
+                color=BLUE,
+            ).next_to(ares_eqn, UP, LARGE_BUFF)
+            # .set_y(rres_label.get_y())
+        )
+        ares_group = Group(ares_label, ares_eqn)
+        vres_label = (
+            Text(
+                "Velocity",
+                font_size=DEFAULT_FONT_SIZE * 1,
+                font="Maple Mono",
+                color=ORANGE,
+            ).next_to(eqn_group[-1], UP, LARGE_BUFF)
+            # .set_y(rres_label.get_y())
+        )
+        vres_group = Group(vres_label, eqn_group[-1])
+
+        eqn_group_w_label = (
+            Group(rres_group, ares_group, vres_group)
+            .arrange(RIGHT, LARGE_BUFF)
+            .next_to(self.camera.frame, DOWN, LARGE_BUFF * 4)
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.add(rres_eqn, ares_eqn, rres_label, ares_label)
+
+        self.play(
+            LaggedStart(
+                vel_res_eqn.animate.scale(1.5).move_to(vres_group[1]).set_color(ORANGE),
+                self.camera.frame.animate.scale_to_fit_width(
+                    eqn_group_w_label.width * 1.3
+                ).move_to(eqn_group_w_label),
+                Write(vres_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
         self.wait(2)
 
 
-class TradeOff(Scene):
-    def construct(self): ...
+class TradeOff(MovingCameraScene):
+    def construct(self):
+        rres_eqn = MathTex(
+            r"\Delta R = \frac{c \tau}{2} \approx \frac{c}{2 B}",
+            color=RED,
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+        ares_eqn = MathTex(
+            r"\Delta \theta \sim \frac{\lambda}{D}",
+            color=BLUE,
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+        vres_eqn = MathTex(
+            r"\Delta v = \frac{\text{PRF} \lambda}{2 M}",
+            color=ORANGE,
+            font_size=DEFAULT_FONT_SIZE * 1.5,
+        )
+
+        eqn_group = Group(rres_eqn, ares_eqn, vres_eqn).arrange(RIGHT, LARGE_BUFF)
+
+        rres_label = Text(
+            "Range", font_size=DEFAULT_FONT_SIZE * 1, font="Maple Mono", color=RED
+        ).next_to(rres_eqn, UP, LARGE_BUFF)
+        rres_group = Group(rres_label, rres_eqn)
+        ares_label = (
+            Text(
+                "Angular",
+                font_size=DEFAULT_FONT_SIZE * 1,
+                font="Maple Mono",
+                color=BLUE,
+            ).next_to(ares_eqn, UP, LARGE_BUFF)
+            # .set_y(rres_label.get_y())
+        )
+        ares_group = Group(ares_label, ares_eqn)
+        vres_label = (
+            Text(
+                "Velocity",
+                font_size=DEFAULT_FONT_SIZE * 1,
+                font="Maple Mono",
+                color=ORANGE,
+            ).next_to(eqn_group[-1], UP, LARGE_BUFF)
+            # .set_y(rres_label.get_y())
+        )
+        vres_group = Group(vres_label, eqn_group[-1])
+
+        eqn_group_w_label = (
+            Group(rres_group, ares_group, vres_group)
+            .arrange(RIGHT, LARGE_BUFF)
+            .next_to(self.camera.frame, DOWN, LARGE_BUFF * 4)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(rres_eqn, ares_eqn, rres_label, ares_label, vres_label, vres_eqn)
+        self.camera.frame.scale_to_fit_width(eqn_group_w_label.width * 1.3).move_to(
+            eqn_group_w_label
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ares_label.animate.set_opacity(0.3).shift(UP * 2),
+            ares_eqn.animate.set_opacity(0.3).shift(UP * 2),
+            Group(rres_group, vres_group)
+            .animate.arrange(RIGHT, LARGE_BUFF * 2)
+            .move_to(self.camera.frame)
+            .shift(DOWN * 2),
+        )
+
+        self.wait(0.5)
+
+        M = VT(40)
+        N = VT(10_000)
+
+        t = np.arange(0, max_time, 1 / fs)
+
+        rmax = c * Tc * fs / (2 * bw)
+
+        target1_pos = VT(12)
+        target1_vel = VT(5)
+        target1_pow = VT(0)
+        target2_pos = VT(6)
+        target2_vel = VT(10)
+        target2_pow = VT(0)
+
+        np.random.seed(0)
+
+        M_max = 100
+        N_max = 10_000
+
+        def plot_rd():
+            N_curr = int(~N)
+            M_curr = int(~M)
+            t_nonpad = np.linspace(0, max_time, N_curr)
+            noise = np.random.normal(0, 0.1, N_curr)
+            targets = [
+                (~target1_pos, ~target1_vel, ~target1_pow),
+                (~target2_pos, ~target2_vel, ~target2_pow),
+            ]
+            window_2d = np.outer(
+                signal.windows.blackman(M_curr, 3), signal.windows.blackman(N_curr, 3)
+            )
+            cpi = (
+                np.array(
+                    [
+                        (
+                            np.sum(
+                                [
+                                    np.sin(
+                                        2 * PI * compute_f_beat(r) * t_nonpad
+                                        + m * compute_phase_diff(v)
+                                    )
+                                    * db_to_lin(p)
+                                    for r, v, p in targets
+                                ],
+                                axis=0,
+                            )
+                            + noise
+                        )
+                        for m in range(M_curr)
+                    ]
+                )
+                * window_2d
+            )
+
+            cpi = pad2d(cpi, (M_max, N_max))
+
+            ranges_n = np.linspace(-rmax / 2, rmax / 2, N_max)
+            range_doppler = fftshift(np.abs(fft2(cpi.T, s=[N_max, M_max]))) / (
+                N_curr / 2
+            )
+            range_doppler = range_doppler[(ranges_n >= 0) & (ranges_n <= 40), :]
+            range_doppler -= range_doppler.min()
+            range_doppler /= range_doppler.max()
+
+            cmap = get_cmap("viridis")
+            range_doppler_fmt = np.uint8(cmap(10 * np.log10(range_doppler + 1)) * 255)
+            range_doppler_fmt[range_doppler < 0.02] = [0, 0, 0, 0]
+
+            rd_img = (
+                ImageMobject(range_doppler_fmt, image_mode="RGBA")
+                .stretch_to_fit_width(config.frame_width * 0.4)
+                .stretch_to_fit_height(config.frame_width * 0.4)
+                .next_to(self.camera.frame.get_right(), LEFT, LARGE_BUFF)
+            )
+            rd_img.set_resampling_algorithm(RESAMPLING_ALGORITHMS["box"])
+            return rd_img
+
+        rd_img = always_redraw(plot_rd)
+
+        rd_ax = Axes(
+            x_range=[-0.5, 10, 2],
+            y_range=[-0.5, 10, 2],
+            tips=False,
+            x_length=rd_img.width,
+            y_length=rd_img.height,
+            axis_config=dict(stroke_width=DEFAULT_STROKE_WIDTH * 1.2),
+        )
+        rd_ax.shift(rd_img.get_corner(DL) - rd_ax.c2p(0, 0))
+        range_label = (
+            Text("Range", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.5)
+            .rotate(PI / 2)
+            .next_to(rd_ax.c2p(0, 5), LEFT)
+        )
+        vel_label = Text(
+            "Velocity", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(rd_ax.c2p(5, 0), DOWN)
+
+        rd_group = Group(rd_ax, range_label, vel_label, rd_img)
+        self.add(
+            Group(rd_ax, range_label, vel_label).shift(DOWN * self.camera.frame.height)
+        )
+
+        self.play(
+            Group(rres_group, vres_group)
+            .animate.scale(0.7)
+            .arrange(DOWN, LARGE_BUFF)
+            .next_to(range_label, LEFT, LARGE_BUFF * 5),
+            self.camera.frame.animate.shift(DOWN * self.camera.frame.height),
+        )
+        self.play(FadeIn(rd_img))
+
+        self.wait(0.5)
+
+        self.play(
+            rres_group[0].animate.set_opacity(0.3),
+            rres_group[1].animate.set_opacity(0.3),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(M @ 10, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(M @ M_max, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(N @ 5000, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(N @ N_max, run_time=3)
+
+        self.wait(2)
 
 
 class ImgTest(Scene):
