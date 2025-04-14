@@ -22,7 +22,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -1357,7 +1357,7 @@ class RangeResolution(MovingCameraScene):
         self.wait(2)
 
 
-class AngularResolution(Scene):
+class AngularResolution(MovingCameraScene):
     def construct(self):
         r_min = -60
 
@@ -1401,8 +1401,11 @@ class AngularResolution(Scene):
 
         X = np.linspace(-n_elem / 2 - 0.05, n_elem / 2 + 0.05, 2**10)
 
+        beta = 3
+
         def get_f_window():
-            window = np.clip(signal.windows.kaiser(2**10, beta=3), 0, None)
+            # window = np.ones(2**10)
+            window = np.clip(signal.windows.kaiser(2**10, beta=beta), 0, None)
             f_window = interp1d(X, window, fill_value="extrapolate", kind="nearest")
             return f_window
 
@@ -1428,6 +1431,96 @@ class AngularResolution(Scene):
 
         AF_polar_plot = always_redraw(get_ap_polar())
         self.add(AF_polar_plot)
+
+        self.wait(0.5)
+
+        theta_label = MathTex(r"\theta").next_to(
+            polar_ax.copy().shift(DOWN), UP, LARGE_BUFF
+        )
+        theta_curve = CurvedDoubleArrow(
+            polar_ax.c2p(-r_min / 2, r_min / 2),
+            polar_ax.c2p(-r_min / 2, -r_min / 2),
+        )
+
+        self.play(
+            LaggedStart(
+                polar_ax.animate.shift(DOWN),
+                GrowFromCenter(theta_label),
+                FadeIn(theta_curve),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        title = Text(
+            "Angular Resolution", font_size=DEFAULT_FONT_SIZE * 1, font="Maple Mono"
+        ).next_to(self.camera.frame, UP)
+
+        self.camera.frame.save_state()
+        self.play(Write(title), self.camera.frame.animate.scale(1.2).shift(UP))
+
+        self.wait(0.5)
+
+        self.play(Unwrite(title), self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        theta_vt = VT(0)
+        dot_left = always_redraw(
+            lambda: Dot(color=ORANGE).move_to(
+                polar_ax.input_to_graph_point(~theta_vt, AF_polar_plot)
+            )
+        )
+        dot_right = always_redraw(
+            lambda: Dot(color=ORANGE).move_to(
+                polar_ax.input_to_graph_point(-~theta_vt, AF_polar_plot)
+            )
+        )
+
+        # self.add(dot_left)
+        self.play(Create(dot_left), Create(dot_right))
+
+        self.wait(0.5)
+
+        self.play(theta_vt @ PI, run_time=3)
+
+        self.wait(0.5)
+
+        fnbw = 4 * PI / (n_elem * beta)
+        self.play(theta_vt @ (fnbw * 2.06))
+
+        self.wait(0.5)
+
+        theta_3db = 2.1 / n_elem
+
+        self.play(theta_vt @ (theta_3db * 2))
+
+        self.wait(0.5)
+
+        theta_3db_arc = ArcBetweenPoints(
+            dot_right.get_center() + [0.1, 0.1, 0],
+            dot_right.get_center() + [2, 1, 0],
+            angle=-TAU / 8,
+            color=ORANGE,
+        )
+
+        theta_3db_label = MathTex(r"\theta_{3 \text{dB}}", color=ORANGE).next_to(
+            theta_3db_arc.get_end(), RIGHT, SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(theta_curve),
+                Create(theta_3db_arc),
+                GrowFromCenter(theta_3db_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        # self.play(FadeOut(dot_left, dot_right))
+
+        self.wait(2)
 
 
 class VelocityResolution(MovingCameraScene):
@@ -1556,7 +1649,7 @@ class VelocityResolution(MovingCameraScene):
             range_doppler -= range_doppler.min()
             range_doppler /= range_doppler.max()
 
-            cmap = get_cmap("viridis")
+            cmap = get_cmap("coolwarm")
             range_doppler_fmt = np.uint8(cmap(10 * np.log10(range_doppler + 1)) * 255)
             range_doppler_fmt[range_doppler < 0.05] = [0, 0, 0, 0]
 
@@ -2300,8 +2393,8 @@ class SigProc(MovingCameraScene):
             ]
         )
         for sample_rects in sample_rects_all:
-            for sample_rect, color in zip(sample_rects, colors_vibrant):
-                sample_rect.set_fill(color=color)
+            for sample_rect in sample_rects:
+                sample_rect.set_fill(color=BLUE)
 
         self.next_section(skip_animations=skip_animations(True))
         self.play(
@@ -2334,8 +2427,16 @@ class SigProc(MovingCameraScene):
         )
 
         self.play(
-            GrowArrow(down_arrow),
-            LaggedStart(*[GrowFromCenter(phi) for phi in phis], lag_ratio=0.2),
+            # GrowArrow(down_arrow),
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        GrowFromCenter(phi), srs[0].animate.set_fill(color=YELLOW)
+                    )
+                    for phi, srs in zip(phis, sample_rects_all)
+                ],
+                lag_ratio=0.2,
+            ),
         )
 
         self.wait(0.5)
@@ -2370,7 +2471,8 @@ class SigProc(MovingCameraScene):
                 )
                 for srs in sample_rects_all
             ],
-            FadeOut(down_arrow),
+            # FadeOut(down_arrow),
+            *[srs[0].animate.set_fill(color=BLUE) for srs in sample_rects_all],
         )
 
         self.wait(0.5)
@@ -3147,11 +3249,11 @@ class TradeOff(MovingCameraScene):
 
         rmax = c * Tc * fs / (2 * bw)
 
-        target1_pos = VT(12)
-        target1_vel = VT(5)
+        target1_pos = VT(17)
+        target1_vel = VT(0)
         target1_pow = VT(0)
-        target2_pos = VT(6)
-        target2_vel = VT(10)
+        target2_pos = VT(20)
+        target2_vel = VT(5)
         target2_pow = VT(0)
 
         np.random.seed(0)
@@ -3159,10 +3261,12 @@ class TradeOff(MovingCameraScene):
         M_max = 100
         N_max = 10_000
 
+        rd_height = VT(config.frame_width * 0.4)
+
         def plot_rd():
             N_curr = int(~N)
             M_curr = int(~M)
-            t_nonpad = np.linspace(0, max_time, N_curr)
+            t_nonpad = np.linspace(0, max_time * (N_curr / N_max), N_curr)
             noise = np.random.normal(0, 0.1, N_curr)
             targets = [
                 (~target1_pos, ~target1_vel, ~target1_pow),
@@ -3204,7 +3308,7 @@ class TradeOff(MovingCameraScene):
             range_doppler -= range_doppler.min()
             range_doppler /= range_doppler.max()
 
-            cmap = get_cmap("viridis")
+            cmap = get_cmap("coolwarm")
             range_doppler_fmt = np.uint8(cmap(10 * np.log10(range_doppler + 1)) * 255)
             range_doppler_fmt[range_doppler < 0.02] = [0, 0, 0, 0]
 
@@ -3214,6 +3318,8 @@ class TradeOff(MovingCameraScene):
                 .stretch_to_fit_height(config.frame_width * 0.4)
                 .next_to(self.camera.frame.get_right(), LEFT, LARGE_BUFF)
             )
+            bot = rd_img.get_bottom()
+            rd_img.stretch_to_fit_height(~rd_height).next_to(bot, UP, 0)
             rd_img.set_resampling_algorithm(RESAMPLING_ALGORITHMS["box"])
             return rd_img
 
@@ -3258,22 +3364,444 @@ class TradeOff(MovingCameraScene):
             rres_group[1].animate.set_opacity(0.3),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        M_val = (
+            MathTex(f"M = {int(~M)}")
+            .move_to(self.camera.frame.get_center(), LEFT)
+            .shift(DOWN + LEFT)
+        )
+        M_val[0][0].set_color(ORANGE)
+
+        self.play(TransformFromCopy(vres_eqn[0][-1], M_val[0][0], path_arc=PI / 3))
+        self.play(FadeIn(M_val[0][1:]))
+
+        def update_M_val(m):
+            new = (
+                MathTex(f"M = {int(~M)}")
+                .move_to(self.camera.frame.get_center(), LEFT)
+                .shift(DOWN + LEFT)
+            )
+            new[0][0].set_color(ORANGE)
+            m.become(new)
+
+        self.add(M_val)
+        M_val.add_updater(update_M_val)
+
         self.wait(0.5)
 
         self.play(M @ 10, run_time=3)
 
         self.wait(0.5)
 
-        self.play(M @ M_max, run_time=3)
+        self.play(M @ 40, run_time=3)
 
         self.wait(0.5)
 
-        self.play(N @ 5000, run_time=3)
+        self.play(M @ 80, run_time=3)
+
+        cpi_eqn = (
+            Tex(r"CPI $ = M \cdot $ PRT $\left[s\right]$")
+            .next_to(M_val, DOWN, LARGE_BUFF)
+            .shift(LEFT / 2)
+        )
+        cpi_eqn[0][4].set_color(ORANGE)
 
         self.wait(0.5)
 
-        self.play(N @ N_max, run_time=3)
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in cpi_eqn[0][:4]],
+                TransformFromCopy(M_val[0][0], cpi_eqn[0][4], path_arc=PI / 3),
+                *[GrowFromCenter(m) for m in cpi_eqn[0][5:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        # self.play(N @ 4000, run_time=3)
+
+        self.wait(0.5)
+
+        theoretical = Text(
+            "Theoretical",
+            font="Maple Mono",
+            font_size=DEFAULT_FONT_SIZE * 0.8,
+            color=RED,
+        ).next_to(rres_label, UP)
+
+        self.play(
+            Write(theoretical),
+            rres_label.animate.set_opacity(1),
+            rres_eqn.animate.set_opacity(1),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                rres_eqn[0][4]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(UP)
+                .set_color(YELLOW),
+                rres_eqn[0][-1]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(DOWN / 3)
+                .set_color(YELLOW),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        y_scale = 1.4
+        rd_ax_new = Axes(
+            x_range=[-0.5, 10, 2],
+            y_range=[-0.5, 10 * y_scale, 2],
+            tips=False,
+            x_length=rd_img.width,
+            y_length=rd_img.height * y_scale,
+            axis_config=dict(stroke_width=DEFAULT_STROKE_WIDTH * 1.2),
+        )
+        rd_ax_new.shift(rd_img.get_corner(DL) - rd_ax_new.c2p(0, 0))
+
+        self.next_section(skip_animations=skip_animations(False))
+        rd_ax.save_state()
+        rd_height_init = ~rd_height
+        self.play(
+            rd_height @ (~rd_height * y_scale),
+            Transform(rd_ax, rd_ax_new),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        N_label = Tex(r"$N = $ Constant").next_to(M_val, UP, LARGE_BUFF, RIGHT)
+        N_label[0][0].set_color(RED)
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in N_label[0]], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        self.play(rd_ax.animate.restore(), rd_height @ rd_height_init)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            rres_eqn.animate(rate_func=rate_functions.there_and_back).set_color(YELLOW),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        grid = NumberPlane(
+            x_range=[-0.5, 10, 1],
+            y_range=[-0.5, 10, 1],
+            x_length=rd_img.width,
+            y_length=rd_img.height,
+            background_line_style={
+                "stroke_color": TEAL,
+                "stroke_width": 4,
+                "stroke_opacity": 0.6,
+            },
+        )
+        grid.shift(rd_ax.c2p(0, 0) - grid.c2p(0, 0))
+
+        rd_ax_new = Axes(
+            x_range=[-0.5, 10, 2],
+            y_range=[-0.5, 10, 2],
+            tips=False,
+            x_length=rd_img.width,
+            y_length=rd_img.height * y_scale,
+            axis_config=dict(stroke_width=DEFAULT_STROKE_WIDTH * 1.2),
+        )
+        rd_ax_new.shift(rd_img.get_corner(DL) - rd_ax_new.c2p(0, 0))
+
+        self.play(Create(grid))
+
+        self.wait(0.5)
+
+        grid_new = NumberPlane(
+            x_range=[-0.5, 10, 1],
+            y_range=[-0.5, 10, 1],
+            x_length=rd_img.width,
+            y_length=rd_img.height,
+            background_line_style={
+                "stroke_color": TEAL,
+                "stroke_width": 4,
+                "stroke_opacity": 0.6,
+            },
+        ).stretch(y_scale, 1)
+        grid_new.shift(rd_ax.c2p(0, 0) - grid_new.c2p(0, 0))
+
+        self.play(Transform(rd_ax, rd_ax_new), Transform(grid, grid_new))
+
+        # self.play(M @ M_max, run_time=3)
+
+        # self.wait(0.5)
+
+        # self.wait(0.5)
+
+        # self.play(N @ N_max, run_time=3)
+
+        self.wait(0.5)
+
+        ares_group.scale(0.7)
+        ares_group[0].set_opacity(1)
+        ares_group[1].set_opacity(1)
+
+        self.play(
+            LaggedStart(
+                FadeOut(rd_img, M_val),
+                AnimationGroup(
+                    eqn_group_w_label.animate.arrange(RIGHT, LARGE_BUFF).move_to(
+                        ares_eqn
+                    ),
+                    self.camera.frame.animate.move_to(ares_eqn),
+                ),
+                lag_ratio=0.4,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=rate_functions.there_and_back).shift(UP)
+                    for m in eqn_group_w_label
+                ],
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[ShrinkToCenter(m) for m in eqn_group_w_label],
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(2)
+
+
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        notebook_scrolling = VideoMobject(
+            "./static/notebook_scrolling.mp4"
+        ).scale_to_fit_width(config.frame_width * 0.6)
+
+        nb_title = Text(
+            "The Interactive Radar Cheatsheet",
+            font="Maple Mono",
+            font_size=DEFAULT_FONT_SIZE,
+        ).next_to(notebook_scrolling, UP)
+
+        self.play(
+            notebook_scrolling.shift(DOWN * 10).animate.shift(UP * 10),
+            nb_title.shift(UP * 5).animate.shift(DOWN * 5),
+        )
+
+        self.wait(10)
+
+        self.play(
+            notebook_scrolling.animate.shift(DOWN * 10),
+            nb_title.animate.shift(UP * 5),
+        )
+
+        self.wait(0.5)
+
+        website_url = Text(
+            "marshallbruner.com", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 1.5
+        )
+
+        self.play(Write(website_url))
+
+        self.wait(0.5)
+
+        phased_array_resource = (
+            ImageMobject("./static/phased_array_resource.png")
+            .scale_to_fit_width(config.frame_width * 0.5)
+            .next_to(self.camera.frame, UP)
+        )
+        rd_resource = (
+            ImageMobject("./static/range_doppler_resource.png")
+            .scale_to_fit_width(config.frame_width * 0.5)
+            .next_to(self.camera.frame, DOWN)
+        )
+        self.play(
+            LaggedStart(
+                FadeOut(website_url),
+                Group(phased_array_resource, rd_resource).animate.arrange(
+                    DOWN, MED_LARGE_BUFF
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        osc = ImageMobject("../08_beamforming/static/osc_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        kraken = ImageMobject("../08_beamforming/static/kraken.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        weather = ImageMobject(
+            "../08_beamforming/static/weather.png"
+        ).scale_to_fit_width(config.frame_width * 0.3)
+        eqn = ImageMobject("../08_beamforming/static/eqn_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+
+        merch = (
+            Group(kraken, osc, eqn, weather)
+            .arrange_in_grid(2, 2)
+            .scale_to_fit_height(config.frame_height * 0.9)
+            .set_y(0)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    rd_resource.animate.shift(DOWN * 10),
+                    phased_array_resource.animate.shift(DOWN * 10),
+                ),
+                LaggedStart(
+                    GrowFromCenter(osc),
+                    GrowFromCenter(kraken),
+                    GrowFromCenter(weather),
+                    GrowFromCenter(eqn),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        tier1 = (
+            ImageMobject("../08_beamforming/static/tier1.png")
+            .scale_to_fit_width(config.frame_width * 0.25)
+            .shift(LEFT * 10)
+        )
+        tier2 = (
+            ImageMobject("../08_beamforming/static/tier2.png")
+            .scale_to_fit_width(config.frame_width * 0.25)
+            .shift(RIGHT * 10)
+        )
+        tier3 = (
+            ImageMobject("../08_beamforming/static/tier3.png")
+            .scale_to_fit_width(config.frame_width * 0.25)
+            .shift(RIGHT * 10)
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(0.5)
+
+        self.play(tier1.animate.move_to(ORIGIN))
+
+        self.wait(0.5)
+
+        self.play(Group(tier1, tier2).animate.arrange(RIGHT, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        self.play(Group(tier1, tier2, tier3).animate.arrange(RIGHT, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[ShrinkToCenter(m) for m in Group(tier1, tier2, tier3)],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        shoutout = Text("Huge thanks to:", font="Maple Mono").to_edge(UP, LARGE_BUFF)
+        people = [
+            "ZacJW",
+            "Dag-Vidar Bauer",
+            "db-isJustARatio",
+            "Jea99",
+            "Leon",
+            "dplynch",
+        ]
+        people_text = (
+            Group(
+                *[
+                    Text(p, font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.6)
+                    for p in people
+                ]
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(shoutout, DOWN)
+        )
+
+        self.play(
+            LaggedStart(*[Write(m) for m in [shoutout, *people_text]], lag_ratio=0.2)
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Tex("Stats for Nerds")
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "3,620"],
+                    ["Script word count", "1,838"],
+                    ["Days to make", "31"],
+                    ["Git commits", "36"],
+                ]
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
+        thank_you_sabrina = (
+            Tex(r"Thank you, Sabrina, for\\editing the whole video :)")
+            .next_to(stats_group, DOWN)
+            .to_edge(DOWN)
+        )
+
+        marshall_bruner = Tex("Marshall Bruner").next_to(
+            [-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Create(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
 
         self.wait(2)
 
