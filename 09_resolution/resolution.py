@@ -22,7 +22,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 
 def skip_animations(b):
@@ -83,8 +83,321 @@ Ts = max_time / N
 fs = 1 / Ts
 
 
-class Intro(Scene):
-    def construct(self): ...
+class Intro(MovingCameraScene):
+    def construct(self):
+        car1 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(BLUE)
+            .scale(0.6)
+            .to_edge(RIGHT, LARGE_BUFF * 2.5)
+            .shift(UP)
+        )
+        car2 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(YELLOW)
+            .scale(0.6)
+            .next_to(car1, LEFT, LARGE_BUFF * 1.5)
+        )
+        car3 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(ORANGE)
+            .scale(0.6)
+            .next_to(car1, DOWN, MED_LARGE_BUFF)
+        )
+        car4 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(RED)
+            .scale(0.6)
+            .next_to(car3, DOWN, MED_LARGE_BUFF)
+        )
+        you = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(WHITE)
+            .scale(0.6)
+            .next_to(car3, LEFT, LARGE_BUFF * 6)
+            .shift(RIGHT * 0.3)
+        )
+        self.play(
+            LaggedStart(
+                car1.shift(LEFT * 12).animate.shift(RIGHT * 12),
+                car2.shift(LEFT * 12).animate.shift(RIGHT * 12),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                car3.shift(LEFT * 12).animate.shift(RIGHT * 12),
+                car4.shift(LEFT * 12).animate.shift(RIGHT * 12),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(you.shift(LEFT * 12).animate.shift(RIGHT * 12))
+
+        self.wait(0.5)
+
+        vlabel = MathTex(r"v_{1} \approx v_{2}").next_to(
+            Group(car1, car2), UP, LARGE_BUFF
+        )
+        vlabel[0][:2].set_color(YELLOW)
+        vlabel[0][3:].set_color(BLUE)
+
+        self.play(Write(vlabel))
+
+        self.wait(0.5)
+
+        rlabel = MathTex(r"R_{3} \approx R_{4}").next_to(
+            Group(car3, car4), RIGHT, MED_SMALL_BUFF
+        )
+        rlabel[0][:2].set_color(ORANGE)
+        rlabel[0][3:].set_color(RED)
+
+        self.play(Write(rlabel))
+
+        self.wait(0.5)
+
+        radar_beam = Line(you.get_right(), car2.get_left(), color=BLUE)
+
+        r_min = -60
+
+        x_len = config.frame_height * 0.6
+        polar_ax = (
+            Axes(
+                x_range=[r_min, -r_min, r_min / 8],
+                y_range=[r_min, -r_min, r_min / 8],
+                tips=False,
+                axis_config={
+                    "include_numbers": False,
+                },
+                x_length=x_len,
+                y_length=x_len,
+            )
+            .set_opacity(0)
+            .rotate(radar_beam.get_angle())
+        )
+        polar_ax.shift(you.get_right() - polar_ax.c2p(0, 0))
+
+        f_0 = 10e9
+        wavelength_0 = c / f_0
+        k_0 = 2 * PI / wavelength_0
+        d_x = wavelength_0 / 2
+        n_elem = 17  # Must be odd
+        n_elem_full = 51
+        weight_trackers = [VT(0) for _ in range(n_elem_full)]
+        X_weights = np.linspace(-n_elem / 2 + 1 / 2, n_elem / 2 - 1 / 2, n_elem)
+        for wt in weight_trackers[
+            n_elem_full // 2 - n_elem // 2 : n_elem_full // 2 + n_elem // 2
+        ]:
+            wt @= 1
+        theta_min = VT(-0.001)
+        theta_max = VT(0.001)
+        steering_angle = VT(0)
+        theta = np.linspace(-PI, PI, 1000)
+        u = np.sin(theta)
+        fnbw = 2 * wavelength_0 / (n_elem * d_x)
+
+        theta_min = VT(0.01)
+        theta_max = VT(0.01)
+
+        X = np.linspace(-n_elem / 2 - 0.05, n_elem / 2 + 0.05, 2**10)
+
+        def get_f_window():
+            window = np.clip(signal.windows.kaiser(2**10, beta=3), 0, None)
+            f_window = interp1d(X, window, fill_value="extrapolate", kind="nearest")
+            return f_window
+
+        def get_ap_polar(polar_ax=polar_ax):
+            def updater():
+                u_0 = np.sin(~steering_angle * PI / 180)
+                # weights = np.array([~w for w in weight_trackers])
+                weights = np.array([get_f_window()(x) for x in X_weights])
+                AF = compute_af_1d(weights, d_x, k_0, u, u_0)
+                AP = AF
+                AP = np.clip(20 * np.log10(np.abs(AP)) - r_min, 0, None)
+                # AP /= AP.max()
+                f_AP = interp1d(u * PI, AP, fill_value="extrapolate")
+                plot = polar_ax.plot_polar_graph(
+                    r_func=f_AP,
+                    theta_range=[~theta_min, ~theta_max, 1 / 400],
+                    color=TX_COLOR,
+                    use_smoothing=True,
+                ).set_z_index(-2)
+                return plot
+
+            return updater
+
+        AF_polar_plot = always_redraw(get_ap_polar())
+        self.add(AF_polar_plot, polar_ax)
+
+        labels1 = (
+            MathTex(r"R_1, v_1, \theta_1")
+            .set_color(YELLOW)
+            .next_to(car2, UP, SMALL_BUFF)
+        )
+        labels2 = (
+            MathTex(r"R_2, v_2, \theta_2").set_color(BLUE).next_to(car1, UP, SMALL_BUFF)
+        )
+        labels3 = (
+            MathTex(r"R_3, v_3, \theta_3")
+            .set_color(ORANGE)
+            .next_to(car3, RIGHT, SMALL_BUFF)
+        )
+        labels4 = (
+            MathTex(r"R_4, v_4, \theta_4")
+            .set_color(RED)
+            .next_to(car4, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            theta_min @ (-PI / 2 - radar_beam.get_angle()),
+            theta_max @ (PI / 2 - radar_beam.get_angle()),
+            Create(radar_beam),
+            Write(labels1),
+        )
+
+        self.wait(0.5)
+
+        radar_beam2 = Line(you.get_right(), car1.get_left(), color=BLUE)
+        radar_beam3 = Line(you.get_right(), car3.get_left(), color=BLUE)
+        radar_beam4 = Line(you.get_right(), car4.get_left(), color=BLUE)
+
+        self.play(
+            theta_min @ (-PI / 2 - radar_beam2.get_angle()),
+            theta_max @ (PI / 2 - radar_beam2.get_angle()),
+            Transform(radar_beam, radar_beam2),
+            polar_ax.animate.rotate(radar_beam2.get_angle() - radar_beam.get_angle()),
+            Write(labels2),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            theta_min @ (-PI / 2 - radar_beam3.get_angle()),
+            theta_max @ (PI / 2 - radar_beam3.get_angle()),
+            Transform(radar_beam, radar_beam3),
+            polar_ax.animate.rotate(radar_beam3.get_angle() - radar_beam2.get_angle()),
+            Write(labels3),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            theta_min @ (-PI / 2 - radar_beam4.get_angle()),
+            theta_max @ (PI / 2 - radar_beam4.get_angle()),
+            Transform(radar_beam, radar_beam4),
+            polar_ax.animate.rotate(radar_beam4.get_angle() - radar_beam3.get_angle()),
+            Write(labels4),
+        )
+
+        self.wait(0.5)
+
+        rvt = (
+            Group(
+                MathTex(r"\Delta R", font_size=DEFAULT_FONT_SIZE * 3),
+                MathTex(r"\Delta v", font_size=DEFAULT_FONT_SIZE * 3),
+                MathTex(r"\Delta \theta", font_size=DEFAULT_FONT_SIZE * 3),
+            )
+            .arrange(RIGHT, LARGE_BUFF * 1.5)
+            .shift(DOWN * config.frame_height)
+        )
+        rv_arrow = CurvedArrow(
+            rvt[0].get_top() + [0, 0.1, 0],
+            rvt[1].get_top() + [0, 0.1, 0],
+            angle=-TAU / 4,
+        )
+        vt_arrow = CurvedArrow(
+            rvt[1].get_bottom() + [0, -0.1, 0],
+            rvt[2].get_bottom() + [0, -0.1, 0],
+            angle=-TAU / 4,
+        )
+        vt_arrow = CurvedArrow(
+            rvt[1].get_bottom() + [0, -0.1, 0],
+            rvt[2].get_bottom() + [0, -0.1, 0],
+            # angle=-TAU / 4,
+        )
+        tr_arrow = CurvedArrow(
+            rvt[2].get_top() + [0, 0.1, 0],
+            rvt[0].get_top() + [-0.2, 0.1, 0],
+            angle=TAU / 3,
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * config.frame_height),
+                ReplacementTransform(labels4[0][0], rvt[0][0][1], path_arc=PI / 2),
+                ReplacementTransform(labels4[0][3], rvt[1][0][1], path_arc=PI / 2),
+                ReplacementTransform(labels4[0][6], rvt[2][0][1], path_arc=PI / 2),
+                GrowFromCenter(rvt[0][0][0]),
+                GrowFromCenter(rvt[1][0][0]),
+                GrowFromCenter(rvt[2][0][0]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(rv_arrow), Create(vt_arrow), Create(tr_arrow), lag_ratio=0.3
+            )
+        )
+
+        self.wait(0.5)
+
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"radar\_cheatsheet.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2.5,
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_reminder, color=RED, fill_color=BACKGROUND_COLOR, fill_opacity=1
+        )
+        notebook = (
+            Group(notebook_box, notebook_reminder)
+            .to_edge(DOWN, MED_LARGE_BUFF)
+            .shift(DOWN * config.frame_height * 2)
+        )
+        self.add(notebook)
+        nbsc1 = (
+            ImageMobject("./static/nb_sc1.png")
+            .scale_to_fit_width(config.frame_width * 0.7)
+            .next_to(notebook, UP)
+        )
+        nbsc2 = (
+            ImageMobject("./static/nb_sc2.png")
+            .scale_to_fit_height(config.frame_height * 0.6)
+            .next_to(notebook, UP)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * config.frame_height),
+                nbsc1.shift(LEFT * 20).animate.shift(RIGHT * 20),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                nbsc1.animate.shift(RIGHT * 20),
+                nbsc2.shift(LEFT * 20).animate.shift(RIGHT * 20),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(nbsc2.animate.shift(RIGHT * 20), notebook.animate.shift(DOWN * 10))
+
+        self.wait(2)
 
 
 class RangeResolution(MovingCameraScene):
@@ -1392,7 +1705,7 @@ class AngularResolution(MovingCameraScene):
         theta_min = VT(-0.001)
         theta_max = VT(0.001)
         steering_angle = VT(0)
-        theta = np.linspace(-PI, PI, 1000)
+        theta = np.linspace(-PI, PI, 2000)
         u = np.sin(theta)
         fnbw = 2 * wavelength_0 / (n_elem * d_x)
 
@@ -1426,7 +1739,7 @@ class AngularResolution(MovingCameraScene):
                     r_func=f_AP,
                     theta_range=[~theta_min, ~theta_max, 1 / 400],
                     color=TX_COLOR,
-                    use_smoothing=False,
+                    use_smoothing=True,
                 ).set_z_index(-2)
                 return plot
 
@@ -1653,7 +1966,7 @@ class AngularResolution(MovingCameraScene):
 
         # self.play(beta @ 0.5)
 
-        self.play(n_elem_vt @ 41)
+        self.play(n_elem_vt @ 41, run_time=3)
 
         self.wait(0.5)
 
@@ -1715,8 +2028,8 @@ class AngularResolution(MovingCameraScene):
             SVGMobject("../props/static/cloud.svg")
             .set_fill(WHITE)
             .set_color(WHITE)
-            .next_to(polar_ax, RIGHT, LARGE_BUFF)
-            .shift(UP)
+            .next_to(polar_ax, RIGHT, LARGE_BUFF * 0.5)
+            .shift(UP * 0.5)
         )
 
         self.play(
@@ -1725,7 +2038,8 @@ class AngularResolution(MovingCameraScene):
             theta_3db_label.animate.shift(DOWN * 2),
         )
 
-        bw_line_dist = -r_min * 3
+        bw_line_dist = -r_min * 2.5
+        bw_line_l_color_interp = VT(0)
         bw_line_l = always_redraw(
             lambda: Line(
                 polar_ax.c2p(0, 0),
@@ -1733,6 +2047,7 @@ class AngularResolution(MovingCameraScene):
                     bw_line_dist * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
                     bw_line_dist * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
                 ),
+                color=interpolate_color(WHITE, PURPLE, ~bw_line_l_color_interp),
             )
         )
         bw_line_r = always_redraw(
@@ -1760,7 +2075,7 @@ class AngularResolution(MovingCameraScene):
                 coords = polar_ax.p2c(shift + cloud.get_center())
                 angle = np.tan(coords[1] / coords[0])
                 fnbw = -4 * 2 * PI / (~n_elem_vt * ~beta)
-                color = GREEN if np.abs(angle) < np.abs(fnbw) else BLUE
+                color = GREEN if np.abs(angle) <= np.abs(fnbw) else BLUE
                 opacity = ~particle_opacity if fade else 0.7
                 ell = Ellipse(
                     width=width,
@@ -1861,7 +2176,7 @@ class AngularResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(n_elem_vt @ end_n_elem, run_time=3)
 
         self.wait(0.5)
@@ -1873,20 +2188,275 @@ class AngularResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        cam_group = Group(AF_polar_plot, particles)
+        cam_group = Group(AF_polar_plot, particles, bw_line_l, bw_line_r)
         l = Line(polar_ax.c2p(0, 0), polar_ax.c2p(-r_min, 0))
-        self.add(l)
-        print(l.get_angle())
         self.play(
-            Group(*self.mobjects).animate.rotate(PI / 4)
-            # self.camera.frame.animate
-            # .scale_to_fit_width(cam_group.width)
-            # .move_to(cam_group)
-            # .rotate(
-            #     Line(polar_ax.c2p(0, 0), polar_ax.c2p(0, 1)).get_angle(), axis=RIGHT
-            # )
+            self.camera.frame.animate.scale_to_fit_height(
+                cam_group.height * 1.2
+            ).move_to(cam_group),
+            theta_3db_label_1.animate.shift(LEFT),
         )
-        # bw_line_r.rotate()
+
+        self.wait(0.5)
+
+        tri_line = Line(bw_line_l.get_end(), bw_line_r.get_end()).set_z_index(-1)
+
+        self.play(Create(tri_line))
+
+        self.wait(0.5)
+
+        theta_arc = ArcBetweenPoints(
+            polar_ax.c2p(
+                bw_line_dist * 0.25 * np.cos(-4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.25 * np.sin(-4 * 2 * PI / (~n_elem_vt * ~beta)),
+            ),
+            polar_ax.c2p(
+                bw_line_dist * 0.25 * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.25 * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+            ),
+            color=ORANGE,
+        )
+        line_to_theta = ArcBetweenPoints(
+            theta_arc.get_midpoint()
+            + 0.1 * np.cos(-4 * 2 * PI / (~n_elem_vt * ~beta)) * RIGHT
+            + 0.1 * np.sin(-4 * 2 * PI / (~n_elem_vt * ~beta)) * UP,
+            theta_3db_label_1.get_corner(UL) + [-0.1, 0, 0],
+            color=ORANGE,
+            angle=-TAU / 8,
+        )
+
+        self.play(LaggedStart(Create(theta_arc), Create(line_to_theta), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        tri_mid = DashedLine(
+            polar_ax.c2p(0, 0),
+            tri_line.get_midpoint(),
+            dash_length=DEFAULT_DASH_LENGTH,
+            dashed_ratio=0.5,
+        )
+
+        right_bot = RightAngle(
+            tri_line.copy().rotate(PI / 2), tri_line, quadrant=(-1, 1), length=0.2
+        )
+        right_top = RightAngle(
+            tri_line.copy().rotate(PI / 2), tri_line, quadrant=(-1, -1), length=0.2
+        )
+
+        self.play(
+            LaggedStart(
+                Create(tri_mid),
+                Create(right_top),
+                Create(right_bot),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        top_tri_line = Line(tri_line.get_start(), tri_line.get_midpoint(), color=YELLOW)
+        top_tri_label = MathTex("d").next_to(top_tri_line, RIGHT, SMALL_BUFF)
+
+        self.play(Create(top_tri_line), Write(top_tri_label))
+
+        self.wait(0.5)
+
+        half_theta_arc = ArcBetweenPoints(
+            polar_ax.c2p(
+                bw_line_dist * 0.5 * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.5 * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+            ),
+            polar_ax.c2p(bw_line_dist * 0.5, 0),
+            color=GREEN,
+            angle=-TAU / 4,
+        )
+        sine = (
+            MathTex(
+                r"\sin{\left(\frac{\theta}{2}\right)} = \frac{d}{2} \cdot \frac{1}{R}",
+                font_size=DEFAULT_FONT_SIZE * 0.6,
+            )
+            .next_to(half_theta_arc, UP, LARGE_BUFF)
+            .shift(LEFT * 2)
+        )
+        sine[0][4:7].set_color(GREEN)
+
+        line_to_theta_half = ArcBetweenPoints(
+            polar_ax.c2p(
+                bw_line_dist * 0.5 * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.5 * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+            )
+            + [-0.1, -0.2, 0],
+            sine[0][4:7].get_bottom() + [0, -0.1, 0],
+            color=GREEN,
+            angle=-TAU / 8,
+        )
+
+        self.play(Create(half_theta_arc))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Write(sine[0][:8]),
+                Create(line_to_theta_half),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Write(sine[0][8]),
+                TransformFromCopy(top_tri_label[0], sine[0][9]),
+                Write(sine[0][10:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                sine[0][9:12].animate.set_color(YELLOW),
+                AnimationGroup(
+                    sine[0][-1].animate.set_color(PURPLE),
+                    bw_line_l_color_interp @ 1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(Uncreate(line_to_theta), Uncreate(line_to_theta_half))
+
+        self.wait(0.5)
+
+        sine_rearr = (
+            MathTex(
+                r"d = 2 R \sin{\left(\frac{\theta}{2}\right)} \approx R \theta",
+                font_size=DEFAULT_FONT_SIZE * 0.6,
+            )
+            .move_to(sine, LEFT)
+            .shift(LEFT / 2)
+        )
+        sine_rearr[0][0].set_color(YELLOW)
+        sine_rearr[0][3].set_color(PURPLE)
+        sine_rearr[0][8].set_color(ORANGE)
+
+        self.play(
+            # TransformByGlyphMap(sine, sine_rearr),
+            LaggedStart(
+                ReplacementTransform(sine[0][9], sine_rearr[0][0], path_arc=PI),
+                ReplacementTransform(sine[0][8], sine_rearr[0][1], path_arc=PI),
+                ShrinkToCenter(sine[0][10]),
+                ShrinkToCenter(sine[0][12:15]),
+                ReplacementTransform(sine[0][11], sine_rearr[0][2], path_arc=PI),
+                ReplacementTransform(sine[0][15], sine_rearr[0][3], path_arc=-PI),
+                ReplacementTransform(sine[0][:8], sine_rearr[0][4:-3]),
+                lag_ratio=0.2,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(Write(sine_rearr[0][-3:]))
+
+        self.wait(0.5)
+
+        theta_qmark = Tex(r"$\theta = $ ?").move_to(sine_rearr)
+        theta_qmark[0][0].set_color(ORANGE)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(
+                        theta_arc,
+                        sine_rearr[0][:8],
+                        sine_rearr[0][9:],
+                        theta_3db_label_1,
+                        half_theta_arc,
+                        tri_mid,
+                        top_tri_line,
+                        tri_line,
+                        right_bot,
+                        right_top,
+                        top_tri_label,
+                    ),
+                    bw_line_l_color_interp @ 0,
+                    particle_opacity @ 1,
+                ),
+                ReplacementTransform(sine_rearr[0][8], theta_qmark[0][0]),
+                Write(theta_qmark[0][1:]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+        theta_f = (
+            Tex(r"$\theta = f(\lambda, D) \sim \frac{\lambda}{D}$")
+            .move_to(theta_qmark, LEFT)
+            .shift(LEFT)
+        )
+        theta_f[0][0].set_color(ORANGE)
+
+        self.play(
+            ReplacementTransform(theta_qmark[0][:2], theta_f[0][:2]),
+            ReplacementTransform(theta_qmark[0][2], theta_f[0][2:8]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(theta_f[0][8]),
+                TransformFromCopy(theta_f[0][5], theta_f[0][-1]),
+                Create(theta_f[0][-2]),
+                TransformFromCopy(theta_f[0][3], theta_f[0][-3]),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                theta_f[0][0]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(UP / 3),
+                AnimationGroup(
+                    theta_f[0][4]
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(UP / 3),
+                    theta_f[0][9]
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(UP / 3),
+                ),
+                AnimationGroup(
+                    theta_f[0][6]
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(UP / 3),
+                    theta_f[0][11]
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(DOWN / 3),
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(n_elem_vt @ (~n_elem_vt * 2), run_time=3)
+
+        self.wait(0.5)
+
+        # self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
