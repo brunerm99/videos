@@ -22,7 +22,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 
 def skip_animations(b):
@@ -1135,7 +1135,7 @@ class RangeResolution(MovingCameraScene):
         # self.remove(*rres_eq[0])
         self.remove(*inequality[0], *inequality_rearr[0])
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(
             LaggedStart(
                 ReplacementTransform(rres_eq[0][:2], rres_eq_bw[0][:2]),
@@ -1359,6 +1359,7 @@ class RangeResolution(MovingCameraScene):
 
 class AngularResolution(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         r_min = -60
 
         x_len = config.frame_height * 0.6
@@ -1384,7 +1385,6 @@ class AngularResolution(MovingCameraScene):
         n_elem = 17  # Must be odd
         n_elem_full = 51
         weight_trackers = [VT(0) for _ in range(n_elem_full)]
-        X_weights = np.linspace(-n_elem / 2 + 1 / 2, n_elem / 2 - 1 / 2, n_elem)
         for wt in weight_trackers[
             n_elem_full // 2 - n_elem // 2 : n_elem_full // 2 + n_elem // 2
         ]:
@@ -1399,18 +1399,21 @@ class AngularResolution(MovingCameraScene):
         theta_min = VT(-PI)
         theta_max = VT(PI)
 
-        X = np.linspace(-n_elem / 2 - 0.05, n_elem / 2 + 0.05, 2**10)
-
-        beta = 3
+        beta = VT(3)
+        n_elem_vt = VT(17)
 
         def get_f_window():
             # window = np.ones(2**10)
-            window = np.clip(signal.windows.kaiser(2**10, beta=beta), 0, None)
+            X = np.linspace(-~n_elem_vt / 2 - 0.05, ~n_elem_vt / 2 + 0.05, 2**10)
+            window = np.clip(signal.windows.kaiser(2**10, beta=~beta), 0, None)
             f_window = interp1d(X, window, fill_value="extrapolate", kind="nearest")
             return f_window
 
         def get_ap_polar(polar_ax=polar_ax):
             def updater():
+                X_weights = np.linspace(
+                    -~n_elem_vt / 2 + 1 / 2, ~n_elem_vt / 2 - 1 / 2, int(~n_elem_vt)
+                )
                 u_0 = np.sin(~steering_angle * PI / 180)
                 # weights = np.array([~w for w in weight_trackers])
                 weights = np.array([get_f_window()(x) for x in X_weights])
@@ -1487,7 +1490,7 @@ class AngularResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        fnbw = 4 * PI / (n_elem * beta)
+        fnbw = 4 * PI / (n_elem * ~beta)
         self.play(theta_vt @ (fnbw * 2.06))
 
         self.wait(0.5)
@@ -1505,20 +1508,385 @@ class AngularResolution(MovingCameraScene):
             color=ORANGE,
         )
 
-        theta_3db_label = MathTex(r"\theta_{3 \text{dB}}", color=ORANGE).next_to(
-            theta_3db_arc.get_end(), RIGHT, SMALL_BUFF
+        theta_3db_label = MathTex(
+            r"\theta_{3 \text{dB}} \approx \frac{\text{max}}{2}", color=ORANGE
+        ).next_to(theta_3db_arc.get_end(), RIGHT, SMALL_BUFF)
+        theta_3db_label[0][-5:-2].set_color(GREEN)
+
+        max_dot = Dot(color=GREEN).move_to(
+            polar_ax.input_to_graph_point(0, AF_polar_plot)
+        )
+        max_curve = ArcBetweenPoints(
+            max_dot.get_center() + [0.1, 0.1, 0],
+            theta_3db_label[0][-5:-2].get_corner(UL) + [-0.1, 0.1, 0],
+            angle=-TAU / 8,
+            color=GREEN,
         )
 
         self.play(
             LaggedStart(
                 FadeOut(theta_curve),
                 Create(theta_3db_arc),
-                GrowFromCenter(theta_3db_label),
+                GrowFromCenter(theta_3db_label[0][:-6]),
                 lag_ratio=0.3,
             )
         )
 
-        # self.play(FadeOut(dot_left, dot_right))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(theta_3db_label[0][-6]),
+                Create(max_dot),
+                Create(max_curve),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in theta_3db_label[0][-5:]], lag_ratio=0.1
+                ),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(max_curve), Uncreate(theta_3db_arc), theta_vt @ (fnbw * 2.06)
+        )
+
+        self.wait(0.5)
+
+        fnbw_label = MathTex(r"\theta_{\text{first-null}}", color=ORANGE).next_to(
+            theta_3db_label, DOWN, LARGE_BUFF
+        )
+
+        fnbw_arc = ArcBetweenPoints(
+            dot_right.get_center() + [0.1, 0.1, 0],
+            fnbw_label.get_left() + [-0.1, 0, 0],
+            angle=-TAU / 8,
+            color=ORANGE,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(fnbw_arc),
+                *[GrowFromCenter(m) for m in fnbw_label[0]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            polar_ax.animate.rotate(-PI / 2).shift(LEFT * 2),
+            FadeOut(fnbw_label, fnbw_arc, theta_label, max_dot),
+            theta_vt @ (theta_3db * 2),
+        )
+
+        self.wait(0.5)
+
+        TARGET1_COLOR = GREEN
+        TARGET2_COLOR = BLUE
+        car1 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(TARGET1_COLOR)
+            .scale(0.6)
+            .flip()
+        ).next_to(
+            polar_ax.input_to_graph_point(0, AF_polar_plot), RIGHT, LARGE_BUFF * 2
+        )
+        car2 = (
+            SVGMobject("../props/static/car.svg")
+            .set_fill(TARGET2_COLOR)
+            .scale(0.6)
+            .flip()
+            .next_to(dot_right, RIGHT, LARGE_BUFF * 2)
+            .shift(DOWN * 0.5)
+        )
+
+        car1_arrow = Arrow(polar_ax.c2p(0, 0), car1.get_left(), color=TARGET1_COLOR)
+
+        self.play(
+            LaggedStart(
+                car1.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                GrowArrow(car1_arrow),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        car2_arrow = Arrow(polar_ax.c2p(0, 0), car2.get_left(), color=TARGET2_COLOR)
+
+        self.play(
+            LaggedStart(
+                car2.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                GrowArrow(car2_arrow),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        car_pow = MathTex(r"P_{\text{car}2} \le \frac{P_{\text{car}1}}{2}").next_to(
+            polar_ax, UP
+        )
+        car_pow[0][:5].set_color(TARGET2_COLOR)
+        car_pow[0][6:11].set_color(TARGET1_COLOR)
+
+        self.play(Write(car_pow))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(car_pow, car1, car2, car1_arrow, car2_arrow, dot_right, dot_left),
+            Group(polar_ax, theta_3db_label).animate.arrange(RIGHT, LARGE_BUFF * 3),
+        )
+
+        self.wait(0.5)
+
+        theta_3db_label_qmark = Tex(
+            r"$\theta_{3 \text{dB}} = $ ?", color=ORANGE
+        ).move_to(theta_3db_label, LEFT)
+
+        self.play(Transform(theta_3db_label[0][-6:], theta_3db_label_qmark[0][-2:]))
+
+        self.wait(0.5)
+
+        # self.play(beta @ 0.5)
+
+        self.play(n_elem_vt @ 41)
+
+        self.wait(0.5)
+
+        target1 = (
+            (
+                SVGMobject("../props/static/plane.svg")
+                .scale(0.7)
+                .rotate(PI * 0.75)
+                .set_fill(TARGET1_COLOR)
+                .set_color(TARGET1_COLOR)
+            )
+            .next_to(polar_ax, RIGHT, LARGE_BUFF * 2)
+            .rotate(PI / 6, about_point=polar_ax.c2p(0))
+            .rotate(-PI / 6)
+        )
+
+        target2 = (
+            (
+                SVGMobject("../props/static/plane.svg")
+                .scale(0.7)
+                .rotate(PI * 0.75)
+                .set_fill(TARGET2_COLOR)
+                .set_color(TARGET2_COLOR)
+            )
+            .next_to(polar_ax, RIGHT, LARGE_BUFF * 2)
+            .rotate(PI / 6, about_point=polar_ax.c2p(0))
+            .rotate(-PI / 6)
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+
+        self.play(
+            polar_ax.animate.rotate(PI / 6),
+            target1.shift(RIGHT * 10).animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        check = Tex(r"\checkmark", color=GREEN).scale(1.8).next_to(target1, LEFT)
+        x = Tex(r"$\times$", color=RED).scale(1.8).next_to(target2, LEFT)
+
+        self.play(LaggedStart(GrowFromCenter(check), GrowFromCenter(x), lag_ratio=0.4))
+
+        self.wait(0.5)
+
+        self.play(
+            Group(target1, check).animate.shift(UP * 5),
+            Group(target2, x).animate.shift(DOWN * 5),
+        )
+
+        self.wait(0.5)
+
+        cloud = (
+            SVGMobject("../props/static/cloud.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .next_to(polar_ax, RIGHT, LARGE_BUFF)
+            .shift(UP)
+        )
+
+        self.play(
+            polar_ax.animate.shift(DOWN * 2),
+            # FadeIn(cloud),
+            theta_3db_label.animate.shift(DOWN * 2),
+        )
+
+        bw_line_dist = -r_min * 3
+        bw_line_l = always_redraw(
+            lambda: Line(
+                polar_ax.c2p(0, 0),
+                polar_ax.c2p(
+                    bw_line_dist * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                    bw_line_dist * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                ),
+            )
+        )
+        bw_line_r = always_redraw(
+            lambda: Line(
+                polar_ax.c2p(0, 0),
+                polar_ax.c2p(
+                    bw_line_dist * np.cos(-4 * 2 * PI / (~n_elem_vt * ~beta)),
+                    bw_line_dist * np.sin(-4 * 2 * PI / (~n_elem_vt * ~beta)),
+                ),
+            )
+        )
+        bw_line_tri = Polygon(
+            bw_line_l.get_start(),
+            bw_line_l.get_end(),
+            bw_line_r.get_end(),
+            color=RED,
+            fill_color=RED,
+            fill_opacity=1,
+        )
+
+        particle_opacity = VT(0.7)
+
+        def get_ellipse(shift, width, height, shifted=True, fade=True):
+            def updater():
+                coords = polar_ax.p2c(shift + cloud.get_center())
+                angle = np.tan(coords[1] / coords[0])
+                fnbw = -4 * 2 * PI / (~n_elem_vt * ~beta)
+                color = GREEN if np.abs(angle) < np.abs(fnbw) else BLUE
+                opacity = ~particle_opacity if fade else 0.7
+                ell = Ellipse(
+                    width=width,
+                    height=height,
+                    stroke_opacity=0,
+                    fill_color=color,
+                    fill_opacity=opacity,
+                ).shift(shift)
+                if shifted:
+                    ell.shift(cloud.get_center())
+                return ell
+
+            return updater
+
+        n_particles = 100
+        np.random.seed(0)
+        particles = [
+            always_redraw(
+                get_ellipse(
+                    cloud.width * np.random.normal(0, 0.25) * RIGHT
+                    + cloud.height * np.random.normal(0, 0.25) * UP,
+                    width=np.random.normal(0.2, 0.03, 1),
+                    height=np.random.normal(0.2, 0.03, 1),
+                )
+            )
+            for _ in range(n_particles)
+        ]
+
+        def is_overlapping(mob1, mob2):
+            left1, right1 = mob1.get_left()[0], mob1.get_right()[0]
+            left2, right2 = mob2.get_left()[0], mob2.get_right()[0]
+            bottom1, top1 = mob1.get_bottom()[1], mob1.get_top()[1]
+            bottom2, top2 = mob2.get_bottom()[1], mob2.get_top()[1]
+
+            if right1 < left2 or right2 < left1:
+                return False
+            if bottom1 > top2 or bottom2 > top1:
+                return False
+            return True
+
+        def remove_overlapping_objects(mobjects):
+            cleaned = []
+            for mob in mobjects:
+                if any(is_overlapping(mob, kept) for kept in cleaned):
+                    continue
+                cleaned.append(mob)
+            return cleaned
+
+        particles = Group(*remove_overlapping_objects(particles))
+        end_n_elem = ~n_elem_vt + 40
+        particles.add(
+            always_redraw(
+                get_ellipse(
+                    polar_ax.c2p(
+                        bw_line_dist * np.cos(4 * 2 * PI / (end_n_elem * ~beta)),
+                        bw_line_dist * np.sin(4 * 2 * PI / (end_n_elem * ~beta)),
+                    ),
+                    width=np.random.normal(0.2, 0.03, 1),
+                    height=np.random.normal(0.2, 0.03, 1),
+                    shifted=False,
+                    fade=False,
+                )
+            ),
+            always_redraw(
+                get_ellipse(
+                    polar_ax.c2p(
+                        bw_line_dist * np.cos(-4 * 2 * PI / (end_n_elem * ~beta)),
+                        bw_line_dist * np.sin(-4 * 2 * PI / (end_n_elem * ~beta)),
+                    ),
+                    width=np.random.normal(0.2, 0.03, 1),
+                    height=np.random.normal(0.2, 0.03, 1),
+                    shifted=False,
+                    fade=False,
+                )
+            ),
+        )
+
+        # particles[0].set_fill(color=GREEN)
+        # coords = polar_ax.p2c(particles[0].get_center())
+        # print(np.tan(coords[1] / coords[0]), -4 * 2 * PI / (~n_elem_vt * ~beta))
+
+        # p1 = always_redraw(get_ellipse([0.1, 0.2, 0]))
+        # self.add(p1)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(Create(bw_line_r), Create(bw_line_l), *[Create(m) for m in particles])
+
+        self.wait(0.5)
+
+        theta_3db_label_1 = Tex(
+            r"$\theta_{3 \text{dB}} = 1^\circ$", color=ORANGE
+        ).move_to(theta_3db_label, LEFT)
+
+        self.play(
+            theta_3db_label.animate.shift(DOWN * 10),
+            theta_3db_label_1.shift(RIGHT * 10).animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(n_elem_vt @ end_n_elem, run_time=3)
+
+        self.wait(0.5)
+
+        # for idx, p in enumerate(particles):
+        #     self.add(Tex(f"{idx}").scale(0.5).move_to(p))
+
+        self.play(particle_opacity @ 0.1)
+
+        self.wait(0.5)
+
+        cam_group = Group(AF_polar_plot, particles)
+        l = Line(polar_ax.c2p(0, 0), polar_ax.c2p(-r_min, 0))
+        self.add(l)
+        print(l.get_angle())
+        self.play(
+            Group(*self.mobjects).animate.rotate(PI / 4)
+            # self.camera.frame.animate
+            # .scale_to_fit_width(cam_group.width)
+            # .move_to(cam_group)
+            # .rotate(
+            #     Line(polar_ax.c2p(0, 0), polar_ax.c2p(0, 1)).get_angle(), axis=RIGHT
+            # )
+        )
+        # bw_line_r.rotate()
 
         self.wait(2)
 
@@ -1704,6 +2072,8 @@ class VelocityResolution(MovingCameraScene):
                 run_time=0.5, rate_func=rate_functions.ease_in_sine
             ).shift(DOWN * config.frame_height)
         )
+
+        self.wait(0.5)
 
         self.wait(2)
 
@@ -2593,6 +2963,7 @@ class SigProc(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(
@@ -2607,8 +2978,13 @@ class SigProc(MovingCameraScene):
                 )
                 for srs in sample_rects_all
             ],
+            vel_ax.animate.set_opacity(0.2),
+            vel_ax_y_label.animate.set_opacity(0.2),
+            vel_ax_x_label.animate.set_opacity(0.2),
+            vel_opacity @ 0.2,
         )
 
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         n_ts_disp = 3
@@ -3153,7 +3529,7 @@ class SigProc(MovingCameraScene):
             .next_to(self.camera.frame, DOWN, LARGE_BUFF * 4)
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.add(rres_eqn, ares_eqn, rres_label, ares_label)
 
         self.play(
@@ -3442,13 +3818,13 @@ class TradeOff(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                rres_eqn[0][4]
-                .animate(rate_func=rate_functions.there_and_back)
-                .shift(UP)
-                .set_color(YELLOW),
                 rres_eqn[0][-1]
                 .animate(rate_func=rate_functions.there_and_back)
                 .shift(DOWN / 3)
+                .set_color(YELLOW),
+                rres_eqn[0][4]
+                .animate(rate_func=rate_functions.there_and_back)
+                .shift(UP)
                 .set_color(YELLOW),
                 lag_ratio=0.3,
             )
@@ -3736,6 +4112,7 @@ class WrapUp(MovingCameraScene):
             "Jea99",
             "Leon",
             "dplynch",
+            "Kris",
         ]
         people_text = (
             Group(
