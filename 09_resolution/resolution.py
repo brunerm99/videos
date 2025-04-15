@@ -85,6 +85,42 @@ fs = 1 / Ts
 
 class Intro(MovingCameraScene):
     def construct(self):
+        box1 = Square(color=RED).to_edge(LEFT, LARGE_BUFF)
+        box2 = Square(color=RED).to_edge(RIGHT, LARGE_BUFF)
+        box_line = always_redraw(
+            lambda: Line(box1.get_right(), box2.get_left()).shift(DOWN * 2)
+        )
+        box_line_l = always_redraw(
+            lambda: Line(box_line.get_start() + DOWN / 8, box_line.get_start() + UP / 8)
+        )
+        box_line_r = always_redraw(
+            lambda: Line(box_line.get_end() + DOWN / 8, box_line.get_end() + UP / 8)
+        )
+
+        self.play(
+            GrowFromCenter(box1),
+            GrowFromCenter(box2),
+            Create(box_line_l),
+            Create(box_line),
+            Create(box_line_r),
+        )
+
+        self.wait(0.5)
+
+        self.play(Group(box1, box2).animate.arrange(RIGHT))
+
+        self.wait(0.5)
+
+        self.play(
+            ShrinkToCenter(box1),
+            ShrinkToCenter(box2),
+            Uncreate(box_line_l),
+            Uncreate(box_line),
+            Uncreate(box_line_r),
+        )
+
+        self.wait(0.5)
+
         car1 = (
             SVGMobject("../props/static/car.svg")
             .set_fill(BLUE)
@@ -2410,6 +2446,11 @@ class AngularResolution(MovingCameraScene):
             ReplacementTransform(theta_qmark[0][2], theta_f[0][2:8]),
         )
 
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(n_elem_vt @ (~n_elem_vt * 2), run_time=3)
+
         self.wait(0.5)
 
         self.play(
@@ -2422,7 +2463,6 @@ class AngularResolution(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(
@@ -2452,11 +2492,7 @@ class AngularResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(n_elem_vt @ (~n_elem_vt * 2), run_time=3)
-
-        self.wait(0.5)
-
-        # self.play(FadeOut(*self.mobjects))
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
@@ -3689,6 +3725,10 @@ class SigProc(MovingCameraScene):
             self.camera.frame.animate.scale_to_fit_width(vel_plot_group.width * 2)
             .move_to(vel_plot_group)
             .shift(UP / 2),
+            vel_opacity @ 1,
+            vel_ax.animate.set_opacity(1),
+            vel_ax_y_label.animate.set_opacity(1),
+            vel_ax_x_label.animate.set_opacity(1),
             Group(
                 axes, sample_rects_all, fast_time_label, slow_time_label
             ).animate.shift(LEFT * 2),
@@ -4712,10 +4752,10 @@ class EndScreen(Scene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "3,620"],
-                    ["Script word count", "1,838"],
-                    ["Days to make", "31"],
-                    ["Git commits", "36"],
+                    ["Lines of code", "4,812"],
+                    ["Script word count", "2,370"],
+                    ["Days to make", "18"],
+                    ["Git commits", "14"],
                 ]
             )
             .scale(0.5)
@@ -4731,14 +4771,18 @@ class EndScreen(Scene):
         )
 
         thank_you_sabrina = (
-            Tex(r"Thank you, Sabrina, for\\editing the whole video :)")
+            Text(
+                "Thank you, Sabrina, for\nediting the whole video :)",
+                font="Maple Mono",
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+            )
             .next_to(stats_group, DOWN)
             .to_edge(DOWN)
         )
 
-        marshall_bruner = Tex("Marshall Bruner").next_to(
-            [-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF
-        )
+        marshall_bruner = Text(
+            "Marshall Bruner", font="Maple Mono", font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to([-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF)
 
         self.play(
             LaggedStart(

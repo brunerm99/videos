@@ -88,3 +88,4 @@ file 'file:/home/marchall/documents/videos/09_resolution/media/videos/resolution
 file 'file:/home/marchall/documents/videos/09_resolution/media/videos/resolution/1080p60/partial_movie_files/AngularResolution/uncached_00086.mp4'
 file 'file:/home/marchall/documents/videos/09_resolution/media/videos/resolution/1080p60/partial_movie_files/AngularResolution/uncached_00087.mp4'
 file 'file:/home/marchall/documents/videos/09_resolution/media/videos/resolution/1080p60/partial_movie_files/AngularResolution/uncached_00088.mp4'
+file 'file:/home/marchall/documents/videos/09_resolution/media/videos/resolution/1080p60/partial_movie_files/AngularResolution/uncached_00089.mp4'
