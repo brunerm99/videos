@@ -2675,25 +2675,25 @@ class VelocityResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        # self.play(
-        #     self.camera.frame.animate(
-        #         run_time=0.5, rate_func=rate_functions.ease_in_sine
-        #     ).shift(DOWN * config.frame_height)
-        # )
-        self.remove(
-            car1,
-            car2,
-            vel2_arrow,
-            vel2_dot,
-            vel2_label,
-            vel1_arrow,
-            vel1_dot,
-            *vel1_label[0],
-            # rd_img,
-            rd_ax,
-            range_label,
-            vel_label,
+        self.play(
+            self.camera.frame.animate(
+                run_time=0.5, rate_func=rate_functions.ease_in_sine
+            ).shift(DOWN * config.frame_height)
         )
+        # self.remove(
+        #     car1,
+        #     car2,
+        #     vel2_arrow,
+        #     vel2_dot,
+        #     vel2_label,
+        #     vel1_arrow,
+        #     vel1_dot,
+        #     *vel1_label[0],
+        #     # rd_img,
+        #     rd_ax,
+        #     range_label,
+        #     vel_label,
+        # )
 
         self.wait(0.5)
 
