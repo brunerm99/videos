@@ -2002,7 +2002,7 @@ class AngularResolution(MovingCameraScene):
 
         # self.play(beta @ 0.5)
 
-        self.play(n_elem_vt @ 41, run_time=3)
+        self.play(n_elem_vt @ 21, run_time=3)
 
         self.wait(0.5)
 
@@ -2074,14 +2074,15 @@ class AngularResolution(MovingCameraScene):
             theta_3db_label.animate.shift(DOWN * 2),
         )
 
+        #   4 * 2 * PI / (~n_elem_vt * ~beta)
         bw_line_dist = -r_min * 2.5
         bw_line_l_color_interp = VT(0)
         bw_line_l = always_redraw(
             lambda: Line(
                 polar_ax.c2p(0, 0),
                 polar_ax.c2p(
-                    bw_line_dist * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
-                    bw_line_dist * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                    bw_line_dist * np.cos(2.1 / ~n_elem_vt * 2),
+                    bw_line_dist * np.sin(2.1 / ~n_elem_vt * 2),
                 ),
                 color=interpolate_color(WHITE, PURPLE, ~bw_line_l_color_interp),
             )
@@ -2090,8 +2091,8 @@ class AngularResolution(MovingCameraScene):
             lambda: Line(
                 polar_ax.c2p(0, 0),
                 polar_ax.c2p(
-                    bw_line_dist * np.cos(-4 * 2 * PI / (~n_elem_vt * ~beta)),
-                    bw_line_dist * np.sin(-4 * 2 * PI / (~n_elem_vt * ~beta)),
+                    bw_line_dist * np.cos(-2.1 / ~n_elem_vt * 2),
+                    bw_line_dist * np.sin(-2.1 / ~n_elem_vt * 2),
                 ),
             )
         )
@@ -2110,7 +2111,7 @@ class AngularResolution(MovingCameraScene):
             def updater():
                 coords = polar_ax.p2c(shift + cloud.get_center())
                 angle = np.tan(coords[1] / coords[0])
-                fnbw = -4 * 2 * PI / (~n_elem_vt * ~beta)
+                fnbw = 2.1 / ~n_elem_vt * 2
                 color = GREEN if np.abs(angle) <= np.abs(fnbw) else BLUE
                 opacity = ~particle_opacity if fade else 0.7
                 ell = Ellipse(
@@ -2161,13 +2162,13 @@ class AngularResolution(MovingCameraScene):
             return cleaned
 
         particles = Group(*remove_overlapping_objects(particles))
-        end_n_elem = ~n_elem_vt + 40
+        end_n_elem = ~n_elem_vt + 10
         particles.add(
             always_redraw(
                 get_ellipse(
                     polar_ax.c2p(
-                        bw_line_dist * np.cos(4 * 2 * PI / (end_n_elem * ~beta)),
-                        bw_line_dist * np.sin(4 * 2 * PI / (end_n_elem * ~beta)),
+                        bw_line_dist * np.cos(2.1 / ~n_elem_vt * 2 / np.sqrt(2)),
+                        bw_line_dist * np.sin(2.1 / ~n_elem_vt * 2 / np.sqrt(2)),
                     ),
                     width=np.random.normal(0.2, 0.03, 1),
                     height=np.random.normal(0.2, 0.03, 1),
@@ -2178,8 +2179,8 @@ class AngularResolution(MovingCameraScene):
             always_redraw(
                 get_ellipse(
                     polar_ax.c2p(
-                        bw_line_dist * np.cos(-4 * 2 * PI / (end_n_elem * ~beta)),
-                        bw_line_dist * np.sin(-4 * 2 * PI / (end_n_elem * ~beta)),
+                        bw_line_dist * np.cos(-2.1 / ~n_elem_vt * 2 / np.sqrt(2)),
+                        bw_line_dist * np.sin(-2.1 / ~n_elem_vt * 2 / np.sqrt(2)),
                     ),
                     width=np.random.normal(0.2, 0.03, 1),
                     height=np.random.normal(0.2, 0.03, 1),
@@ -2212,7 +2213,7 @@ class AngularResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.play(n_elem_vt @ end_n_elem, run_time=3)
 
         self.wait(0.5)
@@ -2243,19 +2244,19 @@ class AngularResolution(MovingCameraScene):
 
         theta_arc = ArcBetweenPoints(
             polar_ax.c2p(
-                bw_line_dist * 0.25 * np.cos(-4 * 2 * PI / (~n_elem_vt * ~beta)),
-                bw_line_dist * 0.25 * np.sin(-4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.25 * np.cos(-2.1 / ~n_elem_vt * 2),
+                bw_line_dist * 0.25 * np.sin(-2.1 / ~n_elem_vt * 2),
             ),
             polar_ax.c2p(
-                bw_line_dist * 0.25 * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
-                bw_line_dist * 0.25 * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.25 * np.cos(2.1 / ~n_elem_vt * 2),
+                bw_line_dist * 0.25 * np.sin(2.1 / ~n_elem_vt * 2),
             ),
             color=ORANGE,
         )
         line_to_theta = ArcBetweenPoints(
             theta_arc.get_midpoint()
-            + 0.1 * np.cos(-4 * 2 * PI / (~n_elem_vt * ~beta)) * RIGHT
-            + 0.1 * np.sin(-4 * 2 * PI / (~n_elem_vt * ~beta)) * UP,
+            + 0.1 * np.cos(-2.1 / ~n_elem_vt * 2) * RIGHT
+            + 0.1 * np.sin(-2.1 / ~n_elem_vt * 2) * UP,
             theta_3db_label_1.get_corner(UL) + [-0.1, 0, 0],
             color=ORANGE,
             angle=-TAU / 8,
@@ -2299,8 +2300,8 @@ class AngularResolution(MovingCameraScene):
 
         half_theta_arc = ArcBetweenPoints(
             polar_ax.c2p(
-                bw_line_dist * 0.5 * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
-                bw_line_dist * 0.5 * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.5 * np.cos(2.1 / ~n_elem_vt * 2),
+                bw_line_dist * 0.5 * np.sin(2.1 / ~n_elem_vt * 2),
             ),
             polar_ax.c2p(bw_line_dist * 0.5, 0),
             color=GREEN,
@@ -2318,8 +2319,8 @@ class AngularResolution(MovingCameraScene):
 
         line_to_theta_half = ArcBetweenPoints(
             polar_ax.c2p(
-                bw_line_dist * 0.5 * np.cos(4 * 2 * PI / (~n_elem_vt * ~beta)),
-                bw_line_dist * 0.5 * np.sin(4 * 2 * PI / (~n_elem_vt * ~beta)),
+                bw_line_dist * 0.5 * np.cos(2.1 / ~n_elem_vt * 2),
+                bw_line_dist * 0.5 * np.sin(2.1 / ~n_elem_vt * 2),
             )
             + [-0.1, -0.2, 0],
             sine[0][4:7].get_bottom() + [0, -0.1, 0],
@@ -2447,6 +2448,7 @@ class AngularResolution(MovingCameraScene):
         )
 
         self.next_section(skip_animations=skip_animations(False))
+        # self.remove(*theta_f[0], *theta_qmark[0])
         self.wait(0.5)
 
         self.play(n_elem_vt @ (~n_elem_vt * 2), run_time=3)
@@ -2673,10 +2675,24 @@ class VelocityResolution(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(
-            self.camera.frame.animate(
-                run_time=0.5, rate_func=rate_functions.ease_in_sine
-            ).shift(DOWN * config.frame_height)
+        # self.play(
+        #     self.camera.frame.animate(
+        #         run_time=0.5, rate_func=rate_functions.ease_in_sine
+        #     ).shift(DOWN * config.frame_height)
+        # )
+        self.remove(
+            car1,
+            car2,
+            vel2_arrow,
+            vel2_dot,
+            vel2_label,
+            vel1_arrow,
+            vel1_dot,
+            *vel1_label[0],
+            # rd_img,
+            rd_ax,
+            range_label,
+            vel_label,
         )
 
         self.wait(0.5)
