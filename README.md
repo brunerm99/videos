@@ -80,3 +80,11 @@ Side lobes in a phased array can cause unwanted interference and distort signals
 In this video, we explore how tapering (or windowing) helps shape the array factor, reducing side lobes at the cost of widening the main lobe. Using animations, we break down the connection between Fourier transforms, spatial sampling, and phased array beamforming.
 
 ![thumbnail](./08_beamforming/media/images/beamforming/Thumbnail_ManimCE_v0.18.1.png)
+
+## [09 - How Radars Tell Targets Apart (and When They Can’t) | Radar Resolution](https://youtu.be/MmpPfQ8WoWk)
+
+How do radars tell targets apart when they’re close together - in range, angle, or speed? 
+
+In this video, we break down the three core types of radar resolution, how each one works, and why improving one often means making trade-offs with the others.
+
+![thumbnail](./09_resolution/static/Resolution%20Thumbnail.png)
