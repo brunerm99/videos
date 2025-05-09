@@ -17,7 +17,9 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
+
+FONT = "Maple Mono CN"
 
 
 def skip_animations(b):
@@ -116,7 +118,7 @@ class SamplingRecap(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         title = Text(
             "Sampling: a recap",
-            font="Maple Mono",
+            font=FONT,
             font_size=DEFAULT_FONT_SIZE * 1.5,
             t2c={"Sampling": ORANGE},
             t2s={"a recap": ITALIC},
@@ -338,7 +340,7 @@ class SamplingRecap(MovingCameraScene):
             to_freq_arrow, RIGHT
         )
 
-        freq_label = Text("Frequency", font="Maple Mono").next_to(f_ax, DOWN)
+        freq_label = Text("Frequency", font=FONT).next_to(f_ax, DOWN)
 
         all_group = Group(ax, f_ax, freq_label)
 
@@ -524,7 +526,7 @@ class SamplingRecap(MovingCameraScene):
             line_func=Line,
         )
         one_f_dots = Group(*[Dot(s.get_end(), color=BLUE) for s in one_f_samples])
-        freq2_label = Text("Frequency", font="Maple Mono").next_to(f_ax2, DOWN)
+        freq2_label = Text("Frequency", font=FONT).next_to(f_ax2, DOWN)
 
         ax2_group = Group(ax2, f_ax2, delta_label, freq2_label)
         self.play(
@@ -735,6 +737,8 @@ class SamplingRecap(MovingCameraScene):
         )
         f_ax_nq3_r.shift(f_ax_soln.c2p(2 * fs, 0) - f_ax_nq3_r.c2p(0, 0))
 
+        # FIXME: Change these zones to every fs/2
+        # FIXME: Change the 0-pi zone to green
         zone3_l = Polygon(
             f_ax_nq3_l.c2p(-fs / 2, 0),
             f_ax_nq3_l.c2p(-fs / 2, 1),
@@ -780,13 +784,13 @@ class SamplingRecap(MovingCameraScene):
             fill_opacity=0.3,
             fill_color=ORANGE,
         )
-        zone2_l_label = Text("Zone 2", font="Maple Mono").next_to(
+        zone2_l_label = Text("Zone 2", font=FONT).next_to(
             zone2_l.get_top(), DOWN, SMALL_BUFF
         )
-        zone2_r_label = Text("Zone 2", font="Maple Mono").next_to(
+        zone2_r_label = Text("Zone 2", font=FONT).next_to(
             zone2_r.get_top(), DOWN, SMALL_BUFF
         )
-        zone1_label = Text("Zone 1", font="Maple Mono").next_to(
+        zone1_label = Text("Zone 1", font=FONT).next_to(
             zone1.get_top(), DOWN, SMALL_BUFF
         )
 
@@ -938,3 +942,417 @@ class SamplingRecap(MovingCameraScene):
         self.play(interp_rect_bw @ 0, f_plot_scalar @ 1, run_time=3)
 
         self.wait(2)
+
+
+class SimpleSignal(MovingCameraScene):
+    def construct(self):
+        fft_len = 2**10
+        stop_time = 3
+        fs = 10
+        freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+        f1 = VT(3)
+        f2 = VT(2)
+        p1 = VT(1)
+        p2 = VT(0)
+
+        plot_width = config.frame_width * 0.9
+        plot_height = config.frame_height * 0.4
+
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=plot_width,
+            y_length=plot_height,
+        )
+
+        interp = VT(0)
+
+        def create_X_k(
+            plot_ax, smoothing=True, shift=0, xmin=None, xmax=None, color=BLUE
+        ):
+            def updater():
+                freq = np.linspace(-fs / 2 + shift, fs / 2 + shift, fft_len)
+                t = np.arange(0, stop_time, 1 / fs)
+                x_n = (
+                    ~p1 * np.sin(2 * PI * ~f1 * t) + ~p2 * np.sin(2 * PI * ~f2 * t)
+                ) / (~p1 + ~p2)
+
+                X_k = fftshift(
+                    ((1 - ~interp) * np.abs(fft(x_n, fft_len)) / (t.size / 2))
+                    + ((~interp) * fft(x_n, fft_len) / (t.size / 2))
+                )
+
+                f_X_k = interp1d(freq, np.real(X_k), fill_value="extrapolate")
+                if xmin is None or xmax is None:
+                    return plot_ax.plot(
+                        f_X_k,
+                        x_range=[-fs / 2 + shift, fs / 2 + shift, fs / 200],
+                        color=color,
+                        use_smoothing=smoothing,
+                    )
+                return plot_ax.plot(
+                    f_X_k,
+                    x_range=[~xmin + shift, ~xmax + shift, fs / 200],
+                    color=color,
+                    use_smoothing=smoothing,
+                )
+
+            return updater
+
+        n_nyquist = 3
+        f_ax = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.3,
+            y_length=plot_height,
+            x_axis_config=dict(
+                numbers_with_elongated_ticks=np.arange(
+                    -n_nyquist * fs / 2, (n_nyquist + 1) * fs / 2, fs / 2
+                ),
+                longer_tick_multiple=3,
+            ),
+        ).set_opacity(1)
+
+        def get_f_ax(shift=0):
+            def updater():
+                newax = Axes(
+                    x_range=[-fs / 2, fs / 2, 1],
+                    y_range=[0, 1, 0.5],
+                    tips=False,
+                    x_length=config.frame_width * 0.3,
+                    y_length=plot_height,
+                ).set_opacity(0)
+                newax.shift(f_ax.c2p(shift, 0) - newax.c2p(0, 0))
+                return newax
+
+            return updater
+
+        f_ax_nq1 = always_redraw(get_f_ax(0))
+        # f_ax_nq2_l = always_redraw(get_f_ax(-fs))
+        # f_ax_nq2_r = always_redraw(get_f_ax(fs))
+
+        self.add(
+            # f_ax_nq2_l,
+            # f_ax_nq2_r,
+            f_ax_nq1,
+        )
+
+        Group(ax, f_ax).arrange(DOWN, MED_LARGE_BUFF)
+        ax.shift(UP * 7)
+        f_ax.shift(DOWN * 7)
+
+        sine_plot = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * ~f1 * t),
+                x_range=[0, 1, 1 / 200],
+                color=ORANGE,
+            )
+        )
+
+        plot_nq1 = always_redraw(create_X_k(f_ax_nq1, smoothing=True))
+
+        self.add(
+            f_ax,
+            plot_nq1,
+            # plot_nq2_l,
+            # plot_nq2_r,
+            ax,
+            sine_plot,
+        )
+
+        self.play(f_ax.animate.shift(UP * 7), ax.animate.shift(DOWN * 7))
+
+        self.wait(0.5)
+
+        time_label = Text(r"f_s = 10 \text{Hz}, T = 1 \text{s}").next_to(ax, UP)
+        # time_label = Text("hi")
+        time_bez_l = CubicBezier(
+            ax.get_corner(UL) + [0, 0.1, 0],
+            ax.get_corner(UL) + [0, 1, 0],
+            time_label.get_left() + [-2, 0, 0],
+            time_label.get_left() + [-0.1, 0, 0],
+        )
+        time_bez_r = CubicBezier(
+            ax.get_corner(UR) + [0, 0.1, 0],
+            ax.get_corner(UR) + [0, 1, 0],
+            time_label.get_right() + [2, 0, 0],
+            time_label.get_right() + [0.1, 0, 0],
+        )
+
+        f_label = Text(r"f = 3 Hz", color=ORANGE).next_to(
+            ax.input_to_graph_point(9.5 / 12, sine_plot),
+            RIGHT,
+            LARGE_BUFF,
+        )
+        # f_label = Text("hi")
+        f_line = CubicBezier(
+            ax.input_to_graph_point(9.5 / 12, sine_plot) + [0.1, 0.1, 0],
+            ax.input_to_graph_point(9.5 / 12, sine_plot) + [0.5, 0.25, 0],
+            f_label.get_left() + [-0.5, 0, 0],
+            f_label.get_left() + [-0.1, 0, 0],
+            color=ORANGE,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.3).shift(UP),
+                Create(f_line),
+                FadeIn(f_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        num_samples = 10
+        samples = ax.get_vertical_lines_to_graph(
+            sine_plot,
+            x_range=[1 / num_samples / 2, 1 - 1 / num_samples / 2],
+            num_lines=num_samples,
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            line_func=Line,
+        )
+        dots = Group(*[Dot(s.get_end(), color=BLUE) for s in samples])
+
+        self.play(
+            AnimationGroup(Create(time_bez_l), Create(time_bez_r)),
+            FadeIn(time_label),
+            LaggedStart(
+                *[LaggedStart(Create(s), Create(dot)) for s, dot in zip(samples, dots)],
+                lag_ratio=0.1,
+            ),
+        )
+
+        self.wait(0.5)
+
+        xmin_pos = VT(3)
+        xmax_pos = VT(3)
+        xmin_neg = VT(-3)
+        xmax_neg = VT(-3)
+
+        highlight_nq2_l_pos = always_redraw(
+            create_X_k(
+                f_ax_nq1, True, shift=-fs, xmin=xmin_pos, xmax=xmax_pos, color=YELLOW
+            )
+        )
+        highlight_nq2_r_pos = always_redraw(
+            create_X_k(
+                f_ax_nq1, True, shift=fs, xmin=xmin_pos, xmax=xmax_pos, color=YELLOW
+            )
+        )
+        highlight_nq1_pos = always_redraw(
+            create_X_k(
+                f_ax_nq1, True, shift=0, xmin=xmin_pos, xmax=xmax_pos, color=YELLOW
+            )
+        )
+        highlight_nq2_l_neg = always_redraw(
+            create_X_k(
+                f_ax_nq1, True, shift=-fs, xmin=xmin_neg, xmax=xmax_neg, color=RED
+            )
+        )
+        highlight_nq2_r_neg = always_redraw(
+            create_X_k(
+                f_ax_nq1, True, shift=fs, xmin=xmin_neg, xmax=xmax_neg, color=RED
+            )
+        )
+        highlight_nq1_neg = always_redraw(
+            create_X_k(f_ax_nq1, True, shift=0, xmin=xmin_neg, xmax=xmax_neg, color=RED)
+        )
+        self.add(
+            # highlight_nq2_l_pos,
+            highlight_nq1_pos,
+            # highlight_nq2_r_pos,
+            # highlight_nq2_l_neg,
+            highlight_nq1_neg,
+            # highlight_nq2_r_neg,
+        )
+
+        self.play(xmin_pos @ (~xmin_pos - 0.3), xmax_pos @ (~xmin_pos + 0.3))
+
+        self.wait(0.5)
+
+        self.play(xmin_neg @ (~xmin_neg - 0.3), xmax_neg @ (~xmin_neg + 0.3))
+
+        self.wait(0.5)
+
+        self.play(xmin_pos @ 3, xmax_pos @ 3)
+
+        self.wait(0.5)
+
+        self.play(xmin_pos @ (~xmin_pos - 0.3), xmax_pos @ (~xmin_pos + 0.3))
+
+        self.wait(0.5)
+
+        zone1 = Polygon(
+            f_ax.c2p(-fs / 2, 0),
+            f_ax.c2p(-fs / 2, 1),
+            f_ax.c2p(fs / 2, 1),
+            f_ax.c2p(fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=ORANGE,
+        )
+
+        zone1_label = Text(
+            "1st Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(zone1, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                Group(
+                    ax,
+                    time_bez_l,
+                    time_bez_r,
+                    f_line,
+                    f_label,
+                    time_label,
+                    samples,
+                    dots,
+                ).animate.shift(UP),
+                FadeIn(zone1),
+                Write(zone1_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        f_labels = Group(
+            *[
+                fl.next_to(f_ax.c2p(x, 0), DOWN)
+                for fl, x in zip(
+                    [
+                        MathTex(r"-\frac{3 f_s}{2}"),
+                        MathTex(r"-f_s"),
+                        MathTex(r"-\frac{f_s}{2}"),
+                        MathTex(r"0"),
+                        MathTex(r"\frac{f_s}{2}"),
+                        MathTex(r"f_s"),
+                        MathTex(r"\frac{3 f_s}{2}"),
+                    ],
+                    [-1.5 * fs, -fs, -0.5 * fs, 0, 0.5 * fs, fs, 1.5 * fs],
+                )
+            ]
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2),
+                FadeIn(f_labels[2]),
+                FadeIn(f_labels[4]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        nfs_val = Text(r"-5 \text{Hz}").move_to(f_labels[2])
+        pfs_val = Text(r"5 \text{Hz}").move_to(f_labels[4])
+
+        self.play(
+            LaggedStart(
+                Transform(f_labels[2], nfs_val),
+                Transform(f_labels[4], pfs_val),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        f_ax_full = Axes(
+            x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.3 * n_nyquist,
+            y_length=plot_height,
+            x_axis_config=dict(
+                numbers_with_elongated_ticks=np.arange(
+                    -n_nyquist * fs / 2, (n_nyquist + 1) * fs / 2, fs / 2
+                ),
+                longer_tick_multiple=3,
+            ),
+        ).set_opacity(1)
+        f_ax_full.shift(f_ax.c2p(0, 0) - f_ax_full.c2p(0, 0))
+
+        plot_nq2_l = always_redraw(create_X_k(f_ax_nq1, smoothing=True, shift=-fs))
+        plot_nq2_r = always_redraw(create_X_k(f_ax_nq1, smoothing=True, shift=fs))
+
+        zone2_l = Polygon(
+            f_ax.c2p(-fs + -fs / 2, 0),
+            f_ax.c2p(-fs + -fs / 2, 1),
+            f_ax.c2p(-fs + fs / 2, 1),
+            f_ax.c2p(-fs + fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=PURPLE,
+        )
+        zone2_r = Polygon(
+            f_ax.c2p(fs + -fs / 2, 0),
+            f_ax.c2p(fs + -fs / 2, 1),
+            f_ax.c2p(fs + fs / 2, 1),
+            f_ax.c2p(fs + fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=PURPLE,
+        )
+
+        zone2_l_label = Text(
+            "2nd Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(zone2_l, UP, SMALL_BUFF)
+        zone2_r_label = Text(
+            "2nd Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(zone2_r, UP, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                Transform(f_ax, f_ax_full),
+                AnimationGroup(Create(plot_nq2_l), Create(plot_nq2_r)),
+                AnimationGroup(
+                    Create(highlight_nq2_l_pos),
+                    Create(highlight_nq2_r_pos),
+                    Create(highlight_nq2_l_neg),
+                    Create(highlight_nq2_r_neg),
+                ),
+                FadeIn(zone2_l),
+                FadeIn(zone2_r),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(Write(zone2_l_label), Write(zone2_r_label), lag_ratio=0.3)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(zone1.height * 1.7)
+            .move_to(zone1)
+            .set_x(f_ax_nq1.c2p(fs / 2, 0)[0]),
+            zone1.animate.set_opacity(0.2),
+            zone2_l.animate.set_opacity(0.2),
+            zone2_r.animate.set_opacity(0.2),
+            xmin_neg @ -3,
+            xmax_neg @ -3,
+        )
+
+        self.wait(0.5)
+
+        self.play()
+
+        self.wait(2)
+
+
+class TexTest(Scene):
+    def construct(self):
+        time_label = MathTex(r"\frac{3 f_s}{2} a")
+
+        self.add(time_label)
