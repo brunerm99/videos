@@ -17,9 +17,9 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
-FONT = "Maple Mono CN"
+FONT = "Maple Mono"
 
 
 def skip_animations(b):
@@ -946,6 +946,7 @@ class SamplingRecap(MovingCameraScene):
 
 class SimpleSignal(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         fft_len = 2**10
         stop_time = 3
         fs = 10
@@ -1310,9 +1311,10 @@ class SimpleSignal(MovingCameraScene):
         ).next_to(zone2_r, UP, SMALL_BUFF)
 
         self.play(
+            Transform(f_ax, f_ax_full),
+            Create(plot_nq2_l),
+            Create(plot_nq2_r),
             LaggedStart(
-                Transform(f_ax, f_ax_full),
-                AnimationGroup(Create(plot_nq2_l), Create(plot_nq2_r)),
                 AnimationGroup(
                     Create(highlight_nq2_l_pos),
                     Create(highlight_nq2_r_pos),
@@ -1322,7 +1324,7 @@ class SimpleSignal(MovingCameraScene):
                 FadeIn(zone2_l),
                 FadeIn(zone2_r),
                 lag_ratio=0.3,
-            )
+            ),
         )
 
         self.wait(0.5)
@@ -1344,9 +1346,18 @@ class SimpleSignal(MovingCameraScene):
             xmax_neg @ -3,
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
-        self.play()
+        self.play(f1 @ (fs * 0.5), run_time=8)
+
+        self.wait(0.5)
+
+        self.play(f1 @ (fs * 0.75), run_time=8)
+
+        self.wait(0.5)
+
+        self.play(f1 @ (fs * 4), run_time=12)
 
         self.wait(2)
 
