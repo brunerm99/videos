@@ -17,9 +17,10 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
-FONT = "Maple Mono"
+# TODO: Install maple mono CN
+FONT = "Maple Mono CN"
 
 
 def skip_animations(b):
@@ -1031,19 +1032,13 @@ class SimpleSignal(MovingCameraScene):
 
             return updater
 
-        f_ax_nq1 = always_redraw(get_f_ax(0))
-        # f_ax_nq2_l = always_redraw(get_f_ax(-fs))
-        # f_ax_nq2_r = always_redraw(get_f_ax(fs))
-
-        self.add(
-            # f_ax_nq2_l,
-            # f_ax_nq2_r,
-            f_ax_nq1,
-        )
-
         Group(ax, f_ax).arrange(DOWN, MED_LARGE_BUFF)
         ax.shift(UP * 7)
         f_ax.shift(DOWN * 7)
+
+        f_ax_nq1 = always_redraw(get_f_ax(0))
+        # f_ax_nq2_l = always_redraw(get_f_ax(-fs))
+        # f_ax_nq2_r = always_redraw(get_f_ax(fs))
 
         sine_plot = always_redraw(
             lambda: ax.plot(
@@ -1057,6 +1052,7 @@ class SimpleSignal(MovingCameraScene):
 
         self.add(
             f_ax,
+            f_ax_nq1,
             plot_nq1,
             # plot_nq2_l,
             # plot_nq2_r,
@@ -1064,11 +1060,41 @@ class SimpleSignal(MovingCameraScene):
             sine_plot,
         )
 
+        # self.play(Create(sine_plot))
+
+        self.wait(0.5)
+
         self.play(f_ax.animate.shift(UP * 7), ax.animate.shift(DOWN * 7))
 
         self.wait(0.5)
 
-        time_label = Text(r"f_s = 10 \text{Hz}, T = 1 \text{s}").next_to(ax, UP)
+        # fc_label = MathTex(r"f = 3 \text{ Hz}").next_to(
+        #     f_ax.c2p(~f1, 0), DOWN, MED_LARGE_BUFF
+        # )
+        # fc_line = f_ax.get_vertical_lines_to_graph(
+        #     plot_nq1, x_range=[~f1, ~f1], num_lines=1
+        # )
+
+        # self.camera.frame.save_state()
+        # self.play(
+        #     LaggedStart(
+        #         self.camera.frame.animate.scale(1.2),
+        #         Create(fc_line[0]),
+        #         FadeIn(fc_label),
+        #         lag_ratio=0.3,
+        #     ),
+        #     run_time=2,
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     Uncreate(fc_line[0]), FadeOut(fc_label), self.camera.frame.animate.restore()
+        # )
+
+        # self.wait(0.5)
+
+        time_label = MathTex(r"f_s = 10 \text{ Hz},\ T = 1 \text{ s}").next_to(ax, UP)
         # time_label = Text("hi")
         time_bez_l = CubicBezier(
             ax.get_corner(UL) + [0, 0.1, 0],
@@ -1083,7 +1109,7 @@ class SimpleSignal(MovingCameraScene):
             time_label.get_right() + [0.1, 0, 0],
         )
 
-        f_label = Text(r"f = 3 Hz", color=ORANGE).next_to(
+        f_label = MathTex(r"f = 3 \text{ Hz}", color=ORANGE).next_to(
             ax.input_to_graph_point(9.5 / 12, sine_plot),
             RIGHT,
             LARGE_BUFF,
@@ -1186,6 +1212,52 @@ class SimpleSignal(MovingCameraScene):
 
         self.wait(0.5)
 
+        no_imag = MathTex(
+            r"x = \sin{(2 \pi f t)} \leftarrow \text{no imaginary ($j$ or $i$) component}"
+        )
+        no_imag_box = SurroundingRectangle(
+            no_imag, corner_radius=0.2, fill_opacity=1, fill_color=BACKGROUND_COLOR
+        )
+        no_imag_group = Group(no_imag_box, no_imag).next_to(
+            time_label, UP, MED_LARGE_BUFF
+        )
+
+        self.play(no_imag_group.shift(UP * 5).animate.shift(DOWN * 5))
+
+        self.wait(0.5)
+
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
+
+        notebook_reminder = Tex(
+            r"aliasing.ipynb \rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+        )
+        notebook_reminder_box = SurroundingRectangle(
+            notebook_reminder,
+            corner_radius=0.2,
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+        )
+        notebook = (
+            Group(notebook_reminder_box, notebook_reminder)
+            .set_y(no_imag_group.get_y())
+            .shift(LEFT * 12)
+        )
+
+        self.play(
+            Group(notebook, no_imag_group)
+            .animate.arrange(RIGHT)
+            .set_y(no_imag_group.get_y())
+        )
+
+        self.wait(0.5)
+
+        self.play(Group(notebook, no_imag_group).animate.shift(UP * 5))
+
+        self.wait(0.5)
+        self.remove(notebook, no_imag_group)
+
         self.play(xmin_pos @ (~xmin_pos - 0.3), xmax_pos @ (~xmin_pos + 0.3))
 
         self.wait(0.5)
@@ -1253,9 +1325,11 @@ class SimpleSignal(MovingCameraScene):
 
         self.wait(0.5)
 
-        nfs_val = Text(r"-5 \text{Hz}").move_to(f_labels[2])
-        pfs_val = Text(r"5 \text{Hz}").move_to(f_labels[4])
+        nfs_val = MathTex(r"-5 \text{Hz}").move_to(f_labels[2])
+        pfs_val = MathTex(r"5 \text{Hz}").move_to(f_labels[4])
 
+        f_labels[2].save_state()
+        f_labels[4].save_state()
         self.play(
             LaggedStart(
                 Transform(f_labels[2], nfs_val),
@@ -1310,20 +1384,26 @@ class SimpleSignal(MovingCameraScene):
             "2nd Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
         ).next_to(zone2_r, UP, SMALL_BUFF)
 
+        f_ax.save_state()
         self.play(
             Transform(f_ax, f_ax_full),
             Create(plot_nq2_l),
             Create(plot_nq2_r),
             LaggedStart(
-                AnimationGroup(
-                    Create(highlight_nq2_l_pos),
-                    Create(highlight_nq2_r_pos),
-                    Create(highlight_nq2_l_neg),
-                    Create(highlight_nq2_r_neg),
-                ),
                 FadeIn(zone2_l),
                 FadeIn(zone2_r),
                 lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeIn(
+                highlight_nq2_l_pos,
+                highlight_nq2_r_pos,
+                highlight_nq2_l_neg,
+                highlight_nq2_r_neg,
             ),
         )
 
@@ -1346,20 +1426,102 @@ class SimpleSignal(MovingCameraScene):
             xmax_neg @ -3,
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                highlight_nq1_pos,
+                highlight_nq2_l_pos,
+                highlight_nq2_r_pos,
+                highlight_nq2_l_neg,
+                highlight_nq2_r_neg,
+            )
+        )
+
+        self.wait(0.5)
+
+        fnew = fs * 0.75
+        self.play(f1 @ (fnew), run_time=12)
+
+        self.wait(0.5)
+
+        nq_boundary = DashedLine(
+            f_ax_nq1.c2p(fs / 2, 0),
+            f_ax_nq1.c2p(fs / 2, 1),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+
         self.next_section(skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(DOWN * 0.75),
+                f_labels[2].animate.restore().shift(DOWN * 0.5),
+                f_labels[4].animate.restore().shift(DOWN * 0.5),
+                Create(nq_boundary),
+                lag_ratio=0.3,
+            )
+        )
+
         self.wait(0.5)
 
-        self.play(f1 @ (fs * 0.5), run_time=8)
+        self.remove(ax, *dots, *samples, sine_plot)
+
+        axes_group = Group(f_ax_nq1)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                axes_group.width * 1.2 * 3
+            ).move_to(axes_group)
+        )
 
         self.wait(0.5)
 
-        self.play(f1 @ (fs * 0.75), run_time=8)
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    plot_nq2_r,
+                    plot_nq2_l,
+                    nq_boundary,
+                    zone2_l,
+                    zone2_l_label,
+                    zone2_r,
+                    zone2_r_label,
+                ),
+                f_ax.animate.restore(),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
-        self.play(f1 @ (fs * 4), run_time=12)
+        self.play(FadeOut(zone1, zone1_label))
 
         self.wait(2)
+
+
+class ZoomIn(MovingCameraScene):
+    def construct(self):
+        fs = 10
+        plot_width = config.frame_width * 0.9
+        plot_height = config.frame_height * 0.4
+        n_nyquist = 3
+        f_ax = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.3,
+            y_length=plot_height,
+            x_axis_config=dict(
+                numbers_with_elongated_ticks=np.arange(
+                    -n_nyquist * fs / 2, (n_nyquist + 1) * fs / 2, fs / 2
+                ),
+                longer_tick_multiple=3,
+            ),
+        ).set_opacity(1)
+
+        self.add(f_ax)
+        self.camera.frame.scale_to_fit_width(f_ax.width * 1.2 * 3)
 
 
 class TexTest(Scene):
