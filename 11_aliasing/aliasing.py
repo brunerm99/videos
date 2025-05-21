@@ -17,7 +17,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 # TODO: Install maple mono CN
 FONT = "Maple Mono CN"
@@ -1784,18 +1784,18 @@ class ZoomIn(MovingCameraScene):
 
         zone2_neg_label = (
             VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
+                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
             )
             .arrange(DOWN)
             .move_to(zone2_neg_box)
         )
         zone2_pos_label = (
             VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
+                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
             )
             .arrange(DOWN)
             .move_to(zone2_pos_box)
@@ -1839,18 +1839,18 @@ class ZoomIn(MovingCameraScene):
         )
         zone3_neg_label = (
             VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
+                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
             )
             .arrange(DOWN)
             .move_to(zone3_neg_box)
         )
         zone3_pos_label = (
             VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
-                Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.6, font=FONT),
+                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+                Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
             )
             .arrange(DOWN)
             .move_to(zone3_pos_box)
@@ -1996,6 +1996,6 @@ class ZoomIn(MovingCameraScene):
 
 class TexTest(Scene):
     def construct(self):
-        time_label = MathTex(r"\frac{3 f_s}{2} a")
+        time_label = Text(r"Hello", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5)
 
         self.add(time_label)
