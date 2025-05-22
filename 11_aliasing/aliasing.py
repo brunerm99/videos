@@ -1994,6 +1994,161 @@ class ZoomIn(MovingCameraScene):
         self.wait(2)
 
 
+class Peak(MovingCameraScene):
+    def construct(self):
+        fs = 10
+        plot_width = config.frame_width * 0.9
+        plot_height = config.frame_height * 0.4
+        n_nyquist = 3
+        f_ax = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.3,
+            y_length=plot_height,
+            x_axis_config=dict(
+                numbers_with_elongated_ticks=np.arange(
+                    -n_nyquist * fs / 2, (n_nyquist + 1) * fs / 2, fs / 2
+                ),
+                longer_tick_multiple=3,
+            ),
+        ).set_opacity(1)
+
+        f1 = VT(3)
+        f2 = VT(2)
+        p1 = VT(1)
+        p2 = VT(0)
+        fft_len = 2**10
+        stop_time = 3
+        interp = VT(0)
+
+        def create_X_k(
+            plot_ax,
+            smoothing=True,
+            shift=0,
+            xmin=None,
+            xmax=None,
+            colors=[BLUE, BLUE, BLUE],
+        ):
+            def updater():
+                freq = np.linspace(-fs / 2 + shift, fs / 2 + shift, fft_len)
+                t = np.arange(0, stop_time, 1 / fs)
+                x_n = (
+                    ~p1 * np.sin(2 * PI * ~f1 * t) + ~p2 * np.sin(2 * PI * ~f2 * t)
+                ) / (~p1 + ~p2)
+
+                X_k = fftshift(
+                    ((1 - ~interp) * np.abs(fft(x_n, fft_len)) / (t.size / 2))
+                    + ((~interp) * fft(x_n, fft_len) / (t.size / 2))
+                )
+
+                color = colors[0]
+                for i in range(len(colors)):
+                    if ~f1 > i * fs / 2:
+                        color = colors[i]
+
+                f_X_k = interp1d(freq, np.real(X_k), fill_value="extrapolate")
+                if xmin is None or xmax is None:
+                    return plot_ax.plot(
+                        f_X_k,
+                        x_range=[-fs / 2 + shift, fs / 2 + shift, fs / 200],
+                        color=color,
+                        use_smoothing=smoothing,
+                    )
+                return plot_ax.plot(
+                    f_X_k,
+                    x_range=[xmin + shift, xmax + shift, fs / 200],
+                    color=color,
+                    use_smoothing=smoothing,
+                )
+
+            return updater
+
+        f1 @= fs * 0.25
+        plot_nq1 = always_redraw(create_X_k(f_ax, smoothing=True, shift=0))
+
+        self.camera.frame.scale_to_fit_height(f_ax.height * 2).move_to(
+            f_ax.c2p(fs / 4, 1)
+        )
+        self.add(f_ax, plot_nq1)
+
+        self.wait(0.5)
+
+        f1_label = (
+            MathTex(r"f_1 = 3 \text{ Hz}")
+            .next_to(f_ax.c2p(0, 1), UP, MED_LARGE_BUFF)
+            .shift(LEFT)
+        )
+
+        def create_f_line():
+            cb = CubicBezier(
+                f1_label.get_right() + [0.1, 0, 0],
+                f1_label.get_right() + [1, 0, 0],
+                f_ax.c2p(~f1, 1) + [0, 1, 0],
+                f_ax.c2p(~f1, 1) + [0, 0.3, 0],
+            )
+            tri = (
+                Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+                .scale(0.3)
+                .rotate(PI)
+                .move_to(cb.get_end())
+            )
+            return cb
+
+        def create_f_tri():
+            cb = CubicBezier(
+                f1_label.get_right() + [0.1, 0, 0],
+                f1_label.get_right() + [1, 0, 0],
+                f_ax.c2p(~f1, 1) + [0, 1, 0],
+                f_ax.c2p(~f1, 1) + [0, 0.3, 0],
+            )
+            tri = (
+                Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+                .scale(0.1)
+                .rotate(PI)
+                .next_to(cb.get_end(), DOWN, 0)
+            )
+            return tri
+
+        f_line = create_f_line()
+        f_tri = create_f_tri()
+
+        self.play(
+            LaggedStart(FadeIn(f1_label), Create(f_line), FadeIn(f_tri), lag_ratio=0.3)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=rate_functions.there_and_back).set_color(YELLOW)
+                    for m in f1_label[0][-3:]
+                ],
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        zone_table = MobjectTable(
+            [
+                [],
+            ],
+            row_labels=[
+                Tex(r"1\\$(f_1)$"),
+                Tex(r"2\\$(f_s - f_1)$"),
+                Tex(r"2\\$(f_s + f_1)$"),
+                Tex(r"2\\$(2f_s - f_1)$"),
+                Tex(r"2\\$(2f_s + f_1)$"),
+            ],
+        )
+
+        # self.play()
+
+        self.wait(2)
+
+
 class TexTest(Scene):
     def construct(self):
         time_label = Text(r"Hello", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5)
