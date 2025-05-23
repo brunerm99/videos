@@ -1,0 +1,8 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00051.mp4'
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00052.mp4'
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00053.mp4'
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00054.mp4'
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00055.mp4'
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00056.mp4'
+file 'file:/home/marchall/documents/tech-videos/11_aliasing/media/videos/aliasing/480p15/partial_movie_files/SamplingRecap2/uncached_00057.mp4'

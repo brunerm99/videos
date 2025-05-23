@@ -1,5 +1,6 @@
 # aliasing.py
 
+from itertools import pairwise
 from manim import *
 import numpy as np
 from scipy import signal
@@ -19,12 +20,712 @@ config.background_color = BACKGROUND_COLOR
 
 SKIP_ANIMATIONS_OVERRIDE = True
 
-# TODO: Install maple mono CN
 FONT = "Maple Mono CN"
 
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+class SamplingRecap2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.8,
+            y_length=config.frame_height * 0.6,
+        )
+
+        f = 3
+        sine_opacity = VT(1)
+        sine = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[0, 1, 1 / 200],
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                stroke_opacity=~sine_opacity,
+            )
+        )
+        sine_static = ax.plot(
+            lambda t: np.sin(2 * PI * f * t),
+            x_range=[0, 1, 1 / 200],
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            stroke_opacity=~sine_opacity,
+        )
+        amplitude_label = (
+            Text("amplitude", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6)
+            .rotate(PI / 2)
+            .next_to(ax.c2p(0, 0), LEFT)
+        )
+        time_label = Text("time", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+            ax.c2p(1, 0)
+        )
+        ax_group = Group(ax, sine_static, amplitude_label, time_label)
+        self.camera.frame.scale_to_fit_width(ax_group.width * 1.2).move_to(ax_group)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(FadeIn(ax), Create(sine_static)),
+                Write(amplitude_label),
+                Write(time_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.remove(sine_static)
+        self.add(sine)
+
+        self.wait(0.5)
+
+        samples_opacity = VT(1)
+
+        def plot_sine():
+            t = np.arange(0, 1 + 1 / ~fs, 1 / ~fs)
+            y = np.sin(2 * PI * f * t)
+            return ax.plot_line_graph(
+                t,
+                y,
+                line_color=ORANGE,
+                add_vertex_dots=False,
+                stroke_opacity=~samples_opacity,
+            )
+
+        def plot_samples():
+            ts = np.arange(0, 1 + 1 / ~fs, 1 / ~fs)
+            ys = np.sin(2 * PI * f * ts)
+            return VGroup(
+                *[
+                    DashedLine(
+                        ax.c2p(t, 0),
+                        ax.c2p(t, y),
+                        color=ORANGE,
+                        dash_length=DEFAULT_DASH_LENGTH * 3,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                        stroke_opacity=~samples_opacity,
+                    )
+                    for t, y in zip(ts, ys)
+                ]
+            )
+
+        def plot_dots():
+            ts = np.arange(0, 1 + 1 / ~fs, 1 / ~fs)
+            ys = np.sin(2 * PI * f * ts)
+            return VGroup(
+                *[
+                    Dot(color=ORANGE)
+                    .set_opacity(~samples_opacity)
+                    .scale(1.3)
+                    .move_to(ax.c2p(t, y))
+                    for t, y in zip(ts, ys)
+                ]
+            )
+
+        fs = VT(10)
+        samples_static = plot_samples()
+        dots_static = plot_dots()
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(Create(s), Create(d))
+                    for s, d in zip(samples_static, dots_static)
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        antennas = Group()
+        for _ in samples_static:
+            antenna_port = Line(ORIGIN, UP * 1.3, color=ORANGE)
+            antenna_tri = (
+                Triangle(color=ORANGE)
+                .scale(0.5)
+                .rotate(PI / 3)
+                .move_to(antenna_port, UP)
+            )
+            antenna = Group(antenna_port, antenna_tri)
+            antennas.add(antenna)
+        antennas.arrange(RIGHT, MED_LARGE_BUFF).move_to(self.camera.frame).shift(
+            UP * self.camera.frame.height
+        )
+
+        ant_periods = Group()
+        for idx, ants in enumerate(pairwise(antennas)):
+            l = Line(ants[0].get_top(), ants[1].get_top()).shift(
+                UP / 2 if idx % 2 == 0 else UP
+            )
+            ll = Line(l.get_left() + DOWN / 8, l.get_left() + UP / 8)
+            lr = Line(l.get_right() + DOWN / 8, l.get_right() + UP / 8)
+            ant_periods.add(Group(ll, l, MathTex("d_x").next_to(l, UP, SMALL_BUFF), lr))
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * self.camera.frame.height),
+                LaggedStart(
+                    *[m.shift(UP).animate.shift(DOWN) for m in antennas], lag_ratio=0.1
+                ),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(*[Create(m) for m in ls], lag_ratio=0.1)
+                    for ls in ant_periods
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        pa_thumbnail = (
+            ImageMobject(
+                "../05_phased_array/media/images/phased_array/thumbnails/Thumbnail1.png"
+            )
+            .scale_to_fit_width(self.camera.frame.width * 0.3)
+            .next_to(self.camera.frame.get_corner(UR), DL, MED_LARGE_BUFF)
+        )
+        pa_thumbnail_box = SurroundingRectangle(pa_thumbnail, buff=0)
+        pa_vid = Group(pa_thumbnail, pa_thumbnail_box)
+
+        self.play(
+            self.camera.frame.animate.shift(UP * 2),
+            pa_vid.shift(UR * 2 + UP * 2).animate.shift(DL * 2),
+        )
+
+        self.wait(0.5)
+
+        part1 = (
+            Text("Part 1: Time Domain", font=FONT)
+            .scale(1.2)
+            .move_to(
+                self.camera.frame.copy().shift(UP * self.camera.frame.height * 1.5)
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * self.camera.frame.height * 1.5),
+                Write(part1),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        self.remove(part1)
+
+        ts_label_long = MathTex(r"T_s [\text{seconds}]").next_to(
+            ax.c2p(0.5, 1), UP, LARGE_BUFF
+        )
+        ts_label = MathTex(r"T_s [\text{s}]").move_to(ts_label_long)
+
+        ts_bez_l = CubicBezier(
+            dots_static[4].get_center() + [0, 0.2, 0],
+            dots_static[4].get_center() + [0.2, 0.7, 0],
+            ts_label.get_bottom() + [-0.2, -0.7, 0],
+            ts_label.get_bottom() + [0, -0.1, 0],
+        )
+        ts_bez_r = CubicBezier(
+            dots_static[5].get_center() + [0, 0.2, 0],
+            dots_static[5].get_center() + [0, 5, 0],
+            ts_label.get_bottom() + [0, -1, 0],
+            ts_label.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            self.camera.frame.animate.shift(UP),
+            Create(ts_bez_l),
+            Create(ts_bez_r),
+            LaggedStart(*[GrowFromCenter(m) for m in ts_label_long[0]], lag_ratio=0.1),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(ts_label_long[0][:3], ts_label[0][:3]),
+            ReplacementTransform(ts_label_long[0][3:-1], ts_label[0][3:-1]),
+            ReplacementTransform(ts_label_long[0][-1], ts_label[0][-1]),
+        )
+
+        self.wait(0.5)
+
+        self.remove(pa_vid)
+        line_to_dx = ArcBetweenPoints(
+            ts_label.get_corner(UR) + [0, 0.1, 0],
+            ant_periods[5][2].copy().shift(DOWN * 3).get_bottom() + [0.3, -0.3, 0],
+        )
+        line_to_dx_head = (
+            Triangle(fill_color=WHITE, fill_opacity=1, stroke_color=WHITE)
+            .rotate(15 * DEGREES)
+            .scale(0.15)
+            .move_to(line_to_dx.get_end())
+        )
+
+        meters = Tex("$[$m$]$").next_to(
+            ant_periods[5][2].copy().shift(DOWN * 3), RIGHT, SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(
+                    UP * self.camera.frame.height + DOWN * 3
+                ),
+                Create(line_to_dx),
+                FadeIn(line_to_dx_head),
+                ant_periods[5][2].animate.shift(DOWN * 3),
+                FadeIn(meters),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(line_to_dx_head),
+            Uncreate(line_to_dx),
+            self.camera.frame.animate.restore(),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ts_label.animate(
+                rate_func=rate_functions.there_and_back_with_pause
+            ).set_color(YELLOW)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(ts_bez_l),
+            Uncreate(ts_bez_r),
+            ts_label.animate.set_opacity(0.3).next_to(
+                self.camera.frame.get_corner(UL), DR, MED_LARGE_BUFF
+            ),
+        )
+
+        self.wait(0.5)
+
+        sine_label = MathTex(r"\sin{(2 \pi (3 \text{ Hz}) t)}").next_to(
+            ax, DOWN, MED_LARGE_BUFF
+        )
+
+        sine_label_bez_l = CubicBezier(
+            ax.get_corner(DL) + [0, -0.1, 0],
+            ax.get_corner(DL) + [0, -1, 0],
+            sine_label.get_left() + [-1, 0, 0],
+            sine_label.get_left() + [-0.1, 0, 0],
+        )
+        sine_label_bez_r = CubicBezier(
+            ax.get_corner(DR) + [0, -0.1, 0],
+            ax.get_corner(DR) + [0, -1, 0],
+            sine_label.get_right() + [1, 0, 0],
+            sine_label.get_right() + [0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(sine_label_bez_l), Create(sine_label_bez_r)),
+                LaggedStart(*[GrowFromCenter(m) for m in sine_label[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        second_line = Line(ax.get_corner(UL), ax.get_corner(UR)).shift(UP / 2)
+        second_line_l = Line(
+            second_line.get_start() + DOWN / 8, second_line.get_start() + UP / 8
+        )
+        second_line_r = Line(
+            second_line.get_end() + DOWN / 8, second_line.get_end() + UP / 8
+        )
+        one_second = Tex("1 second").next_to(second_line, UP)
+
+        self.play(
+            LaggedStart(
+                Create(second_line_l),
+                Create(second_line),
+                FadeIn(one_second),
+                Create(second_line_r),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        highlight_xmax = VT(0)
+        highlight = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[
+                    max(~highlight_xmax - 1 / 3, 0),
+                    min(~highlight_xmax, 1),
+                    1 / 200,
+                ],
+                color=YELLOW,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.7,
+            )
+        )
+        self.add(highlight)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(highlight_xmax + (1 / 3), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(highlight_xmax + (1 / 3), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(highlight_xmax + (1 / 3), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(highlight_xmax + (1 / 3), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(
+            one_second.animate(rate_func=rate_functions.there_and_back)
+            .shift(UP / 3)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    d.animate(rate_func=rate_functions.there_and_back)
+                    .scale(2)
+                    .set_color(YELLOW)
+                    for d in dots_static
+                ],
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        ts_label_val = MathTex(
+            r"T_s = 100 \text{ ms} \rightarrow f_s = 10 \text{ Hz}"
+        ).next_to(ts_label, RIGHT)
+
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(ts_label[0][2]),
+                ShrinkToCenter(ts_label[0][4]),
+                ReplacementTransform(ts_label[0][:2], ts_label_val[0][:2]),
+                ReplacementTransform(ts_label[0][3], ts_label_val[0][7]),
+                *[GrowFromCenter(m) for m in ts_label_val[0][2:7]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    FadeOut(m)
+                    for m in [second_line_l, second_line, one_second, second_line_r]
+                ],
+                *[GrowFromCenter(m) for m in ts_label_val[0][7:]],
+                lag_ratio=0.15,
+            )
+        )
+        self.play(ts_label_val.animate.set_x(self.camera.frame.get_x()))
+
+        self.wait(0.5)
+
+        samples = always_redraw(plot_samples)
+        dots = always_redraw(plot_dots)
+
+        sampled_sine = always_redraw(plot_sine)
+
+        self.play(Create(sampled_sine), sine_opacity @ 0.2)
+
+        self.wait(0.5)
+
+        # samples = always_redraw(
+        #     lambda: ax.get_vertical_lines_to_graph(
+        #         sine_static,
+        #         x_range=[0, 1],
+        #         num_lines=int(~fs),
+        #         color=ORANGE,
+        #         stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        #         line_config=dict(dash_length=DEFAULT_DASH_LENGTH * 3),
+        #     )
+        # )
+        # dots = always_redraw(
+        #     lambda: VGroup(
+        #         *[
+        #             Dot(color=ORANGE)
+        #             .scale(1.3)
+        #             .move_to(ax.input_to_graph_point(x, sine_static))
+        #             for x in np.linspace(0, 1, int(~fs))
+        #         ]
+        #     )
+        # )
+        # self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+        self.remove(*dots_static, *samples_static)
+        self.add(samples, dots)
+
+        ts_label_lshift = VT(0)
+        ts_label_updater = always_redraw(
+            lambda: MathTex(
+                f"T_s = {int(1000 / ~fs)} \\text{{ ms}} \\rightarrow f_s = {int(~fs)} \\text{{ Hz}}"
+            )
+            .move_to(ts_label_val, LEFT)
+            .shift(LEFT * ~ts_label_lshift)
+        )
+        self.remove(ts_label_val)
+        self.add(ts_label_updater)
+
+        self.play(fs @ 25, run_time=12)
+
+        self.wait(0.5)
+
+        self.play(fs @ 5, run_time=12)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        f_wrong = 2
+        wrong_xmax = VT(0)
+        wrong_sine = always_redraw(
+            lambda: ax.plot(
+                lambda t: -np.sin(2 * PI * f_wrong * t),
+                x_range=[0, min(~wrong_xmax, 1), 1 / 200],
+                color=RED,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            )
+        )
+        self.add(wrong_sine)
+
+        self.play(wrong_xmax @ (1 / f_wrong))
+
+        self.wait(0.5)
+
+        self.play(wrong_xmax @ 1)
+
+        self.wait(0.5)
+
+        legend = (
+            Group(
+                Group(
+                    Line(
+                        ORIGIN,
+                        RIGHT,
+                        color=BLUE,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                    ),
+                    Text("Original", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5),
+                ).arrange(RIGHT),
+                Group(
+                    Line(
+                        ORIGIN,
+                        RIGHT,
+                        color=RED,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                    ),
+                    Text("Reconstructed", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5),
+                ).arrange(RIGHT),
+            )
+            .arrange(DOWN, MED_SMALL_BUFF, aligned_edge=LEFT)
+            .next_to(self.camera.frame.get_corner(UR), DL, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                samples_opacity @ 0.2,
+                sine_opacity @ 1,
+                ts_label_lshift @ 3,
+                legend[0].shift(RIGHT * 5).animate.shift(LEFT * 5),
+                legend[1].shift(RIGHT * 5).animate.shift(LEFT * 5),
+                lag_ratio=0.3,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        nyquist_label = Text("Shannon-Nyquist Criterion:", font=FONT)
+        nyquist_cri = MathTex(r"f_s \ge 2 f_{\text{max}}")
+        nyquist = (
+            Group(nyquist_label, nyquist_cri)
+            .arrange(RIGHT)
+            .next_to(ts_label_updater, UP, LARGE_BUFF)
+            .shift(RIGHT * ~ts_label_lshift)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ts_label_lshift @ 0,
+                    legend[0].animate.shift(RIGHT * 10),
+                    legend[1].animate.shift(RIGHT * 10),
+                    self.camera.frame.animate.scale(1.3).shift(UP),
+                    samples_opacity @ 1,
+                    FadeOut(wrong_sine),
+                ),
+                Write(nyquist_label),
+                LaggedStart(*[GrowFromCenter(m) for m in nyquist_cri], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(fs @ (f * 2 + 1), run_time=3)
+
+        self.wait(0.5)
+
+        f_right = 3
+        right_xmax = VT(0)
+        right_sine = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f_right * t),
+                x_range=[0, min(~right_xmax, 1), 1 / 200],
+                color=RED,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            )
+        )
+        self.add(right_sine)
+
+        self.play(
+            legend[0].animate.shift(LEFT * 10),
+            legend[1].animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        self.play(right_xmax + (1 / f_right))
+
+        self.wait(0.5)
+
+        self.play(right_xmax + (1 / f_right))
+
+        self.wait(0.5)
+
+        self.play(right_xmax + (1 / f_right))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        ant_periods[5][2].shift(UP * 3)
+        self.remove(meters)
+
+        self.play(
+            self.camera.frame.animate.scale(1 / 1.3).shift(
+                UP * self.camera.frame.height / 1.3 * 1.1
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m[2]
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(UP / 3)
+                    .set_color(YELLOW)
+                    for m in ant_periods
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        ant_periods_2 = Group()
+        for idx, ants in enumerate(
+            pairwise(antennas.copy().arrange(RIGHT, LARGE_BUFF).move_to(antennas))
+        ):
+            l = Line(ants[0].get_top(), ants[1].get_top()).shift(
+                UP / 2 if idx % 2 == 0 else UP
+            )
+            ll = Line(l.get_left() + DOWN / 8, l.get_left() + UP / 8)
+            lr = Line(l.get_right() + DOWN / 8, l.get_right() + UP / 8)
+            ant_periods_2.add(
+                Group(ll, l, MathTex("d_x").next_to(l, UP, SMALL_BUFF), lr)
+            )
+
+        dx_gt = (
+            MathTex(r"d_x > \frac{\lambda}{2}")
+            .scale(1.6)
+            .next_to(antennas, UP, LARGE_BUFF * 2)
+        )
+        arrow = MathTex(r"\rightarrow").scale(1.6).move_to(dx_gt).shift(RIGHT * 12)
+        grating_lobes = (
+            Text("Grating Lobes", font=FONT).move_to(dx_gt).shift(RIGHT * 12)
+        )
+
+        self.play(
+            antennas.animate.arrange(RIGHT, LARGE_BUFF).move_to(antennas),
+            *[
+                AnimationGroup(*[Transform(a, b) for a, b in zip(ap, ap2)])
+                for ap, ap2 in zip(ant_periods, ant_periods_2)
+            ],
+            LaggedStart(*[GrowFromCenter(m) for m in dx_gt[0]], lag_ratio=0.1),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(dx_gt, arrow, grating_lobes).animate.arrange(RIGHT).move_to(dx_gt)
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        part2 = (
+            Text("Part 2: Frequency Spectrum", font=FONT)
+            .scale(1.2)
+            .move_to(
+                self.camera.frame.copy().shift(DOWN * self.camera.frame.height * 2)
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * self.camera.frame.height * 2),
+                Write(part2),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(part2))
+
+        self.wait(2)
 
 
 class ChangingFS(Scene):
