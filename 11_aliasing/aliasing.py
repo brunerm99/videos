@@ -18,13 +18,21 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+def fh(scene, scale=1):
+    return scene.camera.frame.height * scale
+
+
+def fw(scene, scale=1):
+    return scene.camera.frame.width * scale
 
 
 class SamplingRecap2(MovingCameraScene):
@@ -833,6 +841,246 @@ class SimpleSignal(Scene):
         self.wait(2)
 
 
+class FreqIntro(MovingCameraScene):
+    def construct(self):
+        time_label = Text("time", font=FONT)
+        freq_label = Text("frequency", font=FONT)
+        Group(time_label, freq_label).arrange(RIGHT, LARGE_BUFF * 2)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(time_label),
+                GrowFromCenter(freq_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        one = Text("1")
+        over = Line(freq_label.get_left(), freq_label.get_right())
+
+        one_over_f_group = (
+            Group(one, over, freq_label.copy())
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .move_to(freq_label)
+        )
+
+        tilde = (
+            MathTex(r"\sim")
+            .scale(2)
+            .move_to(Line(time_label.get_right(), one_over_f_group.get_left()))
+        )
+
+        self.play(
+            LaggedStart(
+                Transform(freq_label, one_over_f_group[2]),
+                GrowFromCenter(one),
+                Create(over),
+                GrowFromCenter(tilde),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        bw_vt = VT(PI / 8)
+
+        fft_len = 1024
+        stop_time = 3
+        fs = 10
+        freq = np.linspace(-fs / 2, fs / 2, fft_len)
+        interp_rect_bw = VT(1)
+
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.4,
+            y_length=config.frame_height * 0.6,
+        )
+
+        f_ax = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.4,
+            y_length=config.frame_height * 0.6,
+        )
+
+        Group(ax, f_ax).arrange(RIGHT, LARGE_BUFF).shift(
+            DOWN * config.frame_height
+        ).shift(DOWN)
+
+        def get_x_n():
+            t = np.linspace(0, 1, freq.size)
+
+            x_n = np.sin(2 * PI * 2 * t)
+
+            freq_for_rect = np.linspace(-PI, PI, fft_len)
+            X_k_rect = np.zeros(freq_for_rect.shape)
+            X_k_rect[
+                (freq_for_rect > -~bw_vt / 2 / 8) & (freq_for_rect < ~bw_vt / 2 / 8)
+            ] = 1
+            x_n_rect_bw = np.real(fftshift(ifft(fftshift(X_k_rect))))
+            x_n_rect_bw /= x_n_rect_bw.max()
+
+            x_n = (1 - ~interp_rect_bw) * x_n + ~interp_rect_bw * x_n_rect_bw
+
+            f_x_n = interp1d(t, x_n, fill_value="extrapolate")
+            return ax.plot(f_x_n, x_range=[0, 1, 1 / 200], color=ORANGE)
+
+        def create_X_k(plot_ax, smoothing=True, n_nyquist=1, scalar=None):
+            def updater():
+                X_k = np.where(np.abs(freq * PI / (fs / 2)) < ~bw_vt, 1, 0)
+
+                f_X_k = interp1d(
+                    freq * n_nyquist,
+                    np.real(X_k),
+                    fill_value="extrapolate",
+                )
+                return plot_ax.plot(
+                    f_X_k,
+                    x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, fs / 200],
+                    color=BLUE,
+                    use_smoothing=smoothing,
+                )
+
+            return updater
+
+        time_plot = always_redraw(get_x_n)
+        f_plot = always_redraw(create_X_k(f_ax, smoothing=False))
+
+        self.add(ax, f_ax, time_plot, f_plot)
+        self.play(
+            LaggedStart(
+                FadeOut(tilde),
+                FadeOut(one),
+                FadeOut(over),
+                time_label.animate.next_to(
+                    ax.copy().shift(UP * config.frame_height), UP, LARGE_BUFF
+                ),
+                freq_label.animate.next_to(
+                    f_ax.copy().shift(UP * config.frame_height), UP, LARGE_BUFF
+                ),
+                ax.animate.shift(UP * config.frame_height),
+                f_ax.animate.shift(UP * config.frame_height),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(bw_vt @ (~bw_vt * 6), run_time=4)
+
+        self.wait(0.5)
+
+        # TODO: change to T_s
+        period_eqn = MathTex(r"\frac{1}{T_s} = f_s").scale(2)
+        period_eqn[0][2].save_state()
+        period_eqn[0][3].save_state()
+        period_eqn[0][-2].save_state()
+        period_eqn[0][-1].save_state()
+        period_eqn[0][2:4].next_to(time_label, DOWN, MED_LARGE_BUFF)
+        period_eqn[0][-2:].next_to(freq_label, DOWN, MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                Group(ax, f_ax).animate.shift(DOWN * config.frame_height),
+                GrowFromCenter(period_eqn[0][2:4]),
+                GrowFromCenter(period_eqn[0][-2:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    period_eqn[0][2].animate.restore(),
+                    period_eqn[0][3].animate.restore(),
+                ),
+                GrowFromCenter(period_eqn[0][0]),
+                GrowFromCenter(period_eqn[0][1]),
+                GrowFromCenter(period_eqn[0][4]),
+                AnimationGroup(
+                    period_eqn[0][-2].animate.restore(),
+                    period_eqn[0][-1].animate.restore(),
+                ),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(period_eqn[0][-2:].animate.set_color(YELLOW))
+
+        self.wait(0.5)
+
+        all_group = Group(
+            Group(ax, f_ax)
+            .copy()
+            .arrange(RIGHT, LARGE_BUFF)
+            .next_to(period_eqn, DOWN, LARGE_BUFF),
+            period_eqn,
+            time_label,
+            freq_label,
+        )
+
+        self.play(
+            Group(ax, f_ax)
+            .animate.arrange(RIGHT, LARGE_BUFF)
+            .next_to(period_eqn, DOWN, LARGE_BUFF),
+            self.camera.frame.animate.scale_to_fit_height(
+                all_group.height * 1.2
+            ).move_to(all_group),
+        )
+
+        self.wait(0.5)
+
+        time_to_freq = MathTex(r"\Rightarrow").scale(3)
+        time_to_freq_group = (
+            Group(ax.copy(), time_to_freq, f_ax.copy())
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .set_y(ax.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ax.animate.move_to(time_to_freq_group[0]),
+                    f_ax.animate.move_to(time_to_freq_group[2]),
+                ),
+                GrowFromCenter(time_to_freq),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        qmark = (
+            Text("?", font=FONT).scale(1.5).next_to(time_to_freq, UP).set_color(YELLOW)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(time_label, freq_label, *period_eqn[0]),
+                self.camera.frame.animate.scale_to_fit_width(
+                    time_to_freq_group.width * 1.2
+                ).move_to(time_to_freq_group),
+                Write(qmark),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
 class FrequencyDomain(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -921,10 +1169,8 @@ class FrequencyDomain(MovingCameraScene):
         self.play(
             LaggedStart(
                 *[
-                    LaggedStart(
-                        Create(l), Create(d), FadeIn(func_box, func), lag_ratio=0.3
-                    )
-                    for l, d, func, func_box in zip(samples, dots, funcs, func_boxes)
+                    LaggedStart(Create(l), Create(d), lag_ratio=0.3)
+                    for l, d in zip(samples, dots)
                 ],
                 lag_ratio=0.2,
             )
@@ -938,27 +1184,10 @@ class FrequencyDomain(MovingCameraScene):
 
         self.camera.frame.save_state()
         self.play(
-            LaggedStart(
-                self.camera.frame.animate.scale_to_fit_height(
-                    all_group.height * 1.2
-                ).move_to(all_group),
-                FadeIn(fs_eqn),
-                lag_ratio=0.3,
-            )
+            self.camera.frame.animate.scale_to_fit_height(
+                all_group.height * 1.2
+            ).move_to(all_group),
         )
-
-        self.wait(0.5)
-
-        self.play(
-            fs_eqn[0][:2]
-            .animate(rate_func=rate_functions.there_and_back)
-            .shift(UP / 3)
-            .set_color(YELLOW)
-        )
-
-        self.wait(0.5)
-
-        self.play(fs_eqn[0][-2:].animate.set_color(YELLOW))
 
         self.wait(0.5)
 
@@ -975,20 +1204,6 @@ class FrequencyDomain(MovingCameraScene):
             dots[6].get_top() + [0, 1, 0],
             dots[6].get_top() + [0, 0.1, 0],
             color=YELLOW,
-        )
-
-        self.play(
-            LaggedStart(
-                *[
-                    AnimationGroup(
-                        box.animate.set_opacity(0), func.animate.set_opacity(0)
-                    )
-                    for func, box in zip(funcs[5:7], func_boxes[5:7])
-                ],
-                Create(Ts_bez_l),
-                Create(Ts_bez_r),
-                lag_ratio=0.2,
-            )
         )
 
         self.wait(0.5)
@@ -1050,86 +1265,6 @@ class FrequencyDomain(MovingCameraScene):
         freq_label = Text("Frequency", font=FONT).next_to(f_ax, DOWN)
 
         all_group = Group(ax, f_ax, freq_label)
-
-        self.play(
-            LaggedStart(
-                LaggedStart(
-                    *[
-                        AnimationGroup(
-                            box.animate.set_opacity(0), func.animate.set_opacity(0)
-                        )
-                        for func, box in zip(funcs, func_boxes)
-                    ],
-                    lag_ratio=0.1,
-                ),
-                AnimationGroup(
-                    ShrinkToCenter(fs_eqn[0][2:]),
-                    Uncreate(Ts_bez_l),
-                    Uncreate(Ts_bez_r),
-                ),
-                ReplacementTransform(fs_eqn[0][:2], fs_label[0], path_arc=PI / 2),
-                self.camera.frame.animate.scale_to_fit_height(all_group.height * 1.2)
-                .move_to(all_group)
-                .shift(RIGHT),
-                Create(to_freq_arrow),
-                Create(f_ax),
-                Create(f_plot),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(Write(freq_label))
-
-        neg_fs_label = MathTex(
-            r"-\frac{f_s}{2}", font_size=DEFAULT_FONT_SIZE * 2
-        ).next_to(f_ax.c2p(-fs / 2, 0), LEFT)
-        pos_fs_label = MathTex(
-            r"\frac{f_s}{2}", font_size=DEFAULT_FONT_SIZE * 2
-        ).next_to(f_ax.c2p(fs / 2, 0), RIGHT)
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    TransformFromCopy(
-                        fs_label[0], neg_fs_label[0][1:3], path_arc=PI / 3
-                    ),
-                    TransformFromCopy(
-                        fs_label[0], pos_fs_label[0][0:2], path_arc=PI / 3
-                    ),
-                ),
-                AnimationGroup(
-                    LaggedStart(
-                        *[
-                            GrowFromCenter(m)
-                            for m in [neg_fs_label[0][0], *neg_fs_label[0][3:]]
-                        ],
-                        lag_ratio=0.1,
-                    ),
-                    LaggedStart(
-                        *[GrowFromCenter(m) for m in pos_fs_label[0][2:]],
-                        lag_ratio=0.1,
-                    ),
-                ),
-                lag_ratio=0.3,
-            ),
-            run_time=3,
-        )
-
-        self.wait(0.5)
-
-        f_ax_group = Group(f_ax, f_plot, neg_fs_label, pos_fs_label, freq_label)
-
-        self.play(
-            self.camera.frame.animate.restore(),
-            FadeOut(fs_label, to_freq_arrow),
-            f_ax_group.animate.shift(DOWN * 8),
-        )
-
-        self.wait(0.5)
 
         ax2 = Axes(
             x_range=[0, 1, 0.25],
@@ -1196,10 +1331,60 @@ class FrequencyDomain(MovingCameraScene):
 
         self.wait(0.5)
 
+        ts_label = MathTex(r"T_s").scale(2).next_to(one_dots[-3:-1], UP, LARGE_BUFF * 2)
+        ts_bez_l = CubicBezier(
+            ts_label.get_bottom() + [0, -0.1, 0],
+            ts_label.get_bottom() + [0, -1, 0],
+            one_dots[-3].get_top() + [0, 1, 0],
+            one_dots[-3].get_top() + [0, 0.1, 0],
+        )
+        ts_bez_r = CubicBezier(
+            ts_label.get_bottom() + [0, -0.1, 0],
+            ts_label.get_bottom() + [0, -1, 0],
+            one_dots[-2].get_top() + [0, 1, 0],
+            one_dots[-2].get_top() + [0, 0.1, 0],
+        )
+
         self.play(
-            self.camera.frame.animate.scale_to_fit_width(
-                Group(ax2, delta_label).width * 2
-            ).move_to(Group(ax2, delta_label))
+            LaggedStart(
+                ts_label.shift(UP * 5).animate.shift(DOWN * 5),
+                AnimationGroup(
+                    Create(ts_bez_l),
+                    Create(ts_bez_r),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        dirac_comb_label = Text("Dirac Comb", font=FONT).next_to(
+            delta_label, UP, LARGE_BUFF
+        )
+
+        self.play(
+            Uncreate(ts_bez_l),
+            Uncreate(ts_bez_r),
+            ts_label.animate.shift(UP * 5),
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(ax2, delta_label, dirac_comb_label).height * 1.2
+            ).move_to(Group(ax2, delta_label, dirac_comb_label)),
+            Write(dirac_comb_label),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                *[
+                    Group(l, d)
+                    .animate(rate_func=rate_functions.there_and_back)
+                    .shift(UP / 3)
+                    for l, d in zip(one_samples, one_dots)
+                ],
+                lag_ratio=0.1,
+            )
         )
 
         self.wait(0.5)
@@ -1238,6 +1423,7 @@ class FrequencyDomain(MovingCameraScene):
         ax2_group = Group(ax2, f_ax2, delta_label, freq2_label)
         self.play(
             LaggedStart(
+                FadeOut(dirac_comb_label),
                 self.camera.frame.animate.scale_to_fit_height(
                     ax2_group.height * 1.1
                 ).move_to(ax2_group),
@@ -1254,399 +1440,441 @@ class FrequencyDomain(MovingCameraScene):
 
         self.wait(0.5)
 
-        # TODO: Add notebook reference
-
-        self.next_section(skip_animations=skip_animations(True))
-        self.wait(0.5)
-
-        all_group = Group(delta_label, ax, ax2, f_ax2_rdc, freq2_label)
-
-        dots_l = (
-            MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), LEFT, LARGE_BUFF)
-        )
-        dots_r = (
-            MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), RIGHT, LARGE_BUFF)
-        )
-
-        self.play(
-            self.camera.frame.animate.scale_to_fit_height(
-                all_group.height * 1.2
-            ).move_to(all_group),
-            Transform(f_ax2, f_ax2_rdc),
-            Uncreate(one_f_dots[0]),
-            Uncreate(one_f_dots[-1]),
-            Uncreate(one_f_samples[0]),
-            Uncreate(one_f_samples[-1]),
-            FadeIn(dots_l, dots_r),
-        )
-
-        self.wait(0.5)
-
-        time_box = SurroundingRectangle(
-            delta_label, ax, ax2, delta_label, corner_radius=0.2, buff=MED_SMALL_BUFF
-        )
-
-        self.play(Create(time_box))
-
-        self.wait(0.5)
-
-        f_box = SurroundingRectangle(
-            f_ax_group.copy().shift(UP * 8),
-            f_ax2,
-            freq2_label,
-            corner_radius=0.2,
-            buff=MED_SMALL_BUFF,
-        )
-
-        conv = (
-            MathTex(r"\circledast", color=YELLOW)
-            .scale(3)
-            .move_to(times)
-            .set_y(f_ax2.get_y())
-        )
-
-        self.play(
-            LaggedStart(
-                f_ax_group.animate.shift(UP * 8),
-                GrowFromCenter(conv),
-                ReplacementTransform(time_box, f_box),
-                lag_ratio=0.4,
+        # TODO: add real notebook thumbnail
+        notebook_thumbnail = (
+            ImageMobject(
+                "../../../media/rf_channel_assets/notebook_thumbnails/radar cheatsheet notebook.png"
             )
+            .scale_to_fit_height(fh(self, 0.7))
+            .move_to(self.camera.frame)
+        )
+        notebook_box = SurroundingRectangle(
+            notebook_thumbnail, buff=0, fill_color=BACKGROUND_COLOR, fill_opacity=1
         )
 
-        self.wait(0.5)
+        tex_template = TexTemplate()
+        tex_template.add_to_preamble(r"\usepackage{graphicx}")
 
-        f_ax_soln = Axes(
-            x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
-            y_range=[0, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.6 * n_nyquist,
-            y_length=config.frame_height * 0.6,
-        ).next_to(Group(f_ax, f_ax2), DOWN, LARGE_BUFF * 3)
-
-        conv_bez_l = CubicBezier(
-            f_ax.get_corner(DL) + [0, -0.1, 0],
-            f_ax.get_corner(DL) + [0, -3, 0],
-            f_ax_soln.get_top() + [0, 3, 0],
-            f_ax_soln.get_top() + [0, 0.1, 0],
+        notebook_reminder = Tex(
+            r"aliasing.ipynb\rotatebox[origin=c]{270}{$\looparrowright$}",
+            tex_template=tex_template,
+            font_size=DEFAULT_FONT_SIZE * 2.5,
         )
-        conv_bez_r = CubicBezier(
-            f_ax2.get_corner(DR) + [0, -0.1, 0],
-            f_ax2.get_corner(DR) + [0, -3, 0],
-            f_ax_soln.get_top() + [0, 3, 0],
-            f_ax_soln.get_top() + [0, 0.1, 0],
+        notebook_reminder_box = SurroundingRectangle(
+            notebook_reminder, color=YELLOW, fill_color=BACKGROUND_COLOR, fill_opacity=1
         )
-
-        soln_group = Group(f_ax, f_ax2, f_ax_soln)
-
-        self.play(
-            LaggedStart(
-                Uncreate(f_box),
-                self.camera.frame.animate.scale_to_fit_width(soln_group.width * 1.1)
-                .move_to(soln_group)
-                .shift(DOWN * 0.7),
-                AnimationGroup(Create(conv_bez_l), Create(conv_bez_r)),
-                Create(f_ax_soln),
-                lag_ratio=0.3,
+        notebook_group = (
+            Group(
+                Group(notebook_box, notebook_thumbnail),
+                Group(notebook_reminder_box, notebook_reminder),
             )
-        )
-
-        self.wait(0.5)
-
-        f_ax_nq2_l = Axes(
-            x_range=[-fs / 2, fs / 2, 1],
-            y_range=[0, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.6,
-            y_length=config.frame_height * 0.6,
-        ).set_opacity(0)
-        f_ax_nq2_l.shift(f_ax_soln.c2p(-fs, 0) - f_ax_nq2_l.c2p(0, 0))
-        f_ax_nq2_r = Axes(
-            x_range=[-fs / 2, fs / 2, 1],
-            y_range=[0, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.6,
-            y_length=config.frame_height * 0.6,
-        ).set_opacity(0)
-        f_ax_nq2_r.shift(f_ax_soln.c2p(fs, 0) - f_ax_nq2_r.c2p(0, 0))
-        f_ax_nq1 = Axes(
-            x_range=[-fs / 2, fs / 2, 1],
-            y_range=[0, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.6,
-            y_length=config.frame_height * 0.6,
-        ).set_opacity(0)
-        self.next_section(skip_animations=skip_animations(True))
-        f_ax_nq1.shift(f_ax_soln.c2p(0, 0) - f_ax_nq1.c2p(0, 0))
-
-        f_plot_scalar = VT(1)
-        f_plot_nq1 = always_redraw(create_X_k(f_ax_soln, False, 3, f_plot_scalar))
-        f_plot_nq2_l = always_redraw(create_X_k(f_ax_nq2_l, False))
-        f_plot_nq2_r = always_redraw(create_X_k(f_ax_nq2_r, False))
-
-        # self.play(
-        #     Create(f_plot_nq2_l), rate_func=rate_functions.ease_in_sine, run_time=0.5
-        # )
-        self.play(Create(f_plot_nq1), rate_func=rate_functions.linear, run_time=0.5)
-        # self.play(
-        #     Create(f_plot_nq2_r), rate_func=rate_functions.ease_out_sine, run_time=0.5
-        # )
-
-        self.wait(0.5)
-
-        f_labels = Group(
-            *[
-                fl.next_to(f_ax_soln.c2p(x, 0), DOWN)
-                for fl, x in zip(
-                    [
-                        MathTex(r"-\frac{3 f_s}{2}"),
-                        MathTex(r"-f_s"),
-                        MathTex(r"-\frac{f_s}{2}"),
-                        MathTex(r"0"),
-                        MathTex(r"\frac{f_s}{2}"),
-                        MathTex(r"f_s"),
-                        MathTex(r"\frac{3 f_s}{2}"),
-                    ],
-                    [-1.5 * fs, -fs, -0.5 * fs, 0, 0.5 * fs, fs, 1.5 * fs],
-                )
-            ]
-        )
-
-        self.play(
-            LaggedStart(
-                GrowFromCenter(f_labels[0]),
-                GrowFromCenter(f_labels[1]),
-                ReplacementTransform(neg_fs_label[0], f_labels[2][0], path_arc=PI / 3),
-                GrowFromCenter(f_labels[3]),
-                ReplacementTransform(pos_fs_label[0], f_labels[4][0], path_arc=PI / 3),
-                GrowFromCenter(f_labels[5]),
-                GrowFromCenter(f_labels[6]),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        f_ax_nq3_l = Axes(
-            x_range=[-fs / 2, fs / 2, 1],
-            y_range=[0, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.6,
-            y_length=config.frame_height * 0.6,
-        )
-        f_ax_nq3_l.shift(f_ax_soln.c2p(-2 * fs, 0) - f_ax_nq3_l.c2p(0, 0))
-        f_ax_nq3_r = Axes(
-            x_range=[-fs / 2, fs / 2, 1],
-            y_range=[0, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.6,
-            y_length=config.frame_height * 0.6,
-        )
-        f_ax_nq3_r.shift(f_ax_soln.c2p(2 * fs, 0) - f_ax_nq3_r.c2p(0, 0))
-
-        # FIXME: Change these zones to every fs/2
-        # FIXME: Change the 0-pi zone to green
-        zone3_l = Polygon(
-            f_ax_nq3_l.c2p(-fs / 2, 0),
-            f_ax_nq3_l.c2p(-fs / 2, 1),
-            f_ax_nq3_l.c2p(fs / 2, 1),
-            f_ax_nq3_l.c2p(fs / 2, 0),
-            stroke_opacity=0,
-            fill_opacity=0.3,
-            fill_color=GREEN,
-        )
-        zone3_r = Polygon(
-            f_ax_nq3_r.c2p(-fs / 2, 0),
-            f_ax_nq3_r.c2p(-fs / 2, 1),
-            f_ax_nq3_r.c2p(fs / 2, 1),
-            f_ax_nq3_r.c2p(fs / 2, 0),
-            stroke_opacity=0,
-            fill_opacity=0.3,
-            fill_color=GREEN,
-        )
-        zone2_l = Polygon(
-            f_ax_nq2_l.c2p(-fs / 2, 0),
-            f_ax_nq2_l.c2p(-fs / 2, 1),
-            f_ax_nq2_l.c2p(fs / 2, 1),
-            f_ax_nq2_l.c2p(fs / 2, 0),
-            stroke_opacity=0,
-            fill_opacity=0.3,
-            fill_color=PURPLE,
-        )
-        zone2_r = Polygon(
-            f_ax_nq2_r.c2p(-fs / 2, 0),
-            f_ax_nq2_r.c2p(-fs / 2, 1),
-            f_ax_nq2_r.c2p(fs / 2, 1),
-            f_ax_nq2_r.c2p(fs / 2, 0),
-            stroke_opacity=0,
-            fill_opacity=0.3,
-            fill_color=PURPLE,
-        )
-        zone1 = Polygon(
-            f_ax_nq1.c2p(-fs / 2, 0),
-            f_ax_nq1.c2p(-fs / 2, 1),
-            f_ax_nq1.c2p(fs / 2, 1),
-            f_ax_nq1.c2p(fs / 2, 0),
-            stroke_opacity=0,
-            fill_opacity=0.3,
-            fill_color=ORANGE,
-        )
-        zone2_l_label = Text("Zone 2", font=FONT).next_to(
-            zone2_l.get_top(), DOWN, SMALL_BUFF
-        )
-        zone2_r_label = Text("Zone 2", font=FONT).next_to(
-            zone2_r.get_top(), DOWN, SMALL_BUFF
-        )
-        zone1_label = Text("Zone 1", font=FONT).next_to(
-            zone1.get_top(), DOWN, SMALL_BUFF
-        )
-
-        self.play(
-            LaggedStart(
-                FadeIn(zone3_l, zone3_r),
-                FadeIn(zone2_l, zone2_r, zone2_l_label, zone2_r_label),
-                FadeIn(zone1, zone1_label),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.next_section(skip_animations=skip_animations(True))
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    Uncreate(Ts_bez_l),
-                    Uncreate(Ts_bez_r),
-                ),
-                FadeOut(
-                    zone3_l,
-                    zone3_r,
-                    zone1_label,
-                    zone2_l_label,
-                    zone2_r_label,
-                ),
-                AnimationGroup(
-                    Group(
-                        f_ax_soln, f_ax_nq1, f_ax_nq2_l, f_ax_nq2_r, f_labels
-                    ).animate.shift(DOWN * config.frame_height * 2),
-                    Group(zone2_l, zone2_r, zone1)
-                    .animate.shift(DOWN * config.frame_height * 2)
-                    .set_opacity(0.15),
-                    self.camera.frame.animate.shift(DOWN * config.frame_height * 2),
-                ),
-                lag_ratio=0.4,
-            ),
-            run_time=4,
-        )
-
-        sine_upt = always_redraw(get_x_n)
-        self.remove(sine)
-        self.add(sine_upt)
-
-        self.wait(0.5)
-
-        ax.save_state()
-        self.play(ax.animate.next_to(f_ax_soln, UP, LARGE_BUFF))
-
-        self.wait(0.5)
-
-        self.play(interp_rect_bw @ 1, run_time=3)
-
-        self.wait(0.5)
-
-        self.play(bw_vt @ (~bw_vt * 4), run_time=3)
-
-        self.wait(0.5)
-
-        self.play(bw_vt @ (~bw_vt / 2), run_time=3)
-
-        self.wait(0.5)
-
-        self.play(ax.animate.restore())
-
-        self.wait(0.5)
-
-        bw_label = MathTex("B").next_to(
-            f_ax_soln.c2p(~bw_vt * fs / PI / 4, 1), UP, LARGE_BUFF * 2
-        )
-        fs_label = MathTex("f_s").next_to(
-            f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4
-        )
-        fs_bez_l = CubicBezier(
-            fs_label.get_bottom() + [0, -0.1, 0],
-            fs_label.get_bottom() + [0, -1, 0],
-            f_ax_soln.c2p(0, 1) + [0, 2, 0],
-            f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
-        )
-        fs_bez_r = CubicBezier(
-            fs_label.get_bottom() + [0, -0.1, 0],
-            fs_label.get_bottom() + [0, -1, 0],
-            f_ax_soln.c2p(fs / 2, 1) + [0, 2, 0],
-            f_ax_soln.c2p(fs / 2, 1) + [0, 0.1, 0],
-        )
-        bw_bez_l = CubicBezier(
-            bw_label.get_bottom() + [0, -0.1, 0],
-            bw_label.get_bottom() + [0, -1.5, 0],
-            f_ax_soln.c2p(0, 1) + [0, 1.5, 0],
-            f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
-        )
-        bw_bez_r = CubicBezier(
-            bw_label.get_bottom() + [0, -0.1, 0],
-            bw_label.get_bottom() + [0, -1.5, 0],
-            f_ax_soln.c2p(~bw_vt * fs / PI / 2, 1) + [0, 1.5, 0],
-            f_ax_soln.c2p(~bw_vt * fs / PI / 2, 1) + [0, 0.1, 0],
-        )
-
-        self.play(
-            LaggedStart(
-                GrowFromCenter(bw_label),
-                AnimationGroup(Create(bw_bez_l), Create(bw_bez_r)),
-                lag_ratio=0.4,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                GrowFromCenter(fs_label),
-                AnimationGroup(Create(fs_bez_l), Create(fs_bez_r)),
-                lag_ratio=0.4,
-            )
-        )
-
-        self.next_section(skip_animations=skip_animations(False))
-        self.wait(0.5)
-
-        self.play(f_plot_scalar @ 0.5)
-
-        self.wait(0.5)
-
-        self.play(
-            ShrinkToCenter(fs_label),
-            ShrinkToCenter(bw_label),
-            Uncreate(fs_bez_l),
-            Uncreate(fs_bez_r),
-            Uncreate(bw_bez_l),
-            Uncreate(bw_bez_r),
-        )
-
-        self.wait(0.5)
-
-        self.play(bw_vt @ (~bw_vt * 5), run_time=5)
-
-        self.wait(0.5)
-
-        self.play(
-            Group(ax, f_ax_soln)
-            .animate.arrange(DOWN, LARGE_BUFF * 2)
+            .arrange(DOWN)
             .move_to(self.camera.frame)
         )
 
+        self.play(
+            notebook_group.shift(DOWN * self.camera.frame.height).animate.shift(
+                UP * self.camera.frame.height
+            )
+        )
+
         self.wait(0.5)
 
-        self.play(interp_rect_bw @ 0, f_plot_scalar @ 1, run_time=3)
+        self.play(notebook_group.animate.shift(DOWN * self.camera.frame.height))
+
+        self.wait(0.5)
+
+        # self.next_section(skip_animations=skip_animations(True))
+        # self.wait(0.5)
+
+        # all_group = Group(delta_label, ax, ax2, f_ax2_rdc, freq2_label)
+
+        # dots_l = (
+        #     MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), LEFT, LARGE_BUFF)
+        # )
+        # dots_r = (
+        #     MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), RIGHT, LARGE_BUFF)
+        # )
+
+        # self.play(
+        #     self.camera.frame.animate.scale_to_fit_height(
+        #         all_group.height * 1.2
+        #     ).move_to(all_group),
+        #     Transform(f_ax2, f_ax2_rdc),
+        #     Uncreate(one_f_dots[0]),
+        #     Uncreate(one_f_dots[-1]),
+        #     Uncreate(one_f_samples[0]),
+        #     Uncreate(one_f_samples[-1]),
+        #     FadeIn(dots_l, dots_r),
+        # )
+
+        # self.wait(0.5)
+
+        # time_box = SurroundingRectangle(
+        #     delta_label, ax, ax2, delta_label, corner_radius=0.2, buff=MED_SMALL_BUFF
+        # )
+
+        # self.play(Create(time_box))
+
+        # self.wait(0.5)
+
+        # f_box = SurroundingRectangle(
+        #     f_ax_group.copy().shift(UP * 8),
+        #     f_ax2,
+        #     freq2_label,
+        #     corner_radius=0.2,
+        #     buff=MED_SMALL_BUFF,
+        # )
+
+        # conv = (
+        #     MathTex(r"\circledast", color=YELLOW)
+        #     .scale(3)
+        #     .move_to(times)
+        #     .set_y(f_ax2.get_y())
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         f_ax_group.animate.shift(UP * 8),
+        #         GrowFromCenter(conv),
+        #         ReplacementTransform(time_box, f_box),
+        #         lag_ratio=0.4,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # f_ax_soln = Axes(
+        #     x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
+        #     y_range=[0, 1, 0.5],
+        #     tips=False,
+        #     x_length=config.frame_width * 0.6 * n_nyquist,
+        #     y_length=config.frame_height * 0.6,
+        # ).next_to(Group(f_ax, f_ax2), DOWN, LARGE_BUFF * 3)
+
+        # conv_bez_l = CubicBezier(
+        #     f_ax.get_corner(DL) + [0, -0.1, 0],
+        #     f_ax.get_corner(DL) + [0, -3, 0],
+        #     f_ax_soln.get_top() + [0, 3, 0],
+        #     f_ax_soln.get_top() + [0, 0.1, 0],
+        # )
+        # conv_bez_r = CubicBezier(
+        #     f_ax2.get_corner(DR) + [0, -0.1, 0],
+        #     f_ax2.get_corner(DR) + [0, -3, 0],
+        #     f_ax_soln.get_top() + [0, 3, 0],
+        #     f_ax_soln.get_top() + [0, 0.1, 0],
+        # )
+
+        # soln_group = Group(f_ax, f_ax2, f_ax_soln)
+
+        # self.play(
+        #     LaggedStart(
+        #         Uncreate(f_box),
+        #         self.camera.frame.animate.scale_to_fit_width(soln_group.width * 1.1)
+        #         .move_to(soln_group)
+        #         .shift(DOWN * 0.7),
+        #         AnimationGroup(Create(conv_bez_l), Create(conv_bez_r)),
+        #         Create(f_ax_soln),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # f_ax_nq2_l = Axes(
+        #     x_range=[-fs / 2, fs / 2, 1],
+        #     y_range=[0, 1, 0.5],
+        #     tips=False,
+        #     x_length=config.frame_width * 0.6,
+        #     y_length=config.frame_height * 0.6,
+        # ).set_opacity(0)
+        # f_ax_nq2_l.shift(f_ax_soln.c2p(-fs, 0) - f_ax_nq2_l.c2p(0, 0))
+        # f_ax_nq2_r = Axes(
+        #     x_range=[-fs / 2, fs / 2, 1],
+        #     y_range=[0, 1, 0.5],
+        #     tips=False,
+        #     x_length=config.frame_width * 0.6,
+        #     y_length=config.frame_height * 0.6,
+        # ).set_opacity(0)
+        # f_ax_nq2_r.shift(f_ax_soln.c2p(fs, 0) - f_ax_nq2_r.c2p(0, 0))
+        # f_ax_nq1 = Axes(
+        #     x_range=[-fs / 2, fs / 2, 1],
+        #     y_range=[0, 1, 0.5],
+        #     tips=False,
+        #     x_length=config.frame_width * 0.6,
+        #     y_length=config.frame_height * 0.6,
+        # ).set_opacity(0)
+        # self.next_section(skip_animations=skip_animations(True))
+        # f_ax_nq1.shift(f_ax_soln.c2p(0, 0) - f_ax_nq1.c2p(0, 0))
+
+        # f_plot_scalar = VT(1)
+        # f_plot_nq1 = always_redraw(create_X_k(f_ax_soln, False, 3, f_plot_scalar))
+        # f_plot_nq2_l = always_redraw(create_X_k(f_ax_nq2_l, False))
+        # f_plot_nq2_r = always_redraw(create_X_k(f_ax_nq2_r, False))
+
+        # # self.play(
+        # #     Create(f_plot_nq2_l), rate_func=rate_functions.ease_in_sine, run_time=0.5
+        # # )
+        # self.play(Create(f_plot_nq1), rate_func=rate_functions.linear, run_time=0.5)
+        # # self.play(
+        # #     Create(f_plot_nq2_r), rate_func=rate_functions.ease_out_sine, run_time=0.5
+        # # )
+
+        # self.wait(0.5)
+
+        # f_labels = Group(
+        #     *[
+        #         fl.next_to(f_ax_soln.c2p(x, 0), DOWN)
+        #         for fl, x in zip(
+        #             [
+        #                 MathTex(r"-\frac{3 f_s}{2}"),
+        #                 MathTex(r"-f_s"),
+        #                 MathTex(r"-\frac{f_s}{2}"),
+        #                 MathTex(r"0"),
+        #                 MathTex(r"\frac{f_s}{2}"),
+        #                 MathTex(r"f_s"),
+        #                 MathTex(r"\frac{3 f_s}{2}"),
+        #             ],
+        #             [-1.5 * fs, -fs, -0.5 * fs, 0, 0.5 * fs, fs, 1.5 * fs],
+        #         )
+        #     ]
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         GrowFromCenter(f_labels[0]),
+        #         GrowFromCenter(f_labels[1]),
+        #         ReplacementTransform(neg_fs_label[0], f_labels[2][0], path_arc=PI / 3),
+        #         GrowFromCenter(f_labels[3]),
+        #         ReplacementTransform(pos_fs_label[0], f_labels[4][0], path_arc=PI / 3),
+        #         GrowFromCenter(f_labels[5]),
+        #         GrowFromCenter(f_labels[6]),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # f_ax_nq3_l = Axes(
+        #     x_range=[-fs / 2, fs / 2, 1],
+        #     y_range=[0, 1, 0.5],
+        #     tips=False,
+        #     x_length=config.frame_width * 0.6,
+        #     y_length=config.frame_height * 0.6,
+        # )
+        # f_ax_nq3_l.shift(f_ax_soln.c2p(-2 * fs, 0) - f_ax_nq3_l.c2p(0, 0))
+        # f_ax_nq3_r = Axes(
+        #     x_range=[-fs / 2, fs / 2, 1],
+        #     y_range=[0, 1, 0.5],
+        #     tips=False,
+        #     x_length=config.frame_width * 0.6,
+        #     y_length=config.frame_height * 0.6,
+        # )
+        # f_ax_nq3_r.shift(f_ax_soln.c2p(2 * fs, 0) - f_ax_nq3_r.c2p(0, 0))
+
+        # # FIXME: Change these zones to every fs/2
+        # # FIXME: Change the 0-pi zone to green
+        # zone3_l = Polygon(
+        #     f_ax_nq3_l.c2p(-fs / 2, 0),
+        #     f_ax_nq3_l.c2p(-fs / 2, 1),
+        #     f_ax_nq3_l.c2p(fs / 2, 1),
+        #     f_ax_nq3_l.c2p(fs / 2, 0),
+        #     stroke_opacity=0,
+        #     fill_opacity=0.3,
+        #     fill_color=GREEN,
+        # )
+        # zone3_r = Polygon(
+        #     f_ax_nq3_r.c2p(-fs / 2, 0),
+        #     f_ax_nq3_r.c2p(-fs / 2, 1),
+        #     f_ax_nq3_r.c2p(fs / 2, 1),
+        #     f_ax_nq3_r.c2p(fs / 2, 0),
+        #     stroke_opacity=0,
+        #     fill_opacity=0.3,
+        #     fill_color=GREEN,
+        # )
+        # zone2_l = Polygon(
+        #     f_ax_nq2_l.c2p(-fs / 2, 0),
+        #     f_ax_nq2_l.c2p(-fs / 2, 1),
+        #     f_ax_nq2_l.c2p(fs / 2, 1),
+        #     f_ax_nq2_l.c2p(fs / 2, 0),
+        #     stroke_opacity=0,
+        #     fill_opacity=0.3,
+        #     fill_color=PURPLE,
+        # )
+        # zone2_r = Polygon(
+        #     f_ax_nq2_r.c2p(-fs / 2, 0),
+        #     f_ax_nq2_r.c2p(-fs / 2, 1),
+        #     f_ax_nq2_r.c2p(fs / 2, 1),
+        #     f_ax_nq2_r.c2p(fs / 2, 0),
+        #     stroke_opacity=0,
+        #     fill_opacity=0.3,
+        #     fill_color=PURPLE,
+        # )
+        # zone1 = Polygon(
+        #     f_ax_nq1.c2p(-fs / 2, 0),
+        #     f_ax_nq1.c2p(-fs / 2, 1),
+        #     f_ax_nq1.c2p(fs / 2, 1),
+        #     f_ax_nq1.c2p(fs / 2, 0),
+        #     stroke_opacity=0,
+        #     fill_opacity=0.3,
+        #     fill_color=ORANGE,
+        # )
+        # zone2_l_label = Text("Zone 2", font=FONT).next_to(
+        #     zone2_l.get_top(), DOWN, SMALL_BUFF
+        # )
+        # zone2_r_label = Text("Zone 2", font=FONT).next_to(
+        #     zone2_r.get_top(), DOWN, SMALL_BUFF
+        # )
+        # zone1_label = Text("Zone 1", font=FONT).next_to(
+        #     zone1.get_top(), DOWN, SMALL_BUFF
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         FadeIn(zone3_l, zone3_r),
+        #         FadeIn(zone2_l, zone2_r, zone2_l_label, zone2_r_label),
+        #         FadeIn(zone1, zone1_label),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.next_section(skip_animations=skip_animations(True))
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(
+        #             Uncreate(Ts_bez_l),
+        #             Uncreate(Ts_bez_r),
+        #         ),
+        #         FadeOut(
+        #             zone3_l,
+        #             zone3_r,
+        #             zone1_label,
+        #             zone2_l_label,
+        #             zone2_r_label,
+        #         ),
+        #         AnimationGroup(
+        #             Group(
+        #                 f_ax_soln, f_ax_nq1, f_ax_nq2_l, f_ax_nq2_r, f_labels
+        #             ).animate.shift(DOWN * config.frame_height * 2),
+        #             Group(zone2_l, zone2_r, zone1)
+        #             .animate.shift(DOWN * config.frame_height * 2)
+        #             .set_opacity(0.15),
+        #             self.camera.frame.animate.shift(DOWN * config.frame_height * 2),
+        #         ),
+        #         lag_ratio=0.4,
+        #     ),
+        #     run_time=4,
+        # )
+
+        # sine_upt = always_redraw(get_x_n)
+        # self.remove(sine)
+        # self.add(sine_upt)
+
+        # self.wait(0.5)
+
+        # ax.save_state()
+        # self.play(ax.animate.next_to(f_ax_soln, UP, LARGE_BUFF))
+
+        # self.wait(0.5)
+
+        # self.play(interp_rect_bw @ 1, run_time=3)
+
+        # self.wait(0.5)
+
+        # self.play(bw_vt @ (~bw_vt * 4), run_time=3)
+
+        # self.wait(0.5)
+
+        # self.play(bw_vt @ (~bw_vt / 2), run_time=3)
+
+        # self.wait(0.5)
+
+        # self.play(ax.animate.restore())
+
+        # self.wait(0.5)
+
+        # bw_label = MathTex("B").next_to(
+        #     f_ax_soln.c2p(~bw_vt * fs / PI / 4, 1), UP, LARGE_BUFF * 2
+        # )
+        # fs_label = MathTex("f_s").next_to(
+        #     f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4
+        # )
+        # fs_bez_l = CubicBezier(
+        #     fs_label.get_bottom() + [0, -0.1, 0],
+        #     fs_label.get_bottom() + [0, -1, 0],
+        #     f_ax_soln.c2p(0, 1) + [0, 2, 0],
+        #     f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
+        # )
+        # fs_bez_r = CubicBezier(
+        #     fs_label.get_bottom() + [0, -0.1, 0],
+        #     fs_label.get_bottom() + [0, -1, 0],
+        #     f_ax_soln.c2p(fs / 2, 1) + [0, 2, 0],
+        #     f_ax_soln.c2p(fs / 2, 1) + [0, 0.1, 0],
+        # )
+        # bw_bez_l = CubicBezier(
+        #     bw_label.get_bottom() + [0, -0.1, 0],
+        #     bw_label.get_bottom() + [0, -1.5, 0],
+        #     f_ax_soln.c2p(0, 1) + [0, 1.5, 0],
+        #     f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
+        # )
+        # bw_bez_r = CubicBezier(
+        #     bw_label.get_bottom() + [0, -0.1, 0],
+        #     bw_label.get_bottom() + [0, -1.5, 0],
+        #     f_ax_soln.c2p(~bw_vt * fs / PI / 2, 1) + [0, 1.5, 0],
+        #     f_ax_soln.c2p(~bw_vt * fs / PI / 2, 1) + [0, 0.1, 0],
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         GrowFromCenter(bw_label),
+        #         AnimationGroup(Create(bw_bez_l), Create(bw_bez_r)),
+        #         lag_ratio=0.4,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         GrowFromCenter(fs_label),
+        #         AnimationGroup(Create(fs_bez_l), Create(fs_bez_r)),
+        #         lag_ratio=0.4,
+        #     )
+        # )
+
+        # self.next_section(skip_animations=skip_animations(False))
+        # self.wait(0.5)
+
+        # self.play(f_plot_scalar @ 0.5)
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     ShrinkToCenter(fs_label),
+        #     ShrinkToCenter(bw_label),
+        #     Uncreate(fs_bez_l),
+        #     Uncreate(fs_bez_r),
+        #     Uncreate(bw_bez_l),
+        #     Uncreate(bw_bez_r),
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(bw_vt @ (~bw_vt * 5), run_time=5)
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     Group(ax, f_ax_soln)
+        #     .animate.arrange(DOWN, LARGE_BUFF * 2)
+        #     .move_to(self.camera.frame)
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(interp_rect_bw @ 0, f_plot_scalar @ 1, run_time=3)
 
         self.wait(2)
 
