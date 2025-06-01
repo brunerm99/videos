@@ -975,7 +975,6 @@ class FreqIntro(MovingCameraScene):
 
         self.wait(0.5)
 
-        # TODO: change to T_s
         period_eqn = MathTex(r"\frac{1}{T_s} = f_s").scale(2)
         period_eqn[0][2].save_state()
         period_eqn[0][3].save_state()
@@ -1484,302 +1483,352 @@ class FrequencyDomain(MovingCameraScene):
 
         self.wait(0.5)
 
-        # self.next_section(skip_animations=skip_animations(True))
-        # self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
 
-        # all_group = Group(delta_label, ax, ax2, f_ax2_rdc, freq2_label)
+        all_group = Group(delta_label, ax, ax2, f_ax2_rdc, freq2_label)
 
-        # dots_l = (
-        #     MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), LEFT, LARGE_BUFF)
-        # )
-        # dots_r = (
-        #     MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), RIGHT, LARGE_BUFF)
-        # )
+        dots_l = (
+            MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), LEFT, LARGE_BUFF)
+        )
+        dots_r = (
+            MathTex(r"\cdots").scale(3).next_to(f_ax2.c2p(0, 0.5), RIGHT, LARGE_BUFF)
+        )
 
-        # self.play(
-        #     self.camera.frame.animate.scale_to_fit_height(
-        #         all_group.height * 1.2
-        #     ).move_to(all_group),
-        #     Transform(f_ax2, f_ax2_rdc),
-        #     Uncreate(one_f_dots[0]),
-        #     Uncreate(one_f_dots[-1]),
-        #     Uncreate(one_f_samples[0]),
-        #     Uncreate(one_f_samples[-1]),
-        #     FadeIn(dots_l, dots_r),
-        # )
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                all_group.height * 1.2
+            ).move_to(all_group),
+            Transform(f_ax2, f_ax2_rdc),
+            Uncreate(one_f_dots[0]),
+            Uncreate(one_f_dots[-1]),
+            Uncreate(one_f_samples[0]),
+            Uncreate(one_f_samples[-1]),
+            FadeIn(dots_l, dots_r),
+        )
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # time_box = SurroundingRectangle(
-        #     delta_label, ax, ax2, delta_label, corner_radius=0.2, buff=MED_SMALL_BUFF
-        # )
+        time_box = SurroundingRectangle(
+            Group(delta_label, ax, ax2),
+            corner_radius=0.2,
+            buff=MED_SMALL_BUFF,
+        )
 
-        # self.play(Create(time_box))
+        self.play(Create(time_box))
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # f_box = SurroundingRectangle(
-        #     f_ax_group.copy().shift(UP * 8),
-        #     f_ax2,
-        #     freq2_label,
-        #     corner_radius=0.2,
-        #     buff=MED_SMALL_BUFF,
-        # )
+        f_ax_group = (
+            Group(f_ax, f_plot, freq_label)
+            .shift(RIGHT * (ax.c2p(0.5, 0) - f_ax.c2p(0, 0)))
+            .shift(UP * (f_ax2.c2p(0, 0) - f_ax.c2p(0, 0)))
+            .shift(DOWN * 8)
+        )
 
-        # conv = (
-        #     MathTex(r"\circledast", color=YELLOW)
-        #     .scale(3)
-        #     .move_to(times)
-        #     .set_y(f_ax2.get_y())
-        # )
+        f_box = SurroundingRectangle(
+            Group(f_ax_group.copy().shift(UP * 8), f_ax2, freq2_label),
+            corner_radius=0.2,
+            buff=MED_SMALL_BUFF,
+        )
 
-        # self.play(
-        #     LaggedStart(
-        #         f_ax_group.animate.shift(UP * 8),
-        #         GrowFromCenter(conv),
-        #         ReplacementTransform(time_box, f_box),
-        #         lag_ratio=0.4,
-        #     )
-        # )
+        conv = (
+            MathTex(r"\circledast", color=YELLOW)
+            .scale(3)
+            .move_to(times)
+            .set_y(f_ax2.get_y())
+        )
 
-        # self.wait(0.5)
+        self.play(
+            LaggedStart(
+                f_ax_group.animate.shift(UP * 8),
+                GrowFromCenter(conv),
+                ReplacementTransform(time_box, f_box),
+                lag_ratio=0.4,
+            )
+        )
 
-        # f_ax_soln = Axes(
-        #     x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
-        #     y_range=[0, 1, 0.5],
-        #     tips=False,
-        #     x_length=config.frame_width * 0.6 * n_nyquist,
-        #     y_length=config.frame_height * 0.6,
-        # ).next_to(Group(f_ax, f_ax2), DOWN, LARGE_BUFF * 3)
+        self.wait(0.5)
 
-        # conv_bez_l = CubicBezier(
-        #     f_ax.get_corner(DL) + [0, -0.1, 0],
-        #     f_ax.get_corner(DL) + [0, -3, 0],
-        #     f_ax_soln.get_top() + [0, 3, 0],
-        #     f_ax_soln.get_top() + [0, 0.1, 0],
-        # )
-        # conv_bez_r = CubicBezier(
-        #     f_ax2.get_corner(DR) + [0, -0.1, 0],
-        #     f_ax2.get_corner(DR) + [0, -3, 0],
-        #     f_ax_soln.get_top() + [0, 3, 0],
-        #     f_ax_soln.get_top() + [0, 0.1, 0],
-        # )
+        f_ax_soln = Axes(
+            x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.6 * n_nyquist,
+            y_length=config.frame_height * 0.6,
+        ).next_to(Group(f_ax, f_ax2), DOWN, LARGE_BUFF * 3)
 
-        # soln_group = Group(f_ax, f_ax2, f_ax_soln)
+        conv_bez_l = CubicBezier(
+            f_ax.get_corner(DL) + [0, -0.1, 0],
+            f_ax.get_corner(DL) + [0, -3, 0],
+            f_ax_soln.get_top() + [0, 3, 0],
+            f_ax_soln.get_top() + [0, 0.1, 0],
+        )
+        conv_bez_r = CubicBezier(
+            f_ax2.get_corner(DR) + [0, -0.1, 0],
+            f_ax2.get_corner(DR) + [0, -3, 0],
+            f_ax_soln.get_top() + [0, 3, 0],
+            f_ax_soln.get_top() + [0, 0.1, 0],
+        )
 
-        # self.play(
-        #     LaggedStart(
-        #         Uncreate(f_box),
-        #         self.camera.frame.animate.scale_to_fit_width(soln_group.width * 1.1)
-        #         .move_to(soln_group)
-        #         .shift(DOWN * 0.7),
-        #         AnimationGroup(Create(conv_bez_l), Create(conv_bez_r)),
-        #         Create(f_ax_soln),
-        #         lag_ratio=0.3,
-        #     )
-        # )
+        soln_group = Group(f_ax, f_ax2, f_ax_soln)
 
-        # self.wait(0.5)
+        self.remove(*notebook_group)
 
-        # f_ax_nq2_l = Axes(
-        #     x_range=[-fs / 2, fs / 2, 1],
-        #     y_range=[0, 1, 0.5],
-        #     tips=False,
-        #     x_length=config.frame_width * 0.6,
-        #     y_length=config.frame_height * 0.6,
-        # ).set_opacity(0)
-        # f_ax_nq2_l.shift(f_ax_soln.c2p(-fs, 0) - f_ax_nq2_l.c2p(0, 0))
-        # f_ax_nq2_r = Axes(
-        #     x_range=[-fs / 2, fs / 2, 1],
-        #     y_range=[0, 1, 0.5],
-        #     tips=False,
-        #     x_length=config.frame_width * 0.6,
-        #     y_length=config.frame_height * 0.6,
-        # ).set_opacity(0)
-        # f_ax_nq2_r.shift(f_ax_soln.c2p(fs, 0) - f_ax_nq2_r.c2p(0, 0))
-        # f_ax_nq1 = Axes(
-        #     x_range=[-fs / 2, fs / 2, 1],
-        #     y_range=[0, 1, 0.5],
-        #     tips=False,
-        #     x_length=config.frame_width * 0.6,
-        #     y_length=config.frame_height * 0.6,
-        # ).set_opacity(0)
-        # self.next_section(skip_animations=skip_animations(True))
-        # f_ax_nq1.shift(f_ax_soln.c2p(0, 0) - f_ax_nq1.c2p(0, 0))
+        self.play(
+            LaggedStart(
+                Uncreate(f_box),
+                self.camera.frame.animate.scale_to_fit_width(soln_group.width * 1.1)
+                .move_to(soln_group)
+                .shift(DOWN * 0.7),
+                AnimationGroup(Create(conv_bez_l), Create(conv_bez_r)),
+                Create(f_ax_soln),
+                lag_ratio=0.3,
+            )
+        )
 
-        # f_plot_scalar = VT(1)
-        # f_plot_nq1 = always_redraw(create_X_k(f_ax_soln, False, 3, f_plot_scalar))
-        # f_plot_nq2_l = always_redraw(create_X_k(f_ax_nq2_l, False))
-        # f_plot_nq2_r = always_redraw(create_X_k(f_ax_nq2_r, False))
+        self.wait(0.5)
 
-        # # self.play(
-        # #     Create(f_plot_nq2_l), rate_func=rate_functions.ease_in_sine, run_time=0.5
-        # # )
-        # self.play(Create(f_plot_nq1), rate_func=rate_functions.linear, run_time=0.5)
-        # # self.play(
-        # #     Create(f_plot_nq2_r), rate_func=rate_functions.ease_out_sine, run_time=0.5
-        # # )
+        f_ax_nq2_l = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.6,
+            y_length=config.frame_height * 0.6,
+        ).set_opacity(0)
+        f_ax_nq2_l.shift(f_ax_soln.c2p(-fs, 0) - f_ax_nq2_l.c2p(0, 0))
+        f_ax_nq2_r = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.6,
+            y_length=config.frame_height * 0.6,
+        ).set_opacity(0)
+        f_ax_nq2_r.shift(f_ax_soln.c2p(fs, 0) - f_ax_nq2_r.c2p(0, 0))
+        f_ax_nq1 = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.6,
+            y_length=config.frame_height * 0.6,
+        ).set_opacity(0)
+        self.next_section(skip_animations=skip_animations(True))
+        f_ax_nq1.shift(f_ax_soln.c2p(0, 0) - f_ax_nq1.c2p(0, 0))
 
-        # self.wait(0.5)
+        f_plot_scalar = VT(1)
+        f_plot_nq1 = always_redraw(create_X_k(f_ax_soln, False, 1, f_plot_scalar))
+        f_plot_nq2_l = always_redraw(create_X_k(f_ax_nq2_l, False, 1, f_plot_scalar))
+        f_plot_nq2_r = always_redraw(create_X_k(f_ax_nq2_r, False, 1, f_plot_scalar))
 
-        # f_labels = Group(
-        #     *[
-        #         fl.next_to(f_ax_soln.c2p(x, 0), DOWN)
-        #         for fl, x in zip(
-        #             [
-        #                 MathTex(r"-\frac{3 f_s}{2}"),
-        #                 MathTex(r"-f_s"),
-        #                 MathTex(r"-\frac{f_s}{2}"),
-        #                 MathTex(r"0"),
-        #                 MathTex(r"\frac{f_s}{2}"),
-        #                 MathTex(r"f_s"),
-        #                 MathTex(r"\frac{3 f_s}{2}"),
-        #             ],
-        #             [-1.5 * fs, -fs, -0.5 * fs, 0, 0.5 * fs, fs, 1.5 * fs],
-        #         )
-        #     ]
-        # )
+        self.play(
+            Create(f_plot_nq2_l), rate_func=rate_functions.ease_in_sine, run_time=0.5
+        )
+        self.play(Create(f_plot_nq1), rate_func=rate_functions.linear, run_time=0.5)
+        self.play(
+            Create(f_plot_nq2_r), rate_func=rate_functions.ease_out_sine, run_time=0.5
+        )
 
-        # self.play(
-        #     LaggedStart(
-        #         GrowFromCenter(f_labels[0]),
-        #         GrowFromCenter(f_labels[1]),
-        #         ReplacementTransform(neg_fs_label[0], f_labels[2][0], path_arc=PI / 3),
-        #         GrowFromCenter(f_labels[3]),
-        #         ReplacementTransform(pos_fs_label[0], f_labels[4][0], path_arc=PI / 3),
-        #         GrowFromCenter(f_labels[5]),
-        #         GrowFromCenter(f_labels[6]),
-        #         lag_ratio=0.3,
-        #     )
-        # )
+        self.wait(0.5)
 
-        # self.wait(0.5)
+        f_labels = Group(
+            *[
+                fl.next_to(f_ax_soln.c2p(x, 0), DOWN)
+                for fl, x in zip(
+                    [
+                        MathTex(r"-\frac{3 f_s}{2}"),
+                        MathTex(r"-f_s"),
+                        MathTex(r"-\frac{f_s}{2}"),
+                        MathTex(r"0"),
+                        MathTex(r"\frac{f_s}{2}"),
+                        MathTex(r"f_s"),
+                        MathTex(r"\frac{3 f_s}{2}"),
+                    ],
+                    [-1.5 * fs, -fs, -0.5 * fs, 0, 0.5 * fs, fs, 1.5 * fs],
+                )
+            ]
+        )
 
-        # f_ax_nq3_l = Axes(
-        #     x_range=[-fs / 2, fs / 2, 1],
-        #     y_range=[0, 1, 0.5],
-        #     tips=False,
-        #     x_length=config.frame_width * 0.6,
-        #     y_length=config.frame_height * 0.6,
-        # )
-        # f_ax_nq3_l.shift(f_ax_soln.c2p(-2 * fs, 0) - f_ax_nq3_l.c2p(0, 0))
-        # f_ax_nq3_r = Axes(
-        #     x_range=[-fs / 2, fs / 2, 1],
-        #     y_range=[0, 1, 0.5],
-        #     tips=False,
-        #     x_length=config.frame_width * 0.6,
-        #     y_length=config.frame_height * 0.6,
-        # )
-        # f_ax_nq3_r.shift(f_ax_soln.c2p(2 * fs, 0) - f_ax_nq3_r.c2p(0, 0))
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in f_labels],
+                lag_ratio=0.2,
+            )
+        )
 
-        # # FIXME: Change these zones to every fs/2
-        # # FIXME: Change the 0-pi zone to green
-        # zone3_l = Polygon(
-        #     f_ax_nq3_l.c2p(-fs / 2, 0),
-        #     f_ax_nq3_l.c2p(-fs / 2, 1),
-        #     f_ax_nq3_l.c2p(fs / 2, 1),
-        #     f_ax_nq3_l.c2p(fs / 2, 0),
-        #     stroke_opacity=0,
-        #     fill_opacity=0.3,
-        #     fill_color=GREEN,
-        # )
-        # zone3_r = Polygon(
-        #     f_ax_nq3_r.c2p(-fs / 2, 0),
-        #     f_ax_nq3_r.c2p(-fs / 2, 1),
-        #     f_ax_nq3_r.c2p(fs / 2, 1),
-        #     f_ax_nq3_r.c2p(fs / 2, 0),
-        #     stroke_opacity=0,
-        #     fill_opacity=0.3,
-        #     fill_color=GREEN,
-        # )
-        # zone2_l = Polygon(
-        #     f_ax_nq2_l.c2p(-fs / 2, 0),
-        #     f_ax_nq2_l.c2p(-fs / 2, 1),
-        #     f_ax_nq2_l.c2p(fs / 2, 1),
-        #     f_ax_nq2_l.c2p(fs / 2, 0),
-        #     stroke_opacity=0,
-        #     fill_opacity=0.3,
-        #     fill_color=PURPLE,
-        # )
-        # zone2_r = Polygon(
-        #     f_ax_nq2_r.c2p(-fs / 2, 0),
-        #     f_ax_nq2_r.c2p(-fs / 2, 1),
-        #     f_ax_nq2_r.c2p(fs / 2, 1),
-        #     f_ax_nq2_r.c2p(fs / 2, 0),
-        #     stroke_opacity=0,
-        #     fill_opacity=0.3,
-        #     fill_color=PURPLE,
-        # )
-        # zone1 = Polygon(
-        #     f_ax_nq1.c2p(-fs / 2, 0),
-        #     f_ax_nq1.c2p(-fs / 2, 1),
-        #     f_ax_nq1.c2p(fs / 2, 1),
-        #     f_ax_nq1.c2p(fs / 2, 0),
-        #     stroke_opacity=0,
-        #     fill_opacity=0.3,
-        #     fill_color=ORANGE,
-        # )
-        # zone2_l_label = Text("Zone 2", font=FONT).next_to(
-        #     zone2_l.get_top(), DOWN, SMALL_BUFF
-        # )
-        # zone2_r_label = Text("Zone 2", font=FONT).next_to(
-        #     zone2_r.get_top(), DOWN, SMALL_BUFF
-        # )
-        # zone1_label = Text("Zone 1", font=FONT).next_to(
-        #     zone1.get_top(), DOWN, SMALL_BUFF
-        # )
+        self.wait(0.5)
 
-        # self.play(
-        #     LaggedStart(
-        #         FadeIn(zone3_l, zone3_r),
-        #         FadeIn(zone2_l, zone2_r, zone2_l_label, zone2_r_label),
-        #         FadeIn(zone1, zone1_label),
-        #         lag_ratio=0.3,
-        #     )
-        # )
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=rate_functions.there_and_back)
+                    .shift(DOWN / 3)
+                    .set_color(YELLOW)
+                    for m in [f_labels[1], f_labels[3], f_labels[5]]
+                ],
+                lag_ratio=0.2,
+            )
+        )
 
-        # self.next_section(skip_animations=skip_animations(True))
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(
-        #     LaggedStart(
-        #         AnimationGroup(
-        #             Uncreate(Ts_bez_l),
-        #             Uncreate(Ts_bez_r),
-        #         ),
-        #         FadeOut(
-        #             zone3_l,
-        #             zone3_r,
-        #             zone1_label,
-        #             zone2_l_label,
-        #             zone2_r_label,
-        #         ),
-        #         AnimationGroup(
-        #             Group(
-        #                 f_ax_soln, f_ax_nq1, f_ax_nq2_l, f_ax_nq2_r, f_labels
-        #             ).animate.shift(DOWN * config.frame_height * 2),
-        #             Group(zone2_l, zone2_r, zone1)
-        #             .animate.shift(DOWN * config.frame_height * 2)
-        #             .set_opacity(0.15),
-        #             self.camera.frame.animate.shift(DOWN * config.frame_height * 2),
-        #         ),
-        #         lag_ratio=0.4,
-        #     ),
-        #     run_time=4,
-        # )
+        f_ax_nq3_l = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.6,
+            y_length=config.frame_height * 0.6,
+        )
+        f_ax_nq3_l.shift(f_ax_soln.c2p(-2 * fs, 0) - f_ax_nq3_l.c2p(0, 0))
+        f_ax_nq3_r = Axes(
+            x_range=[-fs / 2, fs / 2, 1],
+            y_range=[0, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.6,
+            y_length=config.frame_height * 0.6,
+        )
+        f_ax_nq3_r.shift(f_ax_soln.c2p(2 * fs, 0) - f_ax_nq3_r.c2p(0, 0))
 
-        # sine_upt = always_redraw(get_x_n)
-        # self.remove(sine)
-        # self.add(sine_upt)
+        zone4_l = Polygon(
+            f_ax_nq3_l.c2p(0, 0),
+            f_ax_nq3_l.c2p(0, 1),
+            f_ax_nq3_l.c2p(fs / 2, 1),
+            f_ax_nq3_l.c2p(fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=RED,
+        )
+        zone4_r = Polygon(
+            f_ax_nq3_r.c2p(-fs / 2, 0),
+            f_ax_nq3_r.c2p(-fs / 2, 1),
+            f_ax_nq3_r.c2p(0, 1),
+            f_ax_nq3_r.c2p(0, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=RED,
+        )
+        zone3_l = Polygon(
+            f_ax_nq2_l.c2p(-fs / 2, 0),
+            f_ax_nq2_l.c2p(-fs / 2, 1),
+            f_ax_nq2_l.c2p(0, 1),
+            f_ax_nq2_l.c2p(0, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=ORANGE,
+        )
+        zone3_r = Polygon(
+            f_ax_nq2_r.c2p(0, 0),
+            f_ax_nq2_r.c2p(0, 1),
+            f_ax_nq2_r.c2p(fs / 2, 1),
+            f_ax_nq2_r.c2p(fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=ORANGE,
+        )
+        zone2_l = Polygon(
+            f_ax_nq2_l.c2p(0, 0),
+            f_ax_nq2_l.c2p(0, 1),
+            f_ax_nq2_l.c2p(fs / 2, 1),
+            f_ax_nq2_l.c2p(fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=PURPLE,
+        )
+        zone2_r = Polygon(
+            f_ax_nq2_r.c2p(-fs / 2, 0),
+            f_ax_nq2_r.c2p(-fs / 2, 1),
+            f_ax_nq2_r.c2p(0, 1),
+            f_ax_nq2_r.c2p(0, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=PURPLE,
+        )
+        zone1 = Polygon(
+            f_ax_nq1.c2p(-fs / 2, 0),
+            f_ax_nq1.c2p(-fs / 2, 1),
+            f_ax_nq1.c2p(fs / 2, 1),
+            f_ax_nq1.c2p(fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=GREEN,
+        )
+        zone4_l_label = Text("Zone 4", font=FONT).next_to(
+            zone4_l.get_top(), DOWN, SMALL_BUFF
+        )
+        zone4_r_label = Text("Zone 4", font=FONT).next_to(
+            zone4_r.get_top(), DOWN, SMALL_BUFF
+        )
+        zone3_l_label = Text("Zone 3", font=FONT).next_to(
+            zone3_l.get_top(), DOWN, SMALL_BUFF
+        )
+        zone3_r_label = Text("Zone 3", font=FONT).next_to(
+            zone3_r.get_top(), DOWN, SMALL_BUFF
+        )
+        zone2_l_label = Text("Zone 2", font=FONT).next_to(
+            zone2_l.get_top(), DOWN, SMALL_BUFF
+        )
+        zone2_r_label = Text("Zone 2", font=FONT).next_to(
+            zone2_r.get_top(), DOWN, SMALL_BUFF
+        )
+        zone1_label = Text("Zone 1", font=FONT).next_to(
+            zone1.get_top(), DOWN, SMALL_BUFF
+        )
 
-        # self.wait(0.5)
+        self.play(
+            LaggedStart(
+                FadeIn(zone4_l, zone4_r, zone4_l_label, zone4_r_label),
+                FadeIn(zone3_l, zone3_r, zone3_l_label, zone3_r_label),
+                FadeIn(zone2_l, zone2_r, zone2_l_label, zone2_r_label),
+                FadeIn(zone1, zone1_label),
+                lag_ratio=0.3,
+            )
+        )
 
-        # ax.save_state()
-        # self.play(ax.animate.next_to(f_ax_soln, UP, LARGE_BUFF))
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
 
-        # self.wait(0.5)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(Ts_bez_l),
+                    Uncreate(Ts_bez_r),
+                ),
+                FadeOut(
+                    zone3_l_label,
+                    zone3_r_label,
+                    zone1_label,
+                    zone2_l_label,
+                    zone2_r_label,
+                ),
+                AnimationGroup(
+                    Group(
+                        f_ax_soln, f_ax_nq1, f_ax_nq2_l, f_ax_nq2_r, f_labels
+                    ).animate.shift(DOWN * config.frame_height * 2),
+                    Group(zone2_l, zone2_r, zone1, zone3_l, zone3_r)
+                    .animate.shift(DOWN * config.frame_height * 2)
+                    .set_opacity(0.15),
+                    self.camera.frame.animate.shift(DOWN * config.frame_height * 2),
+                ),
+                lag_ratio=0.4,
+            ),
+            run_time=4,
+        )
 
-        # self.play(interp_rect_bw @ 1, run_time=3)
+        sine_upt = always_redraw(get_x_n)
+        self.remove(sine)
+        self.add(sine_upt)
+
+        self.wait(0.5)
+
+        ax.save_state()
+        self.play(ax.animate.next_to(f_ax_soln, UP, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        self.play(interp_rect_bw @ 1, f_plot_scalar @ 0.5, run_time=3)
+
+        f_plot_nq1_all = always_redraw(create_X_k(f_ax_soln, False, 3, f_plot_scalar))
+        self.remove(f_plot_nq1, f_plot_nq2_l, f_plot_nq2_r)
+        self.add(f_plot_nq1_all)
 
         # self.wait(0.5)
 
@@ -1795,8 +1844,10 @@ class FrequencyDomain(MovingCameraScene):
 
         # self.wait(0.5)
 
-        # bw_label = MathTex("B").next_to(
-        #     f_ax_soln.c2p(~bw_vt * fs / PI / 4, 1), UP, LARGE_BUFF * 2
+        # bw_label = (
+        #     MathTex("B")
+        #     .next_to(f_ax_soln.c2p(~bw_vt * fs / PI / 4 / 3, 1), UP, LARGE_BUFF * 1)
+        #     .shift(RIGHT)
         # )
         # fs_label = MathTex("f_s").next_to(
         #     f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4
@@ -1814,16 +1865,16 @@ class FrequencyDomain(MovingCameraScene):
         #     f_ax_soln.c2p(fs / 2, 1) + [0, 0.1, 0],
         # )
         # bw_bez_l = CubicBezier(
-        #     bw_label.get_bottom() + [0, -0.1, 0],
-        #     bw_label.get_bottom() + [0, -1.5, 0],
-        #     f_ax_soln.c2p(0, 1) + [0, 1.5, 0],
-        #     f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
+        #     bw_label.get_left() + [-0.1, 0, 0],
+        #     bw_label.get_left() + [-0.5, 0, 0],
+        #     f_ax_soln.c2p(0, 0.5) + [0, 1, 0],
+        #     f_ax_soln.c2p(0, 0.5) + [0, 0.1, 0],
         # )
         # bw_bez_r = CubicBezier(
-        #     bw_label.get_bottom() + [0, -0.1, 0],
-        #     bw_label.get_bottom() + [0, -1.5, 0],
-        #     f_ax_soln.c2p(~bw_vt * fs / PI / 2, 1) + [0, 1.5, 0],
-        #     f_ax_soln.c2p(~bw_vt * fs / PI / 2, 1) + [0, 0.1, 0],
+        #     bw_label.get_left() + [-0.1, 0, 0],
+        #     bw_label.get_left() + [-0.5, 0, 0],
+        #     f_ax_soln.c2p(~bw_vt * fs / PI / 4 / 3 * 2, 0.5) + [0, 1, 0],
+        #     f_ax_soln.c2p(~bw_vt * fs / PI / 4 / 3 * 2, 0.5) + [0, 0.1, 0],
         # )
 
         # self.play(
@@ -1847,10 +1898,6 @@ class FrequencyDomain(MovingCameraScene):
         # self.next_section(skip_animations=skip_animations(False))
         # self.wait(0.5)
 
-        # self.play(f_plot_scalar @ 0.5)
-
-        # self.wait(0.5)
-
         # self.play(
         #     ShrinkToCenter(fs_label),
         #     ShrinkToCenter(bw_label),
@@ -1862,7 +1909,7 @@ class FrequencyDomain(MovingCameraScene):
 
         # self.wait(0.5)
 
-        # self.play(bw_vt @ (~bw_vt * 5), run_time=5)
+        # self.play(bw_vt @ (~bw_vt * 4), run_time=5)
 
         # self.wait(0.5)
 
