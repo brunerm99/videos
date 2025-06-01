@@ -1217,7 +1217,9 @@ class FrequencyDomain(MovingCameraScene):
 
         f = VT(3)
 
-        def create_X_k(plot_ax, smoothing=True, n_nyquist=1, scalar=None):
+        def create_X_k(
+            plot_ax, smoothing=True, n_nyquist=1, scalar=None, n_nyquist_disp=None
+        ):
             def updater():
                 t = np.arange(0, stop_time, 1 / fs)
                 # x_n = np.sum([np.sin(2 * PI * ~f * t) for f in freqs], axis=0)
@@ -1229,8 +1231,12 @@ class FrequencyDomain(MovingCameraScene):
                 X_k_rect = np.zeros(fft_len)
                 X_k_rect = np.sum(
                     [
-                        np.where(np.abs(freq + n * PI) < ~bw_vt / 2, 1, 0)
-                        for n in np.arange(-n_nyquist // 2 + 1, n_nyquist // 2 + 1)
+                        np.where(
+                            np.abs(freq * n_nyquist * PI / fs + n * PI) <= ~bw_vt / 2,
+                            1,
+                            0,
+                        )
+                        for n in np.arange(-(n_nyquist // 2), n_nyquist // 2 + 1)
                     ],
                     axis=0,
                 )
@@ -1243,9 +1249,10 @@ class FrequencyDomain(MovingCameraScene):
                     np.real(X_k),
                     fill_value="extrapolate",
                 )
+                nnd = n_nyquist_disp if n_nyquist_disp is not None else n_nyquist
                 return plot_ax.plot(
                     f_X_k,
-                    x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, fs / 200],
+                    x_range=[-nnd * fs / 2, nnd * fs / 2, fs / 200],
                     color=BLUE,
                     use_smoothing=smoothing,
                 )
@@ -1826,100 +1833,114 @@ class FrequencyDomain(MovingCameraScene):
 
         self.play(interp_rect_bw @ 1, f_plot_scalar @ 0.5, run_time=3)
 
-        f_plot_nq1_all = always_redraw(create_X_k(f_ax_soln, False, 3, f_plot_scalar))
+        f_plot_nq1_all = always_redraw(
+            create_X_k(f_ax_soln, False, 5, f_plot_scalar, n_nyquist_disp=3)
+        )
         self.remove(f_plot_nq1, f_plot_nq2_l, f_plot_nq2_r)
         self.add(f_plot_nq1_all)
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(bw_vt @ (~bw_vt * 4), run_time=3)
+        self.play(bw_vt @ (~bw_vt * 4), run_time=3)
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(bw_vt @ (~bw_vt / 2), run_time=3)
+        self.play(bw_vt @ (~bw_vt / 2), run_time=3)
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(ax.animate.restore())
+        self.play(ax.animate.restore())
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # bw_label = (
-        #     MathTex("B")
-        #     .next_to(f_ax_soln.c2p(~bw_vt * fs / PI / 4 / 3, 1), UP, LARGE_BUFF * 1)
-        #     .shift(RIGHT)
-        # )
-        # fs_label = MathTex("f_s").next_to(
-        #     f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4
-        # )
-        # fs_bez_l = CubicBezier(
-        #     fs_label.get_bottom() + [0, -0.1, 0],
-        #     fs_label.get_bottom() + [0, -1, 0],
-        #     f_ax_soln.c2p(0, 1) + [0, 2, 0],
-        #     f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
-        # )
-        # fs_bez_r = CubicBezier(
-        #     fs_label.get_bottom() + [0, -0.1, 0],
-        #     fs_label.get_bottom() + [0, -1, 0],
-        #     f_ax_soln.c2p(fs / 2, 1) + [0, 2, 0],
-        #     f_ax_soln.c2p(fs / 2, 1) + [0, 0.1, 0],
-        # )
-        # bw_bez_l = CubicBezier(
-        #     bw_label.get_left() + [-0.1, 0, 0],
-        #     bw_label.get_left() + [-0.5, 0, 0],
-        #     f_ax_soln.c2p(0, 0.5) + [0, 1, 0],
-        #     f_ax_soln.c2p(0, 0.5) + [0, 0.1, 0],
-        # )
-        # bw_bez_r = CubicBezier(
-        #     bw_label.get_left() + [-0.1, 0, 0],
-        #     bw_label.get_left() + [-0.5, 0, 0],
-        #     f_ax_soln.c2p(~bw_vt * fs / PI / 4 / 3 * 2, 0.5) + [0, 1, 0],
-        #     f_ax_soln.c2p(~bw_vt * fs / PI / 4 / 3 * 2, 0.5) + [0, 0.1, 0],
-        # )
+        bw_label = (
+            MathTex("B")
+            .scale(1.5)
+            .next_to(f_ax_soln.c2p(~bw_vt * fs / PI / 4, 0.5), UP, LARGE_BUFF * 1)
+        )
+        fs_label = (
+            MathTex("f_s")
+            .scale(1.5)
+            .next_to(f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4)
+        )
+        fs_bez_l = CubicBezier(
+            fs_label.get_bottom() + [0, -0.1, 0],
+            fs_label.get_bottom() + [0, -1, 0],
+            f_ax_soln.c2p(0, 1) + [0, 2, 0],
+            f_ax_soln.c2p(0, 1) + [0, 0.1, 0],
+        )
+        fs_bez_r = CubicBezier(
+            fs_label.get_bottom() + [0, -0.1, 0],
+            fs_label.get_bottom() + [0, -1, 0],
+            f_ax_soln.c2p(fs / 2, 1) + [0, 2, 0],
+            f_ax_soln.c2p(fs / 2, 1) + [0, 0.1, 0],
+        )
+        bw_bez_l = CubicBezier(
+            bw_label.get_bottom() + [0, -0.1, 0],
+            bw_label.get_bottom() + [0, -1, 0],
+            f_ax_soln.c2p(0, 0.5) + [0, 1, 0],
+            f_ax_soln.c2p(0, 0.5) + [0, 0.1, 0],
+        )
+        bw_bez_r = CubicBezier(
+            bw_label.get_bottom() + [0, -0.1, 0],
+            bw_label.get_bottom() + [0, -1, 0],
+            f_ax_soln.c2p(~bw_vt * fs / PI / 2, 0.5) + [0, 1, 0],
+            f_ax_soln.c2p(~bw_vt * fs / PI / 2, 0.5) + [0, 0.1, 0],
+        )
 
-        # self.play(
-        #     LaggedStart(
-        #         GrowFromCenter(bw_label),
-        #         AnimationGroup(Create(bw_bez_l), Create(bw_bez_r)),
-        #         lag_ratio=0.4,
-        #     )
-        # )
+        self.play(
+            LaggedStart(
+                GrowFromCenter(bw_label),
+                AnimationGroup(Create(bw_bez_l), Create(bw_bez_r)),
+                lag_ratio=0.4,
+            )
+        )
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(
-        #     LaggedStart(
-        #         GrowFromCenter(fs_label),
-        #         AnimationGroup(Create(fs_bez_l), Create(fs_bez_r)),
-        #         lag_ratio=0.4,
-        #     )
-        # )
+        self.play(
+            LaggedStart(
+                GrowFromCenter(fs_label),
+                AnimationGroup(Create(fs_bez_l), Create(fs_bez_r)),
+                lag_ratio=0.4,
+            )
+        )
 
-        # self.next_section(skip_animations=skip_animations(False))
-        # self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
 
-        # self.play(
-        #     ShrinkToCenter(fs_label),
-        #     ShrinkToCenter(bw_label),
-        #     Uncreate(fs_bez_l),
-        #     Uncreate(fs_bez_r),
-        #     Uncreate(bw_bez_l),
-        #     Uncreate(bw_bez_r),
-        # )
+        self.play(
+            ShrinkToCenter(fs_label),
+            ShrinkToCenter(bw_label),
+            Uncreate(fs_bez_l),
+            Uncreate(fs_bez_r),
+            Uncreate(bw_bez_l),
+            Uncreate(bw_bez_r),
+        )
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(bw_vt @ (~bw_vt * 4), run_time=5)
+        self.play(bw_vt @ (~bw_vt * 5), run_time=5)
 
-        # self.wait(0.5)
+        self.wait(0.5)
 
-        # self.play(
-        #     Group(ax, f_ax_soln)
-        #     .animate.arrange(DOWN, LARGE_BUFF * 2)
-        #     .move_to(self.camera.frame)
-        # )
+        self.play(
+            Group(ax, Group(f_ax_soln, zone1, zone2_l, zone2_r, zone3_l, zone3_r))
+            .animate(run_time=5)
+            .arrange(DOWN, LARGE_BUFF * 2)
+            .move_to(self.camera.frame),
+            bw_vt.animate(run_time=1).set_value(~bw_vt / 4),
+        )
 
-        # self.wait(0.5)
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        # f_plot_nq1 = always_redraw(create_X_k(f_ax_soln, True, 1, f_plot_scalar))
+        # f_plot_nq2_l = always_redraw(create_X_k(f_ax_nq2_l, True, 1, f_plot_scalar))
+        # f_plot_nq2_r = always_redraw(create_X_k(f_ax_nq2_r, True, 1, f_plot_scalar))
+        # self.add(f_plot_nq1, f_plot_nq2_l, f_plot_nq2_r)
+        # self.remove(f_plot_nq1_all)
 
         # self.play(interp_rect_bw @ 0, f_plot_scalar @ 1, run_time=3)
 
