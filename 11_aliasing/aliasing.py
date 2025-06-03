@@ -18,7 +18,7 @@ from props.style import BACKGROUND_COLOR, TX_COLOR, RX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono CN"
 
@@ -3007,6 +3007,13 @@ class SimpleSignal(MovingCameraScene):
                 f_ax_nq1, True, shift=fs, xmin=xmin_pos, xmax=xmax_pos, color=YELLOW
             )
         )
+
+        def create_highlight(plot_ax, shift, xmin_pos, xmin, xmax, color):
+            def updater():
+                ...
+
+            return updater
+
         highlight_nq1_pos = always_redraw(
             create_X_k(
                 f_ax_nq1, True, shift=0, xmin=xmin_pos, xmax=xmax_pos, color=YELLOW
@@ -3047,7 +3054,7 @@ class SimpleSignal(MovingCameraScene):
         self.wait(0.5)
 
         no_imag = MathTex(
-            r"x = \sin{(2 \pi f t)} \leftarrow \text{no imaginary ($j$ or $i$) component}"
+            r"x(t) = \sin{(2 \pi f t)} \leftarrow \text{no imaginary ($j$ or $i$) component}"
         )
         no_imag_box = SurroundingRectangle(
             no_imag, corner_radius=0.2, fill_opacity=1, fill_color=BACKGROUND_COLOR
@@ -3103,11 +3110,11 @@ class SimpleSignal(MovingCameraScene):
             f_ax.c2p(fs / 2, 0),
             stroke_opacity=0,
             fill_opacity=0.3,
-            fill_color=ORANGE,
+            fill_color=GREEN,
         )
 
         zone1_label = Text(
-            "1st Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+            "Zone 1", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
         ).next_to(zone1, UP, SMALL_BUFF)
 
         self.play(
@@ -3192,9 +3199,27 @@ class SimpleSignal(MovingCameraScene):
         plot_nq2_l = always_redraw(create_X_k(f_ax_nq1, smoothing=True, shift=-fs))
         plot_nq2_r = always_redraw(create_X_k(f_ax_nq1, smoothing=True, shift=fs))
 
-        zone2_l = Polygon(
+        zone3_l = Polygon(
             f_ax.c2p(-fs + -fs / 2, 0),
             f_ax.c2p(-fs + -fs / 2, 1),
+            f_ax.c2p(-fs, 1),
+            f_ax.c2p(-fs, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=ORANGE,
+        )
+        zone3_r = Polygon(
+            f_ax.c2p(fs, 0),
+            f_ax.c2p(fs, 1),
+            f_ax.c2p(fs + fs / 2, 1),
+            f_ax.c2p(fs + fs / 2, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=ORANGE,
+        )
+        zone2_l = Polygon(
+            f_ax.c2p(-fs, 0),
+            f_ax.c2p(-fs, 1),
             f_ax.c2p(-fs + fs / 2, 1),
             f_ax.c2p(-fs + fs / 2, 0),
             stroke_opacity=0,
@@ -3202,20 +3227,26 @@ class SimpleSignal(MovingCameraScene):
             fill_color=PURPLE,
         )
         zone2_r = Polygon(
-            f_ax.c2p(fs + -fs / 2, 0),
-            f_ax.c2p(fs + -fs / 2, 1),
-            f_ax.c2p(fs + fs / 2, 1),
-            f_ax.c2p(fs + fs / 2, 0),
+            f_ax.c2p(fs - fs / 2, 0),
+            f_ax.c2p(fs - fs / 2, 1),
+            f_ax.c2p(fs, 1),
+            f_ax.c2p(fs, 0),
             stroke_opacity=0,
             fill_opacity=0.3,
             fill_color=PURPLE,
         )
 
+        zone3_l_label = Text(
+            "Zone 3", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(zone3_l, UP, SMALL_BUFF)
+        zone3_r_label = Text(
+            "Zone 3", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to(zone3_r, UP, SMALL_BUFF)
         zone2_l_label = Text(
-            "2nd Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+            "Zone 2", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
         ).next_to(zone2_l, UP, SMALL_BUFF)
         zone2_r_label = Text(
-            "2nd Nyquist Zone", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+            "Zone 2", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
         ).next_to(zone2_r, UP, SMALL_BUFF)
 
         f_ax.save_state()
@@ -3226,6 +3257,8 @@ class SimpleSignal(MovingCameraScene):
             LaggedStart(
                 FadeIn(zone2_l),
                 FadeIn(zone2_r),
+                FadeIn(zone3_l),
+                FadeIn(zone3_r),
                 lag_ratio=0.3,
             ),
         )
@@ -3244,7 +3277,13 @@ class SimpleSignal(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            LaggedStart(Write(zone2_l_label), Write(zone2_r_label), lag_ratio=0.3)
+            LaggedStart(
+                Write(zone3_l_label),
+                Write(zone2_l_label),
+                Write(zone2_r_label),
+                Write(zone3_r_label),
+                lag_ratio=0.3,
+            )
         )
 
         self.wait(0.5)
@@ -3256,8 +3295,8 @@ class SimpleSignal(MovingCameraScene):
             zone1.animate.set_opacity(0.2),
             zone2_l.animate.set_opacity(0.2),
             zone2_r.animate.set_opacity(0.2),
-            xmin_neg @ -3,
-            xmax_neg @ -3,
+            # xmin_neg @ -3,
+            # xmax_neg @ -3,
         )
 
         self.next_section(skip_animations=skip_animations(True))
@@ -3265,6 +3304,7 @@ class SimpleSignal(MovingCameraScene):
 
         self.play(
             FadeOut(
+                highlight_nq1_neg,
                 highlight_nq1_pos,
                 highlight_nq2_l_pos,
                 highlight_nq2_r_pos,
@@ -3274,6 +3314,8 @@ class SimpleSignal(MovingCameraScene):
         )
 
         self.wait(0.5)
+
+        # TODO: add the xlim functionality from ZoomIn here
 
         fnew = fs * 0.75
         self.play(f1 @ (fnew), run_time=12)
@@ -3287,7 +3329,7 @@ class SimpleSignal(MovingCameraScene):
             dash_length=DEFAULT_DASH_LENGTH * 2,
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(
             LaggedStart(
                 self.camera.frame.animate.scale(1.2).shift(DOWN * 0.75),
@@ -3303,25 +3345,30 @@ class SimpleSignal(MovingCameraScene):
         self.remove(ax, *dots, *samples, sine_plot)
 
         axes_group = Group(f_ax_nq1)
+        nq1_box = SurroundingRectangle(f_ax_nq1, buff=0)
         self.play(
             self.camera.frame.animate.scale_to_fit_width(
                 axes_group.width * 1.2 * 3
-            ).move_to(axes_group)
+            ).move_to(axes_group),
+            Create(nq1_box),
+            FadeOut(nq_boundary),
         )
 
         self.wait(0.5)
 
         self.play(
             LaggedStart(
-                f1 @ (fs * 0.25),
                 FadeOut(
                     plot_nq2_r,
                     plot_nq2_l,
-                    nq_boundary,
                     zone2_l,
                     zone2_l_label,
                     zone2_r,
                     zone2_r_label,
+                    zone3_l,
+                    zone3_r,
+                    zone3_l_label,
+                    zone3_r_label,
                 ),
                 f_ax.animate.restore(),
                 lag_ratio=0.3,
@@ -3330,7 +3377,22 @@ class SimpleSignal(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(zone1, zone1_label))
+        rewind = (
+            ImageMobject("../props/static/rewind.png")
+            .scale(0.6)
+            .next_to(self.camera.frame.get_corner(UR), DL, LARGE_BUFF)
+        )
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            FadeOut(zone1, zone1_label),
+            Uncreate(nq1_box),
+            f1 @ (fs * 0.25),
+            rewind.shift(RIGHT * 5)
+            .animate(rate_func=there_and_back_with_pause)
+            .shift(LEFT * 5),
+            run_time=2,
+        )
 
         self.wait(2)
 
@@ -3468,362 +3530,385 @@ class ZoomIn(MovingCameraScene):
         self.add(f_ax, plot_nq1, f_labels[2], f_labels[4])
         self.camera.frame.scale_to_fit_width(f_ax.width * 1.2 * 3)
 
-        f_tracker = always_redraw(
-            lambda: MathTex(f"f_1 = {~f1:.2f} \\text{{ Hz}}")
-            .next_to(f_ax, UP, LARGE_BUFF, LEFT)
-            .shift(LEFT)
-        )
+        self.wait(0.5)
 
-        def create_f_line():
-            cb = CubicBezier(
-                f_tracker.get_right() + [0.1, 0, 0],
-                f_tracker.get_right() + [1, 0, 0],
-                f_ax.c2p(~f1, 1) + [0, 1, 0],
-                f_ax.c2p(~f1, 1) + [0, 0.3, 0],
-            )
-            tri = (
-                Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
-                .scale(0.3)
-                .rotate(PI)
-                .move_to(cb.get_end())
-            )
-            return cb
-
-        def create_f_tri():
-            cb = CubicBezier(
-                f_tracker.get_right() + [0.1, 0, 0],
-                f_tracker.get_right() + [1, 0, 0],
-                f_ax.c2p(~f1, 1) + [0, 1, 0],
-                f_ax.c2p(~f1, 1) + [0, 0.3, 0],
-            )
-            tri = (
-                Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
-                .scale(0.1)
-                .rotate(PI)
-                .next_to(cb.get_end(), DOWN, 0)
-            )
-            return tri
-
-        f_line = always_redraw(create_f_line)
-        f_tri = always_redraw(create_f_tri)
-
-        self.play(
-            FadeIn(f_tracker),
-            Create(f_line),
-            FadeIn(f_tri),
-            Create(highlight_nq1_pos),
-            Create(highlight_nq1_neg),
-        )
+        self.play(f1 @ (0.9 * fs), run_time=5)
 
         self.wait(0.5)
 
-        self.play(f1 @ (fs * 0.75), run_time=12)
-
-        self.wait(0.5)
-
-        self.play(f1 @ (fs / 2))
-
-        self.wait(0.5)
-
-        f_zone2_relationship = MathTex(
-            r"f_{\text{real}} \uparrow \hspace{6pt} \Rightarrow \hspace{4pt} f_{\text{apparent}} \downarrow"
-        ).next_to(f_ax, DOWN, LARGE_BUFF * 2)
-        f_zone2_relationship[0][5].set_color(GREEN)
-        f_zone2_relationship[0][-1].set_color(RED)
-
-        for_zone2 = (
-            Tex(r"While $f$ in 2$^\text{nd}$ Nyquist Zone:")
-            .next_to(self.camera.frame.get_left(), LEFT)
-            .set_y(f_zone2_relationship.get_y())
+        rewind = (
+            ImageMobject("../props/static/rewind.png")
+            .scale(0.6)
+            .next_to(self.camera.frame.get_corner(UR), DL, LARGE_BUFF)
         )
-
-        all_group = Group(f_ax, f_line, f_tri, f_tracker, f_zone2_relationship)
-
-        self.play(
-            LaggedStart(
-                self.camera.frame.animate.scale_to_fit_height(all_group.height * 1.2)
-                .move_to(all_group)
-                .set_x(0),
-                Write(f_zone2_relationship),
-                lag_ratio=0.3,
-            ),
-            f1.animate(run_time=12).set_value(fs * 0.75),
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            Group(for_zone2, f_zone2_relationship)
-            .animate.arrange(RIGHT, MED_SMALL_BUFF)
-            .set_y(f_zone2_relationship.get_y())
-        )
-
-        self.wait(0.5)
-
-        zone2_f = MathTex(r"f_{\text{apparent}} = f_s - f_{\text{real}}").next_to(
-            Group(for_zone2, f_zone2_relationship), DOWN, LARGE_BUFF
-        )
-
-        all_group.add(zone2_f)
-
-        self.play(
-            self.camera.frame.animate.scale_to_fit_height(all_group.height * 1.2)
-            .move_to(all_group)
-            .set_x(0),
-        )
-
-        self.next_section(skip_animations=skip_animations(True))
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                TransformFromCopy(
-                    f_zone2_relationship[0][-10:-1], zone2_f[0][:9], path_arc=PI / 2
-                ),
-                GrowFromCenter(zone2_f[0][9]),
-                TransformFromCopy(
-                    f_labels[4][0][:2], zone2_f[0][10:12], path_arc=PI / 2
-                ),
-                GrowFromCenter(zone2_f[0][-6]),
-                TransformFromCopy(
-                    f_zone2_relationship[0][:5], zone2_f[0][-5:], path_arc=-PI / 2
-                ),
-                lag_ratio=0.4,
-            ),
-            run_time=3,
-        )
-
-        for_zone2_box = SurroundingRectangle(for_zone2, corner_radius=0.2)
-        zone2_f_box = SurroundingRectangle(zone2_f, corner_radius=0.2)
-        zone2_neg_box = SurroundingRectangle(
-            Polygon(
-                f_ax.c2p(-fs / 2, 0),
-                f_ax.c2p(-fs / 2, 1),
-                f_ax.c2p(-fs, 1),
-                f_ax.c2p(-fs, 0),
-            ),
-            corner_radius=0.2,
-            buff=0,
-        )
-        zone2_pos_box = SurroundingRectangle(
-            Polygon(
-                f_ax.c2p(fs / 2, 0),
-                f_ax.c2p(fs / 2, 1),
-                f_ax.c2p(fs, 1),
-                f_ax.c2p(fs, 0),
-            ),
-            corner_radius=0.2,
-            buff=0,
-        )
-
-        zone2_neg_label = (
-            VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-            )
-            .arrange(DOWN)
-            .move_to(zone2_neg_box)
-        )
-        zone2_pos_label = (
-            VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-            )
-            .arrange(DOWN)
-            .move_to(zone2_pos_box)
-        )
-
-        self.play(
-            LaggedStart(
-                Create(zone2_f_box),
-                AnimationGroup(
-                    Create(for_zone2_box),
-                    Create(zone2_pos_box),
-                    Create(zone2_neg_box),
-                    *[Write(m) for m in zone2_neg_label],
-                    *[Write(m) for m in zone2_pos_label],
-                ),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        zone3_neg_box = SurroundingRectangle(
-            Polygon(
-                f_ax.c2p(-fs, 0),
-                f_ax.c2p(-fs, 1),
-                f_ax.c2p(-3 * fs / 2, 1),
-                f_ax.c2p(-3 * fs / 2, 0),
-            ),
-            corner_radius=0.2,
-            buff=0,
-        )
-        zone3_pos_box = SurroundingRectangle(
-            Polygon(
-                f_ax.c2p(fs, 0),
-                f_ax.c2p(fs, 1),
-                f_ax.c2p(3 * fs / 2, 1),
-                f_ax.c2p(3 * fs / 2, 0),
-            ),
-            corner_radius=0.2,
-            buff=0,
-        )
-        zone3_neg_label = (
-            VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-            )
-            .arrange(DOWN)
-            .move_to(zone3_neg_box)
-        )
-        zone3_pos_label = (
-            VGroup(
-                Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-                Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
-            )
-            .arrange(DOWN)
-            .move_to(zone3_pos_box)
-        )
-
-        self.play(
-            Transform(zone2_neg_box, zone3_neg_box),
-            Transform(zone2_pos_box, zone3_pos_box),
-            Transform(zone2_neg_label[0], zone3_neg_label[0]),
-            Transform(zone2_neg_label[1], zone3_neg_label[1]),
-            Transform(zone2_neg_label[2], zone3_neg_label[2]),
-            Transform(zone2_pos_label[0], zone3_pos_label[0]),
-            Transform(zone2_pos_label[1], zone3_pos_label[1]),
-            Transform(zone2_pos_label[2], zone3_pos_label[2]),
-        )
-
-        self.play(f1 @ (fs * 1.25), run_time=12)
-
-        self.wait(0.5)
-
-        f_zone3_relationship = MathTex(
-            r"f_{\text{real}} \uparrow \hspace{6pt} \Rightarrow \hspace{4pt} f_{\text{apparent}} \uparrow"
-        ).next_to(f_ax, DOWN, LARGE_BUFF * 2)
-        f_zone3_relationship[0][5].set_color(GREEN)
-        f_zone3_relationship[0][-1].set_color(GREEN)
-        for_zone3 = (
-            Tex(r"While $f$ in 3$^\text{rd}$ Nyquist Zone:")
-            .next_to(self.camera.frame.get_left(), LEFT)
-            .set_y(f_zone3_relationship.get_y())
-        )
-        Group(for_zone3, f_zone3_relationship).arrange(RIGHT, MED_SMALL_BUFF)
-        zone3_f = MathTex(r"f_{\text{apparent}} = f_s + f_{\text{real}}").next_to(
-            Group(for_zone3, f_zone3_relationship), DOWN, LARGE_BUFF
-        )
-        for_zone3_box = SurroundingRectangle(for_zone3, corner_radius=0.2)
-        zone3_f_box = SurroundingRectangle(zone3_f, corner_radius=0.2)
-
-        zone2_group = Group(
-            f_zone2_relationship, for_zone2, zone2_f, for_zone2_box, zone2_f_box
-        )
-        zone3_group = (
-            Group(f_zone3_relationship, for_zone3, zone3_f, for_zone3_box, zone3_f_box)
-            .move_to(zone2_group)
-            .shift(DOWN * config.frame_height)
-        )
-        zone2_loc = zone2_group.get_center()
-        zone3_loc = zone3_group.get_center()
-
-        self.play(
-            LaggedStart(
-                zone2_group.animate.move_to(zone3_loc),
-                zone3_group.animate.move_to(zone2_loc),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            zone2_group.animate.scale_to_fit_width(self.camera.frame.width * 0.45)
-            .next_to(self.camera.frame.get_corner(DL), UR)
-            .shift(UP),
-            zone3_group.animate.scale_to_fit_width(self.camera.frame.width * 0.45)
-            .next_to(self.camera.frame.get_corner(DR), UL)
-            .shift(UP),
-        )
-        self.play(
-            FadeOut(
-                zone2_f_box,
-                zone3_f_box,
-                for_zone2_box,
-                for_zone3_box,
-                zone2_neg_label,
-                zone2_pos_label,
-            )
-        )
-
         self.next_section(skip_animations=skip_animations(False))
-        self.wait(0.5)
-
-        zone2_pos_box.add_updater(lambda m: m.set_x(f_ax.c2p(~f1, 0)[0]))
-        zone2_neg_box.add_updater(lambda m: m.set_x(f_ax.c2p(-~f1, 0)[0]))
-
-        for_even = (
-            Tex(r"While $f$ in \textit{Even} Nyquist Zones:")
-            .scale_to_fit_width(for_zone2.width)
-            .move_to(for_zone2, LEFT)
-        )
-        for_odd = (
-            Tex(r"While $f$ in \textit{Odd} Nyquist Zones:")
-            .scale_to_fit_width(for_zone2.width)
-            .move_to(for_zone3, LEFT)
-        )
-
-        even_zone_f = (
-            MathTex(r"f_{\text{apparent}} = N f_s - f_{\text{real}}")
-            .scale_to_fit_width(zone2_f.width * 1.08)
-            .move_to(zone2_f, LEFT)
-        )
-        odd_zone_f = (
-            MathTex(r"f_{\text{apparent}} = N f_s + f_{\text{real}}")
-            .scale_to_fit_width(zone2_f.width * 1.08)
-            .move_to(zone3_f, LEFT)
-        )
 
         self.play(
-            f1.animate(run_time=20).set_value(fs * 4.25),
-            ReplacementTransform(for_zone2[0][:8], for_even[0][:8]),
-            ReplacementTransform(for_zone3[0][:8], for_odd[0][:8]),
-            ReplacementTransform(for_zone2[0][8:11], for_even[0][8:12]),
-            ReplacementTransform(for_zone3[0][8:11], for_odd[0][8:11]),
-            ReplacementTransform(for_zone2[0][11:], for_even[0][12:]),
-            ReplacementTransform(for_zone3[0][11:], for_odd[0][11:]),
-            ReplacementTransform(zone3_f[0][:10], odd_zone_f[0][:10]),
-            GrowFromCenter(odd_zone_f[0][10]),
-            ReplacementTransform(zone3_f[0][10:], odd_zone_f[0][11:]),
-            ReplacementTransform(zone2_f[0][:10], even_zone_f[0][:10]),
-            GrowFromCenter(even_zone_f[0][10]),
-            ReplacementTransform(zone2_f[0][10:], even_zone_f[0][11:]),
+            f1 @ (0.25 * fs),
+            rewind.shift(RIGHT * 5)
+            .animate(rate_func=there_and_back_with_pause)
+            .shift(LEFT * 5),
+            run_time=5,
         )
 
         self.wait(0.5)
 
-        self.play(
-            FadeOut(
-                zone2_group,
-                zone3_group,
-                f_line,
-                f_tri,
-                f_tracker,
-                even_zone_f,
-                odd_zone_f,
-                for_even,
-                for_odd,
-            ),
-            self.camera.frame.animate.scale_to_fit_height(f_ax.height * 2).move_to(
-                f_ax.c2p(fs / 4, 1)
-            ),
-        )
+        # f_tracker = always_redraw(
+        #     lambda: MathTex(f"f_1 = {~f1:.2f} \\text{{ Hz}}")
+        #     .next_to(f_ax, UP, LARGE_BUFF, LEFT)
+        #     .shift(LEFT)
+        # )
+
+        # def create_f_line():
+        #     cb = CubicBezier(
+        #         f_tracker.get_right() + [0.1, 0, 0],
+        #         f_tracker.get_right() + [1, 0, 0],
+        #         f_ax.c2p(~f1, 1) + [0, 1, 0],
+        #         f_ax.c2p(~f1, 1) + [0, 0.3, 0],
+        #     )
+        #     tri = (
+        #         Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+        #         .scale(0.3)
+        #         .rotate(PI)
+        #         .move_to(cb.get_end())
+        #     )
+        #     return cb
+
+        # def create_f_tri():
+        #     cb = CubicBezier(
+        #         f_tracker.get_right() + [0.1, 0, 0],
+        #         f_tracker.get_right() + [1, 0, 0],
+        #         f_ax.c2p(~f1, 1) + [0, 1, 0],
+        #         f_ax.c2p(~f1, 1) + [0, 0.3, 0],
+        #     )
+        #     tri = (
+        #         Triangle(color=WHITE, fill_color=WHITE, fill_opacity=1)
+        #         .scale(0.1)
+        #         .rotate(PI)
+        #         .next_to(cb.get_end(), DOWN, 0)
+        #     )
+        #     return tri
+
+        # f_line = always_redraw(create_f_line)
+        # f_tri = always_redraw(create_f_tri)
+
+        # self.play(
+        #     FadeIn(f_tracker),
+        #     Create(f_line),
+        #     FadeIn(f_tri),
+        #     Create(highlight_nq1_pos),
+        #     Create(highlight_nq1_neg),
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(f1 @ (fs * 0.75), run_time=12)
+
+        # self.wait(0.5)
+
+        # self.play(f1 @ (fs / 2))
+
+        # self.wait(0.5)
+
+        # f_zone2_relationship = MathTex(
+        #     r"f_{\text{real}} \uparrow \hspace{6pt} \Rightarrow \hspace{4pt} f_{\text{apparent}} \downarrow"
+        # ).next_to(f_ax, DOWN, LARGE_BUFF * 2)
+        # f_zone2_relationship[0][5].set_color(GREEN)
+        # f_zone2_relationship[0][-1].set_color(RED)
+
+        # for_zone2 = (
+        #     Tex(r"While $f$ in 2$^\text{nd}$ Nyquist Zone:")
+        #     .next_to(self.camera.frame.get_left(), LEFT)
+        #     .set_y(f_zone2_relationship.get_y())
+        # )
+
+        # all_group = Group(f_ax, f_line, f_tri, f_tracker, f_zone2_relationship)
+
+        # self.play(
+        #     LaggedStart(
+        #         self.camera.frame.animate.scale_to_fit_height(all_group.height * 1.2)
+        #         .move_to(all_group)
+        #         .set_x(0),
+        #         Write(f_zone2_relationship),
+        #         lag_ratio=0.3,
+        #     ),
+        #     f1.animate(run_time=12).set_value(fs * 0.75),
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     Group(for_zone2, f_zone2_relationship)
+        #     .animate.arrange(RIGHT, MED_SMALL_BUFF)
+        #     .set_y(f_zone2_relationship.get_y())
+        # )
+
+        # self.wait(0.5)
+
+        # zone2_f = MathTex(r"f_{\text{apparent}} = f_s - f_{\text{real}}").next_to(
+        #     Group(for_zone2, f_zone2_relationship), DOWN, LARGE_BUFF
+        # )
+
+        # all_group.add(zone2_f)
+
+        # self.play(
+        #     self.camera.frame.animate.scale_to_fit_height(all_group.height * 1.2)
+        #     .move_to(all_group)
+        #     .set_x(0),
+        # )
+
+        # self.next_section(skip_animations=skip_animations(True))
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         TransformFromCopy(
+        #             f_zone2_relationship[0][-10:-1], zone2_f[0][:9], path_arc=PI / 2
+        #         ),
+        #         GrowFromCenter(zone2_f[0][9]),
+        #         TransformFromCopy(
+        #             f_labels[4][0][:2], zone2_f[0][10:12], path_arc=PI / 2
+        #         ),
+        #         GrowFromCenter(zone2_f[0][-6]),
+        #         TransformFromCopy(
+        #             f_zone2_relationship[0][:5], zone2_f[0][-5:], path_arc=-PI / 2
+        #         ),
+        #         lag_ratio=0.4,
+        #     ),
+        #     run_time=3,
+        # )
+
+        # for_zone2_box = SurroundingRectangle(for_zone2, corner_radius=0.2)
+        # zone2_f_box = SurroundingRectangle(zone2_f, corner_radius=0.2)
+        # zone2_neg_box = SurroundingRectangle(
+        #     Polygon(
+        #         f_ax.c2p(-fs / 2, 0),
+        #         f_ax.c2p(-fs / 2, 1),
+        #         f_ax.c2p(-fs, 1),
+        #         f_ax.c2p(-fs, 0),
+        #     ),
+        #     corner_radius=0.2,
+        #     buff=0,
+        # )
+        # zone2_pos_box = SurroundingRectangle(
+        #     Polygon(
+        #         f_ax.c2p(fs / 2, 0),
+        #         f_ax.c2p(fs / 2, 1),
+        #         f_ax.c2p(fs, 1),
+        #         f_ax.c2p(fs, 0),
+        #     ),
+        #     corner_radius=0.2,
+        #     buff=0,
+        # )
+
+        # zone2_neg_label = (
+        #     VGroup(
+        #         Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #     )
+        #     .arrange(DOWN)
+        #     .move_to(zone2_neg_box)
+        # )
+        # zone2_pos_label = (
+        #     VGroup(
+        #         Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("Zone 2", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #     )
+        #     .arrange(DOWN)
+        #     .move_to(zone2_pos_box)
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         Create(zone2_f_box),
+        #         AnimationGroup(
+        #             Create(for_zone2_box),
+        #             Create(zone2_pos_box),
+        #             Create(zone2_neg_box),
+        #             *[Write(m) for m in zone2_neg_label],
+        #             *[Write(m) for m in zone2_pos_label],
+        #         ),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # zone3_neg_box = SurroundingRectangle(
+        #     Polygon(
+        #         f_ax.c2p(-fs, 0),
+        #         f_ax.c2p(-fs, 1),
+        #         f_ax.c2p(-3 * fs / 2, 1),
+        #         f_ax.c2p(-3 * fs / 2, 0),
+        #     ),
+        #     corner_radius=0.2,
+        #     buff=0,
+        # )
+        # zone3_pos_box = SurroundingRectangle(
+        #     Polygon(
+        #         f_ax.c2p(fs, 0),
+        #         f_ax.c2p(fs, 1),
+        #         f_ax.c2p(3 * fs / 2, 1),
+        #         f_ax.c2p(3 * fs / 2, 0),
+        #     ),
+        #     corner_radius=0.2,
+        #     buff=0,
+        # )
+        # zone3_neg_label = (
+        #     VGroup(
+        #         Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("(-)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #     )
+        #     .arrange(DOWN)
+        #     .move_to(zone3_neg_box)
+        # )
+        # zone3_pos_label = (
+        #     VGroup(
+        #         Text("Nyquist", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("Zone 3", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #         Text("(+)", font_size=DEFAULT_FONT_SIZE * 0.5, font=FONT),
+        #     )
+        #     .arrange(DOWN)
+        #     .move_to(zone3_pos_box)
+        # )
+
+        # self.play(
+        #     Transform(zone2_neg_box, zone3_neg_box),
+        #     Transform(zone2_pos_box, zone3_pos_box),
+        #     Transform(zone2_neg_label[0], zone3_neg_label[0]),
+        #     Transform(zone2_neg_label[1], zone3_neg_label[1]),
+        #     Transform(zone2_neg_label[2], zone3_neg_label[2]),
+        #     Transform(zone2_pos_label[0], zone3_pos_label[0]),
+        #     Transform(zone2_pos_label[1], zone3_pos_label[1]),
+        #     Transform(zone2_pos_label[2], zone3_pos_label[2]),
+        # )
+
+        # self.play(f1 @ (fs * 1.25), run_time=12)
+
+        # self.wait(0.5)
+
+        # f_zone3_relationship = MathTex(
+        #     r"f_{\text{real}} \uparrow \hspace{6pt} \Rightarrow \hspace{4pt} f_{\text{apparent}} \uparrow"
+        # ).next_to(f_ax, DOWN, LARGE_BUFF * 2)
+        # f_zone3_relationship[0][5].set_color(GREEN)
+        # f_zone3_relationship[0][-1].set_color(GREEN)
+        # for_zone3 = (
+        #     Tex(r"While $f$ in 3$^\text{rd}$ Nyquist Zone:")
+        #     .next_to(self.camera.frame.get_left(), LEFT)
+        #     .set_y(f_zone3_relationship.get_y())
+        # )
+        # Group(for_zone3, f_zone3_relationship).arrange(RIGHT, MED_SMALL_BUFF)
+        # zone3_f = MathTex(r"f_{\text{apparent}} = f_s + f_{\text{real}}").next_to(
+        #     Group(for_zone3, f_zone3_relationship), DOWN, LARGE_BUFF
+        # )
+        # for_zone3_box = SurroundingRectangle(for_zone3, corner_radius=0.2)
+        # zone3_f_box = SurroundingRectangle(zone3_f, corner_radius=0.2)
+
+        # zone2_group = Group(
+        #     f_zone2_relationship, for_zone2, zone2_f, for_zone2_box, zone2_f_box
+        # )
+        # zone3_group = (
+        #     Group(f_zone3_relationship, for_zone3, zone3_f, for_zone3_box, zone3_f_box)
+        #     .move_to(zone2_group)
+        #     .shift(DOWN * config.frame_height)
+        # )
+        # zone2_loc = zone2_group.get_center()
+        # zone3_loc = zone3_group.get_center()
+
+        # self.play(
+        #     LaggedStart(
+        #         zone2_group.animate.move_to(zone3_loc),
+        #         zone3_group.animate.move_to(zone2_loc),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     zone2_group.animate.scale_to_fit_width(self.camera.frame.width * 0.45)
+        #     .next_to(self.camera.frame.get_corner(DL), UR)
+        #     .shift(UP),
+        #     zone3_group.animate.scale_to_fit_width(self.camera.frame.width * 0.45)
+        #     .next_to(self.camera.frame.get_corner(DR), UL)
+        #     .shift(UP),
+        # )
+        # self.play(
+        #     FadeOut(
+        #         zone2_f_box,
+        #         zone3_f_box,
+        #         for_zone2_box,
+        #         for_zone3_box,
+        #         zone2_neg_label,
+        #         zone2_pos_label,
+        #     )
+        # )
+
+        # self.next_section(skip_animations=skip_animations(False))
+        # self.wait(0.5)
+
+        # zone2_pos_box.add_updater(lambda m: m.set_x(f_ax.c2p(~f1, 0)[0]))
+        # zone2_neg_box.add_updater(lambda m: m.set_x(f_ax.c2p(-~f1, 0)[0]))
+
+        # for_even = (
+        #     Tex(r"While $f$ in \textit{Even} Nyquist Zones:")
+        #     .scale_to_fit_width(for_zone2.width)
+        #     .move_to(for_zone2, LEFT)
+        # )
+        # for_odd = (
+        #     Tex(r"While $f$ in \textit{Odd} Nyquist Zones:")
+        #     .scale_to_fit_width(for_zone2.width)
+        #     .move_to(for_zone3, LEFT)
+        # )
+
+        # even_zone_f = (
+        #     MathTex(r"f_{\text{apparent}} = N f_s - f_{\text{real}}")
+        #     .scale_to_fit_width(zone2_f.width * 1.08)
+        #     .move_to(zone2_f, LEFT)
+        # )
+        # odd_zone_f = (
+        #     MathTex(r"f_{\text{apparent}} = N f_s + f_{\text{real}}")
+        #     .scale_to_fit_width(zone2_f.width * 1.08)
+        #     .move_to(zone3_f, LEFT)
+        # )
+
+        # self.play(
+        #     f1.animate(run_time=20).set_value(fs * 4.25),
+        #     ReplacementTransform(for_zone2[0][:8], for_even[0][:8]),
+        #     ReplacementTransform(for_zone3[0][:8], for_odd[0][:8]),
+        #     ReplacementTransform(for_zone2[0][8:11], for_even[0][8:12]),
+        #     ReplacementTransform(for_zone3[0][8:11], for_odd[0][8:11]),
+        #     ReplacementTransform(for_zone2[0][11:], for_even[0][12:]),
+        #     ReplacementTransform(for_zone3[0][11:], for_odd[0][11:]),
+        #     ReplacementTransform(zone3_f[0][:10], odd_zone_f[0][:10]),
+        #     GrowFromCenter(odd_zone_f[0][10]),
+        #     ReplacementTransform(zone3_f[0][10:], odd_zone_f[0][11:]),
+        #     ReplacementTransform(zone2_f[0][:10], even_zone_f[0][:10]),
+        #     GrowFromCenter(even_zone_f[0][10]),
+        #     ReplacementTransform(zone2_f[0][10:], even_zone_f[0][11:]),
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     FadeOut(
+        #         zone2_group,
+        #         zone3_group,
+        #         f_line,
+        #         f_tri,
+        #         f_tracker,
+        #         even_zone_f,
+        #         odd_zone_f,
+        #         for_even,
+        #         for_odd,
+        #     ),
+        #     self.camera.frame.animate.scale_to_fit_height(f_ax.height * 2).move_to(
+        #         f_ax.c2p(fs / 4, 1)
+        #     ),
+        # )
 
         self.wait(2)
 
