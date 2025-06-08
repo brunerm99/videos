@@ -35,6 +35,214 @@ def fw(scene, scale=1):
     return scene.camera.frame.width * scale
 
 
+class Intro(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        title = Text("Aliasing", font=FONT)
+
+        self.play(Write(title))
+
+        self.wait(0.5)
+
+        da = Text("digital audio", font=FONT).scale(0.6)
+        cg = Text("computer graphics", font=FONT).scale(0.6)
+        ra = Text("radar", font=FONT).scale(0.6)
+        mi = Text("medical imaging", font=FONT).scale(0.6)
+        g = Group(da, cg, ra, mi).arrange(RIGHT, -SMALL_BUFF)
+        cg.shift(DOWN)
+        mi.shift(DOWN)
+        g.to_edge(DOWN, LARGE_BUFF * 1.5)
+
+        da_bez = CubicBezier(
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -0.1, 0],
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -1, 0],
+            da.get_top() + [0, 1, 0],
+            da.get_top() + [0, 0.1, 0],
+        )
+        cg_bez = CubicBezier(
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -0.1, 0],
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -1, 0],
+            cg.get_top() + [0, 1, 0],
+            cg.get_top() + [0, 0.1, 0],
+        )
+        ra_bez = CubicBezier(
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -0.1, 0],
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -1, 0],
+            ra.get_top() + [0, 1, 0],
+            ra.get_top() + [0, 0.1, 0],
+        )
+        mi_bez = CubicBezier(
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -0.1, 0],
+            title.copy().to_edge(UP, LARGE_BUFF * 1.5).get_bottom() + [0, -1, 0],
+            mi.get_top() + [0, 1, 0],
+            mi.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                title.animate.to_edge(UP, LARGE_BUFF * 1.5),
+                LaggedStart(
+                    Create(da_bez),
+                    Write(da),
+                    Create(cg_bez),
+                    Write(cg),
+                    Create(ra_bez),
+                    Write(ra),
+                    Create(mi_bez),
+                    Write(mi),
+                    lag_ratio=0.25,
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        fs = 10
+
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.8,
+            y_length=config.frame_height * 0.6,
+        ).shift(DOWN * fh(self, 1.2))
+        f1 = VT(3)
+        f2 = VT(2)
+        p1 = VT(1)
+        p2 = VT(1)
+        fft_len = 2**10
+        stop_time = 3
+        interp = VT(0)
+        up_shift = VT(0)
+        scale = VT(1)
+        np.random.seed(0)
+        noise_size1 = np.arange(0, stop_time, 1 / fs).size
+        noise1 = np.random.normal(0, 0.2, noise_size1)
+        ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+        noise = np.random.normal(0, 0.2, ts.size)
+        pnoise = VT(1)
+        samples_opacity = VT(1)
+
+        def plot_sine():
+            ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+            ys = (
+                ~pnoise * noise
+                + ~p1 * np.sin(2 * PI * ~f1 * ts)
+                + ~p2 * np.sin(2 * PI * ~f2 * ts)
+            ) / (~p1 + ~p2 + ~pnoise)
+            return ax.plot_line_graph(
+                ts,
+                ys,
+                line_color=ORANGE,
+                add_vertex_dots=False,
+                stroke_opacity=~samples_opacity,
+            )
+
+        def plot_samples():
+            ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+            ys = (
+                ~pnoise * noise
+                + ~p1 * np.sin(2 * PI * ~f1 * ts)
+                + ~p2 * np.sin(2 * PI * ~f2 * ts)
+            ) / (~p1 + ~p2 + ~pnoise)
+            return VGroup(
+                *[
+                    DashedLine(
+                        ax.c2p(t, 0),
+                        ax.c2p(t, y),
+                        color=ORANGE,
+                        dash_length=DEFAULT_DASH_LENGTH * 3,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                        stroke_opacity=~samples_opacity,
+                    )
+                    for t, y in zip(ts, ys)
+                ]
+            )
+
+        def plot_dots():
+            ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+            ys = (
+                ~pnoise * noise
+                + ~p1 * np.sin(2 * PI * ~f1 * ts)
+                + ~p2 * np.sin(2 * PI * ~f2 * ts)
+            ) / (~p1 + ~p2 + ~pnoise)
+            return VGroup(
+                *[
+                    Dot(color=ORANGE)
+                    .set_opacity(~samples_opacity)
+                    .scale(1.3)
+                    .move_to(ax.c2p(t, y))
+                    for t, y in zip(ts, ys)
+                ]
+            )
+
+        sine_opacity = VT(1)
+        sine = always_redraw(
+            lambda: ax.plot(
+                lambda t: (
+                    ~pnoise * interp1d(ts, noise, fill_value="extrapolate")(t)
+                    + ~p1 * np.sin(2 * PI * ~f1 * t)
+                    + ~p2 * np.sin(2 * PI * ~f2 * t)
+                )
+                / (~p1 + ~p2 + ~pnoise),
+                x_range=[0, 1, 1 / 200],
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                stroke_opacity=~sine_opacity,
+            )
+        )
+
+        samples = always_redraw(plot_samples)
+        sampled_sine = always_redraw(plot_sine)
+        dots = always_redraw(plot_dots)
+
+        self.add(
+            ax,
+            sine,
+            samples,
+            sampled_sine,
+            dots,
+        )
+
+        self.play(self.camera.frame.animate.move_to(ax))
+
+        self.wait(0.5)
+
+        self.play(f1 @ 8, f2 @ 4, run_time=8)
+
+        self.wait(0.5)
+
+        golden_rule = Text("Golden Rule", font=FONT).next_to(ax, DOWN, LARGE_BUFF)
+        nyquist = MathTex(r"f_s \ge 2 f_{\text{max}}").next_to(
+            golden_rule, DOWN, MED_LARGE_BUFF
+        )
+        gr_box = SurroundingRectangle(
+            golden_rule, nyquist, color=YELLOW, buff=SMALL_BUFF, corner_radius=0.2
+        )
+        gr_group = Group(golden_rule, nyquist, gr_box)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(ax, gr_group).height * 1.2
+                ).move_to(Group(ax, gr_group)),
+                LaggedStart(*[FadeIn(m) for m in nyquist[0]], lag_ratio=0.1),
+                Write(golden_rule),
+                Create(gr_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
 class SamplingRecap2(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -3009,8 +3217,7 @@ class SimpleSignal(MovingCameraScene):
         )
 
         def create_highlight(plot_ax, shift, xmin_pos, xmin, xmax, color):
-            def updater():
-                ...
+            def updater(): ...
 
             return updater
 
@@ -4131,6 +4338,7 @@ class ZoomIn(MovingCameraScene):
 
         self.play(
             f1.animate(run_time=20).set_value(fs * 4.25),
+            FadeOut(zone2_pos_label, zone2_neg_label),
             ReplacementTransform(for_zone2[0][:8], for_even[0][:8]),
             ReplacementTransform(for_zone3[0][:8], for_odd[0][:8]),
             ReplacementTransform(for_zone2[0][8:11], for_even[0][8:12]),
@@ -4159,10 +4367,10 @@ class ZoomIn(MovingCameraScene):
                 odd_zone_f,
                 for_even,
                 for_odd,
-                zone3_pos_box,
-                zone3_neg_box,
-                *zone2_pos_label,
-                *zone2_neg_label,
+                # zone3_pos_box,
+                # zone3_neg_box,
+                # *zone2_pos_label,
+                # *zone2_neg_label,
                 highlight_nq1_neg,
                 highlight_nq1_pos,
             ),
@@ -4205,6 +4413,13 @@ class Peak(MovingCameraScene):
         up_shift = VT(0)
         scale = VT(1)
 
+        np.random.seed(0)
+        noise_size1 = np.arange(0, stop_time, 1 / fs).size
+        noise1 = np.random.normal(0, 0.2, noise_size1)
+        ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+        noise = np.random.normal(0, 0.2, ts.size)
+        pnoise = VT(0)
+
         def create_X_k(
             plot_ax,
             smoothing=True,
@@ -4217,8 +4432,10 @@ class Peak(MovingCameraScene):
                 freq = np.linspace(-fs / 2 + shift, fs / 2 + shift, fft_len)
                 t = np.arange(0, stop_time, 1 / fs)
                 x_n = (
-                    ~p1 * np.sin(2 * PI * ~f1 * t) + ~p2 * np.sin(2 * PI * ~f2 * t)
-                ) / (~p1 + ~p2)
+                    ~pnoise * noise1
+                    + ~p1 * np.sin(2 * PI * ~f1 * t)
+                    + ~p2 * np.sin(2 * PI * ~f2 * t)
+                )  # / (~p1 + ~p2)
 
                 X_k = fftshift(
                     ((1 - ~interp) * np.abs(fft(x_n, fft_len)) / (t.size / 2))
@@ -4243,7 +4460,40 @@ class Peak(MovingCameraScene):
                     x_range=[xmin + shift, xmax + shift, fs / 200],
                     color=color,
                     use_smoothing=smoothing,
-                )
+                ).shift(UP * ~up_shift)
+
+            return updater
+
+        def create_X_k_xlim(
+            plot_ax,
+            smoothing=True,
+            shift=0,
+            colors=[BLUE, BLUE, BLUE],
+            neg=False,
+            limit_max=False,
+        ):
+            def updater():
+                if ~f1 % fs >= fs / 2:
+                    xmin_new = (fs / 2) - (~f1 % (fs / 2)) - 0.3
+                    xmax_new = (fs / 2) - (~f1 % (fs / 2)) + 0.3
+                else:
+                    xmin_new = (~f1 % (fs / 2)) - 0.3
+                    xmax_new = (~f1 % (fs / 2)) + 0.3
+                if limit_max:
+                    xmin_new = max(xmin_new, -fs / 2)
+                    xmax_new = min(xmax_new, fs / 2)
+                if neg:
+                    xmin_new, xmax_new = xmax_new, xmin_new
+                    xmin_new *= -1
+                    xmax_new *= -1
+                return create_X_k(
+                    plot_ax,
+                    smoothing=smoothing,
+                    shift=shift,
+                    colors=colors,
+                    xmin=xmin_new,
+                    xmax=xmax_new,
+                )()
 
             return updater
 
@@ -4348,9 +4598,9 @@ class Peak(MovingCameraScene):
                         Text("3", font=FONT).scale(0.7),
                     ],
                     [
-                        Text("...", font=FONT).scale(0.7),
-                        Text("...", font=FONT).scale(0.7),
-                        Text("...", font=FONT).scale(0.7),
+                        Text("...", font=FONT).scale(0.7).set_opacity(0),
+                        Text("...", font=FONT).scale(0.7).set_opacity(0),
+                        Text("...", font=FONT).scale(0.7).set_opacity(0),
                     ],
                 ],
                 col_labels=[
@@ -4432,7 +4682,7 @@ class Peak(MovingCameraScene):
             self.camera.frame.animate(run_time=2)
             .scale_to_fit_height(Group(f_ax, f1_label, fs_label).height * 1.2)
             .move_to(Group(f_ax, f1_label, fs_label)),
-            FadeOut(fs_label, zone1_r),
+            FadeOut(fs_label, zone1_r, f1_label, f_line, f_tri),
             *[FadeOut(*[cell for cell in row]) for row in zone_table.mob_table],
         )
 
@@ -4460,33 +4710,33 @@ class Peak(MovingCameraScene):
         self.wait(0.5)
 
         code = Code(
-            code="""
+            code_string="""
 x_n  # input signal
 X_k = fft(x_n)
 """,
             language="python",
             background="window",
-            font=FONT,
+            paragraph_config=dict(font=FONT),
             tab_width=4,
-            style="paraiso-dark",
+            formatter_style="paraiso-dark",
         ).next_to(self.camera.frame.get_bottom(), DOWN)
         for ln in code.line_numbers:
             ln.set_color(WHITE)
 
         code_abs = Code(
-            code="""
+            code_string="""
 x_n  # input signal
 X_k = abs(fft(x_n))
 """,
             language="python",
             background="window",
-            font=FONT,
+            paragraph_config=dict(font=FONT),
             tab_width=4,
-            style="paraiso-dark",
+            formatter_style="paraiso-dark",
         ).move_to(code)
         for ln in code_abs.line_numbers:
             ln.set_color(WHITE)
-        self.add(code_abs.background_mobject, code_abs.line_numbers)
+        self.add(code_abs.background, code_abs.line_numbers)
         # code_abs.code[1] = (
         #     Text(
         #         "X_k = abs(fft(x_n))",
@@ -4506,27 +4756,31 @@ X_k = abs(fft(x_n))
 
         self.wait(0.5)
 
-        self.play(Write(code.code[0]))
+        self.play(Write(code.code_lines[0]))
 
         self.wait(0.5)
 
-        self.play(Write(code.code[1]))
+        self.play(Write(code.code_lines[1]))
 
         self.wait(0.5)
         self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
-                ReplacementTransform(code.code[1][:4], code_abs.code[1][:4]),
-                ReplacementTransform(code.code[1][6:], code_abs.code[1][10:-1]),
-                Write(code_abs.code[1][6:10]),
-                Write(code_abs.code[1][-1]),
+                ReplacementTransform(
+                    code.code_lines[1][:4], code_abs.code_lines[1][:4]
+                ),
+                ReplacementTransform(
+                    code.code_lines[1][6:], code_abs.code_lines[1][10:-1]
+                ),
+                Write(code_abs.code_lines[1][6:10]),
+                Write(code_abs.code_lines[1][-1]),
                 lag_ratio=0.3,
             )
         )
         self.play(
-            code_abs.code[1][6:10].animate.set_color(BLUE),
-            code_abs.code[1][-1].animate.set_color(BLUE),
+            code_abs.code_lines[1][6:10].animate.set_color(BLUE),
+            code_abs.code_lines[1][-1].animate.set_color(BLUE),
         )
 
         self.wait(0.5)
@@ -4543,13 +4797,13 @@ X_k = abs(fft(x_n))
                 ),
                 longer_tick_multiple=3,
             ),
-        )
+        ).set_z_index(-1)
         f_ax_neg.shift(f_ax.c2p(0, 0.5) - f_ax_neg.c2p(0, 0))
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
-            code_abs.code[1][6:10].animate.set_opacity(0.2),
-            code_abs.code[1][-1].animate.set_opacity(0.2),
+            code_abs.code_lines[1][6:10].animate.set_opacity(0.2),
+            code_abs.code_lines[1][-1].animate.set_opacity(0.2),
         )
 
         self.wait(0.5)
@@ -4612,19 +4866,23 @@ X_k = abs(fft(x_n))
         plot_nq2_l = always_redraw(create_X_k(f_ax, smoothing=True, shift=-fs))
         plot_nq2_r = always_redraw(create_X_k(f_ax, smoothing=True, shift=fs))
 
-        f_ax_neg_full = Axes(
-            x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
-            y_range=[-1, 1, 0.5],
-            tips=False,
-            x_length=config.frame_width * 0.3 * n_nyquist,
-            y_length=plot_height,
-            x_axis_config=dict(
-                numbers_with_elongated_ticks=np.arange(
-                    -n_nyquist * fs / 2, (n_nyquist + 1) * fs / 2, fs / 2
+        f_ax_neg_full = (
+            Axes(
+                x_range=[-n_nyquist * fs / 2, n_nyquist * fs / 2, 1],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=config.frame_width * 0.3 * n_nyquist,
+                y_length=plot_height,
+                x_axis_config=dict(
+                    numbers_with_elongated_ticks=np.arange(
+                        -n_nyquist * fs / 2, (n_nyquist + 1) * fs / 2, fs / 2
+                    ),
+                    longer_tick_multiple=3,
                 ),
-                longer_tick_multiple=3,
-            ),
-        ).set_opacity(0)
+            )
+            .set_opacity(0)
+            .set_z_index(-1)
+        )
         f_ax_neg_full.shift(f_ax_neg.c2p(0, 0) - f_ax_neg_full.c2p(0, 0))
         self.add(f_ax_neg_full)
 
@@ -4644,6 +4902,369 @@ X_k = abs(fft(x_n))
             self.camera.frame.animate.scale_to_fit_width(
                 f_ax_neg_full.width * 1.2
             ).move_to(Group(f_ax_neg_full, code_abs)),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        highlight_neg = always_redraw(
+            create_X_k_xlim(
+                f_ax, True, fs, [RED, YELLOW, RED], neg=True, limit_max=True
+            )
+        )
+        highlight_pos = always_redraw(
+            create_X_k_xlim(
+                f_ax, True, 0, [YELLOW, RED, YELLOW], neg=False, limit_max=True
+            )
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                f_ax_neg_full.height * 1.4
+            ).move_to(f_ax_neg_full.c2p(fs / 2, 0)),
+            FadeIn(highlight_neg, highlight_pos),
+        )
+
+        self.wait(0.5)
+
+        self.play(f1 @ (fs / 2), run_time=10)
+
+        self.remove(
+            code_abs.background,
+            *code.code_lines,
+            *[m for m in code.code_lines[0]],
+            *[m for m in code.code_lines[1]],
+            *[m for m in code_abs.code_lines[0]],
+            *[m for m in code_abs.code_lines[1]],
+            code_abs.line_numbers,
+        )
+
+        self.wait(0.5)
+
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=config.frame_width * 0.8,
+            y_length=config.frame_height * 0.6,
+        ).next_to(f_ax, DOWN, LARGE_BUFF)
+
+        f = 3
+        sine_opacity = VT(1)
+        sine = always_redraw(
+            lambda: ax.plot(
+                lambda t: (
+                    ~pnoise * interp1d(ts, noise, fill_value="extrapolate")(t)
+                    + ~p1 * np.sin(2 * PI * ~f1 * t)
+                    + ~p2 * np.sin(2 * PI * ~f2 * t)
+                )
+                / (~p1 + ~p2 + ~pnoise),
+                x_range=[0, 1, 1 / 200],
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                stroke_opacity=~sine_opacity,
+            )
+        )
+        amplitude_label = (
+            Text("amplitude", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6)
+            .rotate(PI / 2)
+            .next_to(ax.c2p(0, 0), LEFT)
+        )
+        time_label = Text("time", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6).next_to(
+            ax.c2p(1, 0)
+        )
+        ax_group = Group(ax, amplitude_label, time_label)
+
+        samples_opacity = VT(1)
+
+        def plot_sine():
+            ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+            ys = (
+                ~pnoise * noise
+                + ~p1 * np.sin(2 * PI * ~f1 * ts)
+                + ~p2 * np.sin(2 * PI * ~f2 * ts)
+            ) / (~p1 + ~p2 + ~pnoise)
+            return ax.plot_line_graph(
+                ts,
+                ys,
+                line_color=ORANGE,
+                add_vertex_dots=False,
+                stroke_opacity=~samples_opacity,
+            )
+
+        def plot_samples():
+            ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+            ys = (
+                ~pnoise * noise
+                + ~p1 * np.sin(2 * PI * ~f1 * ts)
+                + ~p2 * np.sin(2 * PI * ~f2 * ts)
+            ) / (~p1 + ~p2 + ~pnoise)
+            return VGroup(
+                *[
+                    DashedLine(
+                        ax.c2p(t, 0),
+                        ax.c2p(t, y),
+                        color=ORANGE,
+                        dash_length=DEFAULT_DASH_LENGTH * 3,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                        stroke_opacity=~samples_opacity,
+                    )
+                    for t, y in zip(ts, ys)
+                ]
+            )
+
+        def plot_dots():
+            ts = np.arange(0, 1 + 1 / fs, 1 / fs)
+            ys = (
+                ~pnoise * noise
+                + ~p1 * np.sin(2 * PI * ~f1 * ts)
+                + ~p2 * np.sin(2 * PI * ~f2 * ts)
+            ) / (~p1 + ~p2 + ~pnoise)
+            return VGroup(
+                *[
+                    Dot(color=ORANGE)
+                    .set_opacity(~samples_opacity)
+                    .scale(1.3)
+                    .move_to(ax.c2p(t, y))
+                    for t, y in zip(ts, ys)
+                ]
+            )
+
+        samples = always_redraw(plot_samples)
+        sampled_sine = always_redraw(plot_sine)
+        dots = always_redraw(plot_dots)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.add(*ax_group, sine, samples, dots, sampled_sine)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(f_ax, ax).height * 1.2
+            ).move_to(Group(f_ax, ax)),
+            f1 @ 3,
+            run_time=2,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        boundary = DashedLine(
+            f_ax.c2p(fs / 2, 0),
+            f_ax.c2p(fs / 2, 1),
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=YELLOW,
+        )
+
+        self.play(Create(boundary))
+
+        self.wait(0.5)
+
+        self.play(f1 @ (fs / 2), run_time=12)
+
+        self.wait(0.5)
+
+        self.play(f1 @ (0.52 * fs), run_time=3)
+
+        self.wait(0.5)
+
+        f2_box = Polygon(
+            f_ax_neg.c2p((~f2) - 0.6, -1),
+            f_ax_neg.c2p((~f2) - 0.6, 1),
+            f_ax_neg.c2p((~f2) + 0.6, 1),
+            f_ax_neg.c2p((~f2) + 0.6, -1),
+            stroke_color=YELLOW,
+        )
+
+        self.play(p2 @ 1, Create(f2_box), run_time=3)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(f1 @ 8, run_time=12)
+
+        self.wait(0.5)
+
+        self.play(pnoise @ 1, f2 @ 4, FadeOut(f2_box), run_time=6)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.5)))
+
+        self.wait(0.5)
+
+        nyquist = (
+            MathTex(r"f_s \ge 2 f_{\text{max}}")
+            .scale_to_fit_width(fw(self, 0.3))
+            .move_to(self.camera.frame)
+        )
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in nyquist[0]], lag_ratio=0.2))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*nyquist[0]), run_time=3)
+
+        self.wait(2)
+
+
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        panb = (
+            ImageMobject("../09_resolution/static/phased_array_resource.png")
+            .scale_to_fit_width(fw(self, 0.4))
+            .to_edge(LEFT, MED_LARGE_BUFF)
+        )
+        pasc = ImageMobject(
+            "./static/2025-06-08-112521_hyprshot.png"
+        ).scale_to_fit_height(fh(self, 0.5))
+        pasc2 = ImageMobject("./static/panb2.png").scale_to_fit_height(fh(self, 0.5))
+        Group(pasc, pasc2).arrange(DOWN, -LARGE_BUFF).to_edge(RIGHT, MED_LARGE_BUFF)
+        pasc.shift(LEFT * 2)
+        pasc_bez = CubicBezier(
+            panb.get_right() + [0.1, 0, 0],
+            panb.get_right() + [1, 0, 0],
+            pasc.get_left() + [-1, 0, 0],
+            pasc.get_left() + [-0.1, 0, 0],
+        )
+        pasc2_bez = CubicBezier(
+            panb.get_right() + [0.1, 0, 0],
+            panb.get_right() + [1, 0, 0],
+            pasc2.get_left() + [-1, 0, 0],
+            pasc2.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(panb),
+                Create(pasc_bez),
+                GrowFromCenter(pasc),
+                Create(pasc2_bez),
+                GrowFromCenter(pasc2),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        osc = ImageMobject("../08_beamforming/static/osc_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        kraken = ImageMobject("../08_beamforming/static/kraken.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        weather = ImageMobject(
+            "../08_beamforming/static/weather.png"
+        ).scale_to_fit_width(config.frame_width * 0.3)
+        eqn = ImageMobject("../08_beamforming/static/eqn_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+
+        merch = (
+            Group(kraken, osc, eqn, weather)
+            .arrange_in_grid(2, 2)
+            .scale_to_fit_height(config.frame_height * 0.9)
+            .set_y(0)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(*self.mobjects),
+                LaggedStart(
+                    GrowFromCenter(osc),
+                    GrowFromCenter(kraken),
+                    GrowFromCenter(weather),
+                    GrowFromCenter(eqn),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        shoutout = Text("Huge thanks to:", font=FONT).to_edge(UP, LARGE_BUFF)
+        people = [
+            "ZacJW",
+            "Dag-Vidar Bauer",
+            "db-isJustARatio",
+            "Jea99",
+            "Leon",
+            "dplynch",
+            "Kris",
+        ]
+        people_text = (
+            Group(
+                *[Text(p, font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6) for p in people]
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(shoutout, DOWN)
+        )
+        people_group = (
+            Group(shoutout, people_text).next_to(merch, RIGHT).shift(RIGHT * 12)
+        )
+
+        self.play(
+            LaggedStart(Group(merch, people_group).animate.arrange(RIGHT, LARGE_BUFF))
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.2)))
+
+        self.wait(2)
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "5,273"],
+                    ["Script word count", "2,399"],
+                    ["Days to make", "45"],
+                    ["Git commits", "18"],
+                ],
+                element_to_mobject=Text,
+                element_to_mobject_config=dict(
+                    font=FONT, font_size=DEFAULT_FONT_SIZE * 0.7
+                ),
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
+        thank_you_sabrina = (
+            Text(
+                "Thank you, Sabrina, for\nediting the whole video :)",
+                font=FONT,
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+            )
+            .next_to(stats_group, DOWN)
+            .to_edge(DOWN)
+        )
+
+        marshall_bruner = Text(
+            "Marshall Bruner", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to([-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Create(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
         )
 
         self.wait(2)
