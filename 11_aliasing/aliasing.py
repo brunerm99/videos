@@ -5186,12 +5186,17 @@ class WrapUp(MovingCameraScene):
         shoutout = Text("Huge thanks to:", font=FONT).to_edge(UP, LARGE_BUFF)
         people = [
             "ZacJW",
-            "Dag-Vidar Bauer",
             "db-isJustARatio",
             "Jea99",
             "Leon",
             "dplynch",
             "Kris",
+            "zachdc",
+            "misspeled",
+            "Florian",
+            "Cminor102",
+            "w1gx",
+            "Ioan",
         ]
         people_text = (
             Group(
