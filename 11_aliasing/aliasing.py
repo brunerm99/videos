@@ -805,7 +805,7 @@ class SamplingRecap2(MovingCameraScene):
         self.wait(0.5)
 
         nyquist_label = Text("Shannon-Nyquist Criterion:", font=FONT)
-        nyquist_cri = MathTex(r"f_s \ge 2 f_{\text{max}}")
+        nyquist_cri = MathTex(r"f_s \ge 2 f_{\text{max}}").scale(2)
         nyquist = (
             Group(nyquist_label, nyquist_cri)
             .arrange(RIGHT)
@@ -1587,7 +1587,7 @@ class FrequencyDomain(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -1654,11 +1654,8 @@ class FrequencyDomain(MovingCameraScene):
 
         self.wait(0.5)
 
-        # TODO: add real notebook thumbnail
         notebook_thumbnail = (
-            ImageMobject(
-                "../../../media/rf_channel_assets/notebook_thumbnails/radar cheatsheet notebook.png"
-            )
+            ImageMobject("./static/Aliasing Notebook Thumbnail.png")
             .scale_to_fit_height(fh(self, 0.7))
             .move_to(self.camera.frame)
         )
@@ -2071,6 +2068,11 @@ class FrequencyDomain(MovingCameraScene):
             .scale(1.5)
             .next_to(f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4)
         )
+        fs_over_2_label = (
+            MathTex(r"\frac{f_s}{2}")
+            .scale(1.5)
+            .next_to(f_ax_soln.c2p(fs / PI / 3, 1), UP, LARGE_BUFF * 4)
+        )
         fs_bez_l = CubicBezier(
             fs_label.get_bottom() + [0, -0.1, 0],
             fs_label.get_bottom() + [0, -1, 0],
@@ -2104,6 +2106,7 @@ class FrequencyDomain(MovingCameraScene):
             )
         )
 
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         self.play(
@@ -2114,11 +2117,22 @@ class FrequencyDomain(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                ReplacementTransform(fs_label[0][:2], fs_over_2_label[0][:2]),
+                GrowFromCenter(fs_over_2_label[0][2]),
+                GrowFromCenter(fs_over_2_label[0][3]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
-            ShrinkToCenter(fs_label),
+            ShrinkToCenter(fs_over_2_label),
             ShrinkToCenter(bw_label),
             Uncreate(fs_bez_l),
             Uncreate(fs_bez_r),
@@ -2589,8 +2603,6 @@ class SamplingRecap(MovingCameraScene):
         )
 
         self.wait(0.5)
-
-        # TODO: Add notebook reference
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
@@ -3522,8 +3534,6 @@ class SimpleSignal(MovingCameraScene):
 
         self.wait(0.5)
 
-        # TODO: add the xlim functionality from ZoomIn here
-
         fnew = fs * 0.75
         self.play(f1 @ (fnew), run_time=12)
 
@@ -3794,8 +3804,6 @@ class ZoomIn(MovingCameraScene):
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
-
-        # TODO: add 2nd zone and show (with different colors) the zone 2 peak coming into zone 1
 
         f_ax_w_nq2 = Axes(
             x_range=[-fs / 2, n_nyquist * fs / 2, 1],
@@ -5136,9 +5144,13 @@ class WrapUp(MovingCameraScene):
             pasc2.get_left() + [-0.1, 0, 0],
         )
 
+        web_title = Text("marshallbruner.com", font=FONT).next_to(
+            panb, DOWN, MED_LARGE_BUFF, LEFT
+        )
+
         self.play(
             LaggedStart(
-                GrowFromCenter(panb),
+                AnimationGroup(GrowFromCenter(panb), Write(web_title)),
                 Create(pasc_bez),
                 GrowFromCenter(pasc),
                 Create(pasc2_bez),
