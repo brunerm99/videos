@@ -1,0 +1,3 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/videos/11_aliasing/media/videos/aliasing/1080p60/partial_movie_files/EndScreen/2465084616_3406133073_2358810818.mp4'
+file 'file:/home/marchall/documents/videos/11_aliasing/media/videos/aliasing/1080p60/partial_movie_files/EndScreen/3497492553_2408024828_1995054135.mp4'

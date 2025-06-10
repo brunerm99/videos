@@ -88,3 +88,15 @@ How do radars tell targets apart when they’re close together - in range, angle
 In this video, we break down the three core types of radar resolution, how each one works, and why improving one often means making trade-offs with the others.
 
 ![thumbnail](./09_resolution/static/Resolution%20Thumbnail.png)
+
+## [11 - Aliasing... Or How Sampling Distorts Signals](https://youtu.be/eBHbCZo9QrM)
+
+Aliasing is one of those concepts that shows up everywhere - from audio and imaging to radar and communications - but it’s often misunderstood or oversimplified. 
+
+In this video, we break down exactly what aliasing is, why it happens when sampling signals, and how it leads to distorted or misleading results if you’re not careful.
+
+We’ll start with the core idea of how sampling works, why the Nyquist limit exists, and what it actually means to sample “too slowly.” Then we’ll walk through intuitive visualizations and concrete examples to show how high-frequency signals can appear to be completely different-sometimes even disappearing altogether. 
+
+Whether you're working in DSP, RF, or just curious about signal processing, this video gives you a foundation to understand aliasing and how to avoid it.
+
+![thumbnail](./11_aliasing/static/Aliasing%20Thumbnail.png)
