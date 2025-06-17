@@ -11,7 +11,7 @@ from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -73,6 +73,7 @@ class Intro(MovingCameraScene):
         )
         rtn_ax.shift(cloud.get_left() - rtn_ax.c2p(0, 0))
 
+        phase_vt = VT(0)
         sig_x1 = VT(0)
         A = VT(1)
         pw = 0.4
@@ -87,7 +88,7 @@ class Intro(MovingCameraScene):
         )
         rtn = always_redraw(
             lambda: rtn_ax.plot(
-                lambda t: -~A * np.sin(2 * PI * 3 * t),
+                lambda t: -~A * np.sin(2 * PI * 3 * t + ~phase_vt * PI),
                 x_range=[max(0, (~sig_x1 - 1) - pw), min(1, (~sig_x1 - 1)), 1 / 200],
                 use_smoothing=False,
                 stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
@@ -105,7 +106,7 @@ class Intro(MovingCameraScene):
             run_time=4,
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         self.play(
@@ -142,15 +143,170 @@ class Intro(MovingCameraScene):
 
         self.wait(0.5)
 
-        mag_line_new = Line(rtn.get_corner(DL), rtn.get_corner(UL)).shift(LEFT / 4)
-        mag_line_u_new = Line(
-            mag_line.get_top() + LEFT / 8, mag_line.get_top() + RIGHT / 8
+        range_label = MathTex("R").scale(1.5)
+        rcs_label = MathTex(r"\sigma").scale(1.5)
+        amp_labels = (
+            Group(range_label, rcs_label)
+            .arrange(RIGHT, LARGE_BUFF)
+            .next_to(mag, DOWN, LARGE_BUFF)
+            .shift(LEFT / 2)
         )
-        mag_line_d_new = Line(
-            mag_line.get_bottom() + LEFT / 8, mag_line.get_bottom() + RIGHT / 8
+        range_bez = CubicBezier(
+            mag.get_bottom() + [0, -0.1, 0],
+            mag.get_bottom() + [0, -1, 0],
+            range_label.get_top() + [0, 1, 0],
+            range_label.get_top() + [0, 0.1, 0],
+        )
+        rcs_bez = CubicBezier(
+            mag.get_bottom() + [0, -0.1, 0],
+            mag.get_bottom() + [0, -0.5, 0],
+            rcs_label.get_top() + [0, 0.5, 0],
+            rcs_label.get_top() + [0, 0.1, 0],
         )
 
-        self.play(A @ 0.6, run_time=2)
+        self.play(
+            LaggedStart(
+                Create(range_bez),
+                GrowFromCenter(range_label),
+                Create(rcs_bez),
+                GrowFromCenter(rcs_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_line = Line(
+            [rtn_ax.c2p(~sig_x1 - 1 - pw / 2, 0)[0], rtn.get_top()[1], 0],
+            [rtn_ax.c2p(~sig_x1 - 1 - pw / 2, 0)[0], rtn.get_top()[1], 0],
+        ).shift(UP / 2)
+        phase_line_l = Line(
+            phase_line.get_left() + DOWN / 8, phase_line.get_left() + UP / 8
+        )
+        phase_line_r = Line(
+            phase_line.get_right() + DOWN / 8, phase_line.get_right() + UP / 8
+        )
+        phase_label = always_redraw(
+            lambda: MathTex(f"\\angle s(t) = {~phase_vt:.2f} \\pi")
+            .scale(1.5)
+            .next_to(phase_line, UP, MED_LARGE_BUFF)
+        )
+
+        cloud.shift(RIGHT * 3)
+
+        self.play(
+            Create(phase_line),
+            Create(phase_line_l),
+            Create(phase_line_r),
+            GrowFromCenter(phase_label),
+            self.camera.frame.animate.scale(1 / 0.8),
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        new_phase = 0.3
+        phase_line_2 = Line(
+            [rtn_ax.c2p(~sig_x1 - 1 - pw / 2, 0)[0], rtn.get_top()[1], 0],
+            [
+                rtn_ax.c2p(~sig_x1 - 1 - pw / 2 - new_phase / 3, 0)[0],
+                rtn.get_top()[1],
+                0,
+            ],
+        ).shift(UP / 2)
+        phase_line_l_2 = Line(
+            phase_line_2.get_left() + DOWN / 8, phase_line_2.get_left() + UP / 8
+        )
+        phase_line_r_2 = Line(
+            phase_line_2.get_right() + DOWN / 8, phase_line_2.get_right() + UP / 8
+        )
+
+        self.play(
+            phase_vt @ 1.2,
+            Transform(phase_line, phase_line_2),
+            Transform(phase_line_l, phase_line_l_2),
+            Transform(phase_line_r, phase_line_r_2),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        is_target = Text("?", font=FONT)
+        movement = Text("movement", font=FONT)
+        v_target = MathTex(r"v_{\text{target}}")
+        pm_v = MathTex(r"\pm v")
+        r_ll_1 = MathTex(r"\Delta R \ll 1")
+        l1_group = (
+            Group(is_target, movement)
+            .arrange(RIGHT, LARGE_BUFF)
+            .next_to(phase_label[0][1], UP, LARGE_BUFF)
+        )
+        Group(v_target, pm_v, r_ll_1).arrange(RIGHT, LARGE_BUFF).next_to(
+            movement, UP, LARGE_BUFF
+        )
+
+        is_target_bez = CubicBezier(
+            phase_label[0][1].get_top() + [0, 0.2, 0],
+            phase_label[0][1].get_top() + [0, 1, 0],
+            is_target.get_bottom() + [0, -1, 0],
+            is_target.get_bottom() + [0, -0.1, 0],
+        )
+        movement_bez = CubicBezier(
+            phase_label[0][1].get_top() + [0, 0.2, 0],
+            phase_label[0][1].get_top() + [0, 1, 0],
+            movement.get_bottom() + [0, -1, 0],
+            movement.get_bottom() + [0, -0.1, 0],
+        )
+
+        v_target_bez = CubicBezier(
+            movement.get_top() + [0, 0.1, 0],
+            movement.get_top() + [0, 1, 0],
+            v_target.get_bottom() + [0, -1, 0],
+            v_target.get_bottom() + [0, -0.1, 0],
+        )
+        pm_v_bez = CubicBezier(
+            movement.get_top() + [0, 0.1, 0],
+            movement.get_top() + [0, 0.5, 0],
+            pm_v.get_bottom() + [0, -0.5, 0],
+            pm_v.get_bottom() + [0, -0.1, 0],
+        )
+        r_ll_1_bez = CubicBezier(
+            movement.get_top() + [0, 0.1, 0],
+            movement.get_top() + [0, 1, 0],
+            r_ll_1.get_bottom() + [0, -1, 0],
+            r_ll_1.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * 2),
+                Create(is_target_bez),
+                Write(is_target),
+                Create(movement_bez),
+                Write(movement),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(v_target_bez),
+                GrowFromCenter(v_target),
+                Create(pm_v_bez),
+                GrowFromCenter(pm_v),
+                Create(r_ll_1_bez),
+                GrowFromCenter(r_ll_1),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * 10))
 
         self.wait(2)
 
