@@ -12,7 +12,7 @@ from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -206,7 +206,7 @@ class Intro(MovingCameraScene):
             self.camera.frame.animate.scale(1 / 0.8),
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         new_phase = 0.3
@@ -346,6 +346,127 @@ class Intro(MovingCameraScene):
                 lag_ratio=0.4,
             ),
             run_time=3,
+        )
+
+        self.wait(0.5)
+
+        rx_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=to_cloud.get_length(),
+            y_length=radar.vgroup.height,
+        ).next_to(radar.vgroup, LEFT, LARGE_BUFF)
+        rx_box = SurroundingRectangle(rx_ax, buff=MED_SMALL_BUFF, corner_radius=0.2)
+        rx = Text("Receiver", font=FONT).next_to(rx_box, UP, SMALL_BUFF)
+        rx_plot = rx_ax.plot(lambda t: np.sin(2 * PI * 3 * t), color=RX_COLOR)
+
+        rx_bez_1 = CubicBezier(
+            radar.radome.get_left(),
+            radar.radome.get_left() + [-0.5, 0, 0],
+            rx.get_top() + [4, 0.5, 0],
+            rx.get_top() + [0, 0.5, 0],
+        ).set_z_index(-2)
+        rx_bez_2 = CubicBezier(
+            rx.get_top() + [0, 0.5, 0],
+            rx.get_top() + [-3, 0.5, 0],
+            rx_box.get_left() + [-2, 1, 0],
+            rx_box.get_left() + [0, 0.5, 0],
+        ).set_z_index(-2)
+
+        self.next_section(skip_animations=skip_animations(False))
+        # self.add(rx_ax, rx_box, rx, rx_bez_1, rx_bez_2)
+
+        data = Dot(color=RX_COLOR).move_to(rx_bez_1.get_start()).set_z_index(-1)
+
+        g = Group(rx_ax, radar.vgroup, rx_bez_1, rx_bez_2, rx_box, rx)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Succession(
+                        Create(
+                            rx_bez_1,
+                            rate_func=rate_functions.ease_in_sine,
+                            run_time=0.5,
+                        ),
+                        Create(
+                            rx_bez_2,
+                            rate_func=rate_functions.ease_out_sine,
+                            run_time=0.5,
+                        ),
+                        FadeIn(rx_ax, rx, rx_box),
+                    ),
+                    sig_x1 @ (2 + pw),
+                ),
+                self.camera.frame.animate(run_time=2)
+                .scale_to_fit_width(g.width * 1.2)
+                .move_to(g),
+                Succession(
+                    MoveAlongPath(
+                        data, rx_bez_1, rate_func=rate_functions.ease_in_sine
+                    ),
+                    MoveAlongPath(
+                        data, rx_bez_2, rate_func=rate_functions.ease_out_sine
+                    ),
+                    Create(rx_plot),
+                    FadeOut(data),
+                ),
+                lag_ratio=0.3,
+            ),
+            run_time=5,
+        )
+
+        self.wait(0.5)
+
+        num_samples = 10
+        samples = rx_ax.get_vertical_lines_to_graph(
+            rx_plot,
+            x_range=[1 / num_samples / 2, 1 - 1 / num_samples / 2],
+            num_lines=num_samples,
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            line_func=Line,
+        )
+        dots = Group(*[Dot(s.get_end(), color=BLUE) for s in samples])
+        v_labels = Group(
+            *[
+                MathTex(f"v_{{{idx + 1}}}").next_to(
+                    d, UP if ax.point_to_coords(d.get_center())[1] > 0 else DOWN
+                )
+                for idx, d in enumerate(dots)
+            ]
+        )
+        v_backgrounds = [
+            SurroundingRectangle(
+                v,
+                buff=SMALL_BUFF,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=0.7,
+                stroke_opacity=0,
+                corner_radius=0.2,
+            )
+            for v in v_labels
+        ]
+
+        rx_box2 = SurroundingRectangle(rx_ax, buff=LARGE_BUFF, corner_radius=0.2)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Transform(rx_box, rx_box2),
+                    rx.animate.next_to(rx_box2, UP, SMALL_BUFF),
+                    *[m.animate.set_opacity(0) for m in radar.vgroup],
+                    FadeOut(rx_bez_1, rx_bez_2),
+                    self.camera.frame.animate.scale(0.9),
+                ),
+                LaggedStart(
+                    *[
+                        LaggedStart(Create(l), Create(d), FadeIn(vb, v), lag_ratio=0.3)
+                        for l, d, v, vb in zip(samples, dots, v_labels, v_backgrounds)
+                    ],
+                    lag_ratio=0.2,
+                ),
+            )
         )
 
         # self.play(self.camera.frame.animate.shift(UP * 10))
