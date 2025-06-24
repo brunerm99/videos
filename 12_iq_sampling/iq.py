@@ -12,7 +12,7 @@ from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono CN"
 
@@ -29,6 +29,7 @@ def fw(scene, scale=1):
     return scene.camera.frame.width * scale
 
 
+# TODO: Something needs redone
 class Intro(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -351,7 +352,7 @@ class Intro(MovingCameraScene):
         self.wait(0.5)
 
         rx_ax = Axes(
-            x_range=[0, 1, 0.25],
+            x_range=[0, 2 * PI, PI / 4],
             y_range=[-1, 1, 0.5],
             tips=False,
             x_length=to_cloud.get_length(),
@@ -359,7 +360,7 @@ class Intro(MovingCameraScene):
         ).next_to(radar.vgroup, LEFT, LARGE_BUFF)
         rx_box = SurroundingRectangle(rx_ax, buff=MED_SMALL_BUFF, corner_radius=0.2)
         rx = Text("Receiver", font=FONT).next_to(rx_box, UP, SMALL_BUFF)
-        rx_plot = rx_ax.plot(lambda t: np.sin(2 * PI * 3 * t), color=RX_COLOR)
+        rx_plot = rx_ax.plot(lambda t: np.cos(t), color=RX_COLOR)
 
         rx_bez_1 = CubicBezier(
             radar.radome.get_left(),
@@ -374,7 +375,7 @@ class Intro(MovingCameraScene):
             rx_box.get_left() + [0, 0.5, 0],
         ).set_z_index(-2)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         # self.add(rx_ax, rx_box, rx, rx_bez_1, rx_bez_2)
 
         data = Dot(color=RX_COLOR).move_to(rx_bez_1.get_start()).set_z_index(-1)
@@ -418,7 +419,7 @@ class Intro(MovingCameraScene):
 
         self.wait(0.5)
 
-        num_samples = 10
+        num_samples = 11
         samples = rx_ax.get_vertical_lines_to_graph(
             rx_plot,
             x_range=[1 / num_samples / 2, 1 - 1 / num_samples / 2],
@@ -466,10 +467,562 @@ class Intro(MovingCameraScene):
                     ],
                     lag_ratio=0.2,
                 ),
+            ),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        sample_rects1 = rx_ax.get_riemann_rectangles(
+            rx_plot,
+            input_sample_type="center",
+            x_range=[0, 1],
+            dx=1 / (num_samples),
+            color=BLUE,
+            show_signed_area=False,
+            stroke_color=BLACK,
+            fill_opacity=0.7,
+        )
+
+        self.play(
+            rx_plot.animate.set_stroke(opacity=0.2),
+            LaggedStart(
+                *[
+                    AnimationGroup(FadeIn(sr), FadeOut(s, dot))
+                    for s, sr, dot in zip(samples, sample_rects1, dots)
+                ],
+                lag_ratio=0.1,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        phase_qmark = (
+            Tex("$\\phi = $ ?").scale(1.5).next_to(rx_box, DOWN, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(rx, rx_box, phase_qmark).height * 1.2
+                ).move_to(Group(rx, rx_box, phase_qmark)),
+                LaggedStart(*[FadeIn(m) for m in phase_qmark[0]], lag_ratio=0.15),
+                lag_ratio=0.25,
             )
         )
 
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(rx_box, rx, sample_rects1, v_labels, *v_backgrounds),
+            rx_plot.animate.set_stroke(opacity=1),
+            phase_qmark.animate.shift(DOWN * 6),
+            self.camera.frame.animate.scale(0.9).shift(UP),
+        )
+
+        self.wait(0.5)
+
+        cos = MathTex(r"\cos{(\theta)}").next_to(rx_ax, UP, LARGE_BUFF)
+        cos_bez_l = CubicBezier(
+            cos.get_bottom() + [0, -0.1, 0],
+            cos.get_bottom() + [0, -1, 0],
+            rx_ax.get_corner(UL) + [0, 1, 0],
+            rx_ax.get_corner(UL) + [0, 0.1, 0],
+        )
+        cos_bez_r = CubicBezier(
+            cos.get_bottom() + [0, -0.1, 0],
+            cos.get_bottom() + [0, -1, 0],
+            rx_ax.get_corner(UR) + [0, 1, 0],
+            rx_ax.get_corner(UR) + [0, 0.1, 0],
+        )
+
+        self.remove(rx_plot)
+        rx_f = VT(3)
+        rx_x0 = VT(0)
+        rx_x1 = VT(2 * PI)
+        rx_plot = always_redraw(
+            lambda: rx_ax.plot(
+                lambda t: np.cos(~rx_f * t),
+                x_range=[~rx_x0, ~rx_x1, 1 / 200],
+                color=RX_COLOR,
+            )
+        )
+        self.add(rx_plot)
+
+        self.play(
+            LaggedStart(*[FadeIn(m) for m in cos[0]], lag_ratio=0.1),
+            rx_f @ 1,
+            Create(cos_bez_l),
+            Create(cos_bez_r),
+        )
+
+        self.wait(0.5)
+
+        sample = Line(
+            rx_ax.c2p(30 * DEGREES, 0),
+            rx_ax.input_to_graph_point(30 * DEGREES, rx_plot),
+            color=BLUE,
+        )
+        dot = Dot(sample.get_end(), color=BLUE)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(cos_bez_l),
+                    Uncreate(cos_bez_r),
+                ),
+                Create(sample),
+                Create(dot),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        cos_w_inp = MathTex(r"\cos{\left(30^{\circ}\right)} \approx 0.87").next_to(
+            rx_ax, UP, LARGE_BUFF
+        )
+        cos_w_inp.shift(cos[0][4].get_center() - cos_w_inp[0][4:7].get_center())
+
+        val_bez = CubicBezier(
+            dot.get_center() + [0, 0.1, 0],
+            dot.get_center() + [0, 1, 0],
+            cos_w_inp[0][4:7].get_bottom() + [0, -1, 0],
+            cos_w_inp[0][4:7].get_bottom() + [0, -0.1, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(cos[0][:4], cos_w_inp[0][:4]),
+                    ReplacementTransform(cos[0][5], cos_w_inp[0][7]),
+                ),
+                Create(val_bez),
+                ReplacementTransform(cos[0][4], cos_w_inp[0][4:7]),
+                LaggedStart(*[FadeIn(m) for m in cos_w_inp[0][8:]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        sample_390 = Line(
+            rx_ax.c2p(390 * DEGREES, 0),
+            rx_ax.input_to_graph_point(390 * DEGREES, rx_plot),
+            color=BLUE,
+        )
+        dot_390 = Dot(sample_390.get_end(), color=BLUE)
+
+        cos_w_inp_390 = MathTex(r"\cos{\left(390^{\circ}\right)} \approx 0.87").next_to(
+            cos_w_inp, RIGHT, MED_LARGE_BUFF
+        )
+
+        val_bez_390 = CubicBezier(
+            dot_390.get_center() + [0, 0.1, 0],
+            dot_390.get_center() + [0, 1, 0],
+            cos_w_inp_390[0][4:8].get_bottom() + [0, -1, 0],
+            cos_w_inp_390[0][4:8].get_bottom() + [0, -0.1, 0],
+        )
+
+        rx_ax_2 = Axes(
+            x_range=[0, 3 * PI, PI / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=to_cloud.get_length() * 1.5,
+            y_length=radar.vgroup.height,
+        )
+        rx_ax_2.shift(rx_ax.c2p(0, 0) - rx_ax_2.c2p(0, 0))
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.1).shift(RIGHT),
+                TransformFromCopy(rx_ax, rx_ax_2),
+                rx_x1 @ (3 * PI),
+                Create(sample_390),
+                Create(dot_390),
+                Create(val_bez_390),
+                LaggedStart(*[FadeIn(m) for m in cos_w_inp_390[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rx_ax_3 = Axes(
+            x_range=[-2 * PI, 3 * PI, PI / 4],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=to_cloud.get_length() * 2.5,
+            y_length=radar.vgroup.height,
+        )
+        rx_ax_3.shift(rx_ax.c2p(0, 0) - rx_ax_3.c2p(0, 0))
+
+        sample_n330 = Line(
+            rx_ax.c2p(-330 * DEGREES, 0),
+            rx_ax.input_to_graph_point(-330 * DEGREES, rx_plot),
+            color=BLUE,
+        )
+        dot_n330 = Dot(sample_n330.get_end(), color=BLUE)
+
+        cos_w_inp_n330 = MathTex(
+            r"\cos{\left(-330^{\circ}\right)} \approx 0.87"
+        ).next_to(cos_w_inp, LEFT, 2 * LARGE_BUFF)
+
+        val_bez_n330 = CubicBezier(
+            dot_n330.get_center() + [0, 0.1, 0],
+            dot_n330.get_center() + [0, 1, 0],
+            cos_w_inp_n330[0][4:8].get_bottom() + [0, -1, 0],
+            cos_w_inp_n330[0][4:8].get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).move_to(rx_ax_3).shift(UP),
+                TransformFromCopy(rx_ax, rx_ax_3),
+                rx_x0 @ (-2 * PI),
+                Create(sample_n330),
+                Create(dot_n330),
+                Create(val_bez_n330),
+                LaggedStart(*[FadeIn(m) for m in cos_w_inp_n330[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.restore(),
+            FadeOut(
+                rx_ax_2,
+                rx_ax_3,
+                val_bez_390,
+                val_bez_n330,
+                cos_w_inp_390,
+                cos_w_inp_n330,
+                dot_390,
+                dot_n330,
+                sample_n330,
+                sample_390,
+            ),
+            rx_x0 @ 0,
+            rx_x1 @ (2 * PI),
+            Uncreate(sample),
+            Uncreate(dot),
+            Uncreate(val_bez),
+            cos_w_inp.animate.set_x(self.camera.frame.copy().restore().get_x()),
+        )
+
+        self.wait(0.5)
+
+        qmark = Text("?", font=FONT, color=YELLOW).next_to(
+            cos_w_inp[0][4:7], UP, SMALL_BUFF
+        )
+        self.play(Write(qmark))
         # self.play(self.camera.frame.animate.shift(UP * 10))
+
+        self.wait(0.5)
+
+        cos = (
+            MathTex(r"\cos{(\theta)}")
+            .scale(1.5)
+            .move_to(self.camera.frame)
+            .shift(UP * fh(self, 1))
+        )
+
+        self.play(
+            Transform(cos_w_inp, cos), self.camera.frame.animate.shift(UP * fh(self))
+        )
+
+        self.wait(2)
+
+
+class PolarPlot(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        ax = Axes(
+            x_range=[-1, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.7),
+        )
+
+        self.play(Create(ax))
+
+        self.wait(0.5)
+
+        theta = VT(30)
+
+        line_to_cos = DashedLine(
+            ax.c2p(0, 0),
+            ax.c2p(np.cos(~theta * PI / 180), 0),
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+            color=ORANGE,
+        )
+        dot = Dot(
+            ax.c2p(np.cos(~theta * PI / 180), 0),
+            color=ORANGE,
+            radius=DEFAULT_DOT_RADIUS * 1.8,
+        )
+        cos_val_label = Tex(f"{np.cos(~theta * PI / 180):.2f}").next_to(dot, DOWN)
+        cos_val_label = MathTex(r"\cos{\left(30^\circ\right)}").next_to(dot, DOWN)
+
+        line_to_sin = DashedLine(
+            ax.c2p(np.cos(~theta * PI / 180), 0),
+            ax.c2p(np.cos(~theta * PI / 180), np.sin(~theta * PI / 180)),
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+            color=ORANGE,
+        )
+        sin_val_label = MathTex(r"\sin{\left(30^\circ\right)}").next_to(
+            ax.c2p(0, np.sin(~theta * PI / 180)), LEFT
+        )
+
+        self.play(
+            LaggedStart(
+                Create(line_to_cos), Create(dot), FadeIn(cos_val_label), lag_ratio=0.3
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                Create(line_to_sin),
+                AnimationGroup(
+                    dot.animate.shift(
+                        (line_to_sin.get_end() - line_to_cos.get_end()) * UP
+                    ),
+                    line_to_cos.animate.shift(
+                        (line_to_sin.get_end() - line_to_cos.get_end()) * UP
+                    ),
+                ),
+                FadeIn(sin_val_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        pair_label = (
+            MathTex(r"\left[ \cos{(30^\circ)}, \sin{(30^\circ)} \right]")
+            # .scale(0.7)
+            .next_to(dot, UP, SMALL_BUFF)
+            .shift(RIGHT)
+        )
+
+        line_to_cos_vt = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(0, np.sin(~theta * PI / 180)),
+                ax.c2p(np.cos(~theta * PI / 180), np.sin(~theta * PI / 180)),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+                color=ORANGE,
+            )
+        )
+        dot_vt = always_redraw(
+            lambda: Dot(
+                ax.c2p(np.cos(~theta * PI / 180), np.sin(~theta * PI / 180)),
+                color=ORANGE,
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+            )
+        )
+        line_to_sin_vt = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(np.cos(~theta * PI / 180), 0),
+                ax.c2p(np.cos(~theta * PI / 180), np.sin(~theta * PI / 180)),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+                color=ORANGE,
+            )
+        )
+
+        def get_cos():
+            val = np.cos(~theta * PI / 180)
+            pm = "+" if val > 0 else "-"
+            return pm, abs(val)
+
+        def get_sin():
+            val = np.sin(~theta * PI / 180)
+            pm = "+" if val > 0 else "-"
+            return pm, abs(val)
+
+        pair_label_shift = VT(1)
+        pair_label_vt = always_redraw(
+            lambda: (
+                MathTex(
+                    f"\\left[ {get_cos()[0]}{get_cos()[1]:.2f},{get_sin()[0]}{get_sin()[1]:.2f} \\right]"
+                )
+                # .scale(0.7)
+                .next_to(dot_vt, UP, SMALL_BUFF)
+                .shift(RIGHT * ~pair_label_shift)
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(pair_label[0][0]),
+                TransformFromCopy(cos_val_label[0], pair_label[0][1:9]),
+                FadeIn(pair_label[0][9]),
+                TransformFromCopy(sin_val_label[0], pair_label[0][10:18]),
+                FadeIn(pair_label[0][18]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pair_label, pair_label_vt),
+            FadeOut(cos_val_label, sin_val_label),
+        )
+
+        self.wait(0.5)
+
+        self.add(line_to_sin_vt, line_to_cos_vt, dot_vt, pair_label_vt)
+        self.remove(line_to_sin, line_to_cos, dot)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(theta @ (390), run_time=10)
+
+        self.wait(0.5)
+
+        cos_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.7),
+        ).next_to(ax, RIGHT, LARGE_BUFF)
+        sin_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.7),
+        ).next_to(cos_ax, RIGHT, LARGE_BUFF)
+
+        cos_plot = cos_ax.plot(
+            lambda t: np.cos(2 * PI * t), x_range=[0, 1, 1 / 200], color=ORANGE
+        )
+        sin_plot = sin_ax.plot(
+            lambda t: np.sin(2 * PI * t), x_range=[0, 1, 1 / 200], color=ORANGE
+        )
+
+        axes = Group(ax, cos_ax, sin_ax)
+
+        self.play(
+            LaggedStart(
+                pair_label_shift @ -0.4,
+                self.camera.frame.animate.scale_to_fit_width(axes.width * 1.1).move_to(
+                    axes
+                ),
+                Create(cos_ax),
+                Create(sin_ax),
+                Create(cos_plot),
+                Create(sin_plot),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        pair_plot_label = (
+            MathTex(r"\left[ \cos{(\theta)}, \sin{(\theta)} \right]")
+            .scale(1.5)
+            .next_to(ax, UP)
+        )
+        cos_plot_label = MathTex(r"\cos{(\theta)}").scale(1.5).next_to(cos_ax, UP)
+        sin_plot_label = MathTex(r"\sin{(\theta)}").scale(1.5).next_to(sin_ax, UP)
+
+        self.play(
+            LaggedStart(
+                FadeIn(pair_plot_label),
+                FadeIn(cos_plot_label),
+                FadeIn(sin_plot_label),
+                lag_ratio=0.3,
+            )
+        )
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.wait(0.5)
+
+        y_val = VT(1)
+        cos_y_line = always_redraw(
+            lambda: DashedLine(
+                cos_ax.c2p(0, ~y_val),
+                cos_ax.c2p(1, ~y_val),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+            )
+        )
+        sin_y_line = always_redraw(
+            lambda: DashedLine(
+                sin_ax.c2p(0, ~y_val),
+                sin_ax.c2p(1, ~y_val),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+            )
+        )
+        sin_x_dot_l = always_redraw(
+            lambda: Dot(
+                sin_ax.input_to_graph_point(
+                    (np.arcsin(~y_val)) / (2 * PI),
+                    sin_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+            )
+        )
+        sin_x_dot_r = always_redraw(
+            lambda: Dot(
+                sin_ax.input_to_graph_point(
+                    (PI - np.arcsin(~y_val)) / (2 * PI),
+                    sin_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+            )
+        )
+        cos_x_dot_l = always_redraw(
+            lambda: Dot(
+                cos_ax.input_to_graph_point(
+                    (np.arccos(~y_val)) / (2 * PI),
+                    cos_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+            )
+        )
+        cos_x_dot_r = always_redraw(
+            lambda: Dot(
+                cos_ax.input_to_graph_point(
+                    (2 * PI - np.arccos(~y_val)) / (2 * PI),
+                    cos_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+            )
+        )
+
+        self.play(
+            Create(cos_y_line),
+            Create(sin_y_line),
+            Create(sin_x_dot_l),
+            Create(sin_x_dot_r),
+            Create(cos_x_dot_l),
+            Create(cos_x_dot_r),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        # TODO: fix the sine val going down negative or change this to 0
+        self.play(y_val @ -1, rate_func=rate_functions.there_and_back, run_time=3)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(y_val @ 0.5, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(theta @ (45))
 
         self.wait(2)
 
