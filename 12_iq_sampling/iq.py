@@ -29,6 +29,175 @@ def fw(scene, scale=1):
     return scene.camera.frame.width * scale
 
 
+class Hook(MovingCameraScene):
+    def construct(self):
+        ax = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fh(self, 0.4),
+            y_length=fh(self, 0.4),
+        )  # .to_corner(UL, MED_SMALL_BUFF)
+        unit_circle = Circle(
+            radius=(ax.c2p(1, 0) - ax.c2p(0, 0))[0],
+            color=WHITE,
+        ).move_to(ax.c2p(0, 0))
+        self.add(
+            ax,
+            # unit_circle,
+        )
+
+        f = 2
+        phi = VT(0)
+
+        x_func = lambda t: (np.cos(f * t) + 0.5 * np.cos(f * 4 * t)) / 1.5
+        y_func = lambda t: (np.sin(f * t) + 0.5 * np.sin(f * 4 * t)) / 1.5
+
+        self.camera.frame.shift(LEFT * fw(self))
+        boring_ax = Axes(
+            x_range=[0, 2 * PI, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fh(self, 0.8),
+            y_length=fh(self, 0.5),
+        ).move_to(self.camera.frame)
+        boring_cos = boring_ax.plot(x_func, x_range=[0, 2 * PI, 1 / 200], color=ORANGE)
+
+        num_samples = 11
+        samples = boring_ax.get_vertical_lines_to_graph(
+            boring_cos,
+            x_range=[2 * PI / num_samples / 2, 2 * PI - 2 * PI / num_samples / 2],
+            num_lines=num_samples,
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            line_func=Line,
+        )
+        dots = Group(*[Dot(s.get_end(), color=BLUE) for s in samples])
+
+        self.play(
+            LaggedStart(
+                Create(boring_ax),
+                Create(boring_cos),
+                LaggedStart(
+                    *[
+                        LaggedStart(Create(l), Create(d), lag_ratio=0.3)
+                        for l, d in zip(samples, dots)
+                    ],
+                    lag_ratio=0.15,
+                    run_time=1,
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.wait(0.5)
+
+        l = always_redraw(
+            lambda: Line(ax.c2p(0, 0), ax.c2p(x_func(~phi), y_func(~phi)), color=ORANGE)
+        )
+        d = always_redraw(lambda: Dot(ax.c2p(x_func(~phi), y_func(~phi)), color=ORANGE))
+        d_trace = TracedPath(
+            d.get_center,
+            dissipating_time=2,
+            stroke_opacity=[0, 1],
+            stroke_color=ORANGE,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+        )
+        self.add(l, d, d_trace)
+
+        cos_ax = Axes(
+            x_range=[0, f * 2 * PI, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.4),
+        ).rotate(-PI / 2)
+        cos_ax.shift(ax.c2p(0, -1) - cos_ax.c2p(0, 0))
+        sin_ax = Axes(
+            x_range=[0, f * 2 * PI, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.4),
+        )
+        sin_ax.shift(ax.c2p(1, 0) - sin_ax.c2p(0, 0))
+        self.add(cos_ax, sin_ax)
+
+        sin = always_redraw(
+            lambda: sin_ax.plot(y_func, x_range=[0, ~phi, 2 * PI / 200], color=BLUE)
+        )
+        cos = always_redraw(
+            lambda: cos_ax.plot(x_func, x_range=[0, ~phi, 2 * PI / 200], color=GREEN)
+        )
+
+        line_to_sin = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(x_func(~phi), y_func(~phi)),
+                sin_ax.input_to_graph_point(~phi, sin),
+                color=BLUE,
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+            )
+        )
+        line_to_cos = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(x_func(~phi), y_func(~phi)),
+                cos_ax.input_to_graph_point(~phi, cos),
+                color=GREEN,
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+            )
+        )
+
+        self.add(sin, cos, line_to_cos, line_to_sin)
+
+        arc = CurvedArrow(boring_ax.get_corner(UR), ax.get_corner(UL), angle=-PI / 4)
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(ax), Create(arc), lag_ratio=0.2
+            )
+        )
+
+        self.wait(0.5)
+
+        iq_sampling_label = (
+            Group(
+                Text("In-Phase &", font=FONT),
+                Text("Quadrature", font=FONT),
+                Text("Sampling", font=FONT),
+            )
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .scale(1.5)
+            .next_to(ax, DR, LARGE_BUFF)
+        )
+        iq_sampling_label[0][:-1].set_color(GREEN)
+        iq_sampling_label[1].set_color(BLUE)
+
+        all_group = Group(ax, cos_ax, sin_ax)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    phi @ (4 * PI),
+                    self.camera.frame.animate.scale_to_fit_height(
+                        all_group.height * 1.2
+                    ).move_to(all_group),
+                    run_time=14,
+                ),
+                LaggedStart(
+                    *[Write(m, run_time=2.5) for m in iq_sampling_label],
+                    lag_ratio=0.4,
+                ),
+                lag_ratio=0.4,
+            ),
+        )
+
+        self.wait(2)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(2)
+
+
 # TODO: Something needs redone
 class Intro(MovingCameraScene):
     def construct(self):
