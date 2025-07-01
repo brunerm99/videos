@@ -12,7 +12,7 @@ from props.style import BACKGROUND_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -198,14 +198,22 @@ class Hook(MovingCameraScene):
         self.wait(2)
 
 
-# TODO: Something needs redone
 class Intro(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         radar = WeatherRadarTower()
         radar.vgroup.scale(0.6).to_corner(DL, LARGE_BUFF * 1.5)
 
-        self.play(radar.get_animation())
+        eqn = MathTex(r"s(t) = A(t) \cos{(2 \pi f_c t + \phi(t))}")
+
+        self.play(LaggedStart(*[FadeIn(m) for m in eqn[0]], lag_ratio=0.03))
+        self.add(eqn)
+
+        self.wait(0.5)
+
+        self.play(
+            radar.get_animation(), eqn.animate.to_edge(UP, LARGE_BUFF), run_time=1
+        )
 
         self.wait(0.5)
 
@@ -217,6 +225,8 @@ class Intro(MovingCameraScene):
             .to_edge(RIGHT, LARGE_BUFF * 1.5)
             .shift(UP)
         )
+
+        # eqn[0][-5:-1].set_color(YELLOW)
 
         to_cloud = Line(radar.radome.get_right(), cloud.get_left())
         ax = (
@@ -270,12 +280,17 @@ class Intro(MovingCameraScene):
 
         self.play(
             LaggedStart(
+                eqn[0][15:17].animate.set_color(YELLOW),
                 cloud.shift(RIGHT * 10).animate.shift(LEFT * 10),
                 AnimationGroup(sig_x1 @ (1.5 + pw / 2), A @ 0.5),
                 lag_ratio=0.5,
             ),
             run_time=4,
         )
+
+        self.wait(0.5)
+
+        self.play(eqn[0][15:17].animate.set_color(WHITE))
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
@@ -284,6 +299,7 @@ class Intro(MovingCameraScene):
         self.camera.frame.save_state()
         A.save_state()
         self.play(
+            # eqn.animate.shift(DOWN*.7),
             rtn_ax.animate.rotate(-(to_cloud.get_angle())).move_to(self.camera.frame),
             radar.vgroup.animate.shift(LEFT * 4),
             cloud.animate.shift(RIGHT * 4),
@@ -299,21 +315,20 @@ class Intro(MovingCameraScene):
         mag_line_d = Line(
             mag_line.get_bottom() + LEFT / 8, mag_line.get_bottom() + RIGHT / 8
         )
-        mag = (
-            MathTex(r"\left| s(t) \right|")
-            .scale(1.5)
-            .next_to(mag_line, LEFT, MED_LARGE_BUFF)
-        )
+        mag = MathTex(r"A(t)").scale(1.5).next_to(mag_line, LEFT, MED_LARGE_BUFF)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
                 Create(mag_line_d),
                 Create(mag_line),
                 Create(mag_line_u),
-                LaggedStart(*[FadeIn(m) for m in mag[0]], lag_ratio=0.1),
+                TransformFromCopy(eqn[0][5:9], mag[0]),
                 lag_ratio=0.2,
-            )
+            ),
+            run_time=2,
         )
+        self.add(mag)
 
         self.wait(0.5)
 
@@ -338,6 +353,8 @@ class Intro(MovingCameraScene):
             rcs_label.get_top() + [0, 0.1, 0],
         )
 
+        self.next_section(skip_animations=skip_animations(False))
+
         self.play(
             LaggedStart(
                 Create(range_bez),
@@ -361,20 +378,29 @@ class Intro(MovingCameraScene):
             phase_line.get_right() + DOWN / 8, phase_line.get_right() + UP / 8
         )
         phase_label = always_redraw(
-            lambda: MathTex(f"\\angle s(t) = {~phase_vt:.2f} \\pi")
+            lambda: MathTex(
+                f"\\phi = {~phase_vt:.2f} \\pi",
+                # color=YELLOW,
+            )
             .scale(1.5)
             .next_to(phase_line, UP, MED_LARGE_BUFF)
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+
         cloud.shift(RIGHT * 3)
 
         self.play(
+            eqn.animate.shift(UP * 0.8),
             Create(phase_line),
             Create(phase_line_l),
             Create(phase_line_r),
-            GrowFromCenter(phase_label),
+            TransformFromCopy(eqn[0][-5], phase_label[0][0], path_arc=PI / 3),
+            FadeIn(phase_label[0][1:]),
             self.camera.frame.animate.scale(1 / 0.8),
+            run_time=2,
         )
+        self.add(phase_label)
 
         self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
@@ -395,6 +421,8 @@ class Intro(MovingCameraScene):
             phase_line_2.get_right() + DOWN / 8, phase_line_2.get_right() + UP / 8
         )
 
+        self.next_section(skip_animations=skip_animations(True))
+
         self.play(
             phase_vt @ 1.2,
             Transform(phase_line, phase_line_2),
@@ -405,97 +433,79 @@ class Intro(MovingCameraScene):
 
         self.wait(0.5)
 
-        is_target = Text("?", font=FONT)
-        movement = Text("movement", font=FONT)
-        v_target = MathTex(r"v_{\text{target}}")
-        pm_v = MathTex(r"\pm v")
-        r_ll_1 = MathTex(r"\Delta R \ll 1")
+        doppler_vel = Text("Doppler\nvelocity", font=FONT).scale(0.6)
+        direction = Text("direction", font=FONT).scale(0.6)
+        tiny = Text("tiny\nmovements", font=FONT).scale(0.6)
         l1_group = (
-            Group(is_target, movement)
+            Group(doppler_vel, direction, tiny)
             .arrange(RIGHT, LARGE_BUFF)
-            .next_to(phase_label[0][1], UP, LARGE_BUFF)
-        )
-        Group(v_target, pm_v, r_ll_1).arrange(RIGHT, LARGE_BUFF).next_to(
-            movement, UP, LARGE_BUFF
+            .next_to(eqn[0][-5:-1], UP, LARGE_BUFF)
         )
 
-        is_target_bez = CubicBezier(
-            phase_label[0][1].get_top() + [0, 0.2, 0],
-            phase_label[0][1].get_top() + [0, 1, 0],
-            is_target.get_bottom() + [0, -1, 0],
-            is_target.get_bottom() + [0, -0.1, 0],
+        doppler_vel_bez = CubicBezier(
+            eqn[0][-5:-1].get_top() + [0, 0.2, 0],
+            eqn[0][-5:-1].get_top() + [0, 1, 0],
+            doppler_vel.get_bottom() + [0, -1, 0],
+            doppler_vel.get_bottom() + [0, -0.1, 0],
         )
-        movement_bez = CubicBezier(
-            phase_label[0][1].get_top() + [0, 0.2, 0],
-            phase_label[0][1].get_top() + [0, 1, 0],
-            movement.get_bottom() + [0, -1, 0],
-            movement.get_bottom() + [0, -0.1, 0],
+        direction_bez = CubicBezier(
+            eqn[0][-5:-1].get_top() + [0, 0.2, 0],
+            eqn[0][-5:-1].get_top() + [0, 0.5, 0],
+            direction.get_bottom() + [0, -0.5, 0],
+            direction.get_bottom() + [0, -0.1, 0],
         )
-
-        v_target_bez = CubicBezier(
-            movement.get_top() + [0, 0.1, 0],
-            movement.get_top() + [0, 1, 0],
-            v_target.get_bottom() + [0, -1, 0],
-            v_target.get_bottom() + [0, -0.1, 0],
-        )
-        pm_v_bez = CubicBezier(
-            movement.get_top() + [0, 0.1, 0],
-            movement.get_top() + [0, 0.5, 0],
-            pm_v.get_bottom() + [0, -0.5, 0],
-            pm_v.get_bottom() + [0, -0.1, 0],
-        )
-        r_ll_1_bez = CubicBezier(
-            movement.get_top() + [0, 0.1, 0],
-            movement.get_top() + [0, 1, 0],
-            r_ll_1.get_bottom() + [0, -1, 0],
-            r_ll_1.get_bottom() + [0, -0.1, 0],
+        tiny_bez = CubicBezier(
+            eqn[0][-5:-1].get_top() + [0, 0.2, 0],
+            eqn[0][-5:-1].get_top() + [0, 1, 0],
+            tiny.get_bottom() + [0, -1, 0],
+            tiny.get_bottom() + [0, -0.1, 0],
         )
 
         self.play(
             LaggedStart(
                 self.camera.frame.animate.shift(UP * 2),
-                Create(is_target_bez),
-                Write(is_target),
-                Create(movement_bez),
-                Write(movement),
+                eqn[0][-5:-1].animate.set_color(YELLOW),
+                Create(doppler_vel_bez),
+                Write(doppler_vel),
+                Create(direction_bez),
+                Write(direction),
+                Create(tiny_bez),
+                Write(tiny),
                 lag_ratio=0.3,
             ),
             run_time=3,
         )
 
-        self.wait(0.5)
+        # self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         Create(v_target_bez),
+        #         GrowFromCenter(v_target),
+        #         Create(pm_v_bez),
+        #         GrowFromCenter(pm_v),
+        #         Create(r_ll_1_bez),
+        #         GrowFromCenter(r_ll_1),
+        #         lag_ratio=0.3,
+        #     ),
+        #     run_time=3,
+        # )
+
+        # self.wait(0.5)
 
         self.play(
             LaggedStart(
-                Create(v_target_bez),
-                GrowFromCenter(v_target),
-                Create(pm_v_bez),
-                GrowFromCenter(pm_v),
-                Create(r_ll_1_bez),
-                GrowFromCenter(r_ll_1),
-                lag_ratio=0.3,
-            ),
-            run_time=3,
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
+                eqn[0][-5:-1].animate.set_color(WHITE),
                 FadeOut(
-                    rcs_bez,
-                    pm_v_bez,
-                    range_bez,
-                    r_ll_1_bez,
-                    v_target_bez,
-                    v_target,
-                    movement,
-                    movement_bez,
+                    direction,
+                    direction_bez,
                     range_label,
                     rcs_label,
                     phase_label,
-                    is_target_bez,
-                    is_target,
+                    doppler_vel_bez,
+                    doppler_vel,
+                    tiny,
+                    tiny_bez,
                     mag_line,
                     mag_line_d,
                     mag_line_u,
@@ -503,8 +513,8 @@ class Intro(MovingCameraScene):
                     phase_line_l,
                     phase_line_r,
                     mag,
-                    pm_v,
-                    r_ll_1,
+                    range_bez,
+                    rcs_bez,
                 ),
                 AnimationGroup(
                     rtn_ax.animate.restore(),
@@ -591,7 +601,7 @@ class Intro(MovingCameraScene):
         num_samples = 11
         samples = rx_ax.get_vertical_lines_to_graph(
             rx_plot,
-            x_range=[1 / num_samples / 2, 1 - 1 / num_samples / 2],
+            x_range=[2 * PI / num_samples / 2, 2 * PI - 2 * PI / num_samples / 2],
             num_lines=num_samples,
             color=BLUE,
             stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
@@ -640,272 +650,488 @@ class Intro(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(True))
 
-        sample_rects1 = rx_ax.get_riemann_rectangles(
-            rx_plot,
-            input_sample_type="center",
-            x_range=[0, 1],
-            dx=1 / (num_samples),
-            color=BLUE,
-            show_signed_area=False,
-            stroke_color=BLACK,
-            fill_opacity=0.7,
-        )
-
-        self.play(
-            rx_plot.animate.set_stroke(opacity=0.2),
-            LaggedStart(
-                *[
-                    AnimationGroup(FadeIn(sr), FadeOut(s, dot))
-                    for s, sr, dot in zip(samples, sample_rects1, dots)
-                ],
-                lag_ratio=0.1,
-            ),
-            run_time=2,
-        )
-
-        self.wait(0.5)
-
-        phase_qmark = (
-            Tex("$\\phi = $ ?").scale(1.5).next_to(rx_box, DOWN, MED_LARGE_BUFF)
-        )
-
-        self.play(
-            LaggedStart(
-                self.camera.frame.animate.scale_to_fit_height(
-                    Group(rx, rx_box, phase_qmark).height * 1.2
-                ).move_to(Group(rx, rx_box, phase_qmark)),
-                LaggedStart(*[FadeIn(m) for m in phase_qmark[0]], lag_ratio=0.15),
-                lag_ratio=0.25,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            FadeOut(rx_box, rx, sample_rects1, v_labels, *v_backgrounds),
-            rx_plot.animate.set_stroke(opacity=1),
-            phase_qmark.animate.shift(DOWN * 6),
-            self.camera.frame.animate.scale(0.9).shift(UP),
-        )
-
-        self.wait(0.5)
-
-        cos = MathTex(r"\cos{(\theta)}").next_to(rx_ax, UP, LARGE_BUFF)
-        cos_bez_l = CubicBezier(
-            cos.get_bottom() + [0, -0.1, 0],
-            cos.get_bottom() + [0, -1, 0],
-            rx_ax.get_corner(UL) + [0, 1, 0],
-            rx_ax.get_corner(UL) + [0, 0.1, 0],
-        )
-        cos_bez_r = CubicBezier(
-            cos.get_bottom() + [0, -0.1, 0],
-            cos.get_bottom() + [0, -1, 0],
-            rx_ax.get_corner(UR) + [0, 1, 0],
-            rx_ax.get_corner(UR) + [0, 0.1, 0],
-        )
-
-        self.remove(rx_plot)
-        rx_f = VT(3)
-        rx_x0 = VT(0)
-        rx_x1 = VT(2 * PI)
-        rx_plot = always_redraw(
-            lambda: rx_ax.plot(
-                lambda t: np.cos(~rx_f * t),
-                x_range=[~rx_x0, ~rx_x1, 1 / 200],
-                color=RX_COLOR,
-            )
-        )
-        self.add(rx_plot)
-
-        self.play(
-            LaggedStart(*[FadeIn(m) for m in cos[0]], lag_ratio=0.1),
-            rx_f @ 1,
-            Create(cos_bez_l),
-            Create(cos_bez_r),
-        )
-
-        self.wait(0.5)
-
-        sample = Line(
-            rx_ax.c2p(30 * DEGREES, 0),
-            rx_ax.input_to_graph_point(30 * DEGREES, rx_plot),
-            color=BLUE,
-        )
-        dot = Dot(sample.get_end(), color=BLUE)
-
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    Uncreate(cos_bez_l),
-                    Uncreate(cos_bez_r),
-                ),
-                Create(sample),
-                Create(dot),
-                lag_ratio=0.3,
-            ),
-        )
-
-        self.wait(0.5)
-
-        cos_w_inp = MathTex(r"\cos{\left(30^{\circ}\right)} \approx 0.87").next_to(
-            rx_ax, UP, LARGE_BUFF
-        )
-        cos_w_inp.shift(cos[0][4].get_center() - cos_w_inp[0][4:7].get_center())
-
-        val_bez = CubicBezier(
-            dot.get_center() + [0, 0.1, 0],
-            dot.get_center() + [0, 1, 0],
-            cos_w_inp[0][4:7].get_bottom() + [0, -1, 0],
-            cos_w_inp[0][4:7].get_bottom() + [0, -0.1, 0],
-        )
-
-        self.next_section(skip_animations=skip_animations(False))
-
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    ReplacementTransform(cos[0][:4], cos_w_inp[0][:4]),
-                    ReplacementTransform(cos[0][5], cos_w_inp[0][7]),
-                ),
-                Create(val_bez),
-                ReplacementTransform(cos[0][4], cos_w_inp[0][4:7]),
-                LaggedStart(*[FadeIn(m) for m in cos_w_inp[0][8:]], lag_ratio=0.1),
-                lag_ratio=0.3,
-            ),
-            run_time=3,
-        )
-
-        self.wait(0.5)
-
-        sample_390 = Line(
-            rx_ax.c2p(390 * DEGREES, 0),
-            rx_ax.input_to_graph_point(390 * DEGREES, rx_plot),
-            color=BLUE,
-        )
-        dot_390 = Dot(sample_390.get_end(), color=BLUE)
-
-        cos_w_inp_390 = MathTex(r"\cos{\left(390^{\circ}\right)} \approx 0.87").next_to(
-            cos_w_inp, RIGHT, MED_LARGE_BUFF
-        )
-
-        val_bez_390 = CubicBezier(
-            dot_390.get_center() + [0, 0.1, 0],
-            dot_390.get_center() + [0, 1, 0],
-            cos_w_inp_390[0][4:8].get_bottom() + [0, -1, 0],
-            cos_w_inp_390[0][4:8].get_bottom() + [0, -0.1, 0],
-        )
-
-        rx_ax_2 = Axes(
-            x_range=[0, 3 * PI, PI / 4],
+        sin_ax = Axes(
+            x_range=[0, 2 * PI, PI / 4],
             y_range=[-1, 1, 0.5],
             tips=False,
-            x_length=to_cloud.get_length() * 1.5,
+            x_length=to_cloud.get_length(),
             y_length=radar.vgroup.height,
-        )
-        rx_ax_2.shift(rx_ax.c2p(0, 0) - rx_ax_2.c2p(0, 0))
+        ).move_to(rx_ax)
+        sin_plot = sin_ax.plot(lambda t: np.sin(t), color=RX_COLOR)
 
-        self.camera.frame.save_state()
-        self.play(
-            LaggedStart(
-                self.camera.frame.animate.scale(1.1).shift(RIGHT),
-                TransformFromCopy(rx_ax, rx_ax_2),
-                rx_x1 @ (3 * PI),
-                Create(sample_390),
-                Create(dot_390),
-                Create(val_bez_390),
-                LaggedStart(*[FadeIn(m) for m in cos_w_inp_390[0]], lag_ratio=0.1),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        rx_ax_3 = Axes(
-            x_range=[-2 * PI, 3 * PI, PI / 4],
-            y_range=[-1, 1, 0.5],
-            tips=False,
-            x_length=to_cloud.get_length() * 2.5,
-            y_length=radar.vgroup.height,
-        )
-        rx_ax_3.shift(rx_ax.c2p(0, 0) - rx_ax_3.c2p(0, 0))
-
-        sample_n330 = Line(
-            rx_ax.c2p(-330 * DEGREES, 0),
-            rx_ax.input_to_graph_point(-330 * DEGREES, rx_plot),
-            color=BLUE,
-        )
-        dot_n330 = Dot(sample_n330.get_end(), color=BLUE)
-
-        cos_w_inp_n330 = MathTex(
-            r"\cos{\left(-330^{\circ}\right)} \approx 0.87"
-        ).next_to(cos_w_inp, LEFT, 2 * LARGE_BUFF)
-
-        val_bez_n330 = CubicBezier(
-            dot_n330.get_center() + [0, 0.1, 0],
-            dot_n330.get_center() + [0, 1, 0],
-            cos_w_inp_n330[0][4:8].get_bottom() + [0, -1, 0],
-            cos_w_inp_n330[0][4:8].get_bottom() + [0, -0.1, 0],
-        )
-
-        self.play(
-            LaggedStart(
-                self.camera.frame.animate.scale(1.2).move_to(rx_ax_3).shift(UP),
-                TransformFromCopy(rx_ax, rx_ax_3),
-                rx_x0 @ (-2 * PI),
-                Create(sample_n330),
-                Create(dot_n330),
-                Create(val_bez_n330),
-                LaggedStart(*[FadeIn(m) for m in cos_w_inp_n330[0]], lag_ratio=0.1),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            self.camera.frame.animate.restore(),
-            FadeOut(
-                rx_ax_2,
-                rx_ax_3,
-                val_bez_390,
-                val_bez_n330,
-                cos_w_inp_390,
-                cos_w_inp_n330,
-                dot_390,
-                dot_n330,
-                sample_n330,
-                sample_390,
-            ),
-            rx_x0 @ 0,
-            rx_x1 @ (2 * PI),
-            Uncreate(sample),
-            Uncreate(dot),
-            Uncreate(val_bez),
-            cos_w_inp.animate.set_x(self.camera.frame.copy().restore().get_x()),
-        )
-
-        self.wait(0.5)
-
-        qmark = Text("?", font=FONT, color=YELLOW).next_to(
-            cos_w_inp[0][4:7], UP, SMALL_BUFF
-        )
-        self.play(Write(qmark))
-        # self.play(self.camera.frame.animate.shift(UP * 10))
-
-        self.wait(0.5)
-
-        cos = (
-            MathTex(r"\cos{(\theta)}")
+        new_cam_group = Group(rx_ax.copy().next_to(sin_ax, LEFT, LARGE_BUFF), sin_ax)
+        cos_label = (
+            MathTex(r"\cos{(?)}")
             .scale(1.5)
-            .move_to(self.camera.frame)
-            .shift(UP * fh(self, 1))
+            .next_to(rx_ax.copy().next_to(sin_ax, LEFT, LARGE_BUFF), UP, MED_LARGE_BUFF)
+        )
+        sin_label = MathTex(r"\sin{(?)}").scale(1.5).next_to(sin_ax, UP, MED_LARGE_BUFF)
+        cos_label[0][-2].set_color(YELLOW)
+        sin_label[0][-2].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                FadeOut(rx_box, rx, *samples, *dots, *v_labels, *v_backgrounds),
+                self.camera.frame.animate.scale_to_fit_width(
+                    new_cam_group.width * 1.2
+                ).move_to(new_cam_group),
+                Group(rx_ax, rx_plot).animate.next_to(sin_ax, LEFT, LARGE_BUFF),
+                Create(sin_ax),
+                Create(sin_plot),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        unknown_cos_sample = Dot(
+            rx_ax.input_to_graph_point(PI / 3, rx_plot), color=BLUE
+        ).scale(1.5)
+        unknown_cos_sample_arc = ArcBetweenPoints(
+            unknown_cos_sample.get_center() + [0.2, 0, 0],
+            cos_label.get_bottom() + [0, -0.1, 0],
+            angle=TAU / 6,
+            color=BLUE,
+        )
+        unknown_sin_sample = Dot(
+            sin_ax.input_to_graph_point(PI / 3, sin_plot), color=BLUE
+        ).scale(1.5)
+        unknown_sin_sample_arc = ArcBetweenPoints(
+            unknown_sin_sample.get_center() + [0, 0.2, 0],
+            sin_label.get_left() + [-0.1, 0, 0],
+            angle=-TAU / 4,
+            color=BLUE,
         )
 
         self.play(
-            Transform(cos_w_inp, cos), self.camera.frame.animate.shift(UP * fh(self))
+            LaggedStart(
+                Create(unknown_cos_sample),
+                Create(unknown_cos_sample_arc),
+                FadeIn(cos_label),
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                Create(unknown_sin_sample),
+                Create(unknown_sin_sample_arc),
+                FadeIn(sin_label),
+                lag_ratio=0.3,
+            ),
         )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                unknown_cos_sample,
+                unknown_cos_sample_arc,
+                unknown_sin_sample,
+                unknown_sin_sample_arc,
+                cos_label,
+                sin_label,
+            )
+        )
+
+        self.wait(0.5)
+
+        y_val = VT(1)
+        cos_y_line = always_redraw(
+            lambda: DashedLine(
+                rx_ax.c2p(0, ~y_val),
+                rx_ax.c2p(2 * PI, ~y_val),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+            )
+        )
+        sin_y_line = always_redraw(
+            lambda: DashedLine(
+                sin_ax.c2p(0, ~y_val),
+                sin_ax.c2p(2 * PI, ~y_val),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+            )
+        )
+        sin_x_dot_l = always_redraw(
+            lambda: Dot(
+                sin_ax.input_to_graph_point(
+                    (np.arcsin(~y_val)),
+                    sin_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+                color=BLUE,
+            )
+        )
+        sin_x_dot_r = always_redraw(
+            lambda: Dot(
+                sin_ax.input_to_graph_point(
+                    (PI - np.arcsin(~y_val)),
+                    sin_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+                color=BLUE,
+            )
+        )
+        cos_x_dot_l = always_redraw(
+            lambda: Dot(
+                rx_ax.input_to_graph_point(
+                    (np.arccos(~y_val)),
+                    rx_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+                color=BLUE,
+            )
+        )
+        cos_x_dot_r = always_redraw(
+            lambda: Dot(
+                rx_ax.input_to_graph_point(
+                    (2 * PI - np.arccos(~y_val)),
+                    rx_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+                color=BLUE,
+            )
+        )
+
+        self.play(
+            Create(cos_y_line),
+            Create(sin_y_line),
+            Create(sin_x_dot_l),
+            Create(sin_x_dot_r),
+            Create(cos_x_dot_l),
+            Create(cos_x_dot_r),
+        )
+
+        self.wait(0.5)
+
+        self.play(y_val @ 0.5, run_time=2)
+
+        self.wait(0.5)
+
+        cos_opt_1_x = Line(
+            rx_ax.c2p(PI / 3, -0.2),
+            rx_ax.c2p(PI / 3, 0.2),
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        )
+        cos_opt_2_x = Line(
+            rx_ax.c2p(5 * PI / 3, -0.2),
+            rx_ax.c2p(5 * PI / 3, 0.2),
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        )
+        cos_opt_1 = MathTex(r"\frac{\pi}{3}").next_to(cos_opt_1_x, DOWN)
+        cos_opt_2 = MathTex(r"\frac{5 \pi}{3}").next_to(cos_opt_2_x, DOWN)
+
+        sin_opt_1_x = Line(
+            sin_ax.c2p(PI / 6, -0.2),
+            sin_ax.c2p(PI / 6, 0.2),
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        )
+        sin_opt_2_x = Line(
+            sin_ax.c2p(5 * PI / 6, -0.2),
+            sin_ax.c2p(5 * PI / 6, 0.2),
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        )
+        sin_opt_1 = MathTex(r"\frac{\pi}{6}").next_to(sin_opt_1_x, DOWN)
+        sin_opt_2 = MathTex(r"\frac{5 \pi}{6}").next_to(sin_opt_2_x, DOWN)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(cos_opt_1_x),
+                    GrowFromCenter(cos_opt_1),
+                ),
+                AnimationGroup(
+                    Create(cos_opt_2_x),
+                    GrowFromCenter(cos_opt_2),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(sin_opt_1_x),
+                    GrowFromCenter(sin_opt_1),
+                ),
+                AnimationGroup(
+                    Create(sin_opt_2_x),
+                    GrowFromCenter(sin_opt_2),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        # self.wait(0.5)
+        # self.next_section(skip_animations=skip_animations(True))
+
+        # sample_rects1 = rx_ax.get_riemann_rectangles(
+        #     rx_plot,
+        #     input_sample_type="center",
+        #     x_range=[0, 1],
+        #     dx=1 / (num_samples),
+        #     color=BLUE,
+        #     show_signed_area=False,
+        #     stroke_color=BLACK,
+        #     fill_opacity=0.7,
+        # )
+
+        # self.play(
+        #     rx_plot.animate.set_stroke(opacity=0.2),
+        #     LaggedStart(
+        #         *[
+        #             AnimationGroup(FadeIn(sr), FadeOut(s, dot))
+        #             for s, sr, dot in zip(samples, sample_rects1, dots)
+        #         ],
+        #         lag_ratio=0.1,
+        #     ),
+        #     run_time=2,
+        # )
+
+        # self.wait(0.5)
+
+        # phase_qmark = (
+        #     Tex("$\\phi = $ ?").scale(1.5).next_to(rx_box, DOWN, MED_LARGE_BUFF)
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         self.camera.frame.animate.scale_to_fit_height(
+        #             Group(rx, rx_box, phase_qmark).height * 1.2
+        #         ).move_to(Group(rx, rx_box, phase_qmark)),
+        #         LaggedStart(*[FadeIn(m) for m in phase_qmark[0]], lag_ratio=0.15),
+        #         lag_ratio=0.25,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     FadeOut(rx_box, rx, sample_rects1, v_labels, *v_backgrounds),
+        #     rx_plot.animate.set_stroke(opacity=1),
+        #     phase_qmark.animate.shift(DOWN * 6),
+        #     self.camera.frame.animate.scale(0.9).shift(UP),
+        # )
+
+        # self.wait(0.5)
+
+        # cos = MathTex(r"\cos{(\theta)}").next_to(rx_ax, UP, LARGE_BUFF)
+        # cos_bez_l = CubicBezier(
+        #     cos.get_bottom() + [0, -0.1, 0],
+        #     cos.get_bottom() + [0, -1, 0],
+        #     rx_ax.get_corner(UL) + [0, 1, 0],
+        #     rx_ax.get_corner(UL) + [0, 0.1, 0],
+        # )
+        # cos_bez_r = CubicBezier(
+        #     cos.get_bottom() + [0, -0.1, 0],
+        #     cos.get_bottom() + [0, -1, 0],
+        #     rx_ax.get_corner(UR) + [0, 1, 0],
+        #     rx_ax.get_corner(UR) + [0, 0.1, 0],
+        # )
+
+        # self.remove(rx_plot)
+        # rx_f = VT(3)
+        # rx_x0 = VT(0)
+        # rx_x1 = VT(2 * PI)
+        # rx_plot = always_redraw(
+        #     lambda: rx_ax.plot(
+        #         lambda t: np.cos(~rx_f * t),
+        #         x_range=[~rx_x0, ~rx_x1, 1 / 200],
+        #         color=RX_COLOR,
+        #     )
+        # )
+        # self.add(rx_plot)
+
+        # self.play(
+        #     LaggedStart(*[FadeIn(m) for m in cos[0]], lag_ratio=0.1),
+        #     rx_f @ 1,
+        #     Create(cos_bez_l),
+        #     Create(cos_bez_r),
+        # )
+
+        # self.wait(0.5)
+
+        # sample = Line(
+        #     rx_ax.c2p(30 * DEGREES, 0),
+        #     rx_ax.input_to_graph_point(30 * DEGREES, rx_plot),
+        #     color=BLUE,
+        # )
+        # dot = Dot(sample.get_end(), color=BLUE)
+
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(
+        #             Uncreate(cos_bez_l),
+        #             Uncreate(cos_bez_r),
+        #         ),
+        #         Create(sample),
+        #         Create(dot),
+        #         lag_ratio=0.3,
+        #     ),
+        # )
+
+        # self.wait(0.5)
+
+        # cos_w_inp = MathTex(r"\cos{\left(30^{\circ}\right)} \approx 0.87").next_to(
+        #     rx_ax, UP, LARGE_BUFF
+        # )
+        # cos_w_inp.shift(cos[0][4].get_center() - cos_w_inp[0][4:7].get_center())
+
+        # val_bez = CubicBezier(
+        #     dot.get_center() + [0, 0.1, 0],
+        #     dot.get_center() + [0, 1, 0],
+        #     cos_w_inp[0][4:7].get_bottom() + [0, -1, 0],
+        #     cos_w_inp[0][4:7].get_bottom() + [0, -0.1, 0],
+        # )
+
+        # self.next_section(skip_animations=skip_animations(False))
+
+        # self.play(
+        #     LaggedStart(
+        #         AnimationGroup(
+        #             ReplacementTransform(cos[0][:4], cos_w_inp[0][:4]),
+        #             ReplacementTransform(cos[0][5], cos_w_inp[0][7]),
+        #         ),
+        #         Create(val_bez),
+        #         ReplacementTransform(cos[0][4], cos_w_inp[0][4:7]),
+        #         LaggedStart(*[FadeIn(m) for m in cos_w_inp[0][8:]], lag_ratio=0.1),
+        #         lag_ratio=0.3,
+        #     ),
+        #     run_time=3,
+        # )
+
+        # self.wait(0.5)
+
+        # sample_390 = Line(
+        #     rx_ax.c2p(390 * DEGREES, 0),
+        #     rx_ax.input_to_graph_point(390 * DEGREES, rx_plot),
+        #     color=BLUE,
+        # )
+        # dot_390 = Dot(sample_390.get_end(), color=BLUE)
+
+        # cos_w_inp_390 = MathTex(r"\cos{\left(390^{\circ}\right)} \approx 0.87").next_to(
+        #     cos_w_inp, RIGHT, MED_LARGE_BUFF
+        # )
+
+        # val_bez_390 = CubicBezier(
+        #     dot_390.get_center() + [0, 0.1, 0],
+        #     dot_390.get_center() + [0, 1, 0],
+        #     cos_w_inp_390[0][4:8].get_bottom() + [0, -1, 0],
+        #     cos_w_inp_390[0][4:8].get_bottom() + [0, -0.1, 0],
+        # )
+
+        # rx_ax_2 = Axes(
+        #     x_range=[0, 3 * PI, PI / 4],
+        #     y_range=[-1, 1, 0.5],
+        #     tips=False,
+        #     x_length=to_cloud.get_length() * 1.5,
+        #     y_length=radar.vgroup.height,
+        # )
+        # rx_ax_2.shift(rx_ax.c2p(0, 0) - rx_ax_2.c2p(0, 0))
+
+        # self.camera.frame.save_state()
+        # self.play(
+        #     LaggedStart(
+        #         self.camera.frame.animate.scale(1.1).shift(RIGHT),
+        #         TransformFromCopy(rx_ax, rx_ax_2),
+        #         rx_x1 @ (3 * PI),
+        #         Create(sample_390),
+        #         Create(dot_390),
+        #         Create(val_bez_390),
+        #         LaggedStart(*[FadeIn(m) for m in cos_w_inp_390[0]], lag_ratio=0.1),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # rx_ax_3 = Axes(
+        #     x_range=[-2 * PI, 3 * PI, PI / 4],
+        #     y_range=[-1, 1, 0.5],
+        #     tips=False,
+        #     x_length=to_cloud.get_length() * 2.5,
+        #     y_length=radar.vgroup.height,
+        # )
+        # rx_ax_3.shift(rx_ax.c2p(0, 0) - rx_ax_3.c2p(0, 0))
+
+        # sample_n330 = Line(
+        #     rx_ax.c2p(-330 * DEGREES, 0),
+        #     rx_ax.input_to_graph_point(-330 * DEGREES, rx_plot),
+        #     color=BLUE,
+        # )
+        # dot_n330 = Dot(sample_n330.get_end(), color=BLUE)
+
+        # cos_w_inp_n330 = MathTex(
+        #     r"\cos{\left(-330^{\circ}\right)} \approx 0.87"
+        # ).next_to(cos_w_inp, LEFT, 2 * LARGE_BUFF)
+
+        # val_bez_n330 = CubicBezier(
+        #     dot_n330.get_center() + [0, 0.1, 0],
+        #     dot_n330.get_center() + [0, 1, 0],
+        #     cos_w_inp_n330[0][4:8].get_bottom() + [0, -1, 0],
+        #     cos_w_inp_n330[0][4:8].get_bottom() + [0, -0.1, 0],
+        # )
+
+        # self.play(
+        #     LaggedStart(
+        #         self.camera.frame.animate.scale(1.2).move_to(rx_ax_3).shift(UP),
+        #         TransformFromCopy(rx_ax, rx_ax_3),
+        #         rx_x0 @ (-2 * PI),
+        #         Create(sample_n330),
+        #         Create(dot_n330),
+        #         Create(val_bez_n330),
+        #         LaggedStart(*[FadeIn(m) for m in cos_w_inp_n330[0]], lag_ratio=0.1),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+
+        # self.wait(0.5)
+
+        # self.play(
+        #     self.camera.frame.animate.restore(),
+        #     FadeOut(
+        #         rx_ax_2,
+        #         rx_ax_3,
+        #         val_bez_390,
+        #         val_bez_n330,
+        #         cos_w_inp_390,
+        #         cos_w_inp_n330,
+        #         dot_390,
+        #         dot_n330,
+        #         sample_n330,
+        #         sample_390,
+        #     ),
+        #     rx_x0 @ 0,
+        #     rx_x1 @ (2 * PI),
+        #     Uncreate(sample),
+        #     Uncreate(dot),
+        #     Uncreate(val_bez),
+        #     cos_w_inp.animate.set_x(self.camera.frame.copy().restore().get_x()),
+        # )
+
+        # self.wait(0.5)
+
+        # qmark = Text("?", font=FONT, color=YELLOW).next_to(
+        #     cos_w_inp[0][4:7], UP, SMALL_BUFF
+        # )
+        # self.play(Write(qmark))
+        # # self.play(self.camera.frame.animate.shift(UP * 10))
+
+        # self.wait(0.5)
+
+        # cos = (
+        #     MathTex(r"\cos{(\theta)}")
+        #     .scale(1.5)
+        #     .move_to(self.camera.frame)
+        #     .shift(UP * fh(self, 1))
+        # )
+
+        # self.play(
+        #     Transform(cos_w_inp, cos), self.camera.frame.animate.shift(UP * fh(self))
+        # )
 
         self.wait(2)
 
@@ -1739,5 +1965,85 @@ class ComplexOscillationPhase(MovingCameraScene):
         # self.play(Create(line_to_phi_val))
 
         # self.play(phi @ (PI), run_time=16)
+
+        self.wait(2)
+
+
+class Trig(MovingCameraScene):
+    def construct(self):
+        cos_iden = MathTex(
+            r"\cos{(a)} \cdot \cos{(b)} = \frac{1}{2} \left[\cos{(a - b)} + \cos{(a + b)}\right]"
+        )
+        cos_iden[0][4].set_color(RED)
+        cos_iden[0][22].set_color(RED)
+        cos_iden[0][31].set_color(RED)
+        cos_iden[0][11].set_color(BLUE)
+        cos_iden[0][24].set_color(BLUE)
+        cos_iden[0][33].set_color(BLUE)
+
+        sin_iden = MathTex(
+            r"\cos{(a)} \cdot \sin{(b)} = \frac{1}{2} \left[\sin{(a - b)} + \sin{(a + b)}\right]"
+        )
+        sin_iden[0][4].set_color(RED)
+        sin_iden[0][22].set_color(RED)
+        sin_iden[0][31].set_color(RED)
+        sin_iden[0][11].set_color(BLUE)
+        sin_iden[0][24].set_color(BLUE)
+        sin_iden[0][33].set_color(BLUE)
+        Group(cos_iden, sin_iden).arrange(DOWN, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(cos_iden[0][:6]),
+                GrowFromCenter(cos_iden[0][6]),
+                GrowFromCenter(cos_iden[0][7:13]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                [GrowFromCenter(m) for m in cos_iden[0][13:22]],
+                TransformFromCopy(cos_iden[0][4], cos_iden[0][22], path_arc=PI * 0.7),
+                GrowFromCenter(cos_iden[0][23]),
+                TransformFromCopy(cos_iden[0][11], cos_iden[0][24], path_arc=-PI * 0.7),
+                [GrowFromCenter(m) for m in cos_iden[0][25:31]],
+                TransformFromCopy(cos_iden[0][4], cos_iden[0][31], path_arc=-PI * 0.7),
+                GrowFromCenter(cos_iden[0][32]),
+                TransformFromCopy(cos_iden[0][11], cos_iden[0][33], path_arc=PI * 0.7),
+                [GrowFromCenter(m) for m in cos_iden[0][34:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(sin_iden[0][:6]),
+                GrowFromCenter(sin_iden[0][6]),
+                GrowFromCenter(sin_iden[0][7:13]),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                [GrowFromCenter(m) for m in sin_iden[0][13:22]],
+                TransformFromCopy(sin_iden[0][4], sin_iden[0][22], path_arc=PI * 0.7),
+                GrowFromCenter(sin_iden[0][23]),
+                TransformFromCopy(sin_iden[0][11], sin_iden[0][24], path_arc=-PI * 0.7),
+                [GrowFromCenter(m) for m in sin_iden[0][25:31]],
+                TransformFromCopy(sin_iden[0][4], sin_iden[0][31], path_arc=-PI * 0.7),
+                GrowFromCenter(sin_iden[0][32]),
+                TransformFromCopy(sin_iden[0][11], sin_iden[0][33], path_arc=PI * 0.7),
+                [GrowFromCenter(m) for m in sin_iden[0][34:]],
+                lag_ratio=0.2,
+            )
+        )
 
         self.wait(2)
