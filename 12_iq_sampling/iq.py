@@ -353,7 +353,7 @@ class Intro(MovingCameraScene):
             rcs_label.get_top() + [0, 0.1, 0],
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -727,9 +727,12 @@ class Intro(MovingCameraScene):
                 unknown_cos_sample_arc,
                 unknown_sin_sample,
                 unknown_sin_sample_arc,
-                cos_label,
-                sin_label,
-            )
+            ),
+            LaggedStart(
+                cos_label.animate.shift(UP * 6),
+                sin_label.animate.shift(UP * 6),
+                lag_ratio=0.3,
+            ),
         )
 
         self.wait(0.5)
@@ -758,6 +761,8 @@ class Intro(MovingCameraScene):
                 radius=DEFAULT_DOT_RADIUS * 1.8,
                 color=BLUE,
             )
+            .set_opacity(0 if ~y_val < 0 else 1)
+            .set_z_index(1)
         )
         sin_x_dot_r = always_redraw(
             lambda: Dot(
@@ -767,7 +772,19 @@ class Intro(MovingCameraScene):
                 ),
                 radius=DEFAULT_DOT_RADIUS * 1.8,
                 color=BLUE,
+            ).set_z_index(1)
+        )
+        sin_x_dot_r_2 = always_redraw(
+            lambda: Dot(
+                sin_ax.input_to_graph_point(
+                    (2 * PI + np.arcsin(~y_val)),
+                    sin_plot,
+                ),
+                radius=DEFAULT_DOT_RADIUS * 1.8,
+                color=BLUE,
             )
+            .set_opacity(0 if ~y_val > 0 else 1)
+            .set_z_index(1)
         )
         cos_x_dot_l = always_redraw(
             lambda: Dot(
@@ -777,7 +794,7 @@ class Intro(MovingCameraScene):
                 ),
                 radius=DEFAULT_DOT_RADIUS * 1.8,
                 color=BLUE,
-            )
+            ).set_z_index(1)
         )
         cos_x_dot_r = always_redraw(
             lambda: Dot(
@@ -787,7 +804,7 @@ class Intro(MovingCameraScene):
                 ),
                 radius=DEFAULT_DOT_RADIUS * 1.8,
                 color=BLUE,
-            )
+            ).set_z_index(1)
         )
 
         self.play(
@@ -863,6 +880,335 @@ class Intro(MovingCameraScene):
                 ),
                 lag_ratio=0.3,
             )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(
+                sin_opt_2,
+                sin_opt_2_x,
+                cos_opt_2_x,
+                cos_opt_2,
+                sin_opt_1,
+                sin_opt_1_x,
+                cos_opt_1_x,
+                cos_opt_1,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.add(sin_x_dot_r_2)
+
+        self.play(
+            y_val.animate(rate_func=rate_functions.there_and_back).set_value(-1),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                cos_label.animate.shift(DOWN * 6),
+                sin_label.animate.shift(DOWN * 6),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        doppler_vel = Text("Doppler\nvelocity", font=FONT).scale(0.6)
+        direction = Text("direction", font=FONT).scale(0.6)
+        tiny = Text("tiny\nmovements", font=FONT).scale(0.6)
+        l1_group = (
+            Group(doppler_vel, direction, tiny)
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .next_to(Group(cos_label, sin_label), UP, LARGE_BUFF)
+        )
+        cos_theta_bez = CubicBezier(
+            cos_label[0][4].get_top() + [0, 0.1, 0],
+            cos_label[0][4].get_top() + [0, 0.5, 0],
+            l1_group.get_left() + [-1, -0.5, 0],
+            l1_group.get_left() + [-0.1, 0, 0],
+        )
+        sin_theta_bez = CubicBezier(
+            sin_label[0][4].get_top() + [0, 0.1, 0],
+            sin_label[0][4].get_top() + [0, 0.5, 0],
+            l1_group.get_right() + [1, 0, 0],
+            l1_group.get_right() + [0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(cos_theta_bez), Create(sin_theta_bez)),
+                GrowFromCenter(doppler_vel),
+                GrowFromCenter(direction),
+                GrowFromCenter(tiny),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        ax_group = Group(Group(rx_ax, rx_plot), Group(sin_ax, sin_plot))
+        self.play(
+            Group(
+                cos_label, sin_label, l1_group, cos_theta_bez, sin_theta_bez
+            ).animate.shift(UP * 6),
+            ax_group.animate.arrange(DOWN, MED_LARGE_BUFF).move_to(ax_group),
+        )
+
+        self.wait(0.5)
+
+        vline_1 = DashedLine(
+            rx_ax.c2p(PI / 6, 1),
+            sin_ax.c2p(PI / 6, -1),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        vline_2 = DashedLine(
+            rx_ax.c2p(PI / 3, 1),
+            sin_ax.c2p(PI / 3, -1),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        vline_3 = DashedLine(
+            rx_ax.c2p(5 * PI / 6, 1),
+            sin_ax.c2p(5 * PI / 6, -1),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        vline_4 = DashedLine(
+            rx_ax.c2p(5 * PI / 3, 1),
+            sin_ax.c2p(5 * PI / 3, -1),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(LaggedStart(Create(vline_2), Create(vline_4), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(Create(vline_1), Create(vline_3), lag_ratio=0.3))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        iq_ax = (
+            Axes(
+                x_range=[-1, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=rx_ax.height,
+                y_length=rx_ax.height,
+            )
+            .next_to(ax_group, LEFT)
+            .shift(LEFT * 10)
+        )
+        self.add(ax)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[
+                        FadeOut(m)
+                        for m in [
+                            vline_1,
+                            vline_2,
+                            vline_3,
+                            vline_4,
+                            cos_x_dot_l,
+                            cos_x_dot_r,
+                            sin_x_dot_l,
+                            sin_x_dot_r,
+                            cos_y_line,
+                            sin_y_line,
+                        ]
+                    ],
+                    lag_ratio=0.1,
+                ),
+                Group(iq_ax, ax_group)
+                .animate.arrange(RIGHT, LARGE_BUFF)
+                .move_to(self.camera.frame)
+                .shift(DOWN + LEFT),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        theta_pi = VT(0)
+        theta_label_opacity = VT(0)
+        theta_label_vt = always_redraw(
+            lambda: MathTex(f"\\theta = 0")
+            .next_to(rx_ax, UP, LARGE_BUFF)
+            .set_opacity(~theta_label_opacity)
+        )
+
+        vline_cos = always_redraw(
+            lambda: Line(
+                rx_ax.input_to_graph_point(~theta_pi, rx_plot),
+                rx_ax.c2p(~theta_pi, 0),
+                color=YELLOW,
+            )
+        )
+        vline_sin = always_redraw(
+            lambda: Line(
+                sin_ax.input_to_graph_point(~theta_pi, sin_plot),
+                sin_ax.c2p(~theta_pi, 0),
+                color=YELLOW,
+            )
+        )
+        cos_dot = always_redraw(
+            lambda: Dot(radius=DEFAULT_DOT_RADIUS * 1.8, color=BLUE).move_to(
+                rx_ax.input_to_graph_point(~theta_pi, rx_plot)
+            )
+        )
+        sin_dot = always_redraw(
+            lambda: Dot(radius=DEFAULT_DOT_RADIUS * 1.8, color=BLUE).move_to(
+                sin_ax.input_to_graph_point(~theta_pi, sin_plot)
+            )
+        )
+        cos_label = always_redraw(
+            lambda: MathTex(r"\cos{(\theta)}")
+            .next_to(rx_ax, RIGHT)
+            .set_opacity(~theta_label_opacity)
+        )
+        sin_label = always_redraw(
+            lambda: MathTex(r"\sin{(\theta)}")
+            .next_to(sin_ax, RIGHT)
+            .set_opacity(~theta_label_opacity)
+        )
+        self.add(theta_label_vt, cos_label, sin_label)
+
+        self.play(
+            theta_label_opacity @ 1,
+            Create(vline_cos),
+            Create(vline_sin),
+            Create(cos_dot),
+            Create(sin_dot),
+        )
+
+        self.wait(0.5)
+
+        theta_label = MathTex(f"\\theta = 0").move_to(theta_label_vt)
+        self.remove(theta_label_vt)
+        self.add(theta_label)
+        theta_pi_over_3 = MathTex(r"\theta = \frac{\pi}{3}")
+        theta_pi_over_3.shift(
+            theta_label[0][0].get_center() - theta_pi_over_3[0][0].get_center()
+        )
+
+        self.play(
+            FadeOut(theta_label[0][2], shift=UP),
+            FadeIn(theta_pi_over_3[0][2:], shift=UP),
+            theta_pi @ (PI / 3),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        i_line = Line(iq_ax.c2p(0, 0), iq_ax.c2p(np.cos(PI / 3), 0), color=YELLOW)
+        q_line = Line(iq_ax.c2p(0, 0), iq_ax.c2p(0, np.sin(PI / 3)), color=YELLOW)
+
+        self.play(TransformFromCopy(vline_cos, i_line))
+
+        self.wait(0.5)
+
+        self.play(TransformFromCopy(vline_sin, q_line))
+
+        self.wait(0.5)
+
+        i_line_to_dot = DashedLine(
+            iq_ax.c2p(np.cos(~theta_pi), 0),
+            iq_ax.c2p(np.cos(~theta_pi), np.sin(~theta_pi)),
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+            color=YELLOW,
+        )
+        q_line_to_dot = DashedLine(
+            iq_ax.c2p(0, np.sin(~theta_pi)),
+            iq_ax.c2p(np.cos(~theta_pi), np.sin(~theta_pi)),
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+            color=YELLOW,
+        )
+
+        iq_dot = Dot(color=YELLOW).move_to(
+            iq_ax.c2p(np.cos(~theta_pi), np.sin(~theta_pi))
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(i_line_to_dot), Create(q_line_to_dot)),
+                Create(iq_dot),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        zero = MathTex("0").next_to(rx_ax.c2p(0, 1), UP, MED_LARGE_BUFF)
+        two_pi = MathTex(r"2 \pi").next_to(rx_ax.c2p(2 * PI, 1), UP, MED_LARGE_BUFF)
+        zero_to_2pi = Arrow(zero.get_right(), two_pi.get_left())
+
+        self.play(
+            Group(
+                iq_ax,
+                i_line,
+                q_line,
+                i_line_to_dot,
+                q_line_to_dot,
+                iq_dot,
+            ).animate.shift(DOWN * 8),
+            self.camera.frame.animate.set_x(rx_ax.get_x()),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                cos_label.animate(rate_func=rate_functions.there_and_back)
+                .scale(1.3)
+                .set_color(YELLOW),
+                sin_label.animate(rate_func=rate_functions.there_and_back)
+                .scale(1.3)
+                .set_color(YELLOW),
+                Group(theta_pi_over_3[0][2:], theta_label[0][:2]).animate.shift(UP / 2),
+                GrowFromCenter(zero),
+                GrowArrow(zero_to_2pi),
+                GrowFromCenter(two_pi),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(
+                zero,
+                zero_to_2pi,
+                two_pi,
+                ax_group,
+                theta_label[0][:2],
+                theta_pi_over_3[0][2:],
+            ).animate.shift(RIGHT * 14),
+            # Group(
+            #     iq_ax,
+            #     i_line,
+            #     q_line,
+            #     i_line_to_dot,
+            #     q_line_to_dot,
+            #     iq_dot,
+            # ).animate.shift(UP * 8),
+            # Group(
+            #     theta_label[0][:2],
+            #     theta_pi_over_3[0][2:],
+            # ).animate.next_to(iq_ax, UP, LARGE_BUFF),
+            # self.camera.frame.animate.scale_to_fit_height(iq_ax.height * 2)
+            # .move_to(iq_ax)
+            # .shift(UP),
         )
 
         # self.wait(0.5)
@@ -3203,7 +3549,7 @@ class RealNumbers(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         phi_units_fd_val = MathTex(r"\phi(t) = 2 \pi (200 \text{ Hz}) t + \phi_0")
         phi_units_fd_val[0][:4].set_color(GREEN)
@@ -3236,32 +3582,275 @@ class RealNumbers(MovingCameraScene):
         self.play(phi_units_fd_val[0][5:15].animate.set_color(WHITE))
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
 
         cos_iden_left = (
             MathTex(r"\cos{(a)} \cdot \cos{(b)}").move_to(cos_iden_final).shift(LEFT)
         )
-        cos_iden_phi_sub = MathTex(
-            r"\frac{1}{2} \left[\cos{(2 \pi (200 \text{ Hz}) + \phi_0)} + \cos{(2 \cdot 2 \pi f_c t + (2 \pi (200 \text{ Hz}) + \phi_0))}\right]"
-        ).next_to(cos_iden_final, DOWN, LARGE_BUFF)
-        cos_iden_vals = MathTex(
-            r"\frac{1}{2} \left[\cos{(2 \pi (200 \text{ Hz}) + \phi_0)} + \cos{(2 \cdot 2 \pi (3 \text{ GHz}) t + (2 \pi (200 \text{ Hz}) + \phi_0))}\right]"
-        ).move_to(cos_iden_phi_sub)
+        cos_iden_left[0][4].set_color(RED)
+        cos_iden_left[0][11].set_color(BLUE)
 
-        # self.add(cos_iden_vals)
+        cos_iden_phi_sub = MathTex(
+            r"\frac{1}{2} \left[\cos{(2 \pi (200 \text{ Hz}) t + \phi_0)} + \cos{(2 \cdot 2 \pi f_c t + (2 \pi (200 \text{ Hz}) t + \phi_0))}\right]"
+        ).next_to(cos_iden_final, DOWN, SMALL_BUFF)
+        # cos_iden_phi_sub[0][8:18].set_color(GREEN)
+        cos_iden_vals_1 = (
+            MathTex(r"\frac{1}{2} \left[\cos{(2 \pi (200 \text{ Hz}) t + \phi_0)} +")
+            .move_to(cos_iden_phi_sub, LEFT)
+            .shift(RIGHT)
+        )
+        cos_iden_vals_2 = (
+            MathTex(
+                r"\cos{(2 \cdot 2 \pi (3 \text{ GHz}) t + (2 \pi (200 \text{ Hz}) t + \phi_0))}\right]"
+            )
+            .next_to(cos_iden_vals_1, DOWN, MED_SMALL_BUFF, LEFT)
+            .shift(RIGHT / 2)
+        )
 
         self.play(
             LaggedStart(
                 Uncreate(phi_bez),
+                ReplacementTransform(cos_iden_final[0][14:22], cos_iden_phi_sub[0][:8]),
+                AnimationGroup(
+                    ShrinkToCenter(cos_iden_final[0][22:26]),
+                ),
+                TransformFromCopy(
+                    phi_units_fd_val[0][5:], cos_iden_phi_sub[0][8:21], path_arc=-PI / 3
+                ),
+                *[
+                    ReplacementTransform(a, b, path_arc=PI / 4)
+                    for a, b in zip(
+                        cos_iden_final[0][26:40], cos_iden_phi_sub[0][21:35]
+                    )
+                ],
+                GrowFromCenter(cos_iden_phi_sub[0][35]),
                 ReplacementTransform(
-                    cos_iden_final[0][14:24], cos_iden_phi_sub[0][:10]
+                    phi_units_fd_val[0][5:], cos_iden_phi_sub[0][36:49], path_arc=PI / 3
+                ),
+                AnimationGroup(
+                    ShrinkToCenter(phi_units_fd_val[0][:5]),
+                    ShrinkToCenter(cos_iden_final[0][40:44]),
+                ),
+                GrowFromCenter(cos_iden_phi_sub[0][49]),
+                *[
+                    ReplacementTransform(a, b, path_arc=-PI / 4)
+                    for a, b in zip(cos_iden_final[0][44:], cos_iden_phi_sub[0][50:])
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(fc.animate.set_opacity(1))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(cos_iden_phi_sub[0][:23], cos_iden_vals_1[0]),
+                ReplacementTransform(
+                    cos_iden_phi_sub[0][23:31],
+                    cos_iden_vals_2[0][:8],
+                    path_arc=-PI / 3,
+                ),
+                GrowFromCenter(cos_iden_vals_2[0][8]),
+                ReplacementTransform(
+                    fc[0][3:],
+                    cos_iden_vals_2[0][9:13],
+                    path_arc=PI / 3,
+                ),
+                GrowFromCenter(cos_iden_vals_2[0][13]),
+                AnimationGroup(
+                    ShrinkToCenter(fc[0][:3]),
+                    ShrinkToCenter(cos_iden_phi_sub[0][31:33]),
                 ),
                 ReplacementTransform(
-                    cos_iden_final[0][:14],
-                    cos_iden_left[0],
-                    path_arc=PI / 3,
+                    cos_iden_phi_sub[0][33:],
+                    cos_iden_vals_2[0][14:],
+                    path_arc=-PI / 3,
                 ),
                 lag_ratio=0.3,
             )
         )
 
         self.wait(2)
+
+
+class IQ3D(ThreeDScene):
+    def construct(self):
+        iq_ax = ThreeDAxes(
+            x_range=[-1, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            z_range=[0, 20 * PI, 1],
+            x_length=self.camera.frame_height * 0.5,
+            y_length=self.camera.frame_height * 0.5,
+            z_length=self.camera.frame_height * 0.5 * 2 * PI,
+            tips=False,
+        ).rotate(PI, axis=UP)
+        iq_ax.shift(self.camera.frame_center - iq_ax.c2p(0, 0, 0))
+        self.add(iq_ax)
+
+        theta_pi = VT(PI / 3)
+
+        i_line = always_redraw(
+            lambda: Line(
+                iq_ax.c2p(0, 0, ~theta_pi),
+                iq_ax.c2p(-np.cos(~theta_pi), 0, ~theta_pi),
+                color=YELLOW,
+            )
+        )
+        q_line = always_redraw(
+            lambda: Line(
+                iq_ax.c2p(0, 0, ~theta_pi),
+                iq_ax.c2p(0, np.sin(~theta_pi), ~theta_pi),
+                color=YELLOW,
+            )
+        )
+
+        i_line_to_dot = always_redraw(
+            lambda: DashedLine(
+                iq_ax.c2p(-np.cos(~theta_pi), 0, ~theta_pi),
+                iq_ax.c2p(-np.cos(~theta_pi), np.sin(~theta_pi), ~theta_pi),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+                color=YELLOW,
+            )
+        )
+        q_line_to_dot = always_redraw(
+            lambda: DashedLine(
+                iq_ax.c2p(0, np.sin(~theta_pi), ~theta_pi),
+                iq_ax.c2p(-np.cos(~theta_pi), np.sin(~theta_pi), ~theta_pi),
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+                color=YELLOW,
+            )
+        )
+
+        iq_dot = always_redraw(
+            lambda: Dot(color=YELLOW).move_to(
+                iq_ax.c2p(-np.cos(~theta_pi), np.sin(~theta_pi), ~theta_pi)
+            )
+        )
+
+        iq_path = TracedPath(
+            iq_dot.get_center,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            stroke_color=BLUE,
+            dissipating_time=None,
+        )
+
+        theta_label = always_redraw(
+            lambda: MathTex(f"\\theta = {~theta_pi / PI:.2f} \\pi")
+            .next_to(iq_ax, UP, MED_LARGE_BUFF)
+            .set_z(0)
+            .shift(LEFT)
+        )
+        # self.add_fixed_in_frame_mobjects(theta_label)
+
+        self.add(i_line, q_line, i_line_to_dot, q_line_to_dot, iq_dot, iq_path)
+
+        self.play(
+            FadeIn(theta_label, run_time=1),
+            Group(i_line, q_line, iq_ax, i_line_to_dot, q_line_to_dot, iq_dot, iq_path)
+            .shift(DOWN * 12)
+            .animate(run_time=3)
+            .shift(UP * 12),
+        )
+
+        self.wait(0.5)
+
+        phi, theta, focal_dist, gamma, zoom = self.camera.get_value_trackers()
+        self.play(
+            phi.animate.increment_value(-15 * DEGREES),
+            gamma.animate.increment_value(-30 * DEGREES),
+            theta.animate.increment_value(-30 * DEGREES),
+            run_time=2,
+        )
+
+        self.wait(1)
+
+        self.play(theta_pi @ (20 * PI), run_time=20)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class Cloud(MovingCameraScene):
+    def construct(self):
+        radar = WeatherRadarTower()
+        radar.vgroup.scale(0.6).to_corner(DL, LARGE_BUFF * 1.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(RIGHT, LARGE_BUFF * 1.5)
+            .shift(UP)
+        )
+
+        # self.play(
+        #     radar.vgroup.shift(LEFT * 8).animate.shift(RIGHT * 8),
+        #     cloud.shift(RIGHT * 8).animate.shift(LEFT * 8),
+        # )
+        to_cloud = Line(radar.radome.get_right(), cloud.get_left())
+        ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 1],
+                tips=False,
+                x_length=to_cloud.get_length(),
+                y_length=fh(self, 0.2),
+            )
+            .set_opacity(0)
+            .rotate(to_cloud.get_angle())
+        )
+        ax.shift(radar.radome.get_right() - ax.c2p(0, 0))
+        rtn_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 1],
+                tips=False,
+                x_length=to_cloud.get_length(),
+                y_length=fh(self, 0.2),
+            )
+            .set_opacity(0)
+            .rotate(to_cloud.get_angle() + PI)
+        )
+        rtn_ax.shift(cloud.get_left() - rtn_ax.c2p(0, 0))
+
+        phase_vt = VT(0)
+        sig_x1 = VT(0)
+        A = VT(1)
+        pw = 0.4
+        sig = always_redraw(
+            lambda: ax.plot(
+                lambda t: ~A * np.sin(2 * PI * 3 * t),
+                x_range=[max(0, ~sig_x1 - pw), min(1, ~sig_x1), 1 / 200],
+                use_smoothing=False,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                color=TX_COLOR,
+            )
+        )
+        rtn = always_redraw(
+            lambda: rtn_ax.plot(
+                lambda t: -~A * np.sin(2 * PI * 3 * t + ~phase_vt * PI),
+                x_range=[max(0, (~sig_x1 - 1) - pw), min(1, (~sig_x1 - 1)), 1 / 200],
+                use_smoothing=False,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                color=RX_COLOR,
+            )
+        )
+        self.add(sig, rtn)
+
+        self.play(
+            LaggedStart(
+                cloud.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                AnimationGroup(sig_x1 @ (1.5 + pw / 2), A @ 0.5),
+                lag_ratio=0.5,
+            ),
+            run_time=4,
+        )

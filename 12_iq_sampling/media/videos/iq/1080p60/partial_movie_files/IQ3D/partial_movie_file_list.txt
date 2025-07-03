@@ -1,0 +1,9 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00000.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00001.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00002.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00003.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00004.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00005.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00006.mp4'
+file 'file:/home/marchall/documents/videos/12_iq_sampling/media/videos/iq/1080p60/partial_movie_files/IQ3D/uncached_00007.mp4'
