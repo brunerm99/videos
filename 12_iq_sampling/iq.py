@@ -12,7 +12,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono CN"
 
@@ -2840,6 +2840,428 @@ class Trig(MovingCameraScene):
                     - (cos_iden_final.get_top() + LARGE_BUFF)
                 )
             ),
+        )
+
+        self.wait(2)
+
+
+class RealNumbers(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        cos_iden_final = MathTex(
+            r"\cos{(a)} \cdot \cos{(b)} = \frac{1}{2} \left[\cos{(\phi(t))} + \cos{(2 \cdot 2 \pi f_c t + \phi(t))}\right]"
+        ).to_edge(UP, LARGE_BUFF)
+        cos_iden_final[0][4].set_color(RED)
+        cos_iden_final[0][11].set_color(BLUE)
+        cos_iden_final[0][4 + 14 : 13 + 14].set_color(GREEN)
+
+        self.add(cos_iden_final)
+
+        self.play(
+            LaggedStart(
+                cos_iden_final[0][4 + 14 : 13 + 14].animate.set_color(WHITE),
+                cos_iden_final[0][-10:-8].animate.set_color(GREEN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        fc_units = MathTex(r"f_c = \text{MHz} \rightarrow \text{GHz}")
+        fc_units[0][:2].set_color(GREEN)
+        fc_path = CubicBezier(
+            cos_iden_final[0][-10:-8].get_center(),
+            cos_iden_final[0][-10:-8].get_center() + [0, -2, 0],
+            fc_units[0][:2].get_center() + [0, 2, 0],
+            fc_units[0][:2].get_center(),
+        )
+        fc_bez = CubicBezier(
+            cos_iden_final[0][-10:-8].get_bottom() + [0, -0.1, 0],
+            cos_iden_final[0][-10:-8].get_bottom() + [0, -1, 0],
+            fc_units[0][:2].get_top() + [0, 1, 0],
+            fc_units[0][:2].get_top() + [0, 0.1, 0],
+        )
+        fc = MathTex(r"f_c = 3 \text{ GHz}")
+        fc[0][:2].set_color(GREEN)
+        fc_copy = cos_iden_final[0][-10:-8].copy()
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    MoveAlongPath(fc_copy, fc_path),
+                    Create(fc_bez),
+                    lag_ratio=0.05,
+                ),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in fc_units[0][2:]], lag_ratio=0.1
+                ),
+                lag_ratio=0.4,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                Uncreate(fc_bez),
+                FadeOut(fc_units[0][3:6], shift=DOWN),
+                FadeOut(fc_units[0][6], shift=DOWN),
+                ReplacementTransform(fc_units[0][2], fc[0][2]),
+                ReplacementTransform(fc_copy, fc[0][:2]),
+                ReplacementTransform(fc_units[0][7:], fc[0][4:]),
+                LaggedStart(*[GrowFromCenter(m) for m in fc[0][3]]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            fc.animate.to_corner(DL, LARGE_BUFF).set_opacity(0.2),
+            LaggedStart(
+                cos_iden_final[0][-10:-8].animate.set_color(WHITE),
+                cos_iden_final[0][8 + 14 : 12 + 14].animate.set_color(GREEN),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        v = MathTex(r"v")
+        pm_v = MathTex(r"\pm v")
+        small_movements = MathTex(r"\Delta R \ll 1")
+        based_on_group = (
+            Group(v, pm_v, small_movements)
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .next_to(cos_iden_final[0][8 + 14 : 12 + 14], DOWN, LARGE_BUFF)
+        )
+        based_on_group.shift(
+            RIGHT
+            * (cos_iden_final[0][8 + 14 : 12 + 14].get_center() - pm_v.get_center())
+        )
+
+        v_bez = CubicBezier(
+            cos_iden_final[0][8 + 14 : 12 + 14].get_bottom() + [0, -0.1, 0],
+            cos_iden_final[0][8 + 14 : 12 + 14].get_bottom() + [0, -1, 0],
+            v.get_top() + [0, 1, 0],
+            v.get_top() + [0, 0.1, 0],
+        )
+        pm_v_bez = CubicBezier(
+            cos_iden_final[0][8 + 14 : 12 + 14].get_bottom() + [0, -0.1, 0],
+            cos_iden_final[0][8 + 14 : 12 + 14].get_bottom() + [0, -1, 0],
+            pm_v.get_top() + [0, 1, 0],
+            pm_v.get_top() + [0, 0.1, 0],
+        )
+        small_movements_bez = CubicBezier(
+            cos_iden_final[0][8 + 14 : 12 + 14].get_bottom() + [0, -0.1, 0],
+            cos_iden_final[0][8 + 14 : 12 + 14].get_bottom() + [0, -1, 0],
+            small_movements.get_top() + [0, 1, 0],
+            small_movements.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                Create(v_bez),
+                FadeIn(v),
+                Create(pm_v_bez),
+                FadeIn(pm_v),
+                Create(small_movements_bez),
+                FadeIn(small_movements),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(v_bez),
+            FadeOut(v),
+            Uncreate(pm_v_bez),
+            FadeOut(pm_v),
+            Uncreate(small_movements_bez),
+            FadeOut(small_movements),
+        )
+
+        self.wait(0.5)
+
+        phi_units = MathTex(r"\phi(t) = 2 \pi f_d t + \phi_0")
+        phi_units[0][:4].set_color(GREEN)
+        phi_path = CubicBezier(
+            cos_iden_final[0][22:26].get_center(),
+            cos_iden_final[0][22:26].get_center() + [0, -2, 0],
+            phi_units[0][:4].get_center() + [0, 2, 0],
+            phi_units[0][:4].get_center(),
+        )
+        phi_bez = CubicBezier(
+            cos_iden_final[0][22:26].get_bottom() + [0, -0.1, 0],
+            cos_iden_final[0][22:26].get_bottom() + [0, -1, 0],
+            phi_units[0][:4].get_top() + [0, 1, 0],
+            phi_units[0][:4].get_top() + [0, 0.1, 0],
+        )
+        phi_copy = cos_iden_final[0][22:26].copy()
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    MoveAlongPath(phi_copy, phi_path),
+                    Create(phi_bez),
+                    lag_ratio=0.05,
+                ),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in phi_units[0][4:]], lag_ratio=0.1
+                ),
+                lag_ratio=0.4,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(GREEN) for m in phi_units[0][5:10]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(WHITE) for m in phi_units[0][5:10]],
+                *[m.animate.set_color(GREEN) for m in phi_units[0][11:]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        phi_0_range = MathTex(r"0 \rightarrow 2 \pi").next_to(
+            phi_units[0][11:], DOWN, LARGE_BUFF
+        )
+        phi_0_bez_r = CubicBezier(
+            phi_units[0][11:].get_bottom() + [0, -0.1, 0],
+            phi_units[0][11:].get_bottom() + [0, -0.7, 0],
+            phi_0_range.get_corner(UR) + [0, 0.7, 0],
+            phi_0_range.get_corner(UR) + [0, 0.1, 0],
+        )
+        phi_0_bez_l = CubicBezier(
+            phi_units[0][11:].get_bottom() + [0, -0.1, 0],
+            phi_units[0][11:].get_bottom() + [0, -0.7, 0],
+            phi_0_range.get_corner(UL) + [0, 0.7, 0],
+            phi_0_range.get_corner(UL) + [0, 0.1, 0],
+        )
+
+        self.play(
+            Create(phi_0_bez_r),
+            Create(phi_0_bez_l),
+            FadeIn(phi_0_range, shift=DOWN / 2),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(phi_0_bez_r),
+                    Uncreate(phi_0_bez_l),
+                    FadeOut(phi_0_range, shift=UP / 2),
+                ),
+                LaggedStart(
+                    *[m.animate.set_color(WHITE) for m in phi_units[0][11:][::-1]],
+                    *[m.animate.set_color(GREEN) for m in phi_units[0][5:10][::-1]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        fd_eqn = MathTex(r"f_d = \frac{2 v f_c}{c}").next_to(
+            phi_units[0][5:10], DOWN, LARGE_BUFF
+        )
+        fd_eqn[0][:2].set_color(GREEN)
+        fd_path = CubicBezier(
+            phi_units[0][7:9].get_center(),
+            phi_units[0][7:9].get_center() + [0, -0.7, 0],
+            fd_eqn[0][:2].get_center() + [0, 0.7, 0],
+            fd_eqn[0][:2].get_center(),
+        )
+        fd_bez = CubicBezier(
+            phi_units[0][7:9].get_bottom() + [0, -0.1, 0],
+            phi_units[0][7:9].get_bottom() + [0, -0.7, 0],
+            fd_eqn[0][:2].get_top() + [0, 0.7, 0],
+            fd_eqn[0][:2].get_top() + [0, 0.1, 0],
+        )
+        fd_copy = phi_units[0][7:9].copy()
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    MoveAlongPath(fd_copy, fd_path),
+                    Create(fd_bez),
+                    lag_ratio=0.05,
+                ),
+                LaggedStart(*[GrowFromCenter(m) for m in fd_eqn[0][2:]], lag_ratio=0.1),
+                lag_ratio=0.4,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            fd_eqn[0][4]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(UP / 3)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            fd_eqn[0][8]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(DOWN / 3)
+        )
+
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale(0.6).to_corner(DL, LARGE_BUFF * 1.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(RIGHT, LARGE_BUFF * 1.5)
+            .shift(UP)
+        )
+        radar_group = Group(radar.vgroup, cloud).shift(DOWN * fh(self, 0.65))
+
+        v_val = MathTex(r"\leftarrow v = 10 \text{ m/s}").next_to(cloud, UP)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self, 0.6)),
+                radar_group.shift(DOWN * 5).animate.shift(UP * 5),
+                LaggedStart(
+                    GrowFromCenter(v_val[0][0]),
+                    TransformFromCopy(fd_eqn[0][4], v_val[0][1], path_arc=PI / 2),
+                    *[GrowFromCenter(m) for m in v_val[0][2:]],
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        fd_eqn_val = MathTex(
+            r"f_d = \frac{2 (10 \text{ m/s}) f_c}{c} \approx 200 \text{ Hz}"
+        ).move_to(fd_eqn)
+        fd_eqn_val[0][:2].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                Uncreate(fd_bez),
+                AnimationGroup(
+                    ReplacementTransform(fd_copy, fd_eqn_val[0][:2]),
+                    ReplacementTransform(fd_eqn[0][2:4], fd_eqn_val[0][2:4]),
+                    ReplacementTransform(fd_eqn[0][5:7], fd_eqn_val[0][11:13]),
+                    ReplacementTransform(fd_eqn[0][7], fd_eqn_val[0][13]),
+                    ReplacementTransform(fd_eqn[0][8], fd_eqn_val[0][14]),
+                    ShrinkToCenter(fd_eqn[0][4]),
+                ),
+                AnimationGroup(
+                    GrowFromCenter(fd_eqn_val[0][4]),
+                    GrowFromCenter(fd_eqn_val[0][10]),
+                ),
+                TransformFromCopy(v_val[0][3:], fd_eqn_val[0][5:10], path_arc=PI / 2),
+                LaggedStart(*[GrowFromCenter(m) for m in fd_eqn_val[0][14:]]),
+                lag_ratio=0.4,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.restore(),
+            radar_group.add(v_val).animate.shift(DOWN * 5),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        phi_units_fd_val = MathTex(r"\phi(t) = 2 \pi (200 \text{ Hz}) t + \phi_0")
+        phi_units_fd_val[0][:4].set_color(GREEN)
+        phi_units_fd_val[0][5:15].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(phi_copy, phi_units_fd_val[0][:4]),
+                    ReplacementTransform(phi_units[0][4:7], phi_units_fd_val[0][4:7]),
+                    ReplacementTransform(phi_units[0][9:], phi_units_fd_val[0][14:]),
+                    ShrinkToCenter(phi_units[0][7:9]),
+                ),
+                AnimationGroup(
+                    GrowFromCenter(phi_units_fd_val[0][7]),
+                    GrowFromCenter(phi_units_fd_val[0][13]),
+                ),
+                TransformFromCopy(fd_eqn_val[0][16:], phi_units_fd_val[0][8:13]),
+                FadeOut(fd_eqn_val),
+                lag_ratio=0.3,
+            )
+        )
+
+        phi_units_vals = MathTex(r"\phi(t) = 2 \pi (200 \text{ Hz}) t + \phi_0")
+        phi_units_vals[0][:4].set_color(GREEN)
+        phi_units_vals[0][5:15].set_color(GREEN)
+
+        self.wait(0.5)
+
+        self.play(phi_units_fd_val[0][5:15].animate.set_color(WHITE))
+
+        self.wait(0.5)
+
+        cos_iden_left = (
+            MathTex(r"\cos{(a)} \cdot \cos{(b)}").move_to(cos_iden_final).shift(LEFT)
+        )
+        cos_iden_phi_sub = MathTex(
+            r"\frac{1}{2} \left[\cos{(2 \pi (200 \text{ Hz}) + \phi_0)} + \cos{(2 \cdot 2 \pi f_c t + (2 \pi (200 \text{ Hz}) + \phi_0))}\right]"
+        ).next_to(cos_iden_final, DOWN, LARGE_BUFF)
+        cos_iden_vals = MathTex(
+            r"\frac{1}{2} \left[\cos{(2 \pi (200 \text{ Hz}) + \phi_0)} + \cos{(2 \cdot 2 \pi (3 \text{ GHz}) t + (2 \pi (200 \text{ Hz}) + \phi_0))}\right]"
+        ).move_to(cos_iden_phi_sub)
+
+        # self.add(cos_iden_vals)
+
+        self.play(
+            LaggedStart(
+                Uncreate(phi_bez),
+                ReplacementTransform(
+                    cos_iden_final[0][14:24], cos_iden_phi_sub[0][:10]
+                ),
+                ReplacementTransform(
+                    cos_iden_final[0][:14],
+                    cos_iden_left[0],
+                    path_arc=PI / 3,
+                ),
+                lag_ratio=0.3,
+            )
         )
 
         self.wait(2)
