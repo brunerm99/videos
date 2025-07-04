@@ -3781,7 +3781,7 @@ class IQ3D(ThreeDScene):
 class Cloud(MovingCameraScene):
     def construct(self):
         radar = WeatherRadarTower()
-        radar.vgroup.scale(0.6).to_corner(DL, LARGE_BUFF * 1.5)
+        radar.vgroup.scale(0.6).to_corner(DL, LARGE_BUFF * 1.5).shift(LEFT * 3)
 
         cloud = (
             SVGMobject("../props/static/clouds.svg")
@@ -3789,14 +3789,16 @@ class Cloud(MovingCameraScene):
             .set_color(WHITE)
             .scale(1.2)
             .to_edge(RIGHT, LARGE_BUFF * 1.5)
-            .shift(UP)
+            .shift(UP + RIGHT * 2)
         )
+
+        self.add(radar.vgroup)
 
         # self.play(
         #     radar.vgroup.shift(LEFT * 8).animate.shift(RIGHT * 8),
         #     cloud.shift(RIGHT * 8).animate.shift(LEFT * 8),
         # )
-        to_cloud = Line(radar.radome.get_right(), cloud.get_left())
+        to_cloud = Line(radar.radome.get_center(), cloud.get_left())
         ax = (
             Axes(
                 x_range=[0, 1, 0.5],
@@ -3808,7 +3810,7 @@ class Cloud(MovingCameraScene):
             .set_opacity(0)
             .rotate(to_cloud.get_angle())
         )
-        ax.shift(radar.radome.get_right() - ax.c2p(0, 0))
+        ax.shift(radar.radome.get_center() - ax.c2p(0, 0))
         rtn_ax = (
             Axes(
                 x_range=[0, 1, 0.5],
@@ -3825,32 +3827,118 @@ class Cloud(MovingCameraScene):
         phase_vt = VT(0)
         sig_x1 = VT(0)
         A = VT(1)
-        pw = 0.4
+        f = 2
+        pw = 0.4 / f
         sig = always_redraw(
             lambda: ax.plot(
-                lambda t: ~A * np.sin(2 * PI * 3 * t),
+                lambda t: ~A * np.sin(2 * PI * 3 * f * t),
                 x_range=[max(0, ~sig_x1 - pw), min(1, ~sig_x1), 1 / 200],
                 use_smoothing=False,
                 stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
                 color=TX_COLOR,
-            )
+            ).set_z_index(-2)
         )
         rtn = always_redraw(
             lambda: rtn_ax.plot(
-                lambda t: -~A * np.sin(2 * PI * 3 * t + ~phase_vt * PI),
+                lambda t: -~A * np.sin(2 * PI * 3 * f * t + ~phase_vt * PI),
                 x_range=[max(0, (~sig_x1 - 1) - pw), min(1, (~sig_x1 - 1)), 1 / 200],
                 use_smoothing=False,
                 stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
                 color=RX_COLOR,
-            )
+            ).set_z_index(-2)
         )
         self.add(sig, rtn)
 
+        radome_background = (
+            radar.radome.copy()
+            .set_fill(color=BACKGROUND_COLOR, opacity=1)
+            .move_to(radar.radome)
+            .set_z_index(-1)
+        )
+        self.add(radome_background)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.move_to(radar.radome))
+        self.add(cloud)
+
+        self.wait(0.5)
+
+        def cam_updater(m):
+            m.move_to(
+                ax.c2p(max(~sig_x1 - pw / 2, 0), 0)
+                if ~sig_x1 < 1
+                else rtn_ax.c2p(max(~sig_x1 - 1 - pw / 2, 0), 0)
+            )
+
+        self.camera.frame.add_updater(cam_updater)
+
+        self.play(AnimationGroup(sig_x1 @ (1.5 + pw / 2), A @ 0.5), run_time=6)
+
+        self.wait(0.5)
+
+        eqn = (
+            MathTex(r"s(t) = A(t) \cos{(2 \pi f_c t + \phi(t))}")
+            .scale(1.3)
+            .next_to(rtn, UP)
+        )
+
+        self.play(LaggedStart(*[FadeIn(m) for m in eqn[0]], lag_ratio=0.03))
+        self.add(eqn)
+
+        self.wait(0.5)
+
         self.play(
             LaggedStart(
-                cloud.shift(RIGHT * 10).animate.shift(LEFT * 10),
-                AnimationGroup(sig_x1 @ (1.5 + pw / 2), A @ 0.5),
-                lag_ratio=0.5,
-            ),
-            run_time=4,
+                *[m.animate.set_color(YELLOW) for m in eqn[0][19:23]],
+                lag_ratio=0.1,
+            )
         )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(WHITE) for m in eqn[0][19:23][::-1]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.camera.frame.remove_updater(cam_updater)
+        self.wait(0.5)
+
+        both = MathTex(r"A(t)\cos{(\cdot)}, A(t)\sin{(\cdot)}")
+        both.next_to(eqn[0][5:], UP, LARGE_BUFF * 2)
+        brace = BraceBetweenPoints(both.get_corner(DL), both.get_corner(DR), DOWN)
+        brace_arrow = Arrow(eqn[0][5:].get_top(), brace.get_bottom())
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP),
+                GrowArrow(brace_arrow),
+                FadeIn(brace, shift=UP / 3),
+                FadeIn(both[0][:10]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(both[0][10:]))
+
+        self.wait(0.5)
+
+        phi_box = SurroundingRectangle(eqn[0][19:23])
+        inner_box = SurroundingRectangle(eqn[0][13:23])
+
+        self.play(Create(phi_box))
+
+        self.wait(0.5)
+
+        self.play(ReplacementTransform(phi_box, inner_box))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.2)))
+
+        self.wait(2)
