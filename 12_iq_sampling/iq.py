@@ -12,7 +12,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono CN"
 
@@ -1104,10 +1104,18 @@ class Intro(MovingCameraScene):
             theta_label[0][0].get_center() - theta_pi_over_3[0][0].get_center()
         )
 
+        sin_val = MathTex(r"\frac{\sqrt{3}}{2}").next_to(
+            sin_ax.input_to_graph_point(PI / 3, sin_plot), UP
+        )
+        cos_val = MathTex(r"\frac{1}{2}").next_to(
+            rx_ax.input_to_graph_point(PI / 3, rx_plot), UP
+        )
+
         self.play(
             FadeOut(theta_label[0][2], shift=UP),
             FadeIn(theta_pi_over_3[0][2:], shift=UP),
             theta_pi @ (PI / 3),
+            FadeIn(sin_val, cos_val),
         )
 
         self.wait(0.5)
@@ -1116,11 +1124,20 @@ class Intro(MovingCameraScene):
         i_line = Line(iq_ax.c2p(0, 0), iq_ax.c2p(np.cos(PI / 3), 0), color=YELLOW)
         q_line = Line(iq_ax.c2p(0, 0), iq_ax.c2p(0, np.sin(PI / 3)), color=YELLOW)
 
-        self.play(TransformFromCopy(vline_cos, i_line))
+        sin_val_iq = MathTex(r"\frac{\sqrt{3}}{2}").next_to(q_line.get_end(), LEFT)
+        cos_val_iq = MathTex(r"\frac{1}{2}").next_to(i_line.get_end(), DOWN)
+
+        self.play(
+            TransformFromCopy(vline_cos, i_line),
+            ReplacementTransform(cos_val, cos_val_iq),
+        )
 
         self.wait(0.5)
 
-        self.play(TransformFromCopy(vline_sin, q_line))
+        self.play(
+            TransformFromCopy(vline_sin, q_line),
+            ReplacementTransform(sin_val, sin_val_iq),
+        )
 
         self.wait(0.5)
 
@@ -1163,6 +1180,8 @@ class Intro(MovingCameraScene):
                 i_line_to_dot,
                 q_line_to_dot,
                 iq_dot,
+                cos_val_iq,
+                sin_val_iq,
             ).animate.shift(DOWN * 8),
             self.camera.frame.animate.set_x(rx_ax.get_x()),
         )
@@ -4250,7 +4269,7 @@ class SineFilter(MovingCameraScene):
 
         arrow_2 = Arrow(sin_iden_plugged.get_right(), sum_ax.get_left())
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -4375,6 +4394,87 @@ class SineFilter(MovingCameraScene):
         q_label = Text("Quadrature", font=FONT).next_to(sin_lpf_ax, LEFT, LARGE_BUFF)
 
         self.play(Write(i_label), Write(q_label))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    cos_phi_val[0][17:22].animate.set_color(WHITE),
+                    sin_phi_val[0][17:22].animate.set_color(WHITE),
+                ),
+                i_label.animate.set_color(GREEN),
+                cos_lpf_plot.animate.set_stroke(color=GREEN),
+                q_label.animate.set_color(BLUE),
+                lpf_plot.animate.set_stroke(color=BLUE),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        cos_1_line = DashedLine(
+            cos_lpf_ax.input_to_graph_point(0, cos_lpf_plot) + [0, 1, 0],
+            cos_lpf_ax.input_to_graph_point(0, cos_lpf_plot),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+        )
+        sin_1_line = DashedLine(
+            [
+                sin_lpf_ax.input_to_graph_point(0.25, lpf_plot)[0],
+                (cos_lpf_ax.input_to_graph_point(0, cos_lpf_plot) + [0, 1, 0])[1],
+                0,
+            ],
+            sin_lpf_ax.input_to_graph_point(0.25, lpf_plot),
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+        )
+        quad_line = Line(
+            cos_1_line.get_start() + [0, -0.08, 0],
+            sin_1_line.get_start() + [0, -0.08, 0],
+            color=YELLOW,
+        )
+        quad_label = MathTex(r"\frac{\lambda}{4}").next_to(quad_line, UP)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Group(cos_phi_val, sin_phi_val).animate.shift(RIGHT * 2),
+                    self.camera.frame.animate.scale(1.2).shift(UP * 0.7),
+                ),
+                Create(cos_1_line),
+                Create(quad_line),
+                Create(sin_1_line),
+                FadeIn(quad_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        iq_label = Text("I/Q Sampling", font=FONT).next_to(
+            self.camera.frame.get_top(), UP, LARGE_BUFF
+        )
+        iq_label[0].set_color(GREEN)
+        iq_label[2].set_color(BLUE)
+
+        all_group = Group(iq_label, cos_lpf_ax, sin_lpf_ax, i_label, q_label)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    all_group.height * 1.2
+                ).move_to(all_group),
+                TransformFromCopy(i_label[0], iq_label[0], path_arc=PI / 3),
+                FadeIn(iq_label[1]),
+                TransformFromCopy(q_label[0], iq_label[2], path_arc=PI / 3),
+                FadeIn(iq_label[3:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
 
         self.wait(2)
 
