@@ -7,14 +7,16 @@ from MF_Tools import VT
 from scipy.interpolate import interp1d
 
 sys.path.insert(0, "..")
-from props import WeatherRadarTower
+from props import WeatherRadarTower, get_blocks
 from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
+
+BLOCKS = get_blocks()
 
 
 def skip_animations(b):
@@ -2317,7 +2319,74 @@ class ComplexOscillationPhase(MovingCameraScene):
 
 class Trig(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
+
+        lo_ax = Axes(
+            x_range=[0, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fw(self, 0.25),
+            y_length=fh(self, 0.4),
+        )
+        rf_ax = Axes(
+            x_range=[0, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fw(self, 0.25),
+            y_length=fh(self, 0.4),
+        )
+        if_ax = Axes(
+            x_range=[0, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=fw(self, 0.25),
+            y_length=fh(self, 0.4),
+        )
+        times = MathTex(r"\times").scale(1.5)
+        equal = MathTex(r"=").scale(1.5)
+        mult_group = (
+            Group(rf_ax, times, lo_ax, equal, if_ax)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .scale_to_fit_width(fw(self, 0.9))
+        )
+
+        lo_plot = lo_ax.plot(
+            lambda t: np.sin(2 * PI * 12 * t),
+            color=TX_COLOR,
+            x_range=[0, 1, 1 / 200],
+        )
+        rf_plot = rf_ax.plot(
+            lambda t: np.sin(2 * PI * 1 * t),
+            color=RX_COLOR,
+            x_range=[0, 1, 1 / 200],
+        )
+
+        if_plot = if_ax.plot(
+            lambda t: np.sin(2 * PI * 12 * t) * np.sin(2 * PI * 1 * t),
+            color=IF_COLOR,
+            x_range=[0, 1, 1 / 200],
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(Create(rf_ax), Create(rf_plot), lag_ratio=0.3),
+                GrowFromCenter(times),
+                LaggedStart(Create(lo_ax), Create(lo_plot), lag_ratio=0.3),
+                GrowFromCenter(equal),
+                LaggedStart(Create(if_ax), Create(if_plot), lag_ratio=0.3),
+                lag_ratio=0.3,
+            )
+        )
+
+        common_trig = Text("Trig Identities", font=FONT).to_edge(UP, MED_LARGE_BUFF)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(FadeOut(*mult_group, rf_plot, if_plot, lo_plot))
+
+        self.wait(0.5)
+
         cos_iden = MathTex(
             r"\cos{(a)} \cdot \cos{(b)} = \frac{1}{2} \left[\cos{(a - b)} + \cos{(a + b)}\right]"
         )
@@ -2340,15 +2409,18 @@ class Trig(MovingCameraScene):
         Group(cos_iden, sin_iden).arrange(DOWN, LARGE_BUFF)
 
         self.play(
+            common_trig.shift(UP * 5).animate(run_time=1).shift(DOWN * 5),
             LaggedStart(
                 GrowFromCenter(cos_iden[0][:6]),
                 GrowFromCenter(cos_iden[0][6]),
                 GrowFromCenter(cos_iden[0][7:13]),
                 lag_ratio=0.4,
-            )
+                run_time=2,
+            ),
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -2425,6 +2497,12 @@ class Trig(MovingCameraScene):
             )
         )
         self.add(cos_ax, cos_plot)
+
+        self.play(common_trig.animate.shift(UP * 5))
+
+        self.remove(common_trig)
+
+        self.wait(0.5)
 
         self.add(cos_iden, sin_iden)
         self.play(
@@ -3100,7 +3178,7 @@ class Trig(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -3179,7 +3257,9 @@ class Trig(MovingCameraScene):
         self.play(
             ReplacementTransform(cos_iden[0][:14], cos_iden_final[0][:14]),
             ReplacementTransform(cos_iden_simplified[0], cos_iden_final[0][13:]),
-            self.camera.frame.animate.shift(
+            self.camera.frame.animate.scale_to_fit_width(
+                cos_iden_final.width * 1.5
+            ).shift(
                 DOWN
                 * (
                     self.camera.frame.get_top()
@@ -3200,6 +3280,11 @@ class RealNumbers(MovingCameraScene):
         cos_iden_final[0][4].set_color(RED)
         cos_iden_final[0][11].set_color(BLUE)
         cos_iden_final[0][4 + 14 : 13 + 14].set_color(GREEN)
+
+        self.camera.frame.scale_to_fit_width(cos_iden_final.width * 1.5).shift(
+            DOWN
+            * (self.camera.frame.get_top() - (cos_iden_final.get_top() + LARGE_BUFF))
+        )
 
         self.add(cos_iden_final)
 
@@ -3499,7 +3584,7 @@ class RealNumbers(MovingCameraScene):
         self.camera.frame.save_state()
         self.play(
             LaggedStart(
-                self.camera.frame.animate.shift(DOWN * fh(self, 0.6)),
+                self.camera.frame.animate.shift(DOWN * fh(self, 0.4)),
                 radar_group.shift(DOWN * 5).animate.shift(UP * 5),
                 LaggedStart(
                     GrowFromCenter(v_val[0][0]),
@@ -3582,7 +3667,7 @@ class RealNumbers(MovingCameraScene):
         self.play(phi_units_fd_val[0][5:15].animate.set_color(WHITE))
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         cos_iden_left = (
             MathTex(r"\cos{(a)} \cdot \cos{(b)}").move_to(cos_iden_final).shift(LEFT)
@@ -3606,6 +3691,7 @@ class RealNumbers(MovingCameraScene):
             .next_to(cos_iden_vals_1, DOWN, MED_SMALL_BUFF, LEFT)
             .shift(RIGHT / 2)
         )
+        self.next_section(skip_animations=skip_animations(False))
 
         self.play(
             LaggedStart(
@@ -3617,12 +3703,11 @@ class RealNumbers(MovingCameraScene):
                 TransformFromCopy(
                     phi_units_fd_val[0][5:], cos_iden_phi_sub[0][8:21], path_arc=-PI / 3
                 ),
-                *[
-                    ReplacementTransform(a, b, path_arc=PI / 4)
-                    for a, b in zip(
-                        cos_iden_final[0][26:40], cos_iden_phi_sub[0][21:35]
-                    )
-                ],
+                ReplacementTransform(
+                    cos_iden_final[0][26:40],
+                    cos_iden_phi_sub[0][21:35],
+                    path_arc=PI / 4,
+                ),
                 GrowFromCenter(cos_iden_phi_sub[0][35]),
                 ReplacementTransform(
                     phi_units_fd_val[0][5:], cos_iden_phi_sub[0][36:49], path_arc=PI / 3
@@ -3641,7 +3726,7 @@ class RealNumbers(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(fc.animate.set_opacity(1))
 
@@ -3674,6 +3759,622 @@ class RealNumbers(MovingCameraScene):
                 lag_ratio=0.3,
             )
         )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        cos_iden_vals_2_fs = MathTex(
+            r"\cos{(2 \cdot 2 \pi (3 \text{ GHz} + 200 \text{ Hz}) t + \phi_0)}\right]"
+        ).move_to(cos_iden_vals_2, LEFT)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(
+                    cos_iden_vals_2[0][:13], cos_iden_vals_2_fs[0][:13]
+                ),
+                FadeOut(cos_iden_vals_2[0][13:15]),
+                ReplacementTransform(cos_iden_vals_2[0][15], cos_iden_vals_2_fs[0][13]),
+                FadeOut(cos_iden_vals_2[0][16:20]),
+                FadeOut(cos_iden_vals_2[0][31]),
+                ReplacementTransform(
+                    cos_iden_vals_2[0][20:31], cos_iden_vals_2_fs[0][14:25]
+                ),
+                ReplacementTransform(
+                    cos_iden_vals_2[0][32:], cos_iden_vals_2_fs[0][25:]
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        self.add(cos_iden_vals_2_fs)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        lf_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.2),
+        )
+        hf_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.2),
+        )
+        Group(lf_ax, hf_ax).arrange(DOWN, MED_SMALL_BUFF).next_to(
+            self.camera.frame.get_bottom(), UP, 0
+        )
+        lf_plot = lf_ax.plot(
+            lambda t: np.cos(2 * PI * 1 * t), color=GREEN, x_range=[0, 1, 1 / 200]
+        )
+        hf_plot = hf_ax.plot(
+            lambda t: np.cos(2 * PI * 30 * t), color=PURPLE, x_range=[0, 1, 1 / 1000]
+        )
+        sum_plot = lf_ax.plot(
+            lambda t: np.cos(2 * PI * 30 * t) + np.cos(2 * PI * 1 * t),
+            color=ORANGE,
+            x_range=[0, 1, 1 / 1000],
+        ).shift((hf_ax.c2p(0, 0) - lf_ax.c2p(0, 0)) / 2)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN),
+                Create(hf_ax),
+                cos_iden_vals_2_fs[0][9:19].animate.set_color(PURPLE),
+                Create(lf_ax),
+                cos_iden_vals_1[0][11:16].animate.set_color(GREEN),
+                Create(hf_plot),
+                Create(lf_plot),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(hf_ax, hf_plot).animate.shift(
+                (lf_ax.c2p(0, 0) - hf_ax.c2p(0, 0)) / 2
+            ),
+            Group(lf_ax, lf_plot).animate.shift(
+                (hf_ax.c2p(0, 0) - lf_ax.c2p(0, 0)) / 2
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(hf_plot, sum_plot),
+            FadeOut(lf_plot),
+            # cos_iden_vals_2_fs[0][9:19].animate.set_color(ORANGE),
+        )
+
+        self.wait(0.5)
+
+        phase_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.2),
+        )
+        self.remove(hf_ax)
+        self.next_section(skip_animations=skip_animations(True))
+
+        plus = Text("+", font=FONT).scale(1.5).next_to(sum_plot, UP, MED_LARGE_BUFF)
+
+        lf_ax_2 = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.2),
+        )
+        hf_ax_2 = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.2),
+        )
+        plot_group = (
+            Group(lf_ax_2, hf_ax_2)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(plus, UP, LARGE_BUFF)
+        )
+        lf_plot_2 = lf_ax_2.plot(
+            lambda t: np.cos(2 * PI * 1 * t), color=GREEN, x_range=[0, 1, 1 / 200]
+        )
+        hf_plot_2 = hf_ax_2.plot(
+            lambda t: np.cos(2 * PI * 30 * t), color=PURPLE, x_range=[0, 1, 1 / 1000]
+        )
+
+        phase_term = (
+            MathTex(r"200 \text{ Hz}")
+            .set_color(GREEN)
+            .next_to(plot_group[0], UP, MED_LARGE_BUFF)
+        )
+        phase_and_fc_term = (
+            MathTex(r"3 \text{ GHz} + 200 \text{ Hz}")
+            .set_color(PURPLE)
+            .next_to(plot_group[1], UP, MED_LARGE_BUFF)
+        )
+
+        lf_bez = CubicBezier(
+            lf_ax_2.get_bottom() + [0, -0.1, 0],
+            lf_ax_2.get_bottom() + [0, -1, 0],
+            plus.get_left() + [-1, 0, 0],
+            plus.get_left() + [-0.1, 0, 0],
+        )
+        hf_bez = CubicBezier(
+            hf_ax_2.get_bottom() + [0, -0.1, 0],
+            hf_ax_2.get_bottom() + [0, -1, 0],
+            plus.get_right() + [1, 0, 0],
+            plus.get_right() + [0.1, 0, 0],
+        )
+        equal_line = Arrow(
+            plus.get_bottom(), [plus.get_bottom()[0], lf_ax.get_top()[1], 0]
+        )
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    cos_iden_vals_1[0][:11],
+                    cos_iden_vals_1[0][16:],
+                    cos_iden_vals_2_fs[0][:9],
+                    cos_iden_vals_2_fs[0][19:],
+                    cos_iden_final[0][:14],
+                ),
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(phase_term, phase_and_fc_term, plot_group, sum_plot).width
+                    * 1.1
+                ).move_to(Group(phase_term, phase_and_fc_term, sum_plot, plot_group)),
+                Group(sum_plot, lf_ax).animate.shift(DOWN),
+                AnimationGroup(
+                    ReplacementTransform(
+                        cos_iden_vals_2_fs[0][9:19], phase_and_fc_term[0]
+                    ),
+                    ReplacementTransform(cos_iden_vals_1[0][11:16], phase_term[0]),
+                ),
+                AnimationGroup(
+                    LaggedStart(Create(lf_ax_2), Create(lf_plot_2)),
+                    LaggedStart(Create(hf_ax_2), Create(hf_plot_2)),
+                ),
+                AnimationGroup(Create(lf_bez), Create(hf_bez)),
+                GrowFromCenter(plus),
+                GrowArrow(equal_line),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Indicate(Group(phase_term[0], lf_ax_2, lf_plot_2)))
+
+        self.wait(0.5)
+
+        self.play(Indicate(Group(phase_and_fc_term[0], hf_ax_2, hf_plot_2)))
+
+        self.wait(0.5)
+
+        lpf_block = (
+            BLOCKS.get("lp_filter").copy().next_to(lf_ax, RIGHT, LARGE_BUFF * 1.5)
+        )
+        lpf_label = (
+            Group(
+                Text("Low-Pass", font=FONT),
+                Text("Filter", font=FONT),
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(lpf_block, UP)
+        )
+        lpf_arrow_l = Arrow(lf_ax.get_right(), lpf_block.get_left(), buff=SMALL_BUFF)
+
+        lpf_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=lf_ax.width,
+            y_length=lf_ax.height,
+        ).next_to(lpf_block, RIGHT, LARGE_BUFF * 1.5)
+        lpf_plot = lpf_ax.plot(
+            lambda t: np.cos(2 * PI * 1 * t), color=ORANGE, x_range=[0, 1, 1 / 200]
+        )
+        lpf_arrow_r = Arrow(lpf_block.get_right(), lpf_ax.get_left(), buff=SMALL_BUFF)
+
+        lpf_group = Group(lpf_arrow_l, lpf_block, lpf_label, lf_ax, lpf_ax)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.remove(*v_val[0], cloud, *radar.vgroup)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    *[
+                        m.animate.set_stroke(opacity=0.2)
+                        for m in [
+                            lf_plot_2,
+                            lf_ax_2,
+                            hf_ax_2,
+                            hf_plot_2,
+                            hf_bez,
+                            lf_bez,
+                        ]
+                    ],
+                    *[
+                        m.animate.set_opacity(0.2)
+                        for m in [
+                            plus,
+                            equal_line,
+                            phase_term[0],
+                            phase_and_fc_term[0],
+                        ]
+                    ],
+                ),
+                self.camera.frame.animate.scale_to_fit_width(
+                    lpf_group.width * 1.2
+                ).move_to(lpf_group),
+                GrowArrow(lpf_arrow_l),
+                GrowFromCenter(lpf_block),
+                FadeIn(lpf_label, shift=DOWN),
+                GrowArrow(lpf_arrow_r),
+                Create(lpf_ax),
+                lag_ratio=0.4,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(lpf_plot))
+
+        self.wait(0.5)
+
+        self.play(
+            Group(
+                lf_ax,
+                sum_plot,
+                lpf_block,
+                lpf_arrow_l,
+                lpf_arrow_r,
+                lpf_ax,
+                lpf_plot,
+                lpf_label,
+            ).animate.shift(
+                RIGHT * (plus.get_center() - lpf_block.get_center()) + DOWN
+            ),
+            self.camera.frame.animate.scale(0.9).move_to(plus).shift(DOWN),
+            *[
+                m.animate.set_stroke(opacity=1)
+                for m in [
+                    lf_plot_2,
+                    lf_ax_2,
+                    hf_ax_2,
+                    hf_plot_2,
+                ]
+            ],
+            *[
+                m.animate.set_opacity(1)
+                for m in [
+                    phase_term[0],
+                    phase_and_fc_term[0],
+                ]
+            ],
+            FadeOut(
+                plus,
+                equal_line,
+                hf_bez,
+                lf_bez,
+            ),
+        )
+
+        self.wait(0.5)
+
+        hf_bez = CubicBezier(
+            hf_ax_2.get_bottom() + [0, -0.1, 0],
+            hf_ax_2.get_bottom() + [0, -3, 0],
+            lpf_ax.get_top() + [1, 3, 0],
+            lpf_ax.get_top() + [1, 0.1, 0],
+        )
+        lf_bez = CubicBezier(
+            lf_ax_2.get_bottom() + [0, -0.1, 0],
+            lf_ax_2.get_bottom() + [0, -3, 0],
+            lpf_ax.get_top() + [-1, 3, 0],
+            lpf_ax.get_top() + [-1, 0.1, 0],
+        )
+        lf_check = (
+            MathTex(r"\textbf{\checkmark}")
+            .set_color(GREEN)
+            .scale(2.5)
+            .move_to(lf_bez.get_midpoint())
+        )
+        lf_check_bg = BackgroundRectangle(lf_check, buff=SMALL_BUFF, corner_radius=0.3)
+        lf_check_group = Group(lf_check_bg, lf_check)
+        hf_x = (
+            MathTex(r"\textbf{$\times$}")
+            .set_color(RED)
+            .scale(2.5)
+            .move_to(hf_bez.get_midpoint())
+        )
+        hf_x_bg = BackgroundRectangle(hf_x, buff=SMALL_BUFF, corner_radius=0.3)
+        hf_x_group = Group(hf_x_bg, hf_x)
+
+        self.play(
+            LaggedStart(
+                Create(lf_bez),
+                GrowFromCenter(lf_check_group),
+                Create(hf_bez),
+                GrowFromCenter(hf_x_group),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            *[m.animate.set_stroke(opacity=0.2) for m in [hf_ax_2, hf_plot_2, hf_bez]],
+            *[m.animate.set_opacity(0.2) for m in [phase_and_fc_term[0], hf_x]],
+        )
+
+        self.wait(0.5)
+
+        phi_val = MathTex(
+            r"\cos{(\phi(t)}) = \cos{(2 \pi (200 \text{ Hz}) t + \phi_0})"
+        ).move_to(phase_term[0])
+        phi_val[0][17:22].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(phase_term[0], phi_val[0][17:22]),
+                *[GrowFromCenter(m) for m in phi_val[0][:17]],
+                *[GrowFromCenter(m) for m in phi_val[0][22:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.add(phi_val)
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(lf_bez),
+                Uncreate(hf_bez),
+                FadeOut(lf_check, lf_check_bg, hf_x, hf_x_bg),
+                phi_val.animate.next_to(lpf_ax, UP, MED_LARGE_BUFF),
+                self.camera.frame.animate.scale_to_fit_width(
+                    lpf_ax.width * 1.2
+                ).move_to(lpf_ax),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate(rate_func=rate_functions.ease_in_sine).shift(
+                UP * fh(self, 3)
+            )
+        )
+
+        # self.play(
+        #     LaggedStart(
+        #         self.camera.frame.animate.scale_to_fit_width(
+        #             Group(phase_term, phase_and_fc_term, phase_plot).width * 1.2
+        #         ).move_to(Group(phase_term, phase_and_fc_term, phase_plot)),
+        #         FadeOut(
+        #             cos_iden_vals_1[0][:11],
+        #             cos_iden_vals_1[0][16:],
+        #             cos_iden_vals_2_fs[0][:9],
+        #             cos_iden_vals_2_fs[0][19:],
+        #             cos_iden_final[0][:14],
+        #         ),
+        #         Group(sum_plot, lf_ax).animate.move_to(plot_group[1]),
+        #         ReplacementTransform(cos_iden_vals_2_fs[0][9:19], phase_and_fc_term[0]),
+        #         ReplacementTransform(cos_iden_vals_1[0][11:16], phase_term[0]),
+        #         LaggedStart(Create(phase_ax), Create(phase_plot), lag_ratio=0.2),
+        #         lag_ratio=0.5,
+        #     ),
+        #     run_time=3,
+        # )
+
+        # self.wait(0.5)
+
+        # phase_term_box = SurroundingRectangle(phase_term)
+        # phase_and_fc_term_box = SurroundingRectangle(phase_and_fc_term)
+
+        # self.play(Create(phase_term_box))
+
+        # self.wait(0.5)
+
+        # self.play(ReplacementTransform(phase_term_box, phase_and_fc_term_box))
+
+        self.wait(2)
+
+
+class SineFilter(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        sin_iden = MathTex(
+            r"\cos{(a)} \cdot \sin{(b)} = \frac{1}{2} \left[\sin{(a - b)} + \sin{(a + b)}\right]"
+        )
+        sin_iden[0][4].set_color(RED)
+        sin_iden[0][22].set_color(RED)
+        sin_iden[0][31].set_color(RED)
+        sin_iden[0][11].set_color(BLUE)
+        sin_iden[0][24].set_color(BLUE)
+        sin_iden[0][33].set_color(BLUE)
+
+        self.add(sin_iden)
+
+        self.play(
+            self.camera.frame.shift(DOWN * fh(self))
+            .animate(rate_func=rate_functions.ease_out_sine)
+            .shift(UP * fh(self))
+        )
+
+        self.wait(0.5)
+
+        # TODO: add coloring
+        sin_iden_plugged = MathTex(
+            r"\cos{(2 \pi f_c t + \phi(t))} \cdot \sin{(2 \pi f_c t)} =\frac{1}{2} \left[\sin{(2 \pi f_c t + \phi(t) - 2 \pi f_c t)} + \sin{(2 \pi f_c t + \phi(t) + 2 \pi f_c t)}\right]"
+        ).next_to(sin_iden, RIGHT, LARGE_BUFF * 2)
+        arrow_1 = Arrow(sin_iden.get_right(), sin_iden_plugged.get_left())
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=6).move_to(sin_iden_plugged[0][-1]),
+                GrowArrow(arrow_1),
+                LaggedStart(*[FadeIn(m) for m in sin_iden_plugged[0]], lag_ratio=0.05),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        sum_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.2),
+        ).next_to(sin_iden_plugged, RIGHT, LARGE_BUFF * 2)
+        sum_plot = sum_ax.plot(
+            lambda t: np.sin(2 * PI * 30 * t) + np.sin(2 * PI * 1 * t),
+            color=ORANGE,
+            x_range=[0, 1, 1 / 1000],
+        )
+
+        arrow_2 = Arrow(sin_iden_plugged.get_right(), sum_ax.get_left())
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=2).move_to(sum_ax),
+                GrowArrow(arrow_2),
+                Create(sum_ax),
+                Create(sum_plot),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        lpf_block = (
+            BLOCKS.get("lp_filter").copy().next_to(sum_ax, RIGHT, LARGE_BUFF * 2)
+        )
+        arrow_3 = Arrow(sum_ax.get_right(), lpf_block.get_left())
+        lpf_label = (
+            Group(
+                Text("Low-Pass", font=FONT),
+                Text("Filter", font=FONT),
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(lpf_block, UP)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=2).move_to(lpf_block),
+                GrowArrow(arrow_3),
+                GrowFromCenter(lpf_block),
+                FadeIn(lpf_label, shift=DOWN),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        sin_lpf_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.4),
+        ).next_to(lpf_block, RIGHT, LARGE_BUFF * 2)
+        lpf_plot = sin_lpf_ax.plot(
+            lambda t: np.sin(2 * PI * 1 * t), color=ORANGE, x_range=[0, 1, 1 / 200]
+        )
+
+        arrow_4 = Arrow(lpf_block.get_right(), sin_lpf_ax.get_left())
+
+        sin_phi_val = MathTex(
+            r"\sin{(\phi(t)}) = \sin{(2 \pi (200 \text{ Hz}) t + \phi_0})"
+        ).next_to(sin_lpf_ax, UP)
+        sin_phi_val[0][17:22].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=2).move_to(sin_lpf_ax),
+                GrowArrow(arrow_4),
+                Create(sin_lpf_ax),
+                Create(lpf_plot, shift=DOWN),
+                FadeIn(sin_phi_val, shift=DOWN),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        cos_lpf_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.6),
+            y_length=fh(self, 0.4),
+        ).next_to(sin_lpf_ax, UP, LARGE_BUFF)
+        cos_lpf_plot = cos_lpf_ax.plot(
+            lambda t: np.cos(2 * PI * 1 * t), color=ORANGE, x_range=[0, 1, 1 / 200]
+        )
+        cos_phi_val = MathTex(
+            r"\cos{(\phi(t)}) = \cos{(2 \pi (200 \text{ Hz}) t + \phi_0})"
+        ).next_to(cos_lpf_ax, UP)
+        cos_phi_val[0][17:22].set_color(GREEN)
+
+        lpf_group = Group(sin_lpf_ax, sin_phi_val, cos_phi_val, cos_lpf_ax)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    *[
+                        m.animate.set_opacity(0.2)
+                        for m in [
+                            arrow_4,
+                            arrow_3,
+                            lpf_block,
+                            *lpf_label,
+                        ]
+                    ]
+                ),
+                self.camera.frame.animate.scale_to_fit_height(
+                    lpf_group.height * 1.2
+                ).move_to(lpf_group),
+                FadeIn(cos_phi_val),
+                Create(cos_lpf_ax),
+                Create(cos_lpf_plot),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.shift(RIGHT * fw(self)),
+            Group(*lpf_group, lpf_plot, cos_lpf_plot).animate.shift(
+                RIGHT * (fw(self) + 3)
+            ),
+        )
+
+        self.wait(0.5)
+
+        i_label = Text("In-Phase", font=FONT).next_to(cos_lpf_ax, LEFT, LARGE_BUFF)
+        q_label = Text("Quadrature", font=FONT).next_to(sin_lpf_ax, LEFT, LARGE_BUFF)
+
+        self.play(Write(i_label), Write(q_label))
 
         self.wait(2)
 
@@ -3940,5 +4641,101 @@ class Cloud(MovingCameraScene):
         self.wait(0.5)
 
         self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.2)))
+
+        self.wait(2)
+
+
+class NotebookReminder(MovingCameraScene):
+    def construct(self):
+        math_img = ImageMobject("./static/mpv-shot0005.jpg").scale_to_fit_width(
+            fw(self, 0.4)
+        )
+        math_box = SurroundingRectangle(math_img, buff=0)
+        math = Group(math_img, math_box).to_edge(DOWN, LARGE_BUFF)
+
+        next_section = Text("Next section", font=FONT).to_edge(UP, LARGE_BUFF)
+        next_section_bez = CubicBezier(
+            next_section.get_right() + [0.1, 0, 0],
+            next_section.get_right() + [2, 0, 0],
+            math.get_top() + [0, 1, 0],
+            math.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                next_section.shift(UP * 5).animate.shift(DOWN * 5),
+                Create(next_section_bez),
+                math.shift(DOWN * 10).animate.shift(UP * 10),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        notebook_reminder = Text("iq_sampling.ipynb ↓", font=FONT).to_edge(
+            UP, MED_LARGE_BUFF
+        )
+
+        nb_img_1 = (
+            ImageMobject(
+                "../../../media/rf-channel-assets/notebook_thumbnails/IQ Sampling Notebook Thumbnail - 2.png"
+            )
+            .scale_to_fit_width(fw(self, 0.7))
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        nb_img_1_box = SurroundingRectangle(nb_img_1, buff=0, color=ORANGE)
+        nb_img_1_group = Group(nb_img_1, nb_img_1_box)
+        nb_img_2 = (
+            ImageMobject("./static/2025-07-05-100349_hyprshot.png")
+            .scale_to_fit_width(fw(self, 0.7))
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        nb_img_2_box = SurroundingRectangle(nb_img_2, buff=0, color=ORANGE)
+        nb_img_2_group = Group(nb_img_2, nb_img_2_box)
+        nb_img_3 = (
+            ImageMobject("./static/2025-07-05-100445_hyprshot.png")
+            .scale_to_fit_width(fw(self, 0.7))
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        nb_img_3_box = SurroundingRectangle(nb_img_3, buff=0, color=ORANGE)
+        nb_img_3_group = Group(nb_img_3, nb_img_3_box)
+
+        Group(notebook_reminder, nb_img_1_group, nb_img_2_group, nb_img_3_group).shift(
+            RIGHT * fw(self)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(RIGHT * fw(self)),
+                AnimationGroup(
+                    notebook_reminder.shift(UP * 5).animate.shift(DOWN * 5),
+                    GrowFromCenter(nb_img_1_group),
+                ),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                nb_img_1_group.animate.shift(LEFT * fw(self)),
+                nb_img_2_group.shift(RIGHT * fw(self)).animate.shift(LEFT * fw(self)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                nb_img_2_group.animate.shift(LEFT * fw(self)),
+                nb_img_3_group.shift(RIGHT * fw(self)).animate.shift(LEFT * fw(self)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
 
         self.wait(2)
