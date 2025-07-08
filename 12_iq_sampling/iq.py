@@ -12,7 +12,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -4315,7 +4315,7 @@ class SineFilter(MovingCameraScene):
             x_length=fw(self, 0.6),
             y_length=fh(self, 0.4),
         ).next_to(lpf_block, RIGHT, LARGE_BUFF * 2)
-        lpf_plot = sin_lpf_ax.plot(
+        sin_lpf_plot = sin_lpf_ax.plot(
             lambda t: np.sin(2 * PI * 1 * t), color=ORANGE, x_range=[0, 1, 1 / 200]
         )
 
@@ -4331,7 +4331,7 @@ class SineFilter(MovingCameraScene):
                 self.camera.frame.animate(run_time=2).move_to(sin_lpf_ax),
                 GrowArrow(arrow_4),
                 Create(sin_lpf_ax),
-                Create(lpf_plot, shift=DOWN),
+                Create(sin_lpf_plot, shift=DOWN),
                 FadeIn(sin_phi_val, shift=DOWN),
                 lag_ratio=0.2,
             )
@@ -4383,7 +4383,7 @@ class SineFilter(MovingCameraScene):
 
         self.play(
             self.camera.frame.animate.shift(RIGHT * fw(self)),
-            Group(*lpf_group, lpf_plot, cos_lpf_plot).animate.shift(
+            Group(*lpf_group, sin_lpf_plot, cos_lpf_plot).animate.shift(
                 RIGHT * (fw(self) + 3)
             ),
         )
@@ -4396,7 +4396,7 @@ class SineFilter(MovingCameraScene):
         self.play(Write(i_label), Write(q_label))
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -4407,7 +4407,7 @@ class SineFilter(MovingCameraScene):
                 i_label.animate.set_color(GREEN),
                 cos_lpf_plot.animate.set_stroke(color=GREEN),
                 q_label.animate.set_color(BLUE),
-                lpf_plot.animate.set_stroke(color=BLUE),
+                sin_lpf_plot.animate.set_stroke(color=BLUE),
                 lag_ratio=0.2,
             )
         )
@@ -4422,11 +4422,11 @@ class SineFilter(MovingCameraScene):
         )
         sin_1_line = DashedLine(
             [
-                sin_lpf_ax.input_to_graph_point(0.25, lpf_plot)[0],
+                sin_lpf_ax.input_to_graph_point(0.25, sin_lpf_plot)[0],
                 (cos_lpf_ax.input_to_graph_point(0, cos_lpf_plot) + [0, 1, 0])[1],
                 0,
             ],
-            sin_lpf_ax.input_to_graph_point(0.25, lpf_plot),
+            sin_lpf_ax.input_to_graph_point(0.25, sin_lpf_plot),
             color=YELLOW,
             dash_length=DEFAULT_DASH_LENGTH * 3,
         )
@@ -4475,6 +4475,546 @@ class SineFilter(MovingCameraScene):
         )
 
         self.wait(0.5)
+
+        self.play(
+            FadeOut(iq_label, quad_label),
+            Uncreate(cos_1_line),
+            Uncreate(quad_line),
+            Uncreate(sin_1_line),
+        )
+
+        self.wait(0.5)
+
+        ax = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=cos_lpf_ax.height,
+            y_length=cos_lpf_ax.height,
+        )
+        ax.shift(sin_lpf_ax.c2p(0, 0) - ax.c2p(1, 0))
+
+        new_cos_lpf_ax = cos_lpf_ax.copy().rotate(-PI / 2)
+
+        self.remove(cos_lpf_plot, sin_lpf_plot)
+        phi = VT(2 * PI)
+        plot_width = VT(1)
+        plot_opacity = VT(1)
+        cos_lpf_plot = always_redraw(
+            lambda: cos_lpf_ax.plot(
+                lambda t: np.cos(2 * PI * 1 * t),
+                color=GREEN,
+                x_range=[0, ~phi / (2 * PI), 1 / 200],
+                stroke_width=DEFAULT_STROKE_WIDTH * ~plot_width,
+                stroke_opacity=~plot_opacity,
+            )
+        )
+        sin_lpf_plot = always_redraw(
+            lambda: sin_lpf_ax.plot(
+                lambda t: np.sin(2 * PI * 1 * t),
+                color=BLUE,
+                x_range=[0, ~phi / (2 * PI), 1 / 200],
+                stroke_width=DEFAULT_STROKE_WIDTH * ~plot_width,
+                stroke_opacity=~plot_opacity,
+            )
+        )
+        self.add(cos_lpf_plot, sin_lpf_plot)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                FadeOut(sin_phi_val, cos_phi_val),
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(
+                        new_cos_lpf_ax.copy().shift(
+                            ax.c2p(0, -1) - new_cos_lpf_ax.c2p(0, 0)
+                        ),
+                        ax,
+                        sin_lpf_ax,
+                    ).height
+                    * 1.3
+                )
+                .move_to(
+                    Group(
+                        new_cos_lpf_ax.copy().shift(
+                            ax.c2p(0, -1) - new_cos_lpf_ax.c2p(0, 0)
+                        ),
+                        ax,
+                        sin_lpf_ax,
+                    )
+                )
+                .shift(UP / 2),
+                AnimationGroup(
+                    q_label.animate.next_to(sin_lpf_ax, UP, MED_LARGE_BUFF),
+                    i_label.animate.rotate(PI / 2).next_to(
+                        new_cos_lpf_ax.copy().shift(
+                            ax.c2p(0, -1) - new_cos_lpf_ax.c2p(0, 0)
+                        ),
+                        LEFT,
+                        MED_LARGE_BUFF,
+                    ),
+                    cos_lpf_ax.animate.rotate(-PI / 2).shift(
+                        ax.c2p(0, -1) - new_cos_lpf_ax.c2p(0, 0)
+                    ),
+                ),
+                plot_width @ 2.5,
+                FadeIn(ax),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(phi @ (PI / 3))
+
+        self.wait(0.5)
+
+        cos_dot = always_redraw(
+            lambda: Dot(
+                color=ORANGE,
+                radius=DEFAULT_DOT_RADIUS * 2,
+                stroke_opacity=~plot_opacity,
+            ).move_to(cos_lpf_ax.input_to_graph_point(~phi / (2 * PI), cos_lpf_plot))
+        )
+        sin_dot = always_redraw(
+            lambda: Dot(
+                color=ORANGE,
+                radius=DEFAULT_DOT_RADIUS * 2,
+                stroke_opacity=~plot_opacity,
+            ).move_to(sin_lpf_ax.input_to_graph_point(~phi / (2 * PI), sin_lpf_plot))
+        )
+        cos_line = always_redraw(
+            lambda: Line(
+                cos_lpf_ax.c2p(~phi / (2 * PI), 0),
+                cos_lpf_ax.input_to_graph_point(~phi / (2 * PI), cos_lpf_plot),
+                color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_opacity=~plot_opacity,
+            )
+        )
+        sin_line = always_redraw(
+            lambda: Line(
+                sin_lpf_ax.c2p(~phi / (2 * PI), 0),
+                sin_lpf_ax.input_to_graph_point(~phi / (2 * PI), sin_lpf_plot),
+                color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_opacity=~plot_opacity,
+            )
+        )
+        iq_dot = always_redraw(
+            lambda: Dot(color=ORANGE, radius=DEFAULT_DOT_RADIUS * 2).move_to(
+                ax.c2p(
+                    np.cos(~phi),
+                    np.sin(~phi),
+                )
+            )
+        )
+        iq_line = always_redraw(
+            lambda: Line(
+                ax.c2p(0, 0),
+                ax.c2p(
+                    np.cos(~phi),
+                    np.sin(~phi),
+                ),
+                color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+        )
+
+        cos_to_dot = always_redraw(
+            lambda: DashedLine(
+                cos_lpf_ax.input_to_graph_point(~phi / (2 * PI), cos_lpf_plot),
+                ax.c2p(
+                    np.cos(~phi),
+                    np.sin(~phi),
+                ),
+                color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+                stroke_opacity=~plot_opacity,
+            )
+        )
+        sin_to_dot = always_redraw(
+            lambda: DashedLine(
+                sin_lpf_ax.input_to_graph_point(~phi / (2 * PI), sin_lpf_plot),
+                ax.c2p(
+                    np.cos(~phi),
+                    np.sin(~phi),
+                ),
+                color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+                stroke_opacity=~plot_opacity,
+            )
+        )
+
+        self.play(
+            Create(cos_line),
+            Create(sin_line),
+            Create(cos_dot),
+            Create(sin_dot),
+            Create(cos_to_dot),
+            Create(sin_to_dot),
+            Create(iq_dot),
+            Create(iq_line),
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        new_plot_opacity = 0.2
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    plot_opacity @ new_plot_opacity,
+                    cos_lpf_ax.animate.set_opacity(new_plot_opacity),
+                    sin_lpf_ax.animate.set_opacity(new_plot_opacity),
+                ),
+                self.camera.frame.animate.scale_to_fit_width(ax.width * 2.5).move_to(
+                    ax
+                ),
+                phi @ (0),
+                lag_ratio=0.3,
+            )
+        )
+
+        phi_radius = 0.5
+        phi_angle = always_redraw(
+            lambda: Angle(
+                Line(ax.c2p(0, 0), ax.c2p(np.cos(~phi), np.sin(~phi))),
+                Line(ax.c2p(0, 0), ax.c2p(1, 0)),
+                radius=phi_radius,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                quadrant=(1, 1),
+                color=PURPLE,
+                other_angle=True,
+            )
+            if ~phi > 0
+            else Line(
+                ax.c2p(np.cos(~phi) * phi_radius, np.sin(~phi) * phi_radius),
+                ax.c2p(np.cos(~phi) * phi_radius, np.sin(~phi) * phi_radius),
+            )
+        )
+
+        self.add(phi_angle)
+
+        self.wait(0.5)
+
+        phi_label = (
+            MathTex(r"\phi", color=PURPLE)
+            .next_to(
+                ax.c2p(
+                    phi_radius * np.cos(PI / 6) * 0.8,
+                    phi_radius * np.sin(PI / 6) * 0.8,
+                ),
+                UR,
+                SMALL_BUFF,
+            )
+            .scale(1.5)
+        )
+
+        self.play(
+            LaggedStart(
+                phi @ (PI / 3),
+                FadeIn(phi_label, shift=DL),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        q_line = Line(
+            ax.c2p(np.cos(~phi), 0), ax.c2p(np.cos(~phi), np.sin(~phi)), color=YELLOW
+        )
+        q_label = MathTex("Q").scale(1.2).next_to(q_line, DR, SMALL_BUFF)
+        i_line = Line(
+            ax.c2p(0, np.sin(~phi)), ax.c2p(np.cos(~phi), np.sin(~phi)), color=YELLOW
+        )
+        i_label = MathTex("I").scale(1.2).next_to(i_line, UP, SMALL_BUFF)
+
+        phi_eqn = (
+            MathTex(r"\phi = \tan^{-1}{\left( \frac{Q}{I} \right)}")
+            .scale(1.5)
+            .next_to(ax, UP, MED_LARGE_BUFF)
+        )
+        phi_eqn[0][0].set_color(PURPLE)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(phi_eqn, ax).height * 1.3
+                ).move_to(Group(ax, phi_eqn)),
+                ReplacementTransform(phi_label[0], phi_eqn[0][0], path_arc=PI / 3),
+                FadeIn(phi_eqn[0][1:8]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(Create(q_line), FadeIn(q_label), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(q_label[0], phi_eqn[0][8], path_arc=PI / 3),
+                Uncreate(q_line),
+                Create(phi_eqn[0][9]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(Create(i_line), FadeIn(i_label), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(i_label[0], phi_eqn[0][10], path_arc=PI / 3),
+                Uncreate(i_line),
+                FadeIn(phi_eqn[0][11]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        new_phi = 30 * DEGREES
+
+        phi_ax = Axes(
+            x_range=[0, 2 * PI, 1],
+            y_range=[0, 8, 10],
+            tips=False,
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.4),
+        ).next_to(sin_lpf_ax, DOWN, LARGE_BUFF)
+        phi_opacity = VT(1)
+
+        t = np.linspace(0, 2 * PI, 1000)
+        z = np.cos(t) + 1j * np.sin(t)
+        phi_func = interp1d(
+            t, np.unwrap(np.arctan2(np.imag(z), np.real(z))), fill_value="extrapolate"
+        )
+        phi_plot = always_redraw(
+            lambda: phi_ax.plot(
+                phi_func,
+                x_range=[0, ~phi, 2 * PI / 200],
+                color=BLUE,
+                stroke_opacity=~phi_opacity,
+                use_smoothing=True,
+            )
+        )
+
+        all_group = Group(ax, cos_lpf_ax, sin_lpf_ax, phi_ax)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    all_group.height * 1.1
+                ).move_to(all_group),
+                phi_eqn.animate.next_to(phi_ax, UP, SMALL_BUFF),
+                FadeIn(phi_ax),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(
+            Create(phi_plot), TransformFromCopy(phi_angle, phi_val_line), run_time=2
+        )
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        phi_val_line = DashedLine(
+            phi_val_line.get_end(),
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=YELLOW,
+        )
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        phi_val_line = DashedLine(
+            phi_val_line.get_end(),
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=YELLOW,
+        )
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        phi_val_line = DashedLine(
+            phi_val_line.get_end(),
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=YELLOW,
+        )
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        phi_val_line = DashedLine(
+            phi_val_line.get_end(),
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=YELLOW,
+        )
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(phi + new_phi)
+
+        self.wait(0.5)
+
+        phi_val_line = Line(
+            [phi_ax.input_to_graph_point(~phi, phi_plot)[0], phi_ax.c2p(0, 0)[1], 0],
+            phi_ax.input_to_graph_point(~phi, phi_plot),
+            color=BLUE,
+        )
+
+        self.play(TransformFromCopy(phi_angle, phi_val_line), run_time=2)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
