@@ -5379,3 +5379,449 @@ class NotebookReminder(MovingCameraScene):
         self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
 
         self.wait(2)
+
+
+class ComplexConversion(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        i_eqn = MathTex(r"I(t) = \cos{(\phi(t))}").scale(1.3)
+        i_eqn[0][:4].set_color(GREEN)
+        q_eqn = MathTex(r"Q(t) = \sin{(\phi(t))}").scale(1.3)
+        q_eqn[0][:4].set_color(BLUE)
+        Group(i_eqn, q_eqn).arrange(RIGHT, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                i_eqn.shift(UP * 10).animate.shift(DOWN * 10),
+                q_eqn.shift(UP * 10).animate.shift(DOWN * 10),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        complex_eqn = MathTex(r"z = I(t) + j Q(t)").scale(1.3)
+        complex_eqn[0][2:6].set_color(GREEN)
+        complex_eqn[0][8:].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                FadeOut(i_eqn[0][4:], shift=DOWN),
+                ReplacementTransform(i_eqn[0][:4], complex_eqn[0][2:6]),
+                FadeOut(q_eqn[0][4:], shift=DOWN),
+                ReplacementTransform(q_eqn[0][:4], complex_eqn[0][8:]),
+                *[GrowFromCenter(m) for m in complex_eqn[0][6:8]],
+                *[GrowFromCenter(m) for m in complex_eqn[0][:2]],
+                self.camera.frame.animate.scale(0.7),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            complex_eqn[0][2:6]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(UP / 4)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            complex_eqn[0][8:]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .shift(UP / 4)
+        )
+
+        self.wait(0.5)
+
+        mag = MathTex(r"\lvert z \rvert \rightarrow")
+        mag_label = Text("magnitude", font=FONT).next_to(mag, RIGHT, MED_SMALL_BUFF)
+        phase = MathTex(r"\angle z \rightarrow")
+        phase_label = Text("phase", font=FONT).next_to(phase, RIGHT, MED_SMALL_BUFF)
+
+        stuff = (
+            Group(Group(mag, mag_label), Group(phase, phase_label))
+            .arrange(DOWN, MED_LARGE_BUFF, aligned_edge=LEFT)
+            .next_to(complex_eqn[0][0], DOWN, LARGE_BUFF * 1.5)
+        )
+        z_bez_l = CubicBezier(
+            complex_eqn[0][0].get_bottom() + [0, -0.1, 0],
+            complex_eqn[0][0].get_bottom() + [0, -1, 0],
+            stuff.get_corner(UL) + [-0.1, 1, 0],
+            stuff.get_corner(UL) + [-0.1, 0.1, 0],
+        )
+        z_bez_r = CubicBezier(
+            complex_eqn[0][0].get_bottom() + [0, -0.1, 0],
+            complex_eqn[0][0].get_bottom() + [0, -1, 0],
+            stuff.get_corner(UR) + [0.1, 1, 0],
+            stuff.get_corner(UR) + [0.1, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(DOWN),
+                AnimationGroup(Create(z_bez_l), Create(z_bez_r)),
+                LaggedStart(*[FadeIn(m) for m in [*mag[0], *mag_label]], lag_ratio=0.1),
+                LaggedStart(
+                    *[FadeIn(m) for m in [*phase[0], *phase_label]], lag_ratio=0.1
+                ),
+            )
+        )
+
+        # self.play(FadeIn(mag, mag_label, phase, phase_label))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        j_eqn = (
+            MathTex(r"j = \sqrt{-1}")
+            .scale(1.3)
+            .next_to(self.camera.frame.get_top(), UP)
+            .shift(RIGHT * 4 + UP * 3)
+        )
+        j_path = CubicBezier(
+            complex_eqn[0][7].get_center() + [0, 0, 0],
+            complex_eqn[0][7].get_center() + [0, 1, 0],
+            j_eqn[0][0].get_center() + [0, -1, 0],
+            j_eqn[0][0].get_center() + [0, 0, 0],
+        )
+        j_bez = CubicBezier(
+            complex_eqn[0][7].get_corner(UR) + [0, 0.1, 0],
+            complex_eqn[0][7].get_corner(UR) + [0, 1, 0],
+            j_eqn[0][0].get_bottom() + [0, -1, 0],
+            j_eqn[0][0].get_bottom() + [0, -0.1, 0],
+        )
+        self.play(
+            LaggedStart(
+                MoveAlongPath(complex_eqn[0][7], j_path, run_time=4),
+                Create(j_bez, run_time=3),
+                self.camera.frame.animate.move_to(j_eqn),
+                LaggedStart(*[FadeIn(m) for m in j_eqn[0][1:]], lag_ratio=0.1),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Uncreate(j_bez))
+
+        self.wait(0.5)
+
+        comment = Text("worst video ive evr seen", font=FONT)
+        send_comment = Text("Send", font=FONT).next_to(comment, RIGHT, LARGE_BUFF)
+        send_comment_box = SurroundingRectangle(
+            send_comment,
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.3,
+            color=DARK_BLUE,
+            fill_color=DARK_BLUE,
+            fill_opacity=1,
+        )
+
+        comments = SurroundingRectangle(
+            Group(comment, send_comment_box, send_comment),
+            corner_radius=0.7,
+            buff=MED_LARGE_BUFF,
+            color=DARK_BLUE,
+        )
+        send_comment_group = Group(send_comment_box, send_comment)
+        comment_group = (
+            Group(comments, comment, send_comment_group)
+            .scale_to_fit_width(fw(self, 0.8))
+            .move_to(self.camera.frame.copy().shift(DOWN * fh(self, 3)))
+        )
+        comment_arrow = Arrow(
+            self.camera.frame.get_center() + [0, 1, 0], comments.get_top()
+        )
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(comments, send_comment_box, send_comment)
+
+        self.play(
+            Succession(GrowArrow(comment_arrow), FadeOut(comment_arrow)),
+            self.camera.frame.animate.shift(DOWN * fh(self, 3)),
+        )
+        self.play(Write(comment))
+
+        self.wait(0.5)
+
+        comment_opacity = VT(0)
+        comment_bubble = always_redraw(
+            lambda: SurroundingRectangle(
+                comment,
+                color=DARK_BLUE,
+                stroke_opacity=~comment_opacity,
+                fill_color=DARK_BLUE,
+                fill_opacity=~comment_opacity,
+                corner_radius=0.3,
+            ).move_to(comment)
+        )
+        self.add(comment_bubble)
+
+        self.play(
+            LaggedStart(
+                send_comment_group.animate(
+                    rate_func=rate_functions.there_and_back, run_time=0.6
+                ).scale(0.7),
+                comment_opacity @ 1,
+                comment.animate(run_time=4)
+                .next_to(self.camera.frame.get_top(), UP, LARGE_BUFF)
+                .set_x(comment.get_x()),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        notebook_reminder = Text("iq_sampling.ipynb ↓", font=FONT).next_to(
+            self.camera.frame.get_top(), DOWN, MED_SMALL_BUFF
+        )
+
+        nb_img_1 = (
+            ImageMobject(
+                "../../../media/rf-channel-assets/notebook_thumbnails/IQ Sampling Notebook Thumbnail - 2.png"
+            )
+            .scale_to_fit_width(fw(self, 0.7))
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        nb_img_1_box = SurroundingRectangle(nb_img_1, buff=0, color=ORANGE)
+        nb_img_1_group = Group(nb_img_1, nb_img_1_box)
+        nb_img_2 = (
+            ImageMobject("./static/2025-07-05-100349_hyprshot.png")
+            .scale_to_fit_width(fw(self, 0.7))
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        nb_img_2_box = SurroundingRectangle(nb_img_2, buff=0, color=ORANGE)
+        nb_img_2_group = Group(nb_img_2, nb_img_2_box)
+        nb_img_3 = (
+            ImageMobject("./static/2025-07-05-100445_hyprshot.png")
+            .scale_to_fit_width(fw(self, 0.7))
+            .to_edge(DOWN, LARGE_BUFF)
+        )
+        nb_img_3_box = SurroundingRectangle(nb_img_3, buff=0, color=ORANGE)
+        nb_img_3_group = Group(nb_img_3, nb_img_3_box)
+
+        Group(nb_img_1_group, nb_img_2_group, nb_img_3_group).move_to(self.camera.frame)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            Write(notebook_reminder),
+            LaggedStart(
+                Succession(
+                    GrowFromCenter(nb_img_1_group),
+                    nb_img_1_group.animate.scale_to_fit_height(fw(self, 0.2)).next_to(
+                        self.camera.frame.get_corner(DL), UR
+                    ),
+                ),
+                Succession(
+                    GrowFromCenter(nb_img_2_group),
+                    nb_img_2_group.animate.scale_to_fit_height(fw(self, 0.2)).next_to(
+                        self.camera.frame.get_corner(DR), UL
+                    ),
+                ),
+                Succession(
+                    GrowFromCenter(nb_img_3_group),
+                    nb_img_3_group.animate.scale_to_fit_height(fw(self, 0.2)).next_to(
+                        self.camera.frame.get_top(), DOWN, LARGE_BUFF * 1.2
+                    ),
+                ),
+                lag_ratio=0.7,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(nb_img_1_group),
+                ShrinkToCenter(nb_img_2_group),
+                ShrinkToCenter(nb_img_3_group),
+                ShrinkToCenter(notebook_reminder),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(2)
+
+
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        panb = (
+            ImageMobject("../09_resolution/static/phased_array_resource.png")
+            .scale_to_fit_width(fw(self, 0.4))
+            .to_edge(LEFT, MED_LARGE_BUFF)
+        )
+        pasc = ImageMobject(
+            "../11_aliasing/static/2025-06-08-112521_hyprshot.png"
+        ).scale_to_fit_height(fh(self, 0.5))
+        pasc2 = ImageMobject("../11_aliasing/static/panb2.png").scale_to_fit_height(
+            fh(self, 0.5)
+        )
+        Group(pasc, pasc2).arrange(DOWN, -LARGE_BUFF).to_edge(RIGHT, MED_LARGE_BUFF)
+        pasc.shift(LEFT * 2)
+        pasc_bez = CubicBezier(
+            panb.get_right() + [0.1, 0, 0],
+            panb.get_right() + [1, 0, 0],
+            pasc.get_left() + [-1, 0, 0],
+            pasc.get_left() + [-0.1, 0, 0],
+        )
+        pasc2_bez = CubicBezier(
+            panb.get_right() + [0.1, 0, 0],
+            panb.get_right() + [1, 0, 0],
+            pasc2.get_left() + [-1, 0, 0],
+            pasc2.get_left() + [-0.1, 0, 0],
+        )
+
+        web_title = Text("marshallbruner.com", font=FONT).next_to(
+            panb, DOWN, MED_LARGE_BUFF, LEFT
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(GrowFromCenter(panb), Write(web_title)),
+                Create(pasc_bez),
+                GrowFromCenter(pasc),
+                Create(pasc2_bez),
+                GrowFromCenter(pasc2),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        osc = ImageMobject("../08_beamforming/static/osc_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        kraken = ImageMobject("../08_beamforming/static/kraken.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        weather = ImageMobject(
+            "../08_beamforming/static/weather.png"
+        ).scale_to_fit_width(config.frame_width * 0.3)
+        eqn = ImageMobject("../08_beamforming/static/eqn_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+
+        merch = (
+            Group(kraken, osc, eqn, weather)
+            .arrange_in_grid(2, 2)
+            .scale_to_fit_height(config.frame_height * 0.9)
+            .set_y(0)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(*self.mobjects),
+                LaggedStart(
+                    GrowFromCenter(osc),
+                    GrowFromCenter(kraken),
+                    GrowFromCenter(weather),
+                    GrowFromCenter(eqn),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        shoutout = Text("Huge thanks to:", font=FONT).to_edge(UP, LARGE_BUFF)
+        people = [
+            "ZacJW",
+            "db-isJustARatio",
+            "Jea99",
+            "Leon",
+            "dplynch",
+            "Kris",
+            "zachdc",
+            "misspeled",
+            "Florian",
+            "Cminor102",
+            "w1gx",
+            "Ioan",
+            "nakribc",
+            "alikarb0724",
+            "Mark",
+        ]
+        people_text = (
+            Group(
+                *[Text(p, font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6) for p in people]
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(shoutout, DOWN)
+        )
+        people_group = (
+            Group(shoutout, people_text)
+            .scale_to_fit_height(fh(self, 0.9))
+            .next_to(merch, RIGHT)
+            .shift(RIGHT * 12)
+        )
+
+        self.play(
+            LaggedStart(Group(merch, people_group).animate.arrange(RIGHT, LARGE_BUFF))
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.2)))
+
+        self.wait(2)
+
+
+class EndScreen(Scene):
+    def construct(self):
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "5,822"],
+                    ["Script word count", "1,959"],
+                    ["Days to make", "22"],
+                    ["Git commits", "15"],
+                ],
+                element_to_mobject=Text,
+                element_to_mobject_config=dict(
+                    font=FONT, font_size=DEFAULT_FONT_SIZE * 0.7
+                ),
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .move_to(ORIGIN)
+            .to_edge(RIGHT, buff=LARGE_BUFF)
+        )
+
+        thank_you_sabrina = (
+            Text(
+                "Thank you, Sabrina, for\nediting the whole video :)",
+                font=FONT,
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+            )
+            .next_to(stats_group, DOWN)
+            .to_edge(DOWN)
+        )
+
+        marshall_bruner = Text(
+            "Marshall Bruner", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5
+        ).next_to([-config["frame_width"] / 4, 0, 0], DOWN, MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Write(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
+
+        self.wait(2)
