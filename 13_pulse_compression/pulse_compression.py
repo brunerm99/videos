@@ -14,7 +14,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -428,7 +428,7 @@ class Issue(MovingCameraScene):
         )
         self.add(snr_line, snr_line_u, snr_line_d, snr_label)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -484,11 +484,30 @@ class Issue(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(pulse_amp @ (~pulse_amp * 3), amp @ (~amp * 3))
+        energy_eqn = (
+            MathTex(r"E = P \cdot t")
+            .scale(2.5)
+            .next_to(self.camera.frame.get_bottom(), UP, LARGE_BUFF * 2)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.set_opacity(0)
+                    .shift(DOWN / 2)
+                    .animate.shift(UP / 2)
+                    .set_opacity(1)
+                    for m in energy_eqn[0]
+                ],
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
-        self.play(pulse_amp @ (~pulse_amp / 3), amp @ (~amp / 3))
+        self.play(energy_eqn[0][4].animate.set_color(GREEN))
 
         self.wait(0.5)
 
@@ -497,5 +516,118 @@ class Issue(MovingCameraScene):
         self.wait(0.5)
 
         self.play(pw_plot @ (~pw_plot / 3), amp @ (~amp / 3))
+
+        self.wait(0.5)
+
+        self.play(energy_eqn[0][4].animate.set_color(WHITE))
+
+        self.wait(0.5)
+
+        self.play(energy_eqn[0][2].animate.set_color(GREEN))
+
+        self.wait(0.5)
+
+        self.play(pulse_amp @ (~pulse_amp * 3), amp @ (~amp * 3))
+
+        self.wait(0.5)
+
+        self.play(pulse_amp @ (~pulse_amp / 3), amp @ (~amp / 3))
+
+        self.wait(0.5)
+
+        self.play(energy_eqn[0][2].animate.set_color(WHITE))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self) * 1.5))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        relation_table = (
+            MobjectTable(
+                [
+                    [
+                        MathTex(r"\downarrow").scale(2),
+                        Text("+", font=FONT, color="GREEN").scale(2),
+                        Text("-", font=FONT, color="RED").scale(2),
+                    ],
+                    [
+                        MathTex(r"\uparrow").scale(2),
+                        Text("-", font=FONT, color="RED").scale(2),
+                        Text("+", font=FONT, color="GREEN").scale(2),
+                    ],
+                ],
+                col_labels=[
+                    MathTex(r"\tau").scale(2),
+                    MathTex(r"\Delta R"),
+                    Tex("SNR"),
+                ],
+            )
+            .scale(1.5)
+            .move_to(self.camera.frame)
+        )
+
+        self.play(
+            LaggedStart(
+                *[Create(m) for m in relation_table.get_horizontal_lines()],
+                lag_ratio=0.2,
+            ),
+            LaggedStart(
+                *[Create(m) for m in relation_table.get_vertical_lines()], lag_ratio=0.2
+            ),
+            LaggedStart(
+                *[FadeIn(m) for m in relation_table.get_col_labels()], lag_ratio=0.2
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[FadeIn(m) for m in relation_table.get_rows()[1]], lag_ratio=0.2
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[FadeIn(m) for m in relation_table.get_rows()[2]], lag_ratio=0.2
+            )
+        )
+
+        self.wait(0.5)
+
+        first_option = SurroundingRectangle(relation_table.get_rows()[1])
+        second_option = SurroundingRectangle(relation_table.get_rows()[2])
+        good_rres = SurroundingRectangle(
+            relation_table.get_rows()[1][1], buff=MED_LARGE_BUFF
+        )
+        good_snr = SurroundingRectangle(
+            relation_table.get_rows()[2][2], buff=MED_LARGE_BUFF
+        )
+
+        self.play(Create(first_option))
+
+        self.wait(0.5)
+
+        first_option.save_state()
+        self.play(Transform(first_option, second_option))
+
+        self.wait(0.5)
+
+        self.play(first_option.animate.restore())
+
+        self.wait(0.5)
+
+        self.play(
+            TransformFromCopy(first_option, good_snr),
+            ReplacementTransform(first_option, good_rres),
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self) * 1.5))
 
         self.wait(2)
