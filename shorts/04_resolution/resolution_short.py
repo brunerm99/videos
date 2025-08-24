@@ -1,0 +1,1 @@
+# resolution_short.py
