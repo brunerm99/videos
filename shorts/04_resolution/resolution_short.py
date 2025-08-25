@@ -5,6 +5,7 @@ import sys
 
 import numpy as np
 from manim import *
+from matplotlib import colormaps
 from MF_Tools import VT, TransformByGlyphMap
 from numpy.fft import fft, fft2, fftshift
 from scipy import signal
@@ -26,6 +27,8 @@ config.frame_width = 9
 
 
 FONT = "Maple Mono CN"
+TARGET1_COLOR = GREEN
+TARGET2_COLOR = ORANGE
 
 
 def skip_animations(b):
@@ -55,6 +58,7 @@ def fw(scene, scale=1):
 
 class Intro(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         radar = WeatherRadarTower()
         radar.vgroup.scale_to_fit_height(fh(self, 0.3)).next_to(
             self.camera.frame.get_left(), RIGHT, MED_LARGE_BUFF
@@ -332,5 +336,414 @@ class Intro(MovingCameraScene):
                 lag_ratio=0.2,
             )
         )
+
+        self.wait(0.5)
+
+        new_cloud = cloud.copy().set_color(WHITE).shift(UP)
+        new_plane = plane.copy().set_color(WHITE).shift(LEFT + DOWN * 2)
+        to_plane = Arrow(
+            radar.radome.get_right() + UP / 2,
+            new_plane.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            color=TX_COLOR,
+            buff=SMALL_BUFF,
+        )
+        to_cloud = Arrow(
+            radar.radome.get_right() + UP / 2,
+            new_cloud.get_corner(DL),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            color=TX_COLOR,
+            buff=SMALL_BUFF,
+        )
+
+        r1 = MathTex(r"R_1").scale(1.5).next_to(to_cloud.get_midpoint(), UL)
+        r2 = MathTex(r"R_2").scale(1.5).next_to(to_plane.get_midpoint(), DR)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    theta_min @ 0,
+                    theta_max @ 0,
+                    Uncreate(bw_line_l),
+                    Uncreate(bw_line_r),
+                    Transform(cloud, new_cloud),
+                    Transform(plane, new_plane),
+                ),
+                GrowArrow(to_plane),
+                GrowArrow(to_cloud),
+                GrowFromCenter(r1),
+                GrowFromCenter(r2),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        delta_r_qmark = (
+            MathTex(r"\Delta R = R_1 - R_2 \ge ?")
+            .scale(2)
+            .next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF * 2)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                FadeIn(delta_r_qmark[0][:2]),
+                FadeIn(delta_r_qmark[0][2]),
+                ReplacementTransform(r1[0], delta_r_qmark[0][3:5], path_arc=PI / 3),
+                FadeIn(delta_r_qmark[0][5]),
+                ReplacementTransform(r2[0], delta_r_qmark[0][6:8], path_arc=PI / 3),
+                FadeIn(delta_r_qmark[0][8]),
+                FadeIn(delta_r_qmark[0][9]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=to_targets.get_length(),
+                y_length=radar.radome.height / 2,
+            )
+            .set_opacity(0)
+            .rotate(to_targets.get_angle())
+        )
+        ax.shift(to_targets.get_start() - ax.c2p(0, 0))
+        target1_line = Arrow(
+            radar.radome.get_right() + UP / 2,
+            new_cloud.get_corner(DL),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            color=TX_COLOR,
+            buff=0,
+        )
+        target1_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=target1_line.get_length(),
+                y_length=radar.radome.height / 2,
+            )
+            .rotate(to_cloud.get_angle() + PI)
+            .set_opacity(0)
+        )
+        target1_ax.shift(target1_line.get_end() - target1_ax.c2p(0, 0))
+
+        target2_line = Arrow(
+            radar.radome.get_right() + UP / 2,
+            new_plane.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            color=TX_COLOR,
+            buff=0,
+        )
+        target2_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=target2_line.get_length(),
+                y_length=radar.radome.height / 2,
+            )
+            .rotate(target2_line.get_angle() + PI)
+            .set_opacity(0)
+        )
+        target2_ax.shift(target2_line.get_end() - target2_ax.c2p(0, 0))
+
+        xmax = VT(0)
+        xmax_t1 = VT(0)
+        xmax_t2 = VT(0)
+        pw = 0.3
+        f = 10
+        tx = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax - pw), ~xmax, 1 / 200],
+                color=TX_COLOR,
+            )
+        )
+        rx1 = always_redraw(
+            lambda: target1_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax_t1 - pw), min(~xmax_t1, 1), 1 / 200],
+                color=TARGET1_COLOR,
+            )
+        )
+        rx2 = always_redraw(
+            lambda: target2_ax.plot(
+                lambda t: 0.5 * np.sin(2 * PI * f * t),
+                x_range=[max(0, ~xmax_t2 - pw), min(~xmax_t2, 1), 1 / 200],
+                color=TARGET2_COLOR,
+            )
+        )
+        self.add(tx, rx1, rx2)
+
+        radar.vgroup.set_z_index(1)
+
+        self.add(ax, target1_ax, target2_ax)
+
+        self.play(FadeOut(to_cloud, to_plane))
+
+        self.wait(0.5)
+
+        self.play(xmax @ 0.5)
+
+        self.wait(0.5)
+
+        tau_line_r = Line(ax.c2p(~xmax, -1), ax.c2p(~xmax, 1))
+        tau_line_l = Line(ax.c2p(~xmax - pw, -1), ax.c2p(~xmax - pw, 1))
+        tau_line = Line(tau_line_l.get_end(), tau_line_r.get_end()).shift(
+            (ax.c2p(~xmax - pw, 0) - tau_line_l.get_start()) * 0.8
+        )
+        tau = MathTex(r"\tau").scale(2).next_to(tau_line.get_midpoint(), UL, SMALL_BUFF)
+
+        tau_line_r.shift(ax.c2p(~xmax, 0) - tau_line_r.get_start())
+        tau_line_l.shift(ax.c2p(~xmax - pw, 0) - tau_line_l.get_start())
+        # self.add(tau_line_l, tau_line_r, tau_line, tau)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(tx.width * 3)
+                .move_to(tx)
+                .shift(UP + LEFT / 2),
+                AnimationGroup(
+                    Create(tau_line_l), Create(tau_line), Create(tau_line_r)
+                ),
+                FadeIn(tau),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        delta_r = (
+            MathTex(r"\Delta R = R_1 - R_2 \ge \frac{c \tau}{2}")
+            .scale(2)
+            .move_to(delta_r_qmark)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(tau_line_l),
+                    Uncreate(tau_line_r),
+                    Uncreate(tau_line),
+                ),
+                self.camera.frame.animate.restore().scale(1.2),
+                ReplacementTransform(delta_r_qmark[0][:-1], delta_r[0][:9]),
+                ShrinkToCenter(delta_r_qmark[0][-1]),
+                GrowFromCenter(delta_r[0][9]),
+                ReplacementTransform(tau[0], delta_r[0][10], path_arc=PI / 3),
+                GrowFromCenter(delta_r[0][11]),
+                GrowFromCenter(delta_r[0][12]),
+                LaggedStart(
+                    xmax @ 4,
+                    LaggedStart(xmax_t2 @ (1 + pw), xmax_t1 @ (1 + pw), lag_ratio=0.15),
+                    lag_ratio=0.15,
+                    run_time=3,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        def compute_phase_diff(v):
+            time_from_vel = 2 * (v * Tc) / c
+            return 2 * PI * f * time_from_vel
+
+        def compute_f_beat(R):
+            return (2 * R * bw) / (c * Tc)
+
+        # Radar setup for doppler stuff
+        f = 77e9  # Hz
+        Tc = 40e-6  # chirp time - s
+        bw = 1.6e9  # bandwidth - Hz
+        chirp_rate = bw / Tc  # Hz/s
+
+        wavelength = c / f
+        M = 40  # number of chirps in coherent processing interval (CPI)
+
+        # Target
+        R = 20  # m
+        v = 10  # m/s
+        f_beat = compute_f_beat(R)
+        phase_diff = compute_phase_diff(v)
+        max_time = 15 / f_beat
+        N = 10000
+        Ts = max_time / N
+        fs = 1 / Ts
+
+        t = np.arange(0, max_time, 1 / fs)
+
+        window = signal.windows.blackman(N)
+        fft_len = N * 8
+        max_vel = wavelength / (4 * Tc)
+        vel_res = wavelength / (2 * M * Tc)
+        rmax = c * Tc * fs / (2 * bw)
+        n_ranges = np.linspace(-rmax / 2, rmax / 2, N)
+        ranges = np.linspace(-rmax / 2, rmax / 2, fft_len)
+
+        target2_pos = VT(17)
+        target2_vel = VT(10)
+
+        def plot_rd():
+            targets = [(20, 8, 0), (~target2_pos, ~target2_vel, 0)]
+            cpi = np.array(
+                [
+                    (
+                        np.sum(
+                            [
+                                np.sin(
+                                    2 * PI * compute_f_beat(r) * t
+                                    + m * compute_phase_diff(v)
+                                )
+                                * db_to_lin(p)
+                                for r, v, p in targets
+                            ],
+                            axis=0,
+                        )
+                        + np.random.normal(0, 0.1, N)
+                    )
+                    * window
+                    for m in range(M)
+                ]
+            )
+
+            ranges_n = np.linspace(-rmax / 2, rmax / 2, N)
+            range_doppler = fftshift(np.abs(fft2(cpi.T))) / (N / 2)
+            range_doppler = range_doppler[(ranges_n >= 0) & (ranges_n <= 40), :]
+            range_doppler -= range_doppler.min()
+            range_doppler /= range_doppler.max()
+
+            cmap = colormaps.get("coolwarm")
+            range_doppler_fmt = np.uint8(cmap(10 * np.log10(range_doppler + 1)) * 255)
+            range_doppler_fmt[range_doppler < 0.05] = [0, 0, 0, 0]
+
+            rd_img = (
+                ImageMobject(range_doppler_fmt, image_mode="RGBA")
+                .stretch_to_fit_width(config.frame_width * 0.6)
+                .stretch_to_fit_height(config.frame_width * 0.6)
+                .next_to(radar.vgroup, DOWN, MED_SMALL_BUFF)
+                .set_x(0)
+            )
+            rd_img.set_resampling_algorithm(RESAMPLING_ALGORITHMS["box"])
+            return rd_img
+
+        rd_img = always_redraw(plot_rd)
+
+        rd_ax = Axes(
+            x_range=[-0.5, 10, 2],
+            y_range=[-0.5, 10, 2],
+            tips=False,
+            x_length=rd_img.width,
+            y_length=rd_img.height,
+            axis_config=dict(stroke_width=DEFAULT_STROKE_WIDTH * 1.2),
+        )
+        rd_ax.shift(rd_img.get_corner(DL) - rd_ax.c2p(0, 0))
+
+        range_label = (
+            Text("Range", font=FONT, font_size=DEFAULT_FONT_SIZE)
+            .rotate(PI / 2)
+            .next_to(rd_ax.c2p(0, 5), LEFT)
+        )
+        vel_label = Text("Velocity", font=FONT, font_size=DEFAULT_FONT_SIZE).next_to(
+            rd_ax.c2p(5, 0), DOWN
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(*delta_r[0]),
+                self.camera.frame.animate.shift(DOWN * 4),
+                Create(rd_ax),
+                Write(range_label),
+                Write(vel_label),
+                FadeIn(rd_img),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            plane.animate.shift(LEFT),
+            target2_pos + 10,
+            target2_vel.animate(
+                rate_func=rate_functions.there_and_back
+            ).increment_value(5),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        angular_title = Text("Angular Resolution", font=FONT).set_color(RED)
+        angular = MathTex(r"\theta \approx \frac{\lambda}{D}").scale(2).set_color(RED)
+        range_title = Text("Range Resolution", font=FONT).set_color(BLUE)
+        range_eqn = MathTex(r"\Delta R \ge \frac{c \tau}{2}").scale(2).set_color(BLUE)
+        velocity_title = Text("Velocity Resolution", font=FONT).set_color(ORANGE)
+        velocity = (
+            MathTex(r"\Delta v = \frac{\text{PRF} \lambda}{2 M}")
+            .scale(2)
+            .set_color(ORANGE)
+        )
+        eqns_group = (
+            Group(
+                Group(angular_title, angular).arrange(DOWN, MED_SMALL_BUFF),
+                Group(range_title, range_eqn).arrange(DOWN, MED_SMALL_BUFF),
+                Group(velocity_title, velocity).arrange(DOWN, MED_SMALL_BUFF),
+            )
+            .arrange(DOWN, LARGE_BUFF)
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+        )
+
+        # self.add(eqns_group)
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(eqns_group[0]),
+                GrowFromCenter(eqns_group[1]),
+                GrowFromCenter(eqns_group[2]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        thumbnail = ImageMobject(
+            "../../09_resolution/static/Resolution Thumbnail.png"
+        ).scale_to_fit_width(fw(self, 0.9))
+        thumbnail_box = SurroundingRectangle(thumbnail, buff=0)
+        thumbnail_group = Group(thumbnail, thumbnail_box).move_to(self.camera.frame)
+
+        self.play(
+            angular_title.animate.set_opacity(0.2),
+            angular.animate.set_opacity(0.2),
+            range_title.animate.set_opacity(0.2),
+            range_eqn.animate.set_opacity(0.2),
+            velocity_title.animate.set_opacity(0.2),
+            velocity.animate.set_opacity(0.2),
+            GrowFromCenter(thumbnail_group),
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
 
         self.wait(2)
