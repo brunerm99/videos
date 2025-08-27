@@ -20,6 +20,10 @@ FONT = "Maple Mono CN"
 
 BLOCKS = get_blocks()
 
+GOOD = BLUE
+OK = GREY
+BAD = RED
+
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
@@ -629,5 +633,127 @@ class Issue(MovingCameraScene):
         self.wait(0.5)
 
         self.play(self.camera.frame.animate.shift(UP * fh(self) * 1.5))
+
+        self.wait(2)
+
+
+class Options(MovingCameraScene):
+    def construct(self):
+        pulse_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.5),
+        ).set_z_index(-1)
+
+        rres_nl = NumberLine(
+            x_range=[0, 10, 1], length=pulse_ax.height * 1.3, rotation=PI / 2
+        ).set_z_index(-1)
+        snr_nl = (
+            NumberLine(
+                x_range=[0, 10, 1], length=pulse_ax.height * 1.3, rotation=PI / 2
+            )
+            .next_to(rres_nl, RIGHT, LARGE_BUFF * 2)
+            .set_z_index(-1)
+        )
+
+        Group(pulse_ax, Group(rres_nl, snr_nl)).arrange(RIGHT, LARGE_BUFF * 20)
+
+        rres_label = always_redraw(
+            lambda: MathTex(r"\Delta R").next_to(rres_nl, UP, MED_SMALL_BUFF)
+        )
+        snr_label = always_redraw(
+            lambda: Tex(r"SNR").next_to(snr_nl, UP, MED_SMALL_BUFF)
+        )
+
+        rres = VT(9)
+        rres_dot = always_redraw(
+            lambda: Dot(
+                color=interpolate_color(OK, BAD, (~rres - 5) / 5)
+                if ~rres > 5
+                else interpolate_color(GOOD, OK, ~rres / 5),
+                radius=DEFAULT_DOT_RADIUS * 3,
+            ).move_to(rres_nl.n2p(~rres))
+        )
+
+        snr = VT(9)
+        snr_dot = always_redraw(
+            lambda: Dot(
+                color=interpolate_color(OK, GOOD, (~snr - 5) / 5)
+                if ~snr > 5
+                else interpolate_color(BAD, OK, ~snr / 5),
+                radius=DEFAULT_DOT_RADIUS * 3,
+            ).move_to(snr_nl.n2p(~snr))
+        )
+
+        pw_plot = VT(0.3)
+        pulse_amp = VT(0.3)
+        pulse_f = 20
+        pulse = always_redraw(
+            lambda: pulse_ax.plot(
+                lambda t: ~pulse_amp * np.sin(2 * PI * pulse_f * t)
+                if t < ~pw_plot
+                else 0,
+                x_range=[0, 1, 1 / 1000],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                color=TX_COLOR,
+            )
+        )
+        self.add(
+            pulse_ax,
+            pulse,
+            rres_nl,
+            snr_nl,
+            rres_label,
+            snr_label,
+            snr_dot,
+            rres_dot,
+        )
+
+        self.play(
+            Group(pulse_ax, Group(rres_nl, snr_nl)).animate.arrange(RIGHT, LARGE_BUFF)
+        )
+
+        self.wait(0.5)
+
+        self.play(pw_plot @ 0.1, rres @ 1, snr @ 1, run_time=5)
+
+        self.wait(0.5)
+
+        check = (
+            Text("✔", font=FONT, color=GOOD)
+            .scale(1.5)
+            .next_to(rres_dot, LEFT, SMALL_BUFF)
+        )
+        qmark = Text("?", font=FONT).scale(1.5).next_to(snr_dot, RIGHT, SMALL_BUFF)
+
+        self.play(GrowFromCenter(check))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(qmark))
+
+        self.wait(0.5)
+
+        self.play(pw_plot @ 0.3, rres @ 9, snr @ 9, run_time=5)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Transform(
+                    check,
+                    check.copy().next_to(snr_dot, RIGHT, SMALL_BUFF),
+                    path_arc=PI / 3,
+                ),
+                Transform(
+                    qmark,
+                    qmark.copy().next_to(rres_dot, LEFT, SMALL_BUFF),
+                    path_arc=PI / 3,
+                ),
+                lag_ratio=0.2,
+            )
+        )
 
         self.wait(2)
