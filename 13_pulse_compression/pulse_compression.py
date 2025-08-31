@@ -14,7 +14,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono CN"
 
@@ -23,6 +23,8 @@ BLOCKS = get_blocks()
 GOOD = BLUE
 OK = GREY
 BAD = RED
+TARGET1_COLOR = GREEN
+TARGET2_COLOR = ORANGE
 
 
 def skip_animations(b):
@@ -55,8 +57,6 @@ class Issue(MovingCameraScene):
 
         self.wait(0.5)
 
-        TARGET1_COLOR = GREEN
-        TARGET2_COLOR = ORANGE
         target1 = (
             SVGMobject("../props/static/plane.svg")
             .scale_to_fit_width(radar.vgroup.width)
@@ -546,7 +546,7 @@ class Issue(MovingCameraScene):
         self.play(self.camera.frame.animate.shift(UP * fh(self) * 1.5))
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         relation_table = (
             MobjectTable(
@@ -639,6 +639,7 @@ class Issue(MovingCameraScene):
 
 class Options(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         pulse_ax = Axes(
             x_range=[0, 1, 0.5],
             y_range=[-1, 1, 0.5],
@@ -690,13 +691,24 @@ class Options(MovingCameraScene):
         pw_plot = VT(0.3)
         pulse_amp = VT(0.3)
         pulse_f = 20
+        pulse_f1 = VT(pulse_f)
+        pulse_x1 = VT(1)
+        pulse_x0 = VT(0)
+
         pulse = always_redraw(
             lambda: pulse_ax.plot(
-                lambda t: ~pulse_amp * np.sin(2 * PI * pulse_f * t)
-                if t < ~pw_plot
+                lambda t: ~pulse_amp
+                * signal.chirp(
+                    t - 1 / pulse_f / 4,
+                    pulse_f,
+                    ~pw_plot,
+                    ~pulse_f1,
+                    method="quadratic",
+                )
+                if t < ~pw_plot + ~pulse_x0
                 else 0,
-                x_range=[0, 1, 1 / 1000],
-                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                x_range=[~pulse_x0, ~pulse_x1, 1 / 1000],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=TX_COLOR,
             )
         )
@@ -750,9 +762,318 @@ class Options(MovingCameraScene):
                 Transform(
                     qmark,
                     qmark.copy().next_to(rres_dot, LEFT, SMALL_BUFF),
-                    path_arc=PI / 3,
+                    path_arc=-PI / 3,
                 ),
                 lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(rres_nl, snr_nl, qmark, check).animate.shift(RIGHT * 5),
+            self.camera.frame.animate.scale_to_fit_width(pulse_ax.width * 1.5).move_to(
+                pulse_ax
+            ),
+            pw_plot @ 0.5,
+        )
+
+        self.wait(0.5)
+
+        pulse_line = Line(
+            pulse_ax.c2p(0, ~pulse_amp), pulse_ax.c2p(~pw_plot, ~pulse_amp), color=GREEN
+        ).shift(UP / 2)
+        pulse_line_l = Line(
+            pulse_line.get_left() + DOWN / 4,
+            pulse_line.get_left() + UP / 4,
+            color=GREEN,
+        )
+        pulse_line_r = Line(
+            pulse_line.get_right() + DOWN / 4,
+            pulse_line.get_right() + UP / 4,
+            color=GREEN,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(pulse_line_l),
+                Create(pulse_line),
+                Create(pulse_line_r),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(pulse_f1 @ (pulse_f * 4), run_time=3)
+
+        self.wait(0.5)
+
+        pulse_line_new = Line(
+            pulse_ax.c2p(0, ~pulse_amp),
+            pulse_ax.c2p(0.1, ~pulse_amp),
+            color=GREEN,
+        ).shift(UP / 2)
+
+        pulse_line.save_state()
+        pulse_line_r.save_state()
+        self.play(
+            pw_plot @ 0.1,
+            Transform(pulse_line, pulse_line_new),
+            Transform(
+                pulse_line_r,
+                Line(
+                    pulse_line_new.get_right() + DOWN / 4,
+                    pulse_line_new.get_right() + UP / 4,
+                    color=GREEN,
+                ),
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pw_plot @ 0.5,
+            pulse_line.animate.restore(),
+            pulse_line_r.animate.restore(),
+        )
+
+        self.wait(0.5)
+
+        self.play(pulse_f1 @ pulse_f)
+
+        self.wait(0.5)
+
+        theory_paper = ImageMobject(
+            "../props/static/Theory and Design of Chirp Radars.png"
+        ).scale_to_fit_height(fh(self, 0.7))
+        new_chirp = ImageMobject(
+            "../props/static/Chirp A New Radar Technique.jpg"
+        ).scale_to_fit_width(theory_paper.width * 1.3)
+        fundamentals_of_radar_dsp = ImageMobject(
+            "../props/static/Fundamentals of Radar DSP Book Cover.jpg"
+        ).scale_to_fit_height(fh(self, 0.7))
+        resources = (
+            Group(fundamentals_of_radar_dsp, new_chirp, theory_paper)
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .scale_to_fit_width(fw(self, 0.9))
+            .move_to(self.camera.frame)
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in resources], lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.shift(UP * fh(self)) for m in resources], lag_ratio=0.3
+            )
+        )
+
+        self.remove(*resources)
+
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(config.frame_height * 1).next_to(
+            self.camera.frame.get_left(), LEFT, LARGE_BUFF * 3
+        )
+
+        self.remove(
+            snr_dot,
+            snr_nl,
+            qmark,
+            check,
+            rres_dot,
+            rres_nl,
+            rres_label,
+            snr_label,
+        )
+        self.next_section(skip_animations=skip_animations(True))
+
+        plane = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .set_fill(TARGET1_COLOR)
+            .next_to(pulse, RIGHT, LARGE_BUFF * 3)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(pulse_ax),
+                pulse_x1 @ ~pw_plot,
+                Uncreate(pulse_line_r),
+                Uncreate(pulse_line),
+                Uncreate(pulse_line_l),
+                radar.vgroup.animate.shift(
+                    pulse_ax.c2p(0, 0) - radar.radome.get_right()
+                ),
+                self.camera.frame.animate.scale_to_fit_height(radar.vgroup.height * 1.7)
+                .move_to(
+                    Group(
+                        radar.vgroup.copy().shift(
+                            pulse_ax.c2p(0, 0) - radar.radome.get_right()
+                        ),
+                        pulse,
+                    )
+                )
+                .shift(UP * 2 + RIGHT * 4),
+                plane.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        pulse_rtn_ax = pulse_ax.copy().rotate(PI)
+        pulse_rtn_ax.shift(plane.get_left() - pulse_rtn_ax.c2p(0, 0))
+
+        pulse_rtn_x0 = VT(-~pw_plot)
+        pulse_rtn_x1 = VT(0)
+        pulse_rtn = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: ~pulse_amp
+                * signal.chirp(
+                    t - 1 / pulse_f / 4,
+                    pulse_f,
+                    ~pw_plot,
+                    ~pulse_f1,
+                    method="quadratic",
+                )
+                if t < ~pw_plot + ~pulse_rtn_x0
+                else 0,
+                x_range=[
+                    max(0, ~pulse_rtn_x0),
+                    min(~pulse_rtn_x1, pulse_rtn_ax.p2c(radar.radome.get_right())[0]),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.add(pulse_rtn)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    pulse_x0 + 3,
+                    pulse_x1 + 3,
+                ),
+                AnimationGroup(pulse_rtn_x0 + 1, pulse_rtn_x1 + 1),
+                lag_ratio=0.4,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(pulse_rtn.width * 1.8).move_to(
+                pulse_rtn
+            )
+        )
+
+        self.wait(0.5)
+
+        target_start = VT(~pulse_rtn_x1)
+        target_arrow = always_redraw(
+            lambda: Arrow(
+                pulse_rtn_ax.c2p(~target_start, -1),
+                pulse_rtn_ax.c2p(~target_start, -~pulse_amp),
+            )
+        )
+        target_label = always_redraw(
+            lambda: Text("Target Start", font=FONT)
+            .scale(0.3)
+            .next_to(target_arrow, UP, SMALL_BUFF)
+        )
+        target_start_dot = always_redraw(
+            lambda: Dot(pulse_rtn_ax.input_to_graph_point(~target_start, pulse_rtn))
+        )
+
+        self.play(
+            self.camera.frame.animate.shift(UP),
+            Create(target_start_dot),
+            FadeIn(target_arrow, target_label),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            target_start.animate(
+                rate_func=rate_functions.there_and_back
+            ).increment_value(-~pw_plot),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(target_arrow, target_start_dot, target_label))
+
+        self.wait(0.5)
+
+        pulse_static = pulse.copy().next_to(pulse_rtn, UP, SMALL_BUFF).shift(LEFT * 5)
+        self.add(pulse_static)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(
+                    Group(pulse_rtn, pulse_static.copy().shift(RIGHT * 5))
+                ),
+                pulse_static.animate(
+                    rate_func=rate_functions.ease_out_bounce, run_time=2
+                ).shift(RIGHT * 5),
+                lag_ratio=0.4,
+            ),
+        )
+
+        self.wait(0.5)
+
+        start = DashedLine(
+            pulse_rtn_ax.c2p(~pulse_rtn_x1, -2),
+            pulse_rtn_ax.c2p(~pulse_rtn_x1, 1),
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=YELLOW,
+        )
+
+        self.play(Create(start))
+
+        tx_pulse_label = Text("Tx Pulse", font=FONT, color=TX_COLOR).next_to(
+            pulse_static.copy().set_stroke(opacity=0.3).shift(UP * 3),
+            UP,
+            MED_SMALL_BUFF,
+        )
+        self.add(tx_pulse_label)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        start_arrow = Arrow(
+            radar.radome.get_right() + RIGHT * 2 + DOWN * 2,
+            radar.radome.get_right(),
+            color=YELLOW,
+        )
+
+        self.play(
+            LaggedStart(
+                Uncreate(start),
+                pulse_static.animate.set_stroke(opacity=0.3).shift(UP * 3),
+                self.camera.frame.animate.restore(),
+                AnimationGroup(
+                    pulse_rtn_x1 @ (pulse_rtn_ax.p2c(radar.radome.get_right())[0]),
+                    pulse_rtn_x0
+                    @ (pulse_rtn_ax.p2c(radar.radome.get_right())[0] - ~pw_plot),
+                ),
+                GrowArrow(start_arrow),
+                lag_ratio=0.3,
             )
         )
 
