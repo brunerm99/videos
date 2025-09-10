@@ -16,7 +16,7 @@ config.background_color = BACKGROUND_COLOR
 
 SKIP_ANIMATIONS_OVERRIDE = False
 
-FONT = "Maple Mono CN"
+FONT = "Maple Mono NF CN"
 
 BLOCKS = get_blocks()
 
@@ -25,6 +25,7 @@ OK = GREY
 BAD = RED
 TARGET1_COLOR = GREEN
 TARGET2_COLOR = ORANGE
+TARGET3_COLOR = BLUE
 
 
 def skip_animations(b):
@@ -861,7 +862,7 @@ class Options(MovingCameraScene):
             .move_to(self.camera.frame)
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.play(LaggedStart(*[GrowFromCenter(m) for m in resources], lag_ratio=0.3))
 
         self.wait(0.5)
@@ -1053,7 +1054,7 @@ class Options(MovingCameraScene):
         )
         self.add(tx_pulse_label)
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
         self.wait(0.5)
 
         start_arrow = Arrow(
@@ -1074,6 +1075,35 @@ class Options(MovingCameraScene):
                 ),
                 GrowArrow(start_arrow),
                 lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        target2 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .set_fill(TARGET2_COLOR)
+            .set_color(TARGET2_COLOR)
+            .next_to(plane, UP, -MED_SMALL_BUFF)
+            .shift(LEFT)
+        )
+        target3 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(radar.vgroup.width)
+            .rotate(PI * 0.75)
+            .set_fill(TARGET3_COLOR)
+            .set_color(TARGET3_COLOR)
+            .next_to(plane, DOWN, -MED_SMALL_BUFF)
+            .shift(RIGHT / 2)
+        )
+
+        self.play(
+            LaggedStart(
+                target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                target3.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                lag_ratio=0.2,
             )
         )
 
