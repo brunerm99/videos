@@ -16,7 +16,7 @@ config.background_color = BACKGROUND_COLOR
 
 SKIP_ANIMATIONS_OVERRIDE = False
 
-FONT = "Maple Mono NF CN"
+FONT = "Maple Mono CN"
 
 BLOCKS = get_blocks()
 
@@ -1084,27 +1084,87 @@ class Options(MovingCameraScene):
             SVGMobject("../props/static/plane.svg")
             .scale_to_fit_width(radar.vgroup.width)
             .rotate(PI * 0.75)
+            .scale(0.5)
             .set_fill(TARGET2_COLOR)
             .set_color(TARGET2_COLOR)
-            .next_to(plane, UP, -MED_SMALL_BUFF)
+            .next_to(plane, UP, -LARGE_BUFF)
             .shift(LEFT)
         )
         target3 = (
             SVGMobject("../props/static/plane.svg")
             .scale_to_fit_width(radar.vgroup.width)
             .rotate(PI * 0.75)
+            .scale(0.5)
             .set_fill(TARGET3_COLOR)
             .set_color(TARGET3_COLOR)
-            .next_to(plane, DOWN, -MED_SMALL_BUFF)
+            .next_to(plane, DOWN, -LARGE_BUFF)
             .shift(RIGHT / 2)
         )
 
         self.play(
             LaggedStart(
+                FadeOut(start_arrow),
+                plane.animate.scale(0.5),
                 target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
                 target3.shift(RIGHT * 10).animate.shift(LEFT * 10),
                 lag_ratio=0.2,
             )
         )
+
+        self.wait(0.5)
+
+        pulse_amp_2 = VT(0)
+        pulse_amp_3 = VT(0)
+        pulse_phase_1 = VT(0)
+        pulse_phase_2 = VT(0)
+        pulse_phase_3 = VT(0)
+        pulse_t_start_2 = 0.1
+        pulse_t_start_3 = 0.22
+        pulse_rtn_mult = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: (
+                    (
+                        ~pulse_amp
+                        * signal.chirp(
+                            t - 1 / pulse_f / 4 + ~pulse_phase_1,
+                            pulse_f,
+                            ~pw_plot,
+                            ~pulse_f1,
+                            method="quadratic",
+                        )
+                        if t < ~pw_plot + ~pulse_rtn_x0
+                        else 0
+                    )
+                    + (
+                        ~pulse_amp_2
+                        * signal.chirp(
+                            t - 1 / pulse_f / 4 + ~pulse_phase_2,
+                            pulse_f,
+                            ~pw_plot,
+                            ~pulse_f1,
+                            method="quadratic",
+                        )
+                        if t + pulse_t_start_2
+                        < ~pw_plot + ~pulse_rtn_x0 + pulse_t_start_2
+                        else 0
+                    )
+                )
+                / ((1 + ~pulse_amp) - ~pulse_amp + ~pulse_amp_2 + ~pulse_amp_3),
+                x_range=[
+                    max(0, ~pulse_rtn_x0 - max(pulse_t_start_2, pulse_t_start_3)),
+                    min(
+                        ~pulse_rtn_x1,
+                        pulse_rtn_ax.p2c(radar.radome.get_right())[0],
+                    ),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+            ).shift(DOWN)
+        )
+
+        self.add(pulse_rtn_mult)
+        self.play(pulse_amp_2 @ 0.3)
+        print(~pulse_amp + ~pulse_amp_2 + ~pulse_amp_3)
 
         self.wait(2)
