@@ -932,29 +932,100 @@ class Options(MovingCameraScene):
         pulse_rtn_ax = pulse_ax.copy().rotate(PI)
         pulse_rtn_ax.shift(plane.get_left() - pulse_rtn_ax.c2p(0, 0))
 
+        def chirp_pulse(t_val, pulse_start, pulse_width, f0, f1, amp, phase):
+            t_rel = t_val - pulse_start - 1 / f0 / 4
+
+            if -1 / f0 / 4 <= t_rel <= pulse_width:
+                return amp * signal.chirp(
+                    t_rel,
+                    f0=f0,
+                    t1=pulse_width,
+                    f1=f1,
+                    method="quadratic",
+                    phi=phase,
+                )
+            else:
+                return 0
+
         pulse_rtn_x0 = VT(-~pw_plot)
         pulse_rtn_x1 = VT(0)
+
+        pulse_amp_2 = VT(0)
+        pulse_amp_3 = VT(0)
+        pulse_phase_1 = VT(0)
+        pulse_phase_2 = VT(0)
+        pulse_phase_3 = VT(0)
+        pulse_t_start_2 = VT(0)
+        pulse_t_start_3 = VT(0)
+        pulse_f1_2 = VT(~pulse_f1)
+        allow_2 = VT(0)
+        allow_3 = VT(0)
         pulse_rtn = always_redraw(
             lambda: pulse_rtn_ax.plot(
-                lambda t: ~pulse_amp
-                * signal.chirp(
-                    t - 1 / pulse_f / 4,
-                    pulse_f,
-                    ~pw_plot,
-                    ~pulse_f1,
-                    method="quadratic",
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
                 )
-                if t < ~pw_plot + ~pulse_rtn_x0
-                else 0,
+                + ~allow_2
+                * chirp_pulse(
+                    t,
+                    pulse_start=-~pulse_t_start_2 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1_2,
+                    amp=~pulse_amp_2,
+                    phase=~pulse_phase_2,
+                )
+                + ~allow_3
+                * chirp_pulse(
+                    t,
+                    pulse_start=-~pulse_t_start_3 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_3,
+                    phase=~pulse_phase_3,
+                ),
                 x_range=[
-                    max(0, ~pulse_rtn_x0),
-                    min(~pulse_rtn_x1, pulse_rtn_ax.p2c(radar.radome.get_right())[0]),
+                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    min(
+                        ~pulse_rtn_x1,
+                        pulse_rtn_ax.p2c(radar.radome.get_right())[0],
+                    ),
                     1 / 1000,
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=RX_COLOR,
+                # use_smoothing=False,
             )
         )
+
+        # pulse_rtn = always_redraw(
+        #     lambda: pulse_rtn_ax.plot(
+        #         lambda t: ~pulse_amp
+        #         * signal.chirp(
+        #             t - 1 / pulse_f / 4,
+        #             pulse_f,
+        #             ~pw_plot,
+        #             ~pulse_f1,
+        #             method="quadratic",
+        #         )
+        #         if t < ~pw_plot + ~pulse_rtn_x0
+        #         else 0,
+        #         x_range=[
+        #             max(0, ~pulse_rtn_x0),
+        #             min(~pulse_rtn_x1, pulse_rtn_ax.p2c(radar.radome.get_right())[0]),
+        #             1 / 1000,
+        #         ],
+        #         stroke_width=DEFAULT_STROKE_WIDTH * 1,
+        #         color=RX_COLOR,
+        #     )
+        # )
 
         self.next_section(skip_animations=skip_animations(True))
         self.add(pulse_rtn)
@@ -1054,7 +1125,7 @@ class Options(MovingCameraScene):
         )
         self.add(tx_pulse_label)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         self.wait(0.5)
 
         start_arrow = Arrow(
@@ -1088,7 +1159,7 @@ class Options(MovingCameraScene):
             .set_fill(TARGET2_COLOR)
             .set_color(TARGET2_COLOR)
             .next_to(plane, UP, -LARGE_BUFF)
-            .shift(LEFT)
+            .shift(RIGHT / 2)
         )
         target3 = (
             SVGMobject("../props/static/plane.svg")
@@ -1098,7 +1169,7 @@ class Options(MovingCameraScene):
             .set_fill(TARGET3_COLOR)
             .set_color(TARGET3_COLOR)
             .next_to(plane, DOWN, -LARGE_BUFF)
-            .shift(RIGHT / 2)
+            .shift(RIGHT * 1.4)
         )
 
         self.play(
@@ -1113,45 +1184,24 @@ class Options(MovingCameraScene):
 
         self.wait(0.5)
 
-        pulse_amp_2 = VT(0)
-        pulse_amp_3 = VT(0)
-        pulse_phase_1 = VT(0)
-        pulse_phase_2 = VT(0)
-        pulse_phase_3 = VT(0)
-        pulse_t_start_2 = 0.1
-        pulse_t_start_3 = 0.22
-        pulse_rtn_mult = always_redraw(
+        pulse_2_opacity = VT(0)
+        pulse_3_opacity = VT(0)
+        pulse_t2_shift = VT(1)
+        pulse_t3_shift = VT(1)
+
+        pulse_rtn_t2 = always_redraw(
             lambda: pulse_rtn_ax.plot(
-                lambda t: (
-                    (
-                        ~pulse_amp
-                        * signal.chirp(
-                            t - 1 / pulse_f / 4 + ~pulse_phase_1,
-                            pulse_f,
-                            ~pw_plot,
-                            ~pulse_f1,
-                            method="quadratic",
-                        )
-                        if t < ~pw_plot + ~pulse_rtn_x0
-                        else 0
-                    )
-                    + (
-                        ~pulse_amp_2
-                        * signal.chirp(
-                            t - 1 / pulse_f / 4 + ~pulse_phase_2,
-                            pulse_f,
-                            ~pw_plot,
-                            ~pulse_f1,
-                            method="quadratic",
-                        )
-                        if t + pulse_t_start_2
-                        < ~pw_plot + ~pulse_rtn_x0 + pulse_t_start_2
-                        else 0
-                    )
-                )
-                / ((1 + ~pulse_amp) - ~pulse_amp + ~pulse_amp_2 + ~pulse_amp_3),
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=-~pulse_t_start_2 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_2,
+                    phase=~pulse_phase_2,
+                ),
                 x_range=[
-                    max(0, ~pulse_rtn_x0 - max(pulse_t_start_2, pulse_t_start_3)),
+                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
                     min(
                         ~pulse_rtn_x1,
                         pulse_rtn_ax.p2c(radar.radome.get_right())[0],
@@ -1160,11 +1210,79 @@ class Options(MovingCameraScene):
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=RX_COLOR,
-            ).shift(DOWN)
+            )
+            .shift(UP * ~pulse_t2_shift)
+            .set_stroke(opacity=~pulse_2_opacity)
+        )
+        pulse_rtn_t3 = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=-~pulse_t_start_3 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_3,
+                    phase=~pulse_phase_3,
+                ),
+                x_range=[
+                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    min(
+                        ~pulse_rtn_x1,
+                        pulse_rtn_ax.p2c(radar.radome.get_right())[0],
+                    ),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+            )
+            .shift(DOWN * ~pulse_t3_shift)
+            .set_stroke(opacity=~pulse_3_opacity)
         )
 
-        self.add(pulse_rtn_mult)
-        self.play(pulse_amp_2 @ 0.3)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.add(pulse_rtn_t2, pulse_rtn_t3)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    pulse_2_opacity @ 1,
+                    pulse_3_opacity @ 1,
+                ),
+                AnimationGroup(
+                    pulse_t_start_2 @ 0.1,
+                    pulse_t_start_3 @ 0.22,
+                ),
+                pulse_amp_2 @ 0.3,
+                pulse_amp_3 @ 0.3,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                LaggedStart(pulse_t2_shift @ 0, pulse_2_opacity @ 0, lag_ratio=0.2),
+                allow_2 @ 1,
+                LaggedStart(pulse_t3_shift @ 0, pulse_3_opacity @ 0, lag_ratio=0.2),
+                allow_3 @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        # self.play(
+        #     pulse_amp @ 0.3,
+        #     pulse_amp_2 @ 0.3,
+        #     pulse_amp_3 @ 0.3,
+        #     # pulse_phase_3 @ (10 * DEGREES),
+        #     allow_2 @ 1,
+        #     allow_3 @ 1,
+        #     # pulse_f1_2 @ (~pulse_f1 * 5),
+        # )
+
+        # # self.play(pulse_amp_2 @ 0.3)
         print(~pulse_amp + ~pulse_amp_2 + ~pulse_amp_3)
 
         self.wait(2)
