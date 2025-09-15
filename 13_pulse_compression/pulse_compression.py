@@ -44,6 +44,22 @@ def lin2db(x):
     return 10 * np.log10(x)
 
 
+def chirp_pulse(t_val, pulse_start, pulse_width, f0, f1, amp, phase, ramp="quadratic"):
+    t_rel = t_val - pulse_start - 1 / f0 / 4
+
+    if -1 / f0 / 4 <= t_rel <= pulse_width:
+        return amp * signal.chirp(
+            t_rel,
+            f0=f0,
+            t1=pulse_width,
+            f1=f1,
+            method=ramp,
+            phi=phase,
+        )
+    else:
+        return 0
+
+
 class Issue(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -932,21 +948,6 @@ class Options(MovingCameraScene):
         pulse_rtn_ax = pulse_ax.copy().rotate(PI)
         pulse_rtn_ax.shift(plane.get_left() - pulse_rtn_ax.c2p(0, 0))
 
-        def chirp_pulse(t_val, pulse_start, pulse_width, f0, f1, amp, phase):
-            t_rel = t_val - pulse_start - 1 / f0 / 4
-
-            if -1 / f0 / 4 <= t_rel <= pulse_width:
-                return amp * signal.chirp(
-                    t_rel,
-                    f0=f0,
-                    t1=pulse_width,
-                    f1=f1,
-                    method="quadratic",
-                    phi=phase,
-                )
-            else:
-                return 0
-
         pulse_rtn_x0 = VT(-~pw_plot)
         pulse_rtn_x1 = VT(0)
 
@@ -1172,22 +1173,10 @@ class Options(MovingCameraScene):
             .shift(RIGHT * 1.4)
         )
 
-        self.play(
-            LaggedStart(
-                FadeOut(start_arrow),
-                plane.animate.scale(0.5),
-                target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
-                target3.shift(RIGHT * 10).animate.shift(LEFT * 10),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
         pulse_2_opacity = VT(0)
         pulse_3_opacity = VT(0)
-        pulse_t2_shift = VT(1)
-        pulse_t3_shift = VT(1)
+        pulse_t2_shift = VT(1.3)
+        pulse_t3_shift = VT(1.3)
 
         pulse_rtn_t2 = always_redraw(
             lambda: pulse_rtn_ax.plot(
@@ -1242,12 +1231,21 @@ class Options(MovingCameraScene):
 
         self.next_section(skip_animations=skip_animations(True))
 
+        self.play(FadeOut(start_arrow))
+
+        self.wait(0.5)
+
         self.add(pulse_rtn_t2, pulse_rtn_t3)
         self.play(
             LaggedStart(
+                plane.animate.scale(0.5),
                 AnimationGroup(
                     pulse_2_opacity @ 1,
+                    target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                ),
+                AnimationGroup(
                     pulse_3_opacity @ 1,
+                    target3.shift(RIGHT * 10).animate.shift(LEFT * 10),
                 ),
                 AnimationGroup(
                     pulse_t_start_2 @ 0.1,
@@ -1260,7 +1258,9 @@ class Options(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -1272,17 +1272,604 @@ class Options(MovingCameraScene):
             )
         )
 
-        # self.play(
-        #     pulse_amp @ 0.3,
-        #     pulse_amp_2 @ 0.3,
-        #     pulse_amp_3 @ 0.3,
-        #     # pulse_phase_3 @ (10 * DEGREES),
-        #     allow_2 @ 1,
-        #     allow_3 @ 1,
-        #     # pulse_f1_2 @ (~pulse_f1 * 5),
-        # )
+        self.wait(0.5)
 
-        # # self.play(pulse_amp_2 @ 0.3)
-        print(~pulse_amp + ~pulse_amp_2 + ~pulse_amp_3)
+        comparison_group = Group(
+            pulse_rtn, pulse_static.copy().next_to(pulse_rtn, UP, MED_LARGE_BUFF)
+        )
+
+        start = DashedLine(
+            comparison_group[1].get_corner(UL) + UP / 2,
+            comparison_group[1].get_corner(UL) + DOWN * 4.7,
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=YELLOW,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                pulse_static.animate.set_stroke(opacity=1).move_to(comparison_group[1]),
+                self.camera.frame.animate.scale_to_fit_height(
+                    (pulse_rtn.height + pulse_static.height) * 1.8
+                ).move_to(comparison_group),
+                Create(start),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            Group(pulse_static, start).animate.shift(
+                RIGHT * (pulse_rtn.get_left() - pulse_static.get_left())[0]
+            ),
+            run_time=0.5,
+        )
+        self.play(Group(pulse_static, start).animate.shift(RIGHT * 2), run_time=0.5)
+        self.play(Group(pulse_static, start).animate.shift(LEFT * 0.4), run_time=0.5)
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                pulse_phase_2.animate(
+                    rate_func=rate_functions.there_and_back
+                ).increment_value(80),
+                pulse_phase_1.animate(
+                    rate_func=rate_functions.there_and_back
+                ).increment_value(40),
+                pulse_phase_3.animate(
+                    rate_func=rate_functions.there_and_back
+                ).increment_value(110),
+                lag_ratio=0.2,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        lu_bez = CubicBezier(
+            pulse_rtn.get_corner(DL) + [0, -0.1, 0],
+            pulse_rtn.get_corner(DL) + [0, -1, 0],
+            pulse_rtn.get_bottom() + [0, -1.5, 0],
+            pulse_rtn.get_bottom() + [0, -3, 0],
+        )
+        ru_bez = CubicBezier(
+            pulse_rtn.get_corner(DR) + [0, -0.1, 0],
+            pulse_rtn.get_corner(DR) + [0, -1, 0],
+            pulse_rtn.get_bottom() + [0, -1.5, 0],
+            pulse_rtn.get_bottom() + [0, -3, 0],
+        )
+
+        nums = [str(np.random.randint(0, 2)) for _ in range(16)]
+        info = Text(
+            "".join(nums), font=FONT, font_size=DEFAULT_FONT_SIZE * 1.2
+        ).next_to(ru_bez.get_end(), DOWN, LARGE_BUFF * 3)
+        for char, num in zip(info, nums):
+            if num == "1":
+                char.set_color(GOOD)
+            else:
+                char.set_color(BAD)
+
+        info_group = Group(pulse_rtn, info)
+
+        ld_bez = CubicBezier(
+            pulse_rtn.get_bottom() + [0, -3, 0],
+            pulse_rtn.get_bottom() + [0, -4.5, 0],
+            info.get_corner(UL) + [0, 1, 0],
+            info.get_corner(UL) + [0, 0.1, 0],
+        )
+        rd_bez = CubicBezier(
+            pulse_rtn.get_bottom() + [0, -3, 0],
+            pulse_rtn.get_bottom() + [0, -4.5, 0],
+            info.get_corner(UR) + [0, 1, 0],
+            info.get_corner(UR) + [0, 0.1, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                FadeOut(radar.vgroup, start, pulse_static, target2, target3, plane),
+                self.camera.frame.animate.scale_to_fit_height(
+                    info_group.height * 1.2
+                ).move_to(info_group),
+                pulse_f1.animate(run_time=2).set_value(pulse_f * 3),
+                AnimationGroup(Create(lu_bez), Create(ru_bez)),
+                AnimationGroup(Create(ld_bez), Create(rd_bez)),
+                LaggedStart(*[GrowFromCenter(m) for m in info], lag_ratio=0.1),
+                lag_ratio=0.4,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self) * 2))
+
+        self.wait(2)
+
+
+class Encoding(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        f_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[0, 1, 0.25],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.4),
+        )
+        lfm_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.4),
+        )
+        Group(f_ax, lfm_ax).arrange(DOWN, MED_LARGE_BUFF).to_edge(RIGHT, LARGE_BUFF)
+        f_label = (
+            Text("Frequency", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(f_ax, LEFT, SMALL_BUFF)
+        )
+        amp_label = (
+            Text("Amplitude", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(lfm_ax, LEFT, SMALL_BUFF)
+        )
+
+        m = VT(0)
+        f = 4
+        f1 = VT(f)
+        f_plot = always_redraw(
+            lambda: f_ax.plot(lambda t: 0.2 + ~m * t, color=TX_COLOR)
+        )
+        lfm_plot = always_redraw(
+            lambda: lfm_ax.plot(
+                lambda t: chirp_pulse(t, 0, 1, f, ~f1, 1, 0, ramp="linear"),
+                x_range=[0, 1, 1 / 1000],
+                color=TX_COLOR,
+            )
+        )
+
+        lfm_label = (
+            Text("Linear\nFrequency\nModulation", font=FONT)
+            .scale_to_fit_width(fw(self, 0.25))
+            .to_edge(LEFT, LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Write(lfm_label),
+                Create(f_ax),
+                Create(lfm_ax),
+                FadeIn(f_label),
+                FadeIn(amp_label),
+                lag_ratio=0.3,
+            )
+        )
+        self.play(Create(f_plot), Create(lfm_plot))
+
+        self.wait(0.5)
+
+        self.play(m @ 0.8, f1 @ 30)
+
+        self.wait(0.5)
+
+        thumbnail = (
+            ImageMobject("../01_fmcw/media/images/fmcw/thumbnails/comparison.png")
+            .scale_to_fit_width(lfm_label.width * 1.2)
+            .next_to(lfm_label, DOWN, LARGE_BUFF * 10)
+        )
+        tn_box = SurroundingRectangle(thumbnail, buff=0)
+
+        title_top = Text("What is FMCW Radar and", font=FONT).scale(0.5)
+        title_bot = Text("why is it useful?", font=FONT).scale(0.5)
+        title = Group(title_top, title_bot).arrange(DOWN).next_to(thumbnail, DOWN)
+        tn = Group(thumbnail, tn_box, title)
+
+        self.play(
+            Group(lfm_label, tn)
+            .animate.arrange(DOWN, LARGE_BUFF)
+            .set_x(lfm_label.get_x())
+        )
+
+        self.wait(0.5)
+
+        phase_ax = Axes(
+            x_range=[0, 8, 1],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.4),
+        )
+        phase_amp_ax = Axes(
+            x_range=[0, 8, 1],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.4),
+        )
+        Group(phase_ax, phase_amp_ax).arrange(DOWN, MED_LARGE_BUFF).to_edge(
+            RIGHT, LARGE_BUFF
+        ).shift(DOWN * fh(self))
+        phase_label = (
+            Text("Phase", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(phase_ax, LEFT, SMALL_BUFF)
+        )
+        phase_amp_label = (
+            Text("Amplitude", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(phase_amp_ax, LEFT, SMALL_BUFF)
+        )
+
+        np.random.seed(2)
+        phase_seq = (np.random.randint(0, 2, 8) - 0.5) * -2
+        phase_plot = phase_ax.plot(
+            lambda t: 1 if phase_seq[int(np.floor(t))] > 0 else -1,
+            x_range=[0, 8 - 1 / 1000, 1 / 1000],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+        phase_amp_plot = phase_amp_ax.plot(
+            lambda t: np.sin(2 * PI * 1 * t)
+            * (1 if phase_seq[int(np.floor(t))] > 0 else -1),
+            x_range=[0, 8 - 1 / 1000, 1 / 1000],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+        phase_labels = Group(
+            *[
+                Text("0", color=BAD, font=FONT).move_to(phase_ax.c2p(idx + 0.5, -0.5))
+                if num < 0
+                else Text("1", color=GOOD, font=FONT).move_to(
+                    phase_ax.c2p(idx + 0.5, 0.5)
+                )
+                for idx, num in enumerate(phase_seq)
+            ]
+        )
+
+        phase_mod_label = (
+            Text("Phase\nModulation", font=FONT)
+            .scale_to_fit_width(fw(self, 0.25))
+            .to_edge(LEFT, LARGE_BUFF)
+            .shift(DOWN * fh(self))
+        )
+        self.add(
+            phase_labels,
+            phase_mod_label,
+            phase_amp_plot,
+            phase_amp_label,
+            phase_label,
+            phase_ax,
+            phase_amp_ax,
+            phase_plot,
+        )
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        np.random.seed(3)
+        phase_seq_new = (np.random.randint(0, 2, 8) - 0.5) * -2
+        phase_plot_new = phase_ax.plot(
+            lambda t: 1 if phase_seq_new[int(np.floor(t))] > 0 else -1,
+            x_range=[0, 8 - 1 / 1000, 1 / 1000],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+        phase_amp_plot_new = phase_amp_ax.plot(
+            lambda t: np.sin(2 * PI * 1 * t)
+            * (1 if phase_seq_new[int(np.floor(t))] > 0 else -1),
+            x_range=[0, 8 - 1 / 1000, 1 / 1000],
+            use_smoothing=False,
+            color=TX_COLOR,
+        )
+        phase_labels_new = Group(
+            *[
+                Text("0", color=BAD, font=FONT).move_to(phase_ax.c2p(idx + 0.5, -0.5))
+                if num < 0
+                else Text("1", color=GOOD, font=FONT).move_to(
+                    phase_ax.c2p(idx + 0.5, 0.5)
+                )
+                for idx, num in enumerate(phase_seq_new)
+            ]
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                *[
+                    Transform(old, new)
+                    for old, new in zip(phase_labels, phase_labels_new)
+                ],
+                lag_ratio=0.1,
+            ),
+            Transform(phase_plot, phase_plot_new),
+            Transform(phase_amp_plot, phase_amp_plot_new),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(fh(self, 2.1)).shift(
+                UP * fh(self) / 2
+            )
+        )
+
+        self.wait(0.5)
+
+        new_cam = self.camera.frame.copy().scale(0.5).shift(RIGHT * fw(self, 0.5))
+        all_modulations = Text("All Modulation Schemes", font=FONT).next_to(
+            new_cam.get_top(), DOWN, LARGE_BUFF
+        )
+
+        self.play(
+            self.camera.frame.animate.scale(0.5).shift(RIGHT * fw(self, 0.5)),
+            Write(all_modulations),
+        )
+
+        self.wait(0.5)
+
+        gen_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.4),
+            y_length=fh(self, 0.3),
+        )
+        mod_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.4),
+            y_length=fh(self, 0.3),
+        )
+        arrow = MathTex(r"\Rightarrow").scale(2)
+        Group(gen_ax, arrow, mod_ax).arrange(RIGHT, MED_LARGE_BUFF).move_to(new_cam)
+        gen_plot = gen_ax.plot(
+            lambda t: np.sin(2 * PI * 6 * t),
+            x_range=[0, 1, 1 / 400],
+            color=TX_COLOR,
+        )
+
+        self.play(LaggedStart(Create(gen_ax), Create(gen_plot), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        gen_bw = (
+            MathTex(r"B = 0 \text{ Hz}").scale(2).next_to(gen_ax, DOWN, MED_LARGE_BUFF)
+        )
+        mod_bw = (
+            MathTex(r"B > 0 \text{ Hz}").scale(2).next_to(mod_ax, DOWN, MED_LARGE_BUFF)
+        )
+
+        self.play(FadeIn(gen_bw, shift=UP))
+
+        self.wait(0.5)
+
+        qmark = Text("?", font=FONT, color=YELLOW).scale(1.5).move_to(mod_ax).shift(UP)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(arrow),
+                Create(mod_ax),
+                GrowFromCenter(qmark),
+                FadeIn(mod_bw, shift=UP),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.move_to(Group(lfm_label, lfm_ax, f_ax)))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        hl_l = VT(0)
+        hl_r = VT(0)
+        hl = always_redraw(
+            lambda: f_ax.plot(
+                lambda t: 0.2 + ~m * t, color=YELLOW, x_range=[~hl_l, ~hl_r, 1 / 1000]
+            ),
+        )
+
+        self.add(hl)
+
+        self.play(LaggedStart(hl_r @ 1, hl_l @ 1, lag_ratio=0.2))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        lines = Group(
+            *[
+                DashedLine(
+                    phase_amp_ax.c2p(2, 1),
+                    phase_amp_ax.c2p(2, -1),
+                    color=YELLOW,
+                    dash_length=DEFAULT_DASH_LENGTH * 2,
+                ),
+                DashedLine(
+                    phase_amp_ax.c2p(4, 1),
+                    phase_amp_ax.c2p(4, -1),
+                    color=YELLOW,
+                    dash_length=DEFAULT_DASH_LENGTH * 2,
+                ),
+                DashedLine(
+                    phase_amp_ax.c2p(7, 1),
+                    phase_amp_ax.c2p(7, -1),
+                    color=YELLOW,
+                    dash_length=DEFAULT_DASH_LENGTH * 2,
+                ),
+            ]
+        )
+
+        self.play(LaggedStart(*[Create(m) for m in lines], lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+        self.wait(2)
+
+
+class Overlap(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(False))
+
+        pulse_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=fw(self, 0.5),
+                y_length=fh(self, 0.3),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+        pulse_rtn_ax = pulse_ax.copy()
+        Group(pulse_ax, pulse_rtn_ax).arrange(
+            DOWN,
+            MED_LARGE_BUFF,
+        )
+
+        pw_plot = VT(0.3)
+        pulse_amp = VT(0.3)
+        pulse_f = 20
+        pulse_rtn_x0 = VT(-~pw_plot)
+        pulse_rtn_x1 = VT(0)
+
+        pulse_f1 = VT(pulse_f)
+        pulse_amp_2 = VT(0)
+        pulse_amp_3 = VT(0)
+        pulse_phase_1 = VT(0)
+        pulse_phase_2 = VT(0)
+        pulse_phase_3 = VT(0)
+        pulse_t_start_2 = VT(0)
+        pulse_t_start_3 = VT(0)
+        pulse_f1_2 = VT(~pulse_f1)
+        allow_2 = VT(0)
+        allow_3 = VT(0)
+        pulse = always_redraw(
+            lambda: pulse_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[
+                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    min(
+                        ~pulse_rtn_x1,
+                        1,
+                    ),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=TX_COLOR,
+                # use_smoothing=False,
+            )
+        )
+        pulse_rtn = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                )
+                + ~allow_2
+                * chirp_pulse(
+                    t,
+                    pulse_start=-~pulse_t_start_2 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1_2,
+                    amp=~pulse_amp_2,
+                    phase=~pulse_phase_2,
+                )
+                + ~allow_3
+                * chirp_pulse(
+                    t,
+                    pulse_start=-~pulse_t_start_3 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_3,
+                    phase=~pulse_phase_3,
+                ),
+                x_range=[
+                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    min(
+                        ~pulse_rtn_x1,
+                        1,
+                    ),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+                # use_smoothing=False,
+            )
+        )
+
+        target1 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_height(fh(self, 0.2))
+            .rotate(PI * 0.75)
+            .set_fill(TARGET1_COLOR)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .set_y(pulse_rtn_ax.get_y())
+        )
+
+        self.add(pulse_ax, pulse_rtn_ax, pulse_rtn, pulse)
+
+        self.wait(0.5)
+
+        self.play(
+            pulse_rtn_x1 @ ~pw_plot,
+            pulse_rtn_x0 @ 0,
+            target1.shift(RIGHT * 10).animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        with_lfm = (
+            Text("* with linear\n  frequency\n  modulation", font=FONT)
+            .scale(0.4)
+            .to_corner(UL, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(FadeIn(with_lfm), pulse_f1 @ (pulse_f * 5), lag_ratio=0.3)
+        )
 
         self.wait(2)
