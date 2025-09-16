@@ -14,7 +14,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -1736,7 +1736,7 @@ class Encoding(MovingCameraScene):
 
 class Overlap(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         pulse_ax = (
             Axes(
@@ -1772,11 +1772,12 @@ class Overlap(MovingCameraScene):
         pulse_f1_2 = VT(~pulse_f1)
         allow_2 = VT(0)
         allow_3 = VT(0)
+        pulse_start_offset = VT(0)
         pulse = always_redraw(
             lambda: pulse_ax.plot(
                 lambda t: chirp_pulse(
                     t,
-                    pulse_start=~pulse_rtn_x0,
+                    pulse_start=~pulse_rtn_x0 + ~pulse_start_offset,
                     pulse_width=~pw_plot,
                     f0=pulse_f,
                     f1=~pulse_f1,
@@ -1784,11 +1785,8 @@ class Overlap(MovingCameraScene):
                     phase=~pulse_phase_1,
                 ),
                 x_range=[
-                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
-                    min(
-                        ~pulse_rtn_x1,
-                        1,
-                    ),
+                    0,
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
                     1 / 1000,
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
@@ -1810,7 +1808,7 @@ class Overlap(MovingCameraScene):
                 + ~allow_2
                 * chirp_pulse(
                     t,
-                    pulse_start=-~pulse_t_start_2 + ~pulse_rtn_x0,
+                    pulse_start=~pulse_t_start_2 + ~pulse_rtn_x0,
                     pulse_width=~pw_plot,
                     f0=pulse_f,
                     f1=~pulse_f1_2,
@@ -1820,7 +1818,7 @@ class Overlap(MovingCameraScene):
                 + ~allow_3
                 * chirp_pulse(
                     t,
-                    pulse_start=-~pulse_t_start_3 + ~pulse_rtn_x0,
+                    pulse_start=~pulse_t_start_3 + ~pulse_rtn_x0,
                     pulse_width=~pw_plot,
                     f0=pulse_f,
                     f1=~pulse_f1,
@@ -1828,11 +1826,8 @@ class Overlap(MovingCameraScene):
                     phase=~pulse_phase_3,
                 ),
                 x_range=[
-                    max(0, ~pulse_rtn_x0 - max(~pulse_t_start_2, ~pulse_t_start_3)),
-                    min(
-                        ~pulse_rtn_x1,
-                        1,
-                    ),
+                    max(~pulse_rtn_x0, 0),
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
                     1 / 1000,
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
@@ -1869,7 +1864,249 @@ class Overlap(MovingCameraScene):
         )
 
         self.play(
-            LaggedStart(FadeIn(with_lfm), pulse_f1 @ (pulse_f * 5), lag_ratio=0.3)
+            LaggedStart(
+                FadeIn(with_lfm),
+                pulse_f1 @ (pulse_f * 5),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        target2 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(target1.width)
+            .rotate(PI * 0.75)
+            .scale(0.5)
+            .set_fill(TARGET2_COLOR)
+            .set_color(TARGET2_COLOR)
+            .next_to(target1, UP, 0)
+            .shift(LEFT * 2)
+            .shift(RIGHT / 2)
+        )
+        target3 = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(target1.width)
+            .rotate(PI * 0.75)
+            .scale(0.5)
+            .set_fill(TARGET3_COLOR)
+            .set_color(TARGET3_COLOR)
+            .next_to(target1, DOWN, 0)
+            .shift(LEFT * 2)
+            .shift(RIGHT * 1.4)
+        )
+
+        self.play(pulse_ax.animate.shift(DOWN * 2))
+
+        self.wait(0.5)
+
+        pulse_2_opacity = VT(0)
+        pulse_3_opacity = VT(0)
+        pulse_t2_shift = VT(1.3)
+        pulse_t3_shift = VT(1.3)
+
+        pulse_rtn_t2 = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_t_start_2 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_2,
+                    phase=~pulse_phase_2,
+                ),
+                x_range=[
+                    max(~pulse_rtn_x0, 0),
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+            )
+            .shift(UP * ~pulse_t2_shift)
+            .set_stroke(opacity=~pulse_2_opacity)
+        )
+        pulse_rtn_t3 = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_t_start_3 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_3,
+                    phase=~pulse_phase_3,
+                ),
+                x_range=[
+                    max(~pulse_rtn_x0, 0),
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+            )
+            .shift(DOWN * ~pulse_t3_shift)
+            .set_stroke(opacity=~pulse_3_opacity)
+        )
+        self.add(pulse_rtn_t2, pulse_rtn_t3)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                pulse_ax.animate.shift(UP * 2),
+                target1.animate.scale(0.5).shift(LEFT * 2),
+                target2.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                pulse_2_opacity @ 1,
+                pulse_amp_2 @ ~pulse_amp,
+                target3.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                pulse_3_opacity @ 1,
+                pulse_amp_3 @ ~pulse_amp,
+                pulse_t_start_2 @ 0.1,
+                pulse_t_start_3 @ 0.28,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        start = always_redraw(
+            lambda: DashedLine(
+                pulse_ax.c2p(~pulse_start_offset, 1),
+                pulse_rtn_ax.c2p(~pulse_start_offset, -2),
+                dash_length=DEFAULT_DASH_LENGTH * 3,
+                color=YELLOW,
+            )
+        )
+
+        self.play(Create(start))
+
+        self.wait(0.5)
+
+        self.play(pulse_start_offset @ 0.1)
+
+        self.wait(0.5)
+
+        self.play(pulse_start_offset @ 0.28)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(start),
+                pulse_start_offset @ 0,
+                LaggedStart(
+                    pulse_2_opacity @ 0,
+                    pulse_t2_shift @ 0,
+                    allow_2 @ 1,
+                    lag_ratio=0.15,
+                ),
+                LaggedStart(
+                    pulse_3_opacity @ 0,
+                    pulse_t3_shift @ 0,
+                    allow_3 @ 1,
+                    lag_ratio=0.15,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(pulse_start_offset @ 0.1, run_time=0.5)
+        self.play(pulse_start_offset @ 0.2, run_time=0.5)
+        self.play(pulse_start_offset @ 0.05, run_time=0.5)
+        self.play(pulse_start_offset @ 0, run_time=0.5)
+
+        self.wait(0.5)
+
+        lfm_structure = (
+            Text("LFM structured", font=FONT)
+            .scale(0.8)
+            .next_to(pulse_rtn, DOWN, MED_SMALL_BUFF)
+        )
+        to_label = CubicBezier(
+            with_lfm.get_bottom() + [0, -0.1, 0],
+            with_lfm.get_bottom() + [0, -3, 0],
+            lfm_structure.get_left() + [-2, 0, 0],
+            lfm_structure.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(LaggedStart(Create(to_label), Write(lfm_structure), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        axes_group = Group(pulse.copy().shift(DOWN), pulse_rtn)
+        self.play(
+            LaggedStart(
+                Uncreate(to_label),
+                FadeOut(lfm_structure),
+                target1.animate.shift(RIGHT * 6),
+                target3.animate.shift(RIGHT * 6),
+                target2.animate.shift(RIGHT * 6),
+                self.camera.frame.animate.scale_to_fit_height(
+                    axes_group.height * 1.8
+                ).move_to(axes_group),
+                pulse_ax.animate.shift(DOWN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        xcorr = MathTex(
+            r"R_{xy}(\tau) = \left(s_{tx} \star s_{rx}\right)(\tau)"
+        ).next_to(pulse, UP)
+        xcorr[0][1].set_color(TX_COLOR)
+        xcorr[0][2].set_color(RX_COLOR)
+        xcorr[0][8:11].set_color(TX_COLOR)
+        xcorr[0][12:15].set_color(RX_COLOR)
+
+        self.play(
+            Group(pulse_ax, pulse_rtn_ax).animate.shift(DOWN * 0.7),
+            xcorr.shift(UP * 5).animate.shift(DOWN * 5),
+        )
+
+        self.wait(0.5)
+
+        time_seq = (
+            MathTex(r"0,1,2, \ldots t_{max} \text{ s}")
+            .scale(0.7)
+            .next_to(xcorr[0][4], DOWN, MED_LARGE_BUFF * 1.4)
+        )
+        time_bez_l = CubicBezier(
+            xcorr[0][4].get_bottom() + [0, -0.1, 0],
+            xcorr[0][4].get_bottom() + [0, -0.8, 0],
+            time_seq.get_corner(UL) + [0, 0.8, 0],
+            time_seq.get_corner(UL) + [0, 0.1, 0],
+        )
+        time_bez_r = CubicBezier(
+            xcorr[0][4].get_bottom() + [0, -0.1, 0],
+            xcorr[0][4].get_bottom() + [0, -0.8, 0],
+            time_seq.get_corner(UR) + [0, 0.8, 0],
+            time_seq.get_corner(UR) + [0, 0.1, 0],
+        )
+
+        self.play(
+            Group(pulse_ax, pulse_rtn_ax).animate.shift(DOWN * 0.3),
+            LaggedStart(
+                AnimationGroup(Create(time_bez_l), Create(time_bez_r)),
+                *[FadeIn(m) for m in time_seq[0]],
+                lag_ratio=0.08,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(*time_seq[0]),
+                AnimationGroup(Uncreate(time_bez_l), Uncreate(time_bez_r)),
+                lag_ratio=0.2,
+            )
         )
 
         self.wait(2)
