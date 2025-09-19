@@ -1761,6 +1761,8 @@ class Overlap(MovingCameraScene):
         pulse_rtn_x0 = VT(-~pw_plot)
         pulse_rtn_x1 = VT(0)
 
+        min_x = VT(0)
+
         pulse_f1 = VT(pulse_f)
         pulse_amp_2 = VT(0)
         pulse_amp_3 = VT(0)
@@ -1770,6 +1772,7 @@ class Overlap(MovingCameraScene):
         pulse_t_start_2 = VT(0)
         pulse_t_start_3 = VT(0)
         pulse_f1_2 = VT(~pulse_f1)
+        allow_1 = VT(1)
         allow_2 = VT(0)
         allow_3 = VT(0)
         pulse_start_offset = VT(0)
@@ -1796,7 +1799,8 @@ class Overlap(MovingCameraScene):
         )
         pulse_rtn = always_redraw(
             lambda: pulse_rtn_ax.plot(
-                lambda t: chirp_pulse(
+                lambda t: ~allow_1
+                * chirp_pulse(
                     t,
                     pulse_start=~pulse_rtn_x0,
                     pulse_width=~pw_plot,
@@ -1811,7 +1815,7 @@ class Overlap(MovingCameraScene):
                     pulse_start=~pulse_t_start_2 + ~pulse_rtn_x0,
                     pulse_width=~pw_plot,
                     f0=pulse_f,
-                    f1=~pulse_f1_2,
+                    f1=~pulse_f1,
                     amp=~pulse_amp_2,
                     phase=~pulse_phase_2,
                 )
@@ -1826,7 +1830,7 @@ class Overlap(MovingCameraScene):
                     phase=~pulse_phase_3,
                 ),
                 x_range=[
-                    max(~pulse_rtn_x0, 0),
+                    max(~pulse_rtn_x0, ~min_x),
                     min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
                     1 / 1000,
                 ],
@@ -2037,7 +2041,7 @@ class Overlap(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         axes_group = Group(pulse.copy().shift(DOWN), pulse_rtn)
         self.play(
@@ -2108,5 +2112,347 @@ class Overlap(MovingCameraScene):
                 lag_ratio=0.2,
             )
         )
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        new_axes = (
+            Group(pulse_ax.copy(), pulse_rtn_ax.copy())
+            .arrange(DOWN, -SMALL_BUFF)
+            .set_y(Group(pulse, pulse_rtn).get_y())
+        )
+        new_cam = (
+            self.camera.frame.copy()
+            .scale_to_fit_height(new_axes.height * 1.2)
+            .move_to(new_axes)
+            .shift(LEFT * 3)
+        )
+
+        self.play(
+            xcorr.animate.scale_to_fit_width(new_cam.width * 0.4).next_to(
+                new_cam.get_top(),
+                DOWN,
+                MED_SMALL_BUFF,
+            ),
+            pulse_ax.animate.move_to(new_axes[0]),
+            pulse_rtn_ax.animate.move_to(new_axes[1]),
+            self.camera.frame.animate.scale_to_fit_height(new_axes.height * 1.2)
+            .move_to(new_axes)
+            .shift(LEFT * 3),
+        )
+
+        self.wait(2)
+
+
+class XCorr(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        pulse_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=fw(self, 0.5),
+                y_length=fh(self, 0.3),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+        pulse_rtn_ax = pulse_ax.copy()
+        prod_ax = pulse_ax.copy()
+
+        axes = Group(pulse_ax, pulse_rtn_ax).arrange(DOWN, -SMALL_BUFF)
+
+        pw_plot = VT(0.3)
+        pulse_amp = VT(0.3)
+        pulse_f = 20
+        pulse_rtn_x0 = VT(0)
+        pulse_rtn_x1 = VT(~pw_plot)
+
+        min_x = VT(0)
+
+        pulse_f1 = VT(pulse_f * 5)
+        pulse_amp_2 = VT(0.3)
+        pulse_amp_3 = VT(0.3)
+        pulse_phase_1 = VT(0)
+        pulse_phase_2 = VT(0)
+        pulse_phase_3 = VT(0)
+        pulse_t_start_2 = VT(0.1)
+        pulse_t_start_3 = VT(0.28)
+        allow_1 = VT(1)
+        allow_2 = VT(1)
+        allow_3 = VT(1)
+        pulse_start_offset = VT(0)
+        pulse = always_redraw(
+            lambda: pulse_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_start_offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[
+                    ~min_x,
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=TX_COLOR,
+            )
+        )
+        pulse_rtn = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: ~allow_1
+                * chirp_pulse(
+                    t,
+                    pulse_start=~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                )
+                + ~allow_2
+                * chirp_pulse(
+                    t,
+                    pulse_start=~pulse_t_start_2 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_2,
+                    phase=~pulse_phase_2,
+                )
+                + ~allow_3
+                * chirp_pulse(
+                    t,
+                    pulse_start=~pulse_t_start_3 + ~pulse_rtn_x0,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp_3,
+                    phase=~pulse_phase_3,
+                ),
+                x_range=[
+                    ~min_x,
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+            )
+        )
+
+        self.add(pulse, pulse_ax, pulse_rtn, pulse_rtn_ax)
+
+        self.camera.frame.scale_to_fit_height(axes.height * 1.2).move_to(axes).shift(
+            LEFT * 3
+        )
+
+        xcorr = MathTex(
+            r"R_{xy}(\tau) = \left(s_{tx} \star s_{rx}\right)(\tau)"
+        ).next_to(pulse, UP)
+        xcorr[0][1].set_color(TX_COLOR)
+        xcorr[0][2].set_color(RX_COLOR)
+        xcorr[0][8:11].set_color(TX_COLOR)
+        xcorr[0][12:15].set_color(RX_COLOR)
+
+        xcorr.scale_to_fit_width(self.camera.frame.width * 0.4).next_to(
+            self.camera.frame.get_top(),
+            DOWN,
+            MED_SMALL_BUFF,
+        )
+
+        self.add(xcorr)
+
+        self.wait(0.5)
+
+        self.play(pulse_start_offset @ -~pw_plot, min_x @ -~pw_plot)
+
+        self.wait(0.5)
+
+        times = MathTex(r"\times").scale(2).next_to(pulse, DOWN, MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                pulse_rtn_ax.animate.shift(
+                    DOWN
+                    * ((pulse_rtn.get_top() - times.get_bottom())[1] + MED_SMALL_BUFF)
+                ),
+                GrowFromCenter(times),
+                lag_ratio=0.3,
+            )
+        )
+
+        pulse_samples = pulse_ax.get_riemann_rectangles(
+            pulse,
+            x_range=[
+                ~min_x,
+                min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+            ],
+            stroke_color=YELLOW,
+            color=YELLOW,
+            show_signed_area=False,
+            dx=0.005,
+            input_sample_type="center",
+            fill_opacity=1,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.2,
+        )
+        pulse_rtn_samples = pulse_rtn_ax.get_riemann_rectangles(
+            pulse_rtn,
+            x_range=[
+                ~min_x,
+                min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+            ],
+            stroke_color=YELLOW,
+            color=YELLOW,
+            show_signed_area=False,
+            dx=0.005,
+            input_sample_type="center",
+            fill_opacity=1,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.2,
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeIn(m) for m in pulse_samples], lag_ratio=0.05),
+                LaggedStart(*[FadeIn(m) for m in pulse_rtn_samples], lag_ratio=0.05),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        equal = MathTex(r"=").scale(2).next_to(pulse_rtn, DOWN, MED_SMALL_BUFF)
+        prod_ax.set_x(pulse_ax.get_x())
+
+        prod_ax.shift(
+            DOWN * ((prod_ax.c2p(0, 0.5) - equal.get_bottom())[1] + MED_SMALL_BUFF)
+        )
+
+        prod = always_redraw(
+            lambda: prod_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_start_offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                )
+                * (
+                    ~allow_1
+                    * chirp_pulse(
+                        t,
+                        pulse_start=~pulse_rtn_x0,
+                        pulse_width=~pw_plot,
+                        f0=pulse_f,
+                        f1=~pulse_f1,
+                        amp=~pulse_amp,
+                        phase=~pulse_phase_1,
+                    )
+                    + ~allow_2
+                    * chirp_pulse(
+                        t,
+                        pulse_start=~pulse_t_start_2 + ~pulse_rtn_x0,
+                        pulse_width=~pw_plot,
+                        f0=pulse_f,
+                        f1=~pulse_f1,
+                        amp=~pulse_amp_2,
+                        phase=~pulse_phase_2,
+                    )
+                    + ~allow_3
+                    * chirp_pulse(
+                        t,
+                        pulse_start=~pulse_t_start_3 + ~pulse_rtn_x0,
+                        pulse_width=~pw_plot,
+                        f0=pulse_f,
+                        f1=~pulse_f1,
+                        amp=~pulse_amp_3,
+                        phase=~pulse_phase_3,
+                    )
+                ),
+                x_range=[
+                    ~min_x,
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=ORANGE,
+            )
+        )
+
+        all_axes = Group(pulse_ax, pulse_rtn_ax, prod_ax)
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(all_axes.height * 1)
+                .move_to(all_axes)
+                .shift(LEFT * 3),
+                GrowFromCenter(equal),
+                lag_ratio=0.3,
+            )
+        )
+
+        prod_samples = prod_ax.get_riemann_rectangles(
+            prod,
+            x_range=[
+                ~min_x,
+                min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+            ],
+            dx=0.005,
+            stroke_color=YELLOW,
+            color=YELLOW,
+            show_signed_area=False,
+            input_sample_type="center",
+            fill_opacity=1,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.2,
+        )
+
+        self.add(prod_ax)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[
+                        m.animate.set_opacity(0).set_y(prod_ax.c2p(0, 0)[1])
+                        for m in pulse_samples
+                    ],
+                    lag_ratio=0.05,
+                    run_time=8,
+                ),
+                LaggedStart(
+                    *[
+                        m.animate.set_opacity(0).set_y(prod_ax.c2p(0, 0)[1])
+                        for m in pulse_rtn_samples
+                    ],
+                    lag_ratio=0.05,
+                    run_time=8,
+                ),
+                AnimationGroup(
+                    LaggedStart(
+                        *[FadeIn(m) for m in prod_samples], lag_ratio=0.05, run_time=8
+                    ),
+                    Create(
+                        prod.set_z_index(-1),
+                        run_time=8,
+                        rate_func=rate_functions.linear,
+                    ),
+                ),
+                lag_ratio=0.05,
+            )
+        )
+
+        self.wait(0.5)
+
+        # self.play(FadeOut(*prod_samples))
+
+        # self.wait(0.5)
+
+        # self.play()
 
         self.wait(2)
