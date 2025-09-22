@@ -2197,7 +2197,13 @@ class XCorr(MovingCameraScene):
                 ),
                 x_range=[
                     ~min_x,
-                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    min(
+                        1,
+                        max(
+                            ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3),
+                            ~pulse_start_offset + ~pw_plot,
+                        ),
+                    ),
                     1 / 1000,
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
@@ -2251,22 +2257,6 @@ class XCorr(MovingCameraScene):
         self.camera.frame.scale_to_fit_height(axes.height * 1.2).move_to(axes).shift(
             LEFT * 3
         )
-
-        xcorr = MathTex(
-            r"R_{xy}(\tau) = \left(s_{tx} \star s_{rx}\right)(\tau)"
-        ).next_to(pulse, UP)
-        xcorr[0][1].set_color(TX_COLOR)
-        xcorr[0][2].set_color(RX_COLOR)
-        xcorr[0][8:11].set_color(TX_COLOR)
-        xcorr[0][12:15].set_color(RX_COLOR)
-
-        xcorr.scale_to_fit_width(self.camera.frame.width * 0.4).next_to(
-            self.camera.frame.get_top(),
-            DOWN,
-            MED_SMALL_BUFF,
-        )
-
-        self.add(xcorr)
 
         self.wait(0.5)
 
@@ -2375,7 +2365,8 @@ class XCorr(MovingCameraScene):
                         amp=~pulse_amp_3,
                         phase=~pulse_phase_3,
                     )
-                ),
+                )
+                / ~pulse_amp,
                 x_range=[
                     ~min_x,
                     min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
@@ -2413,7 +2404,7 @@ class XCorr(MovingCameraScene):
         )
 
         self.add(prod_ax)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -2449,10 +2440,250 @@ class XCorr(MovingCameraScene):
 
         self.wait(0.5)
 
-        # self.play(FadeOut(*prod_samples))
+        self.play(FadeOut(*prod_samples))
 
-        # self.wait(0.5)
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
-        # self.play()
+        xcorr_ax = pulse_ax.copy().shift(
+            UP * (prod_ax.c2p(0, -0.5) - pulse_ax.c2p(0, 2.2))[1]
+        )
+        xcorr_plot = xcorr_ax.plot(
+            lambda t: 0.3 * np.sin(2 * PI * 3 * t),
+            color=GREEN,
+            x_range=[
+                -~pw_plot,
+                ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3),
+                1 / 200,
+            ],
+        )
+
+        def get_xcorr():
+            fs = 1e3
+            t_discreet = np.arange(0, 1, 1 / fs)
+            tau = 0.3
+            pulse = np.array(
+                [
+                    chirp_pulse(
+                        t_val=t_val,
+                        pulse_start=0,
+                        pulse_width=tau,
+                        f0=20,
+                        f1=100,
+                        amp=1,
+                        phase=0,
+                        ramp="linear",
+                    )
+                    for t_val in t_discreet
+                ]
+            )
+            pulse_starts = [tau, 0.1 + tau, 0.28 + tau]
+            rtn = np.array(
+                np.sum(
+                    [
+                        [
+                            chirp_pulse(
+                                t_val=t_val,
+                                pulse_start=ps,
+                                pulse_width=tau,
+                                f0=20,
+                                f1=100,
+                                amp=1,
+                                phase=0,
+                                ramp="linear",
+                            )
+                            for t_val in t_discreet
+                        ]
+                        for ps in pulse_starts
+                    ],
+                    axis=0,
+                )
+            )
+
+            h_matched = np.conj(pulse[t_discreet < tau][::-1])
+            rtn_matched = signal.fftconvolve(rtn, h_matched, mode="full")
+            rtn_matched /= rtn_matched.max()
+            rtn_matched *= 2
+            t_full = np.arange(rtn_matched.size) / fs - tau
+            func = interp1d(t_full - tau, rtn_matched, fill_value="extrapolate")
+            return func
+
+        xcorr_func = get_xcorr()
+
+        xcorr_plot = always_redraw(
+            lambda: xcorr_ax.plot(
+                xcorr_func,
+                color=GREEN,
+                x_range=[
+                    -~pw_plot,
+                    min(
+                        ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3),
+                        ~pulse_start_offset,
+                    ),
+                    1 / 200,
+                ],
+            )
+        )
+
+        all_plots = Group(
+            pulse,
+            pulse_rtn,
+            prod,
+            Line(
+                xcorr_ax.c2p(-~pw_plot, -0.5),
+                xcorr_ax.c2p(
+                    ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3), -0.5
+                ),
+            ),
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    all_plots.height * 1.2
+                ).move_to(all_plots),
+                Create(xcorr_plot),
+            )
+        )
+
+        def get_l_bez():
+            return CubicBezier(
+                prod_ax.c2p(-~pw_plot, -~pulse_amp) + [0, -0.1, 0],
+                prod_ax.c2p(-~pw_plot, -~pulse_amp) + [0, -0.5, 0],
+                xcorr_ax.c2p(~pulse_start_offset, 1.4) + [0, 1, 0],
+                xcorr_ax.c2p(~pulse_start_offset, 1.4) + [0, 0.3, 0],
+            )
+
+        def get_r_bez():
+            return CubicBezier(
+                prod_ax.c2p(
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    -~pulse_amp,
+                )
+                + [0, -0.1, 0],
+                prod_ax.c2p(
+                    min(1, ~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+                    -~pulse_amp,
+                )
+                + [0, -0.5, 0],
+                xcorr_ax.c2p(~pulse_start_offset, 1.4) + [0, 1, 0],
+                xcorr_ax.c2p(~pulse_start_offset, 1.4) + [0, 0.3, 0],
+            )
+
+        l_bez = always_redraw(get_l_bez)
+        r_bez = always_redraw(get_r_bez)
+        self.play(Create(l_bez), Create(r_bez))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pulse_start_offset @ (-0.05),
+            run_time=10,
+        )
+
+        self.wait(0.5)
+
+        # target1_box = Polygon(
+        #     pulse_rtn_ax.c2p(0, -0.6),
+        #     pulse_rtn_ax.c2p(0, 0.6),
+        #     pulse_rtn_ax.c2p(~pw_plot, 0.6),
+        #     pulse_rtn_ax.c2p(~pw_plot, -0.6),
+        #     stroke_opacity=0,
+        #     fill_opacity=0.5,
+        #     fill_color=PURPLE,
+        # )
+
+        target1_l = DashedLine(
+            pulse_ax.c2p(0, 0.6),
+            pulse_rtn_ax.c2p(0, -0.6),
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=YELLOW,
+        )
+        target1_r = DashedLine(
+            pulse_ax.c2p(~pw_plot, 0.6),
+            pulse_rtn_ax.c2p(~pw_plot, -0.6),
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=YELLOW,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(target1_l),
+                FadeIn(target1_r),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pulse_start_offset @ (0.05),
+            run_time=10,
+        )
+        self.play(
+            pulse_start_offset
+            @ (~pulse_rtn_x1 + max(~pulse_t_start_2, ~pulse_t_start_3)),
+            run_time=20,
+        )
+
+        self.wait(0.5)
+
+        plot_group = Group(
+            pulse.copy(),
+            pulse_rtn.copy().shift(UP * 0.5),
+            xcorr_plot.copy().shift(UP * 2),
+        )
+
+        xcorr_label = (
+            Text("Cross\nCorrelation", font=FONT)
+            .scale(0.7)
+            .next_to(plot_group[2], LEFT, LARGE_BUFF)
+        )
+        tx_label = (
+            Text("Transmit", font=FONT)
+            .scale(0.7)
+            .next_to(xcorr_label, UP, aligned_edge=LEFT)
+            .set_y(plot_group[0].get_y())
+        )
+        rx_label = (
+            Text("Receive", font=FONT)
+            .scale(0.7)
+            .next_to(xcorr_label, UP, aligned_edge=LEFT)
+            .set_y(plot_group[1].get_y())
+        )
+        xcorr = MathTex(
+            r"R_{xy}(\tau) = \left(s_{tx} \star s_{rx}\right)(\tau)"
+        ).next_to(xcorr_label, DOWN, MED_LARGE_BUFF)
+        xcorr[0][0].set_color(GREEN)
+        # xcorr[0][3:6].set_color(GREEN)
+        xcorr[0][1].set_color(TX_COLOR)
+        xcorr[0][2].set_color(RX_COLOR)
+        xcorr[0][8:11].set_color(TX_COLOR)
+        xcorr[0][12:15].set_color(RX_COLOR)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                FadeOut(l_bez, r_bez, times, equal, prod, target1_l, target1_r),
+                LaggedStart(
+                    self.camera.frame.animate.scale_to_fit_height(
+                        plot_group.height * 1.2
+                    )
+                    .move_to(plot_group)
+                    .shift(LEFT * 2),
+                    pulse_rtn_ax.animate.shift(UP * 0.5),
+                    xcorr_ax.animate.shift(UP * 2),
+                    Write(tx_label),
+                    Write(rx_label),
+                    Write(xcorr_label),
+                    FadeIn(xcorr),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.6,
+            )
+        )
 
         self.wait(2)
