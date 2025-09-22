@@ -2184,6 +2184,8 @@ class XCorr(MovingCameraScene):
         allow_2 = VT(1)
         allow_3 = VT(1)
         pulse_start_offset = VT(0)
+        pulse_opacity = VT(1)
+        pulse_rtn_opacity = VT(1)
         pulse = always_redraw(
             lambda: pulse_ax.plot(
                 lambda t: chirp_pulse(
@@ -2208,6 +2210,7 @@ class XCorr(MovingCameraScene):
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=TX_COLOR,
+                stroke_opacity=~pulse_opacity,
             )
         )
         pulse_rtn = always_redraw(
@@ -2249,6 +2252,7 @@ class XCorr(MovingCameraScene):
                 ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=RX_COLOR,
+                stroke_opacity=~pulse_rtn_opacity,
             )
         )
 
@@ -2510,9 +2514,10 @@ class XCorr(MovingCameraScene):
 
         xcorr_func = get_xcorr()
 
+        xcorr_amp = VT(1)
         xcorr_plot = always_redraw(
             lambda: xcorr_ax.plot(
-                xcorr_func,
+                lambda t: xcorr_func(t) * ~xcorr_amp,
                 color=GREEN,
                 x_range=[
                     -~pw_plot,
@@ -2663,7 +2668,7 @@ class XCorr(MovingCameraScene):
         xcorr[0][8:11].set_color(TX_COLOR)
         xcorr[0][12:15].set_color(RX_COLOR)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -2685,5 +2690,205 @@ class XCorr(MovingCameraScene):
                 lag_ratio=0.6,
             )
         )
+
+        self.wait(0.5)
+
+        one = (
+            Text("1", font=FONT)
+            .scale(0.7)
+            .next_to(xcorr_ax.i2gp(0, xcorr_plot), UP, MED_SMALL_BUFF)
+        )
+        two = (
+            Text("2", font=FONT)
+            .scale(0.7)
+            .next_to(xcorr_ax.i2gp(0.1, xcorr_plot), UP, MED_SMALL_BUFF)
+        )
+        three = (
+            Text("3", font=FONT)
+            .scale(0.7)
+            .next_to(xcorr_ax.i2gp(0.28, xcorr_plot), UP, MED_SMALL_BUFF)
+        )
+
+        tau1 = MathTex(r"\tau_1").next_to(xcorr_ax.c2p(0, -0.8), DOWN, MED_SMALL_BUFF)
+        tau2 = MathTex(r"\tau_2").next_to(xcorr_ax.c2p(0.1, -0.8), DOWN, MED_SMALL_BUFF)
+        tau3 = MathTex(r"\tau_3").next_to(
+            xcorr_ax.c2p(0.28, -0.8), DOWN, MED_SMALL_BUFF
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    GrowFromCenter(one),
+                    TransformFromCopy(xcorr[0][4], tau1[0], path_arc=-PI / 3),
+                ),
+                AnimationGroup(
+                    GrowFromCenter(two),
+                    TransformFromCopy(xcorr[0][4], tau2[0], path_arc=-PI / 3),
+                ),
+                AnimationGroup(
+                    GrowFromCenter(three),
+                    TransformFromCopy(xcorr[0][4], tau3[0], path_arc=-PI / 3),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        larrow1 = Arrow(xcorr_ax.c2p(-0.08, 0.5), xcorr_ax.c2p(-0.01, 0.5), buff=0)
+        rarrow1 = Arrow(xcorr_ax.c2p(0.08, 0.5), xcorr_ax.c2p(0.01, 0.5), buff=0)
+        larrow2 = Arrow(
+            xcorr_ax.c2p(0.1 + -0.08, 0.9), xcorr_ax.c2p(-0.01 + 0.1, 0.9), buff=0
+        )
+        rarrow2 = Arrow(
+            xcorr_ax.c2p(0.1 + 0.08, 0.9), xcorr_ax.c2p(0.01 + 0.1, 0.9), buff=0
+        )
+        larrow3 = Arrow(
+            xcorr_ax.c2p(0.28 + -0.08, 1.3), xcorr_ax.c2p(-0.01 + 0.28, 1.3), buff=0
+        )
+        rarrow3 = Arrow(
+            xcorr_ax.c2p(0.28 + 0.08, 1.3), xcorr_ax.c2p(0.01 + 0.28, 1.3), buff=0
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(GrowArrow(larrow1), GrowArrow(rarrow1)),
+                AnimationGroup(GrowArrow(larrow2), GrowArrow(rarrow2)),
+                AnimationGroup(GrowArrow(larrow3), GrowArrow(rarrow3)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    one,
+                    two,
+                    three,
+                    tau1,
+                    tau2,
+                    tau3,
+                    larrow1,
+                    rarrow1,
+                    larrow2,
+                    rarrow2,
+                    larrow3,
+                    rarrow3,
+                ),
+                AnimationGroup(
+                    pulse_opacity @ 0.3,
+                    pulse_rtn_opacity @ 0.3,
+                ),
+                self.camera.frame.animate.scale(1.5).shift(UP * 1.5),
+                xcorr_amp @ 4,
+                lag_ratio=0.4,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        pulse_ltail = VT(1)
+        pulse_new = always_redraw(
+            lambda: pulse_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_start_offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[
+                    ~pulse_start_offset - ~pulse_ltail,
+                    ~pulse_start_offset + ~pw_plot,
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=TX_COLOR,
+                stroke_opacity=1,
+            )
+        )
+
+        self.play(
+            pulse_opacity @ 1,
+            pulse_rtn_opacity @ 0,
+            self.camera.frame.animate.scale_to_fit_height(pulse.height * 4).move_to(
+                pulse_ax.c2p(~pulse_start_offset + ~pw_plot / 2)
+            ),
+        )
+
+        self.add(pulse_new)
+        self.remove(pulse)
+
+        self.wait(0.5)
+
+        self.play(pulse_ltail @ 0)
+
+        self.wait(0.5)
+
+        self.play(pulse_start_offset - 0.2)
+
+        self.wait(0.5)
+
+        self.play(pw_plot @ (~pw_plot * 2), pulse_amp @ (~pulse_amp / 2))
+
+        self.wait(0.5)
+
+        self.play(
+            pulse_start_offset + 0.4,
+            pw_plot @ (~pw_plot / 6),
+            pulse_amp @ (~pulse_amp * 6),
+        )
+
+        self.wait(0.5)
+
+        self.remove(tx_label, rx_label)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                xcorr_plot.height * 0.85
+            ).move_to(xcorr_plot),
+            pulse_ax.animate.shift(
+                xcorr_ax.c2p(0, 0) - pulse_ax.c2p(~pulse_start_offset + ~pw_plot / 2, 0)
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pw_plot @ (~pw_plot * 0.2),
+            pulse_amp @ 7.65,
+            pulse_f1 @ (~pulse_f1 * 4),
+            pulse_start_offset + (~pw_plot / 2),
+        )
+
+        self.wait(0.5)
+
+        pulse_compression = (
+            Text("Pulse Compression", font=FONT)
+            .scale_to_fit_width(fw(self, 0.6))
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self) * 2)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self) * 2),
+                Write(pulse_compression),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(pulse_compression))
 
         self.wait(2)
