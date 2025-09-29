@@ -3629,10 +3629,6 @@ class ThumbnailRenders(MovingCameraScene):
 
 class EndScreen(MovingCameraScene):
     def construct(self):
-        hours = ImageMobject(
-            "../../notebooks/figures/video_hours.png"
-        ).scale_to_fit_width(fw(self, 0.5))
-
         def coverage_array(spans, allow_wrap=True):
             cov = np.zeros(24 * 60, dtype=int)
             for a, b in spans:
@@ -3643,9 +3639,9 @@ class EndScreen(MovingCameraScene):
                     cov[a:b] += 1
             return cov
 
-        hours = pd.read_csv(
-            "../../../downloads/Work Hours - Hours - 2025 (1).csv"
-        ).dropna(subset=["In", "Out", "Category Fill"])
+        hours = pd.read_csv("../../../downloads/Work Hours - Hours - 2025.csv").dropna(
+            subset=["In", "Out", "Category Fill"]
+        )
         hours = hours[
             (hours["Category Fill"] == "Videos")
             & (hours["Video Fill"] == "Pulse Compression")
