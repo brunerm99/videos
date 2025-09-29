@@ -2,6 +2,7 @@
 
 import sys
 
+import pandas as pd
 from manim import *
 from MF_Tools import VT
 from numpy.fft import fft, fftshift
@@ -14,7 +15,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -2969,10 +2970,11 @@ class RRes(MovingCameraScene):
         self.add(pulse)
 
         next_point = target1.get_left()
+        offset = pulse_ax.p2c(next_point)[0] - ~pw_plot
 
         self.play(
             target1.shift(RIGHT * 8).animate.shift(LEFT * 8),
-            pulse_start_offset @ (pulse_ax.p2c(next_point)[0] - ~pw_plot),
+            pulse_start_offset @ offset,
             self.camera.frame.animate.scale(0.8),
         )
 
@@ -3009,6 +3011,8 @@ class RRes(MovingCameraScene):
         )
 
         xcorr_amp = VT(1)
+
+        xcorr_x_offset = VT(0)
 
         def get_xcorr():
             fs = 1e3
@@ -3065,7 +3069,7 @@ class RRes(MovingCameraScene):
                     color=GREEN,
                     x_range=[
                         -~pw_plot,
-                        ~pw_plot,
+                        ~pw_plot - ~xcorr_x_offset,
                         1 / 200,
                     ],
                 )
@@ -3280,7 +3284,7 @@ class RRes(MovingCameraScene):
         self.play(pulse_f1 @ pulse_f, run_time=3)
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         tri_up = Line(
             xcorr_ax.c2p(-~pw_plot, 0),
@@ -3296,5 +3300,419 @@ class RRes(MovingCameraScene):
         ).shift(UP * 0.1)
 
         self.play(LaggedStart(Create(tri_up), Create(tri_down), lag_ratio=0.7))
+
+        self.wait(0.5)
+
+        pulse_rtn_ax = pulse_ax.copy().next_to(xcorr_ax, LEFT).shift(DOWN + LEFT)
+        pulse_rtn = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[
+                    offset + ~pulse_ltail,
+                    offset + ~pw_plot,
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+                stroke_opacity=1,
+            )
+        )
+
+        new_group = Group(
+            pulse_ax.copy().next_to(pulse_rtn_ax, UP, -MED_SMALL_BUFF),
+            pulse_rtn_ax,
+            xcorr_plot,
+        )
+        conv = MathTex(r"\circledast").move_to(new_group[:2]).set_x(pulse_rtn.get_x())
+        equal = (
+            MathTex("=").next_to(pulse_rtn, RIGHT).set_y(conv.get_y()).shift(RIGHT * 2)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(
+            LaggedStart(
+                FadeOut(pulse_to_xcorr, target1),
+                AnimationGroup(
+                    pulse_ax.animate.next_to(pulse_rtn_ax, UP, -MED_SMALL_BUFF),
+                    rres_eqn.animate.next_to(
+                        pulse_ax.copy()
+                        .next_to(pulse_rtn_ax, UP, -MED_SMALL_BUFF)
+                        .c2p(0.35, 0.5),
+                        UP,
+                    ),
+                ),
+                self.camera.frame.animate.scale_to_fit_width(new_group.width * 1.3)
+                .move_to(new_group)
+                .shift(RIGHT + UP / 3),
+                GrowFromCenter(conv),
+                Create(pulse_rtn),
+                GrowFromCenter(equal),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        pulse_start_offset_old = ~pulse_start_offset
+        xcorr_x_offset_old = ~xcorr_x_offset
+        self.play(
+            pulse_start_offset - (~pw_plot),
+            self.camera.frame.animate.shift(LEFT),
+            Uncreate(tri_down),
+            Uncreate(tri_up),
+            xcorr_x_offset @ (~pw_plot * 2 - 0.01),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            pulse_start_offset @ pulse_start_offset_old,
+            xcorr_x_offset @ ~pw_plot,
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pulse_start_offset + ~pw_plot,
+            xcorr_x_offset - ~pw_plot,
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        pulse_to_xcorr = Arrow(
+            pulse.copy()
+            .shift(DOWN * (pulse_ax.c2p(0, 0) - conv.get_center())[1] + LEFT * 2)
+            .get_right(),
+            [
+                xcorr_plot.get_left()[0],
+                pulse.copy()
+                .shift(DOWN * (pulse_ax.c2p(0, 0) - conv.get_center())[1])
+                .get_right()[1],
+                0,
+            ],
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(pulse_rtn, conv, equal),
+                pulse_ax.animate.shift(
+                    DOWN * (pulse_ax.c2p(0, 0) - conv.get_center())[1]
+                ),
+                rres_eqn.animate.shift(
+                    DOWN * (pulse_ax.c2p(0, 0) - conv.get_center())[1]
+                ),
+                pulse_start_offset - ~pw_plot,
+                GrowArrow(pulse_to_xcorr),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rres_bw_eqn = MathTex(r"\Delta R \approx \frac{c}{2 B}").move_to(rres_eqn, LEFT)
+
+        tri_up = Line(
+            xcorr_ax.c2p(-~pw_plot, 0),
+            xcorr_ax.c2p(0, 2),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        ).shift(UP * 0.1)
+        tri_down = Line(
+            xcorr_ax.c2p(0, 2),
+            xcorr_ax.c2p(~pw_plot, 0),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        ).shift(UP * 0.1)
+
+        qmark = Text("?", font=FONT).move_to(rres_eqn[0][3:], UP).shift(DOWN * 0.1)
+
+        self.play(
+            LaggedStart(
+                rres_eqn[0][3:].animate.shift(UP * 1.5).set_opacity(0.2),
+                GrowFromCenter(qmark),
+                pulse_f1.animate(run_time=8).set_value(~pulse_f1 * 5),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(Create(tri_up), Create(tri_down), lag_ratio=0.7))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(tri_up, tri_down, qmark))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(rres_eqn[0][:2], rres_bw_eqn[0][:2]),
+                ReplacementTransform(rres_eqn[0][2], rres_bw_eqn[0][2]),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in rres_bw_eqn[0][3:]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.remove(pulse_rtn, xcorr_plot)
+
+        self.play(
+            FadeOut(pulse_to_xcorr),
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(pulse, rres_bw_eqn).height * 1.5
+            ).move_to(Group(pulse, rres_bw_eqn)),
+            AnimationGroup(
+                pulse_start_offset - (~pw_plot / 2),
+                pw_plot @ (~pw_plot * 2),
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(pulse_f1 @ (~pulse_f1 * 2), run_time=6)
+
+        self.wait(2)
+
+
+class ThumbnailRenders(MovingCameraScene):
+    def construct(self):
+        pulse_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=fw(self, 0.5),
+                y_length=fh(self, 0.3),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+
+        pw_plot = VT(0.6)
+        pulse_amp = VT(0.5)
+        pulse_f = 20
+        pulse_rtn_x0 = VT(0)
+        pulse_rtn_x1 = VT(~pw_plot)
+
+        min_x = VT(0)
+
+        pulse_f1 = VT(pulse_f * 5)
+        pulse_amp_2 = VT(0.3)
+        pulse_amp_3 = VT(0.3)
+        pulse_phase_1 = VT(0)
+        pulse_phase_2 = VT(0)
+        pulse_phase_3 = VT(0)
+        pulse_t_start_2 = VT(0.1)
+        pulse_t_start_3 = VT(0.28)
+        allow_1 = VT(1)
+        allow_2 = VT(1)
+        allow_3 = VT(1)
+        pulse_start_offset = VT(-5)
+        pulse_opacity = VT(1)
+        pulse_rtn_opacity = VT(1)
+        pulse_ltail = VT(0)
+        pulse = always_redraw(
+            lambda: pulse_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_start_offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[
+                    ~pulse_start_offset - ~pulse_ltail,
+                    ~pulse_start_offset + ~pw_plot,
+                    1 / 1000,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=TX_COLOR,
+                stroke_opacity=1,
+            )
+        )
+        self.add(pulse)
+
+        self.camera.frame.scale_to_fit_width(pulse.width * 1.2).move_to(pulse)
+
+        # xcorr_ax = pulse_ax.copy().shift(
+        #     pulse_ax.c2p(~pulse_start_offset + ~pw_plot / 2, -1.5)
+        #     - pulse_ax.c2p(0, 2.2)
+        # )
+
+        # xcorr_amp = VT(1)
+
+        # def get_xcorr():
+        #     fs = 1e3
+        #     t_discreet = np.arange(0, 1, 1 / fs)
+        #     tau = 0.3
+        #     pulse = np.array(
+        #         [
+        #             chirp_pulse(
+        #                 t_val=t_val,
+        #                 pulse_start=0,
+        #                 pulse_width=tau,
+        #                 f0=pulse_f,
+        #                 f1=~pulse_f1,
+        #                 amp=1,
+        #                 phase=0,
+        #                 ramp="linear",
+        #             )
+        #             for t_val in t_discreet
+        #         ]
+        #     )
+        #     pulse_starts = [tau]
+        #     rtn = np.array(
+        #         np.sum(
+        #             [
+        #                 [
+        #                     chirp_pulse(
+        #                         t_val=t_val,
+        #                         pulse_start=ps,
+        #                         pulse_width=tau,
+        #                         f0=pulse_f,
+        #                         f1=~pulse_f1,
+        #                         amp=1,
+        #                         phase=0,
+        #                         ramp="linear",
+        #                     )
+        #                     for t_val in t_discreet
+        #                 ]
+        #                 for ps in pulse_starts
+        #             ],
+        #             axis=0,
+        #         )
+        #     )
+
+        #     h_matched = np.conj(pulse[t_discreet < tau][::-1])
+        #     rtn_matched = signal.fftconvolve(rtn, h_matched, mode="full")
+        #     rtn_matched /= rtn_matched.max()
+        #     rtn_matched *= 2 * ~xcorr_amp
+        #     t_full = np.arange(rtn_matched.size) / fs - tau
+        #     func = interp1d(t_full - tau, rtn_matched, fill_value="extrapolate")
+
+        #     xcorr_plot = always_redraw(
+        #         lambda: xcorr_ax.plot(
+        #             func,
+        #             color=GREEN,
+        #             x_range=[
+        #                 -~pw_plot,
+        #                 ~pw_plot,
+        #                 1 / 200,
+        #             ],
+        #         )
+        #     )
+        #     return xcorr_plot
+
+        # xcorr_plot = always_redraw(get_xcorr)
+        # self.add(xcorr_plot)
+
+        # self.camera.frame.scale_to_fit_width(xcorr_plot.width * 1.5).move_to(xcorr_plot)
+
+
+class EndScreen(MovingCameraScene):
+    def construct(self):
+        hours = ImageMobject(
+            "../../notebooks/figures/video_hours.png"
+        ).scale_to_fit_width(fw(self, 0.5))
+
+        def coverage_array(spans, allow_wrap=True):
+            cov = np.zeros(24 * 60, dtype=int)
+            for a, b in spans:
+                if allow_wrap and b < a:
+                    cov[a:] += 1
+                    cov[:b] += 1
+                else:
+                    cov[a:b] += 1
+            return cov
+
+        hours = pd.read_csv(
+            "../../../downloads/Work Hours - Hours - 2025 (1).csv"
+        ).dropna(subset=["In", "Out", "Category Fill"])
+        hours = hours[
+            (hours["Category Fill"] == "Videos")
+            & (hours["Video Fill"] == "Pulse Compression")
+        ]
+        hours["In_dt"] = pd.to_datetime(hours["In"], errors="coerce")
+        hours["Out_dt"] = pd.to_datetime(hours["Out"], errors="coerce")
+        hours["In_mins"] = hours["In_dt"].dt.hour * 60 + hours["In_dt"].dt.minute
+        hours["Out_mins"] = hours["Out_dt"].dt.hour * 60 + hours["Out_dt"].dt.minute
+
+        spans = list(hours[["In_mins", "Out_mins"]].itertuples(index=None, name=None))
+        cov = coverage_array(spans)
+        filter_len = 201
+        window = np.ones(filter_len) / filter_len
+
+        t = np.linspace(0, 24, cov.size)
+
+        ax = Axes(x_range=[0, 24, 3], y_range=[0, 4, 1], tips=False)
+
+        scale = VT(0)
+
+        def get_plot():
+            plot = always_redraw(
+                lambda: ax.plot(
+                    interp1d(
+                        t,
+                        ~scale * np.convolve(cov, window, mode="same"),
+                        fill_value="extrapolate",
+                    ),
+                    color=BLUE,
+                )
+            )
+            area = ax.get_area(plot, color=BLUE, opacity=0.5)
+            return plot, area
+
+        plot = always_redraw(lambda: get_plot()[0])
+        area = always_redraw(lambda: get_plot()[1])
+
+        times = np.arange(0, 27, 3)
+        time_labels = Group(
+            *[
+                Text(f"{h % 12 or 12}{'am' if h < 12 else 'pm'}", font=FONT)
+                .scale(0.5)
+                .next_to(ax.c2p(h, 0), DOWN, MED_SMALL_BUFF)
+                for h in times
+            ]
+        )
+        hour_yaxis = np.arange(1, 5, 1)
+        hour_labels = Group(
+            *[
+                Text(f"{h}", font=FONT)
+                .scale(0.5)
+                .next_to(ax.c2p(0, h), LEFT, MED_SMALL_BUFF)
+                for h in hour_yaxis
+            ]
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(ax), FadeIn(plot, area)),
+                AnimationGroup(
+                    LaggedStart(*[FadeIn(m) for m in time_labels], lag_ratio=0.1),
+                    LaggedStart(*[FadeIn(m) for m in hour_labels], lag_ratio=0.1),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.play(scale @ 1)
 
         self.wait(2)
