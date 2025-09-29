@@ -15,7 +15,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono CN"
 
@@ -2915,27 +2915,6 @@ class RRes(MovingCameraScene):
 
         pw_plot = VT(0.3)
         pulse_amp = VT(0.5)
-        pulse_f = 20
-        pulse_rtn_x0 = VT(0)
-        pulse_rtn_x1 = VT(~pw_plot)
-
-        min_x = VT(0)
-
-        pulse_f1 = VT(pulse_f * 5)
-        pulse_amp_2 = VT(0.3)
-        pulse_amp_3 = VT(0.3)
-        pulse_phase_1 = VT(0)
-        pulse_phase_2 = VT(0)
-        pulse_phase_3 = VT(0)
-        pulse_t_start_2 = VT(0.1)
-        pulse_t_start_3 = VT(0.28)
-        allow_1 = VT(1)
-        allow_2 = VT(1)
-        allow_3 = VT(1)
-        pulse_start_offset = VT(-5)
-        pulse_opacity = VT(1)
-        pulse_rtn_opacity = VT(1)
-        pulse_ltail = VT(0)
         pulse = always_redraw(
             lambda: pulse_ax.plot(
                 lambda t: chirp_pulse(
@@ -3372,7 +3351,7 @@ class RRes(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             pulse_start_offset @ pulse_start_offset_old,
@@ -3485,7 +3464,248 @@ class RRes(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(pulse_f1 @ (~pulse_f1 * 2), run_time=6)
+        infty_b = MathTex(r"B \rightarrow \infty ?").next_to(pulse, DOWN)
+
+        new_group = Group(rres_bw_eqn, pulse, infty_b)
+
+        self.play(
+            pulse_f1.animate(run_time=6).set_value(~pulse_f1 * 2),
+            LaggedStart(*[FadeIn(m) for m in infty_b[0]], lag_ratio=0.1),
+            self.camera.frame.animate.scale_to_fit_height(
+                new_group.height * 1.4
+            ).move_to(new_group),
+        )
+
+        self.wait(0.5)
+
+        pcb = Text("PCB layout", font=FONT).scale(0.6)
+        regulatory = ImageMobject(
+            "../props/static/band_allocation_chart.jpg"
+        ).scale_to_fit_width(fw(self, 0.35))
+        etc = Text("etc.", font=FONT).scale(0.6)
+        reasons_group = (
+            Group(pcb, regulatory, etc)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(infty_b, DOWN, LARGE_BUFF * 3)
+        )
+        regulatory.shift(DOWN)
+        etc.shift(DOWN / 2)
+        bez_l = CubicBezier(
+            infty_b.get_bottom() + [0, -0.1, 0],
+            infty_b.get_bottom() + [0, -1, 0],
+            pcb.get_top() + [0, 1, 0],
+            pcb.get_top() + [0, 0.1, 0],
+        )
+        bez_m = CubicBezier(
+            infty_b.get_bottom() + [0, -0.1, 0],
+            infty_b.get_bottom() + [0, -1, 0],
+            regulatory.get_top() + [0, 1, 0],
+            regulatory.get_top() + [0, 0.1, 0],
+        )
+        bez_r = CubicBezier(
+            infty_b.get_bottom() + [0, -0.1, 0],
+            infty_b.get_bottom() + [0, -1, 0],
+            etc.get_top() + [0, 1, 0],
+            etc.get_top() + [0, 0.1, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Create(bez_l),
+                    Create(bez_m),
+                    Create(bez_r),
+                    lag_ratio=0.2,
+                ),
+                self.camera.frame.animate.move_to(reasons_group),
+                LaggedStart(
+                    Write(pcb),
+                    GrowFromCenter(regulatory),
+                    Write(etc),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(2)
+
+
+class Tradeoffs(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        # doesn't include the first part of the animation
+
+        pulse_f = 20
+        pulse_f1 = VT(pulse_f * 5)
+        pw_plot = VT(0.3)
+        is_db = VT(0)
+
+        xcorr_ax = (
+            Axes(
+                x_range=[-~pw_plot, ~pw_plot, 0.5],
+                y_range=[-1, 2, 0.5],
+                tips=False,
+                x_length=fw(self, 0.7),
+                y_length=fh(self, 0.7),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+        self.add(xcorr_ax)
+
+        xcorr_amp = VT(1)
+
+        xcorr_x_offset = VT(~pw_plot)
+
+        fs = 2**10
+
+        def get_xcorr():
+            t_discreet = np.arange(0, 1, 1 / fs)
+            tau = 0.3
+            pulse = np.array(
+                [
+                    chirp_pulse(
+                        t_val=t_val,
+                        pulse_start=0,
+                        pulse_width=tau,
+                        f0=pulse_f,
+                        f1=~pulse_f1,
+                        amp=1,
+                        phase=0,
+                        ramp="linear",
+                    )
+                    for t_val in t_discreet
+                ]
+            )
+            pulse_starts = [tau]
+            rtn = np.array(
+                np.sum(
+                    [
+                        [
+                            chirp_pulse(
+                                t_val=t_val,
+                                pulse_start=ps,
+                                pulse_width=tau,
+                                f0=pulse_f,
+                                f1=~pulse_f1,
+                                amp=1,
+                                phase=0,
+                                ramp="linear",
+                            )
+                            for t_val in t_discreet
+                        ]
+                        for ps in pulse_starts
+                    ],
+                    axis=0,
+                )
+            )
+
+            h_matched = np.conj(pulse[t_discreet < tau][::-1])
+            rtn_matched = signal.fftconvolve(rtn, h_matched, mode="full")
+            rtn_matched /= rtn_matched.max()
+            rtn_matched *= 2 * ~xcorr_amp
+            t_full = np.arange(rtn_matched.size) / fs - tau
+
+            rtn_matched_db = np.clip(10 * np.log10(np.abs(rtn_matched)), -50, None)
+            rtn_matched_db -= np.nanmin(rtn_matched_db)
+            rtn_matched_db /= np.nanmax(rtn_matched_db)
+            rtn_matched_db *= rtn_matched.max()
+            rtn_matched_db *= 4
+            rtn_matched_db -= 6
+
+            func = interp1d(
+                t_full - tau,
+                rtn_matched * (1 - ~is_db) + rtn_matched_db * ~is_db,
+                fill_value="extrapolate",
+            )
+
+            xcorr_plot = always_redraw(
+                lambda: xcorr_ax.plot(
+                    func,
+                    color=GREEN,
+                    x_range=[
+                        -~pw_plot + ~xcorr_x_offset,
+                        ~pw_plot - ~xcorr_x_offset,
+                        1 / (fs * 1),
+                    ],
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                )
+            )
+            return xcorr_plot
+
+        xcorr_plot = always_redraw(get_xcorr)
+        self.add(xcorr_plot)
+
+        self.wait(0.5)
+
+        self.play(xcorr_x_offset @ 0, run_time=2)
+
+        self.wait(0.5)
+
+        # self.play(is_db @ 1)
+
+        sinc_opacity = VT(0)
+        sinc_amp = VT(0)
+        sinc_f = VT(0)
+        sinc = always_redraw(
+            lambda: xcorr_ax.plot(
+                lambda t: ~sinc_amp * np.sinc(2 * PI * ~sinc_f * t),
+                x_range=[-~pw_plot, ~pw_plot, 1 / fs],
+                color=YELLOW,
+                stroke_opacity=~sinc_opacity,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            )
+        )
+        self.add(sinc)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        xcorr_line_legend = Line(
+            ORIGIN,
+            RIGHT,
+            color=GREEN,
+            stroke_opacity=1,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        xcorr_legend = MathTex(r"R_{xy}(\tau)").next_to(
+            xcorr_line_legend, RIGHT, SMALL_BUFF
+        )
+        sinc_line_legend = Line(
+            ORIGIN,
+            RIGHT,
+            color=YELLOW,
+            stroke_opacity=0.5,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        sinc_legend = MathTex(r"\frac{\sin{(x)}}{x}").next_to(
+            sinc_line_legend, RIGHT, SMALL_BUFF
+        )
+        legend_group = (
+            Group(
+                Group(xcorr_line_legend, xcorr_legend),
+                Group(sinc_line_legend, sinc_legend),
+            )
+            .arrange(DOWN, MED_SMALL_BUFF, aligned_edge=LEFT)
+            .next_to(self.camera.frame.get_corner(UR), DL)
+        )
+
+        self.play(
+            LaggedStart(
+                sinc_opacity @ 0.5,
+                sinc_amp @ 2,
+                sinc_f @ (pulse_f + 10),
+                lag_ratio=0.2,
+            ),
+            FadeIn(legend_group),
+            run_time=3,
+        )
 
         self.wait(2)
 
