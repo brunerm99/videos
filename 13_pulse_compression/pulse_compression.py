@@ -15,9 +15,9 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
-FONT = "Maple Mono CN"
+FONT = "Maple Mono"
 
 BLOCKS = get_blocks()
 
@@ -2901,6 +2901,30 @@ class RRes(MovingCameraScene):
 
         self.wait(0.5)
 
+        pw_plot = VT(0.3)
+        pulse_amp = VT(0.3)
+        pulse_f = 20
+        pulse_rtn_x0 = VT(0)
+        pulse_rtn_x1 = VT(~pw_plot)
+
+        min_x = VT(0)
+
+        pulse_f1 = VT(pulse_f * 5)
+        pulse_amp_2 = VT(0.3)
+        pulse_amp_3 = VT(0.3)
+        pulse_phase_1 = VT(0)
+        pulse_phase_2 = VT(0)
+        pulse_phase_3 = VT(0)
+        pulse_t_start_2 = VT(0.1)
+        pulse_t_start_3 = VT(0.28)
+        allow_1 = VT(1)
+        allow_2 = VT(1)
+        allow_3 = VT(1)
+        pulse_start_offset = VT(0)
+        pulse_opacity = VT(1)
+        pulse_rtn_opacity = VT(1)
+        pulse_ltail = VT(0)
+
         pulse_ax = (
             Axes(
                 x_range=[0, 1, 0.5],
@@ -3707,6 +3731,304 @@ class Tradeoffs(MovingCameraScene):
             run_time=3,
         )
 
+        self.wait(0.5)
+
+        vid1 = ImageMobject(
+            "../05_phased_array/media/images/phased_array/thumbnails/Thumbnail1.png"
+        ).scale_to_fit_width(fw(self, 0.3))
+        vid1_box = SurroundingRectangle(vid1, buff=0, color=ORANGE)
+        vid1_group = (
+            Group(vid1, vid1_box)
+            .next_to(sinc_legend, RIGHT, LARGE_BUFF * 4)
+            .shift(UP * 2 + UP + LEFT / 2)
+        )
+        vid2 = ImageMobject(
+            "../08_beamforming/static/Tapering Walkthrough YouTube Thumbnail.png"
+        ).scale_to_fit_width(fw(self, 0.3))
+        vid2_box = SurroundingRectangle(vid2, buff=0, color=ORANGE)
+        vid2_group = (
+            Group(vid2, vid2_box)
+            .next_to(sinc_legend, RIGHT, LARGE_BUFF * 4)
+            .shift(UP * 2 + DOWN + RIGHT / 2)
+        )
+
+        bez_u = CubicBezier(
+            sinc_legend.get_right() + [0.1, 0, 0],
+            sinc_legend.get_right() + [2, 0, 0],
+            vid1_group.get_left() + [-2, 0, 0],
+            vid1_group.get_left() + [-0.1, 0, 0],
+            color=RED,
+        )
+        bez_d = CubicBezier(
+            sinc_legend.get_right() + [0.1, 0, 0],
+            sinc_legend.get_right() + [2, 0, 0],
+            vid2_group.get_left() + [-2, 0, 0],
+            vid2_group.get_left() + [-0.1, 0, 0],
+            color=RED,
+        )
+        antenna_pattern_label = (
+            Text("Antenna\nPatterns", font=FONT, color=RED)
+            .scale(0.6)
+            .next_to(bez_u, UP)
+        )
+
+        vid3 = ImageMobject(
+            "../01_fmcw/media/images/fmcw/thumbnails/comparison.png"
+        ).scale_to_fit_width(fw(self, 0.3))
+        vid3_box = SurroundingRectangle(vid3, buff=0, color=ORANGE)
+        vid3_group = (
+            Group(vid3, vid3_box)
+            .next_to(sinc_legend, DOWN, SMALL_BUFF)
+            .shift(UP + LEFT / 2 + DOWN * 3)
+        )
+        vid4 = ImageMobject(
+            "../04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_2.png"
+        ).scale_to_fit_width(fw(self, 0.3))
+        vid4_box = SurroundingRectangle(vid4, buff=0, color=ORANGE)
+        vid4_group = (
+            Group(vid4, vid4_box)
+            .next_to(sinc_legend, DOWN, SMALL_BUFF)
+            .shift(RIGHT * 2 + DOWN * 3)
+        )
+        vid5 = ImageMobject(
+            "../03_cfar/media/images/cfar/thumbnails/Thumbnail_1.png"
+        ).scale_to_fit_width(fw(self, 0.3))
+        vid5_box = SurroundingRectangle(vid5, buff=0, color=ORANGE)
+        vid5_group = (
+            Group(vid5, vid5_box)
+            .next_to(sinc_legend, DOWN, SMALL_BUFF)
+            .shift(UP + LEFT / 2 + DOWN * 3 + RIGHT * 6)
+        )
+        vid6 = ImageMobject(
+            "../11_aliasing/static/Aliasing Thumbnail.png"
+        ).scale_to_fit_width(fw(self, 0.3))
+        vid6_box = SurroundingRectangle(vid6, buff=0, color=ORANGE)
+        vid6_group = (
+            Group(vid6, vid6_box)
+            .next_to(sinc_legend, DOWN, SMALL_BUFF)
+            .shift(RIGHT * 2 + DOWN * 3 + RIGHT * 6)
+        )
+
+        bez_d1 = CubicBezier(
+            sinc_legend.get_right() + [0.1, 0, 0],
+            sinc_legend.get_right() + [2, 0, 0],
+            vid3_group.get_top() + [0, 1, 0],
+            vid3_group.get_top() + [0, 0.1, 0],
+            color=BLUE,
+        )
+        bez_d2 = CubicBezier(
+            sinc_legend.get_right() + [0.1, 0, 0],
+            sinc_legend.get_right() + [2, 0, 0],
+            vid4_group.get_top() + [0, 1, 0],
+            vid4_group.get_top() + [0, 0.1, 0],
+            color=BLUE,
+        )
+        bez_d3 = CubicBezier(
+            sinc_legend.get_right() + [0.1, 0, 0],
+            sinc_legend.get_right() + [2, 0, 0],
+            vid5_group.get_top() + [0, 1, 0],
+            vid5_group.get_top() + [0, 0.1, 0],
+            color=BLUE,
+        )
+        bez_d4 = CubicBezier(
+            sinc_legend.get_right() + [0.1, 0, 0],
+            sinc_legend.get_right() + [2, 0, 0],
+            vid6_group.get_top() + [0, 3, 0],
+            vid6_group.get_top() + [0, 0.1, 0],
+            color=BLUE,
+        )
+        fft_label = (
+            Text("Fourier\nTransform", font=FONT, color=BLUE)
+            .scale(0.6)
+            .next_to(bez_d3.get_midpoint(), LEFT)
+            .shift(DOWN + RIGHT)
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.5).shift(
+                    RIGHT
+                    * (
+                        (sinc_line_legend.get_left()[0] - MED_SMALL_BUFF)
+                        - self.camera.frame.get_left()
+                    )
+                    + UP
+                ),
+                Create(bez_u),
+                Create(bez_d),
+                Write(antenna_pattern_label),
+                GrowFromCenter(vid1_group),
+                GrowFromCenter(vid2_group),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        d1 = (
+            Dot().scale(2).next_to(Group(vid5_group, vid6_group), RIGHT, MED_LARGE_BUFF)
+        )
+        d2 = Dot().scale(2).next_to(d1, RIGHT, MED_SMALL_BUFF)
+        d3 = Dot().scale(2).next_to(d2, RIGHT, MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                Write(fft_label),
+                Create(bez_d1),
+                GrowFromCenter(vid3_group),
+                Create(bez_d2),
+                GrowFromCenter(vid4_group),
+                Create(bez_d3),
+                GrowFromCenter(vid5_group),
+                Create(bez_d4),
+                GrowFromCenter(vid6_group),
+                GrowFromCenter(d1),
+                GrowFromCenter(d2),
+                GrowFromCenter(d3),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(bez_u),
+                    Uncreate(bez_d),
+                    Unwrite(antenna_pattern_label),
+                    ShrinkToCenter(vid1_group),
+                    ShrinkToCenter(vid2_group),
+                    Unwrite(fft_label),
+                    Uncreate(bez_d1),
+                    ShrinkToCenter(vid3_group),
+                    Uncreate(bez_d2),
+                    ShrinkToCenter(vid4_group),
+                    Uncreate(bez_d3),
+                    ShrinkToCenter(vid5_group),
+                    Uncreate(bez_d4),
+                    ShrinkToCenter(vid6_group),
+                    ShrinkToCenter(d1),
+                    ShrinkToCenter(d2),
+                    ShrinkToCenter(d3),
+                ),
+                self.camera.frame.animate.restore(),
+                AnimationGroup(
+                    sinc_opacity @ 0,
+                    FadeOut(sinc_legend, sinc_line_legend),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        main_lobe_box = Polygon(
+            xcorr_ax.c2p(-0.02, 0),
+            xcorr_ax.c2p(-0.02, 2.1),
+            xcorr_ax.c2p(0.02, 2.1),
+            xcorr_ax.c2p(0.02, 0),
+        )
+
+        self.play(
+            self.camera.frame.animate.scale(0.8),
+            Group(xcorr_line_legend, xcorr_legend).animate.next_to(
+                self.camera.frame.copy().scale(0.8).get_corner(UR), DL
+            ),
+            Create(main_lobe_box),
+        )
+
+        self.wait(0.5)
+
+        width_r = Line(
+            main_lobe_box.get_corner(UR) + [0, 0.1, 0],
+            main_lobe_box.get_corner(UR) + [0, 0.3, 0],
+        )
+        width_l = Line(
+            main_lobe_box.get_corner(UL) + [0, 0.1, 0],
+            main_lobe_box.get_corner(UL) + [0, 0.3, 0],
+        )
+        width_line = Line(width_l.get_midpoint(), width_r.get_midpoint())
+
+        sim_rres = MathTex(r"\sim \Delta R")
+        sim_rres.shift(width_r.get_midpoint() - sim_rres[0][0].get_left()).shift(
+            RIGHT / 4
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP),
+                Create(width_l),
+                Create(width_line),
+                Create(width_r),
+                *[GrowFromCenter(m) for m in sim_rres[0]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        side_lobe_box_l = Polygon(
+            xcorr_ax.c2p(-~pw_plot, -1),
+            xcorr_ax.c2p(-~pw_plot, 0.25),
+            xcorr_ax.c2p(-0.005, 0.25),
+            xcorr_ax.c2p(-0.005, -1),
+        )
+        side_lobe_box_r = Polygon(
+            xcorr_ax.c2p(0.005, -1),
+            xcorr_ax.c2p(0.005, 0.25),
+            xcorr_ax.c2p(~pw_plot, 0.25),
+            xcorr_ax.c2p(~pw_plot, -1),
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    FadeOut(*sim_rres[0]),
+                    Uncreate(width_r),
+                    Uncreate(width_line),
+                    Uncreate(width_l),
+                    lag_ratio=0.1,
+                ),
+                self.camera.frame.animate.shift(DOWN),
+                AnimationGroup(
+                    TransformFromCopy(main_lobe_box, side_lobe_box_l),
+                    ReplacementTransform(main_lobe_box, side_lobe_box_r),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        xcorr_legend_db = (
+            MathTex(r"10 \cdot \log{(R_{xy}(\tau))}")
+            .move_to(xcorr_legend, RIGHT)
+            .shift(RIGHT + UP / 2)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(side_lobe_box_l, side_lobe_box_r),
+                AnimationGroup(
+                    self.camera.frame.animate.scale(1 / 0.8),
+                    is_db @ 1,
+                    xcorr_line_legend.animate.next_to(xcorr_legend_db, LEFT),
+                    LaggedStart(
+                        ReplacementTransform(xcorr_legend[0], xcorr_legend_db[0][7:-1]),
+                        GrowFromCenter(xcorr_legend_db[0][:2]),
+                        GrowFromCenter(xcorr_legend_db[0][2]),
+                        GrowFromCenter(xcorr_legend_db[0][3:7]),
+                        GrowFromCenter(xcorr_legend_db[0][-1]),
+                        lag_ratio=0.3,
+                    ),
+                    run_time=3,
+                ),
+                lag_ratio=0.3,
+            ),
+        )
+
         self.wait(2)
 
 
@@ -3859,7 +4181,7 @@ class EndScreen(MovingCameraScene):
                     cov[a:b] += 1
             return cov
 
-        hours = pd.read_csv("../../../downloads/Work Hours - Hours - 2025.csv").dropna(
+        hours = pd.read_csv("../../../Downloads/Work Hours 2025.csv").dropna(
             subset=["In", "Out", "Category Fill"]
         )
         hours = hours[
@@ -3873,12 +4195,12 @@ class EndScreen(MovingCameraScene):
 
         spans = list(hours[["In_mins", "Out_mins"]].itertuples(index=None, name=None))
         cov = coverage_array(spans)
-        filter_len = 201
+        filter_len = 61
         window = np.ones(filter_len) / filter_len
 
         t = np.linspace(0, 24, cov.size)
 
-        ax = Axes(x_range=[0, 24, 3], y_range=[0, 4, 1], tips=False)
+        ax = Axes(x_range=[0, 24, 3], y_range=[0, 5, 1], tips=False)
 
         scale = VT(0)
 
@@ -3891,6 +4213,7 @@ class EndScreen(MovingCameraScene):
                         fill_value="extrapolate",
                     ),
                     color=BLUE,
+                    use_smoothing=False,
                 )
             )
             area = ax.get_area(plot, color=BLUE, opacity=0.5)
@@ -3908,7 +4231,7 @@ class EndScreen(MovingCameraScene):
                 for h in times
             ]
         )
-        hour_yaxis = np.arange(1, 5, 1)
+        hour_yaxis = np.arange(1, 6, 1)
         hour_labels = Group(
             *[
                 Text(f"{h}", font=FONT)
