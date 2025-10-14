@@ -15,7 +15,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 FONT = "Maple Mono CN"
 
@@ -3611,7 +3611,7 @@ class Tradeoffs(MovingCameraScene):
                     for t_val in t_discreet
                 ]
             )
-            pulse_starts = [tau, tau * 1.1]
+            pulse_starts = [tau, tau * 1.05]
             pulse_amps = [~rtn_amp_1, ~rtn_amp_2]
             rtn = np.array(
                 np.sum(
@@ -4037,7 +4037,7 @@ class Tradeoffs(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         plane = (
             SVGMobject("../props/static/plane.svg")
@@ -4064,7 +4064,8 @@ class Tradeoffs(MovingCameraScene):
                 ).move_to(all_group),
                 plane.shift(RIGHT * 8).animate.shift(LEFT * 8),
                 lag_ratio=0.4,
-            )
+            ),
+            run_time=3,
         )
 
         self.wait(0.5)
@@ -4078,28 +4079,137 @@ class Tradeoffs(MovingCameraScene):
         self.play(Create(plane_bez))
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
 
         parachute_bez = CubicBezier(
             parachute.get_left() + [-0.1, 0, 0],
             parachute.get_left() + [-3, -1, 0],
-            xcorr_ax.c2p(~pw_plot * 0.1, 0.45) + [1, 0.1, 0],
-            xcorr_ax.c2p(~pw_plot * 0.1, 0.45) + [0.1, 0.1, 0],
+            xcorr_ax.c2p(~pw_plot * 0.05, 0.05) + [1, 0.1, 0],
+            xcorr_ax.c2p(~pw_plot * 0.05, -0.2) + [0.1, 0, 0],
         )
         self.play(
             LaggedStart(
                 FadeIn(parachute, shift=DOWN + RIGHT),
-                rtn_amp_2 @ 0.5,
+                rtn_amp_2 @ 0.3,
                 Create(parachute_bez),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        sll_line_u = Line(
+            xcorr_ax.c2p(0, 2), xcorr_ax.c2p(0, 2) + [-0.5, 0, 0], buff=SMALL_BUFF
+        )
+        sll_line_d = Line(
+            xcorr_ax.c2p(0, 0.35), xcorr_ax.c2p(0, 0.35) + [-0.5, 0, 0], buff=SMALL_BUFF
+        )
+        sll_line = Line(sll_line_d.get_midpoint(), sll_line_u.get_midpoint())
+
+        sll_label = MathTex(r"\approx -13 \text{ dB}").next_to(sll_line, LEFT)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    self.camera.frame.animate.scale_to_fit_width(xcorr_plot.width * 1.3)
+                    .move_to(xcorr_plot)
+                    .shift(UP / 2),
+                    Group(xcorr_legend_abs, xcorr_line_legend).animate.shift(LEFT),
+                    plane_bez.animate.set_stroke(opacity=0.2),
+                    parachute_bez.animate.set_stroke(opacity=0.2),
+                ),
+                Create(sll_line_d),
+                Create(sll_line),
+                Create(sll_line_u),
+                FadeIn(sll_label),
                 lag_ratio=0.3,
             )
         )
 
-        # self.wait(0.5)
-
         # self.play(rtn_amp_2 @ 0.5)
-        # self.play(pulse_f1 @ (~pulse_f1 / 2))
+        # self.play(pulse_f1 @ (~pulse_f1 * 0.6), run_time=5)
+
+        self.wait(0.5)
+
+        sll_level = DashedLine(
+            xcorr_ax.c2p(0, 0.35) + [-0.5, 0, 0],
+            xcorr_ax.c2p(0, 0.35) + [2, 0, 0],
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+            dashed_ratio=0.6,
+        )
+        parachute_level = DashedLine(
+            xcorr_ax.c2p(0, -0.22) + [-0.5, 0, 0],
+            xcorr_ax.c2p(0, -0.22) + [2, 0, 0],
+            color=YELLOW,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+            dashed_ratio=0.6,
+        )
+        plane_sll_label = (
+            Text("Plane\nSide Lobe", font=FONT)
+            .scale(0.5)
+            .next_to(sll_level, RIGHT, MED_SMALL_BUFF)
+        )
+        parachute_level_label = (
+            Text("Person\nMain Lobe", font=FONT)
+            .scale(0.5)
+            .next_to(parachute_level, RIGHT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Create(sll_level),
+                Write(plane_sll_label),
+                Create(parachute_level),
+                Write(parachute_level_label),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        sll_down = Arrow(
+            sll_line.get_bottom(),
+            sll_line.get_bottom() + [0, -1.5, 0],
+            buff=SMALL_BUFF,
+            color=RED,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    parachute_level, sll_level, plane_sll_label, parachute_level_label
+                ),
+                self.camera.frame.animate.scale(0.7).move_to(sll_line.get_bottom()),
+                GrowArrow(sll_down),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        bc = (
+            Text("Barker Codes", font=FONT, color=GREEN)
+            .scale_to_fit_width(fw(self, 0.6))
+            .move_to(self.camera.frame.copy().shift(DOWN * fh(self, 2)))
+        )
+        soln = (
+            Text("Possible solution:", font=FONT)
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(bc, UP, MED_LARGE_BUFF)
+        )
+        self.add(bc, soln)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 2)))
 
         self.wait(2)
+
+
+class BarkerCodes(MovingCameraScene):
+    def construct(self): ...
 
 
 class ThumbnailRenders(MovingCameraScene):
