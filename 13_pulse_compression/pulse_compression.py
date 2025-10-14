@@ -15,9 +15,9 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
-FONT = "Maple Mono"
+FONT = "Maple Mono CN"
 
 BLOCKS = get_blocks()
 
@@ -3569,7 +3569,7 @@ class Tradeoffs(MovingCameraScene):
         pulse_f = 20
         pulse_f1 = VT(pulse_f * 5)
         pw_plot = VT(0.3)
-        is_db = VT(0)
+        is_abs = VT(0)
 
         xcorr_ax = (
             Axes(
@@ -3590,6 +3590,9 @@ class Tradeoffs(MovingCameraScene):
 
         fs = 2**10
 
+        rtn_amp_1 = VT(1)
+        rtn_amp_2 = VT(0)
+
         def get_xcorr():
             t_discreet = np.arange(0, 1, 1 / fs)
             tau = 0.3
@@ -3608,12 +3611,14 @@ class Tradeoffs(MovingCameraScene):
                     for t_val in t_discreet
                 ]
             )
-            pulse_starts = [tau]
+            pulse_starts = [tau, tau * 1.1]
+            pulse_amps = [~rtn_amp_1, ~rtn_amp_2]
             rtn = np.array(
                 np.sum(
                     [
                         [
-                            chirp_pulse(
+                            pa
+                            * chirp_pulse(
                                 t_val=t_val,
                                 pulse_start=ps,
                                 pulse_width=tau,
@@ -3625,7 +3630,7 @@ class Tradeoffs(MovingCameraScene):
                             )
                             for t_val in t_discreet
                         ]
-                        for ps in pulse_starts
+                        for ps, pa in zip(pulse_starts, pulse_amps)
                     ],
                     axis=0,
                 )
@@ -3637,16 +3642,16 @@ class Tradeoffs(MovingCameraScene):
             rtn_matched *= 2 * ~xcorr_amp
             t_full = np.arange(rtn_matched.size) / fs - tau
 
-            rtn_matched_db = np.clip(10 * np.log10(np.abs(rtn_matched)), -50, None)
-            rtn_matched_db -= np.nanmin(rtn_matched_db)
-            rtn_matched_db /= np.nanmax(rtn_matched_db)
-            rtn_matched_db *= rtn_matched.max()
-            rtn_matched_db *= 4
-            rtn_matched_db -= 6
+            # rtn_matched_db = np.clip(10 * np.log10(np.abs(rtn_matched)), -50, None)
+            # rtn_matched_db -= np.nanmin(rtn_matched_db)
+            # rtn_matched_db /= np.nanmax(rtn_matched_db)
+            # rtn_matched_db *= rtn_matched.max()
+            # rtn_matched_db *= 4
+            # rtn_matched_db -= 6
 
             func = interp1d(
                 t_full - tau,
-                rtn_matched * (1 - ~is_db) + rtn_matched_db * ~is_db,
+                rtn_matched * (1 - ~is_abs) + (np.abs(rtn_matched) * 1.5 - 1) * ~is_abs,
                 fill_value="extrapolate",
             )
 
@@ -3689,7 +3694,7 @@ class Tradeoffs(MovingCameraScene):
         )
         self.add(sinc)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         xcorr_line_legend = Line(
             ORIGIN,
@@ -4002,25 +4007,27 @@ class Tradeoffs(MovingCameraScene):
 
         self.wait(0.5)
 
-        xcorr_legend_db = (
-            MathTex(r"10 \cdot \log{(R_{xy}(\tau))}")
+        xcorr_legend_abs = (
+            MathTex(r"\lvert R_{xy}(\tau) \rvert")
             .move_to(xcorr_legend, RIGHT)
             .shift(RIGHT + UP / 2)
         )
+
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
                 FadeOut(side_lobe_box_l, side_lobe_box_r),
                 AnimationGroup(
                     self.camera.frame.animate.scale(1 / 0.8),
-                    is_db @ 1,
-                    xcorr_line_legend.animate.next_to(xcorr_legend_db, LEFT),
+                    is_abs @ 1,
+                    xcorr_line_legend.animate.next_to(xcorr_legend_abs, LEFT),
                     LaggedStart(
-                        ReplacementTransform(xcorr_legend[0], xcorr_legend_db[0][7:-1]),
-                        GrowFromCenter(xcorr_legend_db[0][:2]),
-                        GrowFromCenter(xcorr_legend_db[0][2]),
-                        GrowFromCenter(xcorr_legend_db[0][3:7]),
-                        GrowFromCenter(xcorr_legend_db[0][-1]),
+                        ReplacementTransform(
+                            xcorr_legend[0], xcorr_legend_abs[0][1:-1]
+                        ),
+                        GrowFromCenter(xcorr_legend_abs[0][0]),
+                        GrowFromCenter(xcorr_legend_abs[0][-1]),
                         lag_ratio=0.3,
                     ),
                     run_time=3,
@@ -4028,6 +4035,69 @@ class Tradeoffs(MovingCameraScene):
                 lag_ratio=0.3,
             ),
         )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        plane = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(fw(self, 0.2))
+            .rotate(PI * 0.75)
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .move_to(legend_group)
+            .shift(RIGHT * 4)
+        )
+        parachute = (
+            ImageMobject("../props/static/Parachute Army Toy.png")
+            .scale_to_fit_width(plane.width)
+            .next_to(plane, DOWN, LARGE_BUFF)
+            .shift(RIGHT)
+        )
+
+        all_group = Group(xcorr_plot, plane, parachute, legend_group)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    all_group.width * 1.1
+                ).move_to(all_group),
+                plane.shift(RIGHT * 8).animate.shift(LEFT * 8),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        plane_bez = CubicBezier(
+            plane.get_left() + [-0.1, 0, 0],
+            plane.get_left() + [-3, -1, 0],
+            xcorr_ax.c2p(0, 1.9) + [1, 0.1, 0],
+            xcorr_ax.c2p(0, 1.9) + [0.1, 0.1, 0],
+        )
+        self.play(Create(plane_bez))
+
+        self.wait(0.5)
+
+        parachute_bez = CubicBezier(
+            parachute.get_left() + [-0.1, 0, 0],
+            parachute.get_left() + [-3, -1, 0],
+            xcorr_ax.c2p(~pw_plot * 0.1, 0.45) + [1, 0.1, 0],
+            xcorr_ax.c2p(~pw_plot * 0.1, 0.45) + [0.1, 0.1, 0],
+        )
+        self.play(
+            LaggedStart(
+                FadeIn(parachute, shift=DOWN + RIGHT),
+                rtn_amp_2 @ 0.5,
+                Create(parachute_bez),
+                lag_ratio=0.3,
+            )
+        )
+
+        # self.wait(0.5)
+
+        # self.play(rtn_amp_2 @ 0.5)
+        # self.play(pulse_f1 @ (~pulse_f1 / 2))
 
         self.wait(2)
 
