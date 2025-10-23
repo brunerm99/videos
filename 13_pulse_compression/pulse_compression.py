@@ -17,7 +17,7 @@ config.background_color = BACKGROUND_COLOR
 
 SKIP_ANIMATIONS_OVERRIDE = True
 
-FONT = "Maple Mono CN"
+FONT = "Maple Mono NF CN"
 
 BLOCKS = get_blocks()
 
@@ -655,6 +655,7 @@ class Issue(MovingCameraScene):
         self.wait(2)
 
 
+# TODO: Remove the good,ok,bad labels and notebook after usage
 class Options(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -735,6 +736,8 @@ class Options(MovingCameraScene):
             pulse,
             rres_nl,
             snr_nl,
+            # snr_bad_label,
+            # rres_good_label,
             rres_label,
             snr_label,
             snr_dot,
@@ -742,10 +745,71 @@ class Options(MovingCameraScene):
         )
 
         self.play(
-            Group(pulse_ax, Group(rres_nl, snr_nl)).animate.arrange(RIGHT, LARGE_BUFF)
+            Group(
+                pulse_ax,
+                Group(
+                    rres_nl,
+                    # rres_good_label,
+                    snr_nl,
+                    # snr_bad_label,
+                ),
+            ).animate.arrange(RIGHT, LARGE_BUFF)
+        )
+
+        rres_bad_label = (
+            Text("Bad", color=BAD, font=FONT)
+            .scale(0.5)
+            .next_to(rres_nl.n2p(10), RIGHT, MED_SMALL_BUFF)
+        )
+        snr_good_label = (
+            Text("Good", color=GOOD, font=FONT)
+            .scale(0.5)
+            .next_to(snr_nl.n2p(10), LEFT, MED_SMALL_BUFF)
+        )
+        rres_ok_label = (
+            Text("OK", color=OK, font=FONT)
+            .scale(0.5)
+            .next_to(rres_nl.n2p(5), RIGHT, MED_SMALL_BUFF)
+        )
+        snr_ok_label = (
+            Text("OK", color=OK, font=FONT)
+            .scale(0.5)
+            .next_to(snr_nl.n2p(5), LEFT, MED_SMALL_BUFF)
+        )
+        rres_good_label = (
+            Text("Good", color=GOOD, font=FONT)
+            .scale(0.5)
+            .next_to(rres_nl.n2p(0), RIGHT, MED_SMALL_BUFF)
+        )
+        snr_bad_label = (
+            Text("Bad", color=BAD, font=FONT)
+            .scale(0.5)
+            .next_to(snr_nl.n2p(0), LEFT, MED_SMALL_BUFF)
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeIn(rres_bad_label),
+                    FadeIn(snr_good_label),
+                ),
+                AnimationGroup(
+                    FadeIn(rres_ok_label),
+                    FadeIn(snr_ok_label),
+                ),
+                AnimationGroup(
+                    FadeIn(rres_good_label),
+                    FadeIn(snr_bad_label),
+                ),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(pw_plot @ 0.1, rres @ 1, snr @ 1, run_time=5)
 
@@ -893,6 +957,78 @@ class Options(MovingCameraScene):
         self.remove(*resources)
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        # It's honestly pretty incredible how people came to these findings,
+        # so as always, you can find some great resources, papers, books,
+        # and more in the description, as well as a Python notebook to play
+        # around with the concepts yourself.
+
+        nb_img_1 = ImageMobject("./static/nb_img_1.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+        nb_img_2 = ImageMobject("./static/nb_img_2.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+        nb_img_3 = ImageMobject("./static/nb_img_3.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+        nb_img_group = (
+            Group(nb_img_1, nb_img_2, nb_img_3)
+            .arrange(RIGHT, -MED_SMALL_BUFF)
+            .scale_to_fit_width(fw(self, 0.95))
+            .next_to(self.camera.frame.get_bottom(), UP, LARGE_BUFF * 2)
+        )
+        nb_img_2.shift(DOWN)
+
+        nb_label = (
+            Text("pulse_compression.ipynb", font=FONT)
+            .scale_to_fit_width(fw(self, 0.5))
+            .next_to(self.camera.frame.get_top(), DOWN)
+        )
+
+        nb_group = (
+            Group(nb_label, nb_img_1, nb_img_2, nb_img_3)
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+        )
+        nb_bez_1 = CubicBezier(
+            nb_label.get_bottom() + [0, -0.1, 0],
+            nb_label.get_bottom() + [0, -1, 0],
+            nb_img_1.get_top() + [0, 1, 0],
+            nb_img_1.get_top() + [0, 0.1, 0],
+        )
+
+        nb_bez_2 = CubicBezier(
+            nb_label.get_bottom() + [0, -0.1, 0],
+            nb_label.get_bottom() + [0, -1, 0],
+            nb_img_2.get_top() + [0, 1, 0],
+            nb_img_2.get_top() + [0, 0.1, 0],
+        )
+
+        nb_bez_3 = CubicBezier(
+            nb_label.get_bottom() + [0, -0.1, 0],
+            nb_label.get_bottom() + [0, -1, 0],
+            nb_img_3.get_top() + [0, 1, 0],
+            nb_img_3.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                Write(nb_label),
+                Create(nb_bez_1),
+                GrowFromCenter(nb_img_1),
+                Create(nb_bez_2),
+                GrowFromCenter(nb_img_2),
+                Create(nb_bez_3),
+                GrowFromCenter(nb_img_3),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         radar = WeatherRadarTower()
         radar.vgroup.scale_to_fit_height(config.frame_height * 1).next_to(
@@ -1372,7 +1508,7 @@ class Options(MovingCameraScene):
             info.get_corner(UR) + [0, 0.1, 0],
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -4210,6 +4346,138 @@ class Tradeoffs(MovingCameraScene):
 
 class BarkerCodes(MovingCameraScene):
     def construct(self): ...
+
+
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        wrapup_label = Text("Wrap up", font=FONT).to_corner(UL, MED_LARGE_BUFF)
+
+        self.play(wrapup_label.shift(LEFT * 5).animate.shift(RIGHT * 5))
+
+        self.wait(0.5)
+
+        pulse_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=fw(self, 0.7),
+                y_length=fh(self, 0.6),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+
+        pw_plot = VT(0.5)
+        pulse_amp = VT(0.5)
+        pulse_f = 20
+
+        pulse_f1 = VT(pulse_f)
+        pulse_phase_1 = VT(0)
+        pulse_start_offset = VT(0)
+        pulse_ltail = VT(0)
+        pulse = always_redraw(
+            lambda: pulse_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=~pulse_start_offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[0, 1, 1 / 1000],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=TX_COLOR,
+                stroke_opacity=1,
+            )
+        )
+        # self.add(pulse)
+
+        self.play(Create(pulse))
+
+        self.wait(0.5)
+
+        bw_label = MathTex(r"B > 0 \text{ Hz}").to_edge(UP, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(*[FadeIn(m) for m in bw_label[0]], lag_ratio=0.2),
+            pulse_f1 @ (~pulse_f1 * 5),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        offset = 0.3
+        pulse_rtn_ax = pulse_ax.copy().next_to(pulse_ax, DOWN, MED_LARGE_BUFF)
+        pulse_rtn = always_redraw(
+            lambda: pulse_rtn_ax.plot(
+                lambda t: chirp_pulse(
+                    t,
+                    pulse_start=offset,
+                    pulse_width=~pw_plot,
+                    f0=pulse_f,
+                    f1=~pulse_f1,
+                    amp=~pulse_amp,
+                    phase=~pulse_phase_1,
+                ),
+                x_range=[0, 1, 1 / 1000],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                color=RX_COLOR,
+                stroke_opacity=1,
+            )
+        )
+
+        plane = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(fw(self, 0.3))
+            .rotate(PI * 0.75)
+            .set_fill(TARGET1_COLOR)
+            .next_to(pulse_ax.c2p(1, 0), RIGHT, LARGE_BUFF * 3)
+            .set_y(Group(pulse, pulse_rtn).get_y())
+        )
+        self.add(plane)
+
+        all_group = Group(pulse, plane)
+
+        tx_arrow = Arrow(pulse_ax.c2p(1, 0), plane.get_left(), color=TX_COLOR)
+        rx_arrow = Arrow(plane.get_left(), pulse_rtn_ax.c2p(1, 0), color=RX_COLOR)
+
+        # self.add(pulse_rtn, tx_arrow, rx_arrow)
+
+        self.play(
+            LaggedStart(
+                FadeOut(bw_label),
+                self.camera.frame.animate.scale_to_fit_width(
+                    all_group.width * 1.1
+                ).move_to(all_group),
+                wrapup_label.animate.next_to(
+                    self.camera.frame.copy()
+                    .scale_to_fit_width(all_group.width * 1.1)
+                    .move_to(all_group)
+                    .get_corner(UL),
+                    DR,
+                    MED_LARGE_BUFF,
+                ),
+                GrowArrow(tx_arrow),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(rx_arrow),
+                Create(pulse_rtn),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(2)
 
 
 class ThumbnailRenders(MovingCameraScene):
