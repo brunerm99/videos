@@ -1,8 +1,10 @@
 # pulse_compression.py
 
+import os
 import sys
 
 import pandas as pd
+from dotenv import load_dotenv
 from manim import *
 from MF_Tools import VT
 from numpy.fft import fft, fftshift
@@ -15,9 +17,10 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
-FONT = "Maple Mono NF CN"
+load_dotenv("../.env")
+FONT = os.getenv("FONT")
 
 BLOCKS = get_blocks()
 
@@ -3850,6 +3853,53 @@ class Tradeoffs(MovingCameraScene):
 
         self.wait(0.5)
 
+        non_zero_label = MathTex(r"\Delta R > 0").next_to(
+            xcorr_ax.c2p(0, 2), UP, LARGE_BUFF
+        )
+
+        l_bez = CubicBezier(
+            xcorr_ax.c2p(-0.01, 1) + [0, 0, 0],
+            xcorr_ax.c2p(-0.01, 1) + [0, 1, 0],
+            non_zero_label.get_corner(DL) + [-0.1, -1, 0],
+            non_zero_label.get_corner(DL) + [-0.1, 0, 0],
+        )
+        r_bez = CubicBezier(
+            xcorr_ax.c2p(0.01, 1) + [0, 0, 0],
+            xcorr_ax.c2p(0.01, 1) + [0, 1, 0],
+            non_zero_label.get_corner(DR) + [0.1, -1, 0],
+            non_zero_label.get_corner(DR) + [0.1, 0, 0],
+        )
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP),
+                AnimationGroup(
+                    Create(l_bez),
+                    Create(r_bez),
+                ),
+                LaggedStart(*[FadeIn(m) for m in non_zero_label[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(*non_zero_label[0]),
+                AnimationGroup(
+                    Uncreate(l_bez),
+                    Uncreate(r_bez),
+                ),
+                self.camera.frame.animate.shift(DOWN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
         # self.play(is_db @ 1)
 
         sinc_opacity = VT(0)
@@ -4251,7 +4301,7 @@ class Tradeoffs(MovingCameraScene):
         self.play(Create(plane_bez))
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         parachute_bez = CubicBezier(
             parachute.get_left() + [-0.1, 0, 0],
@@ -4270,7 +4320,7 @@ class Tradeoffs(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         sll_line_u = Line(
             xcorr_ax.c2p(0, 2), xcorr_ax.c2p(0, 2) + [-0.5, 0, 0], buff=SMALL_BUFF
