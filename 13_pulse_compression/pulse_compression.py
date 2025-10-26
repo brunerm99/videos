@@ -2312,6 +2312,7 @@ class Overlap(MovingCameraScene):
             ),
             pulse_ax.animate.move_to(new_axes[0]),
             pulse_rtn_ax.animate.move_to(new_axes[1]),
+            FadeOut(xcorr),
             self.camera.frame.animate.scale_to_fit_height(new_axes.height * 1.2)
             .move_to(new_axes)
             .shift(LEFT * 3),
@@ -3739,7 +3740,6 @@ class RRes(MovingCameraScene):
 class Tradeoffs(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
-        # doesn't include the first part of the animation
 
         pulse_f = 20
         pulse_f1 = VT(pulse_f * 5)
