@@ -853,7 +853,18 @@ class Options(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            Group(rres_nl, snr_nl, qmark, check).animate.shift(RIGHT * 5),
+            Group(
+                rres_nl,
+                snr_nl,
+                qmark,
+                check,
+                snr_good_label,
+                rres_good_label,
+                rres_ok_label,
+                snr_ok_label,
+                rres_bad_label,
+                snr_bad_label,
+            ).animate.shift(RIGHT * 5),
             self.camera.frame.animate.scale_to_fit_width(pulse_ax.width * 1.5).move_to(
                 pulse_ax
             ),
@@ -957,7 +968,7 @@ class Options(MovingCameraScene):
         self.remove(*resources)
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         # It's honestly pretty incredible how people came to these findings,
         # so as always, you can find some great resources, papers, books,
@@ -1028,7 +1039,6 @@ class Options(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(True))
 
         radar = WeatherRadarTower()
         radar.vgroup.scale_to_fit_height(config.frame_height * 1).next_to(
@@ -1044,8 +1054,14 @@ class Options(MovingCameraScene):
             rres_nl,
             rres_label,
             snr_label,
+            snr_good_label,
+            rres_good_label,
+            snr_bad_label,
+            rres_bad_label,
+            snr_ok_label,
+            rres_ok_label,
         )
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
 
         plane = (
             SVGMobject("../props/static/plane.svg")
@@ -1055,16 +1071,18 @@ class Options(MovingCameraScene):
             .next_to(pulse, RIGHT, LARGE_BUFF * 3)
         )
 
+        radar.vgroup.shift(LEFT * 5)
         self.play(
             LaggedStart(
-                FadeOut(pulse_ax),
-                pulse_x1 @ ~pw_plot,
-                Uncreate(pulse_line_r),
-                Uncreate(pulse_line),
-                Uncreate(pulse_line_l),
-                radar.vgroup.animate.shift(
-                    pulse_ax.c2p(0, 0) - radar.radome.get_right()
-                ),
+                Group(
+                    nb_label,
+                    nb_bez_1,
+                    nb_bez_2,
+                    nb_bez_3,
+                    nb_img_1,
+                    nb_img_2,
+                    nb_img_3,
+                ).animate.shift(DOWN * 10),
                 self.camera.frame.animate.scale_to_fit_height(radar.vgroup.height * 1.7)
                 .move_to(
                     Group(
@@ -1075,12 +1093,30 @@ class Options(MovingCameraScene):
                     )
                 )
                 .shift(UP * 2 + RIGHT * 4),
+                FadeOut(pulse_ax),
+                pulse_x1 @ ~pw_plot,
+                Uncreate(pulse_line_r),
+                Uncreate(pulse_line),
+                Uncreate(pulse_line_l),
+                radar.vgroup.animate.shift(
+                    pulse_ax.c2p(0, 0) - radar.radome.get_right()
+                ),
                 plane.shift(RIGHT * 10).animate.shift(LEFT * 10),
                 lag_ratio=0.2,
             )
         )
+        self.remove(
+            nb_label,
+            nb_bez_1,
+            nb_bez_2,
+            nb_bez_2,
+            nb_img_1,
+            nb_img_2,
+            nb_img_3,
+        )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         pulse_rtn_ax = pulse_ax.copy().rotate(PI)
         pulse_rtn_ax.shift(plane.get_left() - pulse_rtn_ax.c2p(0, 0))
