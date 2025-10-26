@@ -15,7 +15,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 FONT = "Maple Mono NF CN"
 
@@ -4381,7 +4381,170 @@ class Tradeoffs(MovingCameraScene):
 
 
 class BarkerCodes(MovingCameraScene):
-    def construct(self): ...
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.8),
+            y_length=fh(self, 0.5),
+        )
+        barker_len = 13
+        barker_codes = [VT(1) for _ in range(barker_len)]
+
+        ts = np.linspace(0, 1, 1000)
+        f = 20
+
+        def get_tx():
+            x = np.sum(
+                [
+                    [
+                        np.sin(2 * PI * f * t + np.deg2rad((~phi - 1) / 2 * 180))
+                        if (idx / barker_len) < t < ((idx + 1) / barker_len)
+                        else 0
+                        for t in ts
+                    ]
+                    for idx, phi in enumerate(barker_codes)
+                ],
+                axis=0,
+            )
+            func = interp1d(ts, x)
+            tx = ax.plot(
+                func,
+                x_range=[0, 1, 1 / 1000],
+                color=TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            )
+            return tx
+
+        tx = always_redraw(get_tx)
+
+        tx_label = Text("Transmit Waveform", font=FONT).next_to(ax, UP, MED_LARGE_BUFF)
+        # Group(tx_label, waveform_label, ax).move_to(self.camera.frame)
+
+        self.play(
+            LaggedStart(
+                Create(ax),
+                Create(tx),
+                Write(tx_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        label1 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[0])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(0.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label2 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[1])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(1.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label3 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[2])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(2.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label4 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[3])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(3.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label5 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[4])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(4.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label6 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[5])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(5.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label7 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[6])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(6.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label8 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[7])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(7.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label9 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[8])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(8.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label10 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[9])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(9.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label11 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[10])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(10.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label12 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[11])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(11.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+        label13 = always_redraw(
+            lambda: Text(f"{int(~barker_codes[12])}", font=FONT)
+            .scale(0.6)
+            .next_to(ax.c2p(12.5 / barker_len, -1), DOWN, MED_LARGE_BUFF)
+        )
+
+        code_labels = [
+            label1,
+            label2,
+            label3,
+            label4,
+            label5,
+            label6,
+            label7,
+            label8,
+            label9,
+            label10,
+            label11,
+            label12,
+            label13,
+        ]
+
+        lines = [
+            DashedLine(
+                ax.c2p(idx / barker_len, 1),
+                ax.c2p(idx / barker_len, -1.6),
+                color=YELLOW,
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+                dashed_ratio=0.6,
+            )
+            for idx in range(barker_len + 1)
+        ]
+
+        self.play(
+            *[GrowFromCenter(m) for m in code_labels],
+            LaggedStart(*[Create(m) for m in lines], lag_ratio=0.3),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        barker_codes_actual = [1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1]
+
+        self.play(
+            LaggedStart(
+                *[bc @ barker_codes_actual[idx] for idx, bc in enumerate(barker_codes)]
+            ),
+            run_time=5,
+        )
+
+        self.wait(2)
 
 
 class WrapUp(MovingCameraScene):
