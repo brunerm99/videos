@@ -17,7 +17,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -4752,6 +4752,8 @@ class BarkerCodes(MovingCameraScene):
 
 class WrapUp(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
         wrapup_label = Text("Wrap up", font=FONT).to_corner(UL, MED_LARGE_BUFF)
 
         self.play(wrapup_label.shift(LEFT * 5).animate.shift(RIGHT * 5))
@@ -4776,10 +4778,32 @@ class WrapUp(MovingCameraScene):
         pulse_start = VT(0)
         pulse_end = VT(1)
 
+        offset = 0.3
+
+        pulse_rtn_ax = pulse_ax.copy().next_to(pulse_ax, DOWN, MED_LARGE_BUFF)
+        xcorr_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                # y_range=[-1, 1, 0.5],
+                # x_range=[offset - ~pw_plot, ~pw_plot, 0.5],
+                y_range=[-1, 2, 0.5],
+                tips=False,
+                x_length=fw(self, 0.7),
+                y_length=fh(self, 0.6),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+        xcorr_ax.shift((pulse_rtn_ax.c2p(offset, 0) - xcorr_ax.c2p(0, 0)) + DOWN * 6)
+        self.add(xcorr_ax)
+
+        full_xcorr_width = ~pw_plot - xcorr_ax.p2c(pulse_ax.c2p(offset - ~pw_plot))[0]
+        xcorr_x_offset = VT(full_xcorr_width)
+
         pulse_f1 = VT(pulse_f)
         pulse_phase_1 = VT(0)
         pulse_start_offset = VT(0)
-        pulse_ltail = VT(0)
+        pulse_ltail = VT(~pw_plot)
         pulse = always_redraw(
             lambda: pulse_ax.plot(
                 lambda t: chirp_pulse(
@@ -4791,7 +4815,11 @@ class WrapUp(MovingCameraScene):
                     amp=~pulse_amp,
                     phase=~pulse_phase_1,
                 ),
-                x_range=[~pulse_start, ~pulse_end, 1 / 1000],
+                x_range=[
+                    ~pulse_start,
+                    (~pulse_end + ~pw_plot - ~pulse_ltail),
+                    1 / 1000,
+                ],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=TX_COLOR,
                 stroke_opacity=1,
@@ -4813,8 +4841,6 @@ class WrapUp(MovingCameraScene):
 
         self.wait(0.5)
 
-        offset = 0.3
-        pulse_rtn_ax = pulse_ax.copy().next_to(pulse_ax, DOWN, MED_LARGE_BUFF)
         pulse_rtn = always_redraw(
             lambda: pulse_rtn_ax.plot(
                 lambda t: chirp_pulse(
@@ -4883,23 +4909,7 @@ class WrapUp(MovingCameraScene):
 
         self.wait(0.5)
 
-        xcorr_ax = (
-            Axes(
-                x_range=[offset - ~pw_plot, ~pw_plot, 0.5],
-                y_range=[-1, 2, 0.5],
-                tips=False,
-                x_length=fw(self, 0.7),
-                y_length=fh(self, 0.7),
-            )
-            .set_z_index(-1)
-            .set_opacity(0)
-        )
-        xcorr_ax.shift((pulse_rtn_ax.c2p(offset, 0) - xcorr_ax.c2p(0, 0)))
-        self.add(xcorr_ax)
-
         xcorr_amp = VT(1)
-
-        xcorr_x_offset = VT(~pw_plot)
 
         fs = 2**10
 
@@ -4969,7 +4979,7 @@ class WrapUp(MovingCameraScene):
                     func,
                     color=GREEN,
                     x_range=[
-                        -~pw_plot + ~xcorr_x_offset,
+                        xcorr_ax.p2c(pulse_ax.c2p(offset - ~pw_plot))[0],
                         ~pw_plot - ~xcorr_x_offset,
                         1 / (fs * 1),
                     ],
@@ -4982,19 +4992,254 @@ class WrapUp(MovingCameraScene):
         self.add(xcorr_plot)
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
-        self.play(xcorr_x_offset @ 0, run_time=2)
+        # self.play(xcorr_x_offset @ 0, run_time=2)
 
         self.play(
-            self.camera.frame.animate.scale(1.2).shift(LEFT),
-            wrapup_label.animate.next_to(
-                self.camera.frame.copy().scale(1.2).shift(LEFT).get_corner(UL),
-                DR,
-                MED_LARGE_BUFF,
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(tx_arrow, rx_arrow),
+                    plane.animate.shift(RIGHT * 10),
+                ),
+                AnimationGroup(
+                    self.camera.frame.animate.scale(1.4)
+                    .set_x(pulse.get_x())
+                    .shift(DOWN * 4),
+                    wrapup_label.animate.next_to(
+                        self.camera.frame.copy()
+                        .scale(1.4)
+                        .set_x(pulse.get_x())
+                        .shift(DOWN * 4)
+                        .get_corner(UL),
+                        DR,
+                        MED_LARGE_BUFF,
+                    ),
+                ),
+                AnimationGroup(
+                    pulse_start @ (offset - ~pw_plot),
+                    pulse_start_offset @ (offset - ~pw_plot),
+                    pulse_ltail @ 0,
+                ),
+                lag_ratio=0.3,
             ),
-            pulse_start @ (offset - ~pw_plot),
-            pulse_start_offset @ (offset - ~pw_plot),
+            run_time=3,
         )
+
+        self.wait(0.5)
+
+        self.play(
+            xcorr_x_offset @ 0,
+            pulse_start_offset @ (~pulse_end),
+            run_time=10,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(
+                xcorr_plot.width * 1.2
+            ).move_to(xcorr_plot),
+        )
+
+        self.wait(0.5)
+
+        nb_label = (
+            Text("pulse_compression.ipynb", font=FONT)
+            .scale_to_fit_width(fw(self, 0.5))
+            .next_to(self.camera.frame.get_top(), DOWN)
+        ).shift(DOWN * fh(self))
+
+        nb_img_2 = ImageMobject("./static/nb_img_2.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+        nb_img_3 = ImageMobject("./static/nb_img_3.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+        Group(nb_img_2, nb_img_3).arrange(RIGHT, MED_LARGE_BUFF).move_to(
+            self.camera.frame
+        ).shift(DOWN * fh(self))
+
+        self.add(nb_label)
+
+        bez_0 = CubicBezier(
+            nb_img_2.get_corner(DL) + [0, -0.1, 0],
+            nb_img_2.get_corner(DL) + [-1, -2, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 3) + [-4, 2, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 3) + [-2, 0, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                LaggedStart(
+                    GrowFromCenter(nb_img_2), GrowFromCenter(nb_img_3), lag_ratio=0.2
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        theory_paper = ImageMobject(
+            "../props/static/Theory and Design of Chirp Radars.png"
+        ).scale_to_fit_height(fh(self, 0.7))
+        new_chirp = ImageMobject(
+            "../props/static/Chirp A New Radar Technique.jpg"
+        ).scale_to_fit_width(theory_paper.width * 1.3)
+        fundamentals_of_radar_dsp = ImageMobject(
+            "../props/static/Fundamentals of Radar DSP Book Cover.jpg"
+        ).scale_to_fit_height(fh(self, 0.7))
+        resources = (
+            Group(fundamentals_of_radar_dsp, new_chirp, theory_paper)
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .scale_to_fit_width(fw(self, 0.9))
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+        )
+
+        bez_1 = CubicBezier(
+            fundamentals_of_radar_dsp.get_bottom() + [0, -0.1, 0],
+            fundamentals_of_radar_dsp.get_bottom() + [0, -2, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 2) + [0, 3, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 2),
+        )
+        bez_2 = CubicBezier(
+            new_chirp.get_bottom() + [0, -0.1, 0],
+            new_chirp.get_bottom() + [0, -2, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 2) + [0, 3, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 2),
+        )
+        bez_3 = CubicBezier(
+            theory_paper.get_bottom() + [0, -0.1, 0],
+            theory_paper.get_bottom() + [0, -2, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 2) + [0, 3, 0],
+            self.camera.frame.get_center() + DOWN * fh(self, 2),
+        )
+
+        self.play(
+            LaggedStart(
+                Create(bez_0),
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in resources],
+                    lag_ratio=0.2,
+                ),
+                AnimationGroup(
+                    Create(bez_1),
+                    Create(bez_2),
+                    Create(bez_3),
+                ),
+                lag_ratio=0.5,
+            )
+        )
+        desc = Text("Description", font=FONT).next_to(bez_2, DOWN, SMALL_BUFF)
+        self.add(desc)
+
+        self.play(self.camera.frame.animate.move_to(desc))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        osc = ImageMobject("../08_beamforming/static/osc_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        kraken = ImageMobject("../08_beamforming/static/kraken.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        weather = ImageMobject(
+            "../08_beamforming/static/weather.png"
+        ).scale_to_fit_width(config.frame_width * 0.3)
+        eqn = ImageMobject("../08_beamforming/static/eqn_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        merch = (
+            Group(kraken, osc, eqn, weather)
+            .arrange_in_grid(2, 2)
+            .scale_to_fit_height(config.frame_height * 0.9)
+            .set_y(0)
+        )
+
+        shoutout = Text("Huge thanks to:", font=FONT)
+        people = [
+            "ZacJW",
+            "db-isJustARatio",
+            "Jea99",
+            "Leon",
+            "dplynch",
+            "Kris",
+            "zachdc",
+            "misspeled",
+            "Florian",
+            "Cminor102",
+            "w1gx",
+            "Ioan",
+            "nakribc",
+            "alikarb0724",
+            "Mark",
+        ]
+        people_text = (
+            Group(
+                *[Text(p, font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6) for p in people]
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(shoutout, DOWN)
+        )
+        people_group = (
+            Group(shoutout, people_text)
+            .scale_to_fit_height(fh(self, 0.9))
+            .next_to(merch, RIGHT)
+            .shift(RIGHT * 12)
+        )
+        people_group = (
+            Group(shoutout, people_text)
+            .scale_to_fit_height(fh(self, 0.9))
+            .next_to(merch, RIGHT)
+            .shift(RIGHT * 12)
+        )
+        website_group = (
+            Group(
+                merch,
+                people_group,
+            )
+            .scale_to_fit_height(fh(self, 0.9))
+            .arrange(RIGHT)
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self) + DOWN * 5)
+        )
+        website_background = SurroundingRectangle(
+            website_group,
+            color=BACKGROUND_COLOR,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+        )
+        self.add(website_background, website_group)
+        desc_background = SurroundingRectangle(
+            desc, fill_color=BACKGROUND_COLOR, fill_opacity=1, color=BACKGROUND_COLOR
+        ).set_z_index(-1)
+        self.add(desc_background)
+
+        website_bez = CubicBezier(
+            desc.get_center(),
+            desc.get_right() + [3, 0, 0],
+            website_background.get_left() + [-5, 0, 0],
+            website_group.get_center(),
+        ).set_z_index(-2)
+
+        self.play(
+            LaggedStart(
+                Create(website_bez),
+                MoveAlongPath(self.camera.frame, website_bez),
+                lag_ratio=0.1,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.scale(1000))
 
         self.wait(2)
 
@@ -5136,6 +5381,63 @@ class ThumbnailRenders(MovingCameraScene):
         # self.camera.frame.scale_to_fit_width(xcorr_plot.width * 1.5).move_to(xcorr_plot)
 
 
+class ThumbnailRendering2(MovingCameraScene):
+    def construct(self):
+        f_scale = 1
+        f1 = 1.5 * f_scale
+        f2 = 2.7 * f_scale
+        f_clutter = 3.7 * f_scale
+        power_norm_1 = -18
+        power_norm_2 = -100
+        power_norm_clutter = -100
+        A_1 = 10 ** (power_norm_1 / 10)
+        A_2 = 10 ** (power_norm_2 / 10)
+        A_clutter = 10 ** (power_norm_clutter / 10)
+
+        stop_time = 8
+        fs = 1000
+        N = fs * stop_time
+        t = np.linspace(0, stop_time, N)
+
+        noise_mu = 0
+        noise_sigma_db = -10
+        noise_sigma = 10 ** (noise_sigma_db / 10)
+
+        np.random.seed(0)
+        noise = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
+        x_n = (
+            A_1 * np.sin(2 * PI * f1 * t)
+            + A_2 * np.sin(2 * PI * f2 * t)
+            + A_clutter * np.sin(2 * PI * f_clutter * t)
+            + noise
+        ) / (A_1 + A_2 + A_clutter + noise_sigma)
+
+        blackman_window = signal.windows.blackman(N)
+        x_n_windowed = x_n * blackman_window
+
+        fft_len = N * 4
+
+        X_k = fftshift(fft(x_n_windowed, fft_len))
+        X_k /= N / 2
+        X_k = np.abs(X_k)
+        X_k = 10 * np.log10(X_k)
+
+        freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+        func = interp1d(freq, X_k, fill_value="extrapolate")
+
+        ax = Axes(x_range=[0, 4 * f_scale, PI / 2], y_range=[-40, -10, 10], tips=False)
+        plot = ax.plot(
+            func,
+            x_range=[0, 4 * f_scale, 1 / 1000],
+            color=BLUE,
+            use_smoothing=True,
+            stroke_width=DEFAULT_STROKE_WIDTH * 5,
+        )
+        self.add(plot)
+
+
 class EndScreen(MovingCameraScene):
     def construct(self):
         hours = pd.read_csv(
@@ -5154,7 +5456,7 @@ class EndScreen(MovingCameraScene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "5,142"],
+                    ["Lines of code", "5,515"],
                     ["Hours", f"{hours['Session Hours'].sum():.1f}"],
                     ["Days", "xxx"],
                 ],
