@@ -17,7 +17,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -649,6 +649,45 @@ class Issue(MovingCameraScene):
         self.play(
             TransformFromCopy(first_option, good_snr),
             ReplacementTransform(first_option, good_rres),
+        )
+
+        self.wait(0.5)
+
+        pulse_compression_label = (
+            Text("Pulse Compression &", font=FONT)
+            .next_to(relation_table, DOWN, LARGE_BUFF * 2)
+            .shift(RIGHT / 2)
+        )
+        matched_filtering_label = Text("Matched Filtering", font=FONT).next_to(
+            pulse_compression_label, DOWN, MED_SMALL_BUFF
+        )
+
+        rres_bez = CubicBezier(
+            good_rres.get_bottom() + [0, -0.1, 0],
+            good_rres.get_bottom() + [0, -1, 0],
+            pulse_compression_label.get_top() + [0.2, 2, 0],
+            pulse_compression_label.get_top() + [0, 0.1, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        snr_bez = CubicBezier(
+            good_snr.get_bottom() + [0, -0.1, 0],
+            good_snr.get_bottom() + [0, -1, 0],
+            pulse_compression_label.get_top() + [0, 2, 0],
+            pulse_compression_label.get_top() + [0, 0.1, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.3).shift(DOWN * 2),
+                Create(rres_bez),
+                Create(snr_bez),
+                Write(pulse_compression_label),
+                Write(matched_filtering_label),
+                lag_ratio=0.3,
+            )
         )
 
         self.wait(0.5)
@@ -2942,6 +2981,28 @@ class XCorr(MovingCameraScene):
 
         self.wait(0.5)
 
+        self.camera.frame.save_state()
+
+        matched_filter_label = Text("Matched Filter", font=FONT).next_to(
+            xcorr, DOWN, LARGE_BUFF * 1.5
+        )
+        mfl_bez_l = CubicBezier(
+            xcorr.get_bottom() + [0, -0.1, 0],
+            xcorr.get_bottom() + [0, -1, 0],
+            matched_filter_label.get_corner(UL) + [-0.1, 1, 0],
+            matched_filter_label.get_corner(UL) + [-0.1, 0.1, 0],
+        )
+        mfl_bez_r = CubicBezier(
+            xcorr.get_bottom() + [0, -0.1, 0],
+            xcorr.get_bottom() + [0, -1, 0],
+            matched_filter_label.get_corner(UR) + [0.1, 1, 0],
+            matched_filter_label.get_corner(UR) + [0.1, 0.1, 0],
+        )
+
+        mfl_group = Group(
+            xcorr, xcorr_label, mfl_bez_l, mfl_bez_r, matched_filter_label, xcorr_plot
+        )
+
         self.play(
             LaggedStart(
                 FadeOut(
@@ -2957,6 +3018,98 @@ class XCorr(MovingCameraScene):
                     rarrow2,
                     larrow3,
                     rarrow3,
+                ),
+                self.camera.frame.animate.scale_to_fit_height(
+                    mfl_group.height * 1.3
+                ).move_to(mfl_group),
+                AnimationGroup(
+                    Create(mfl_bez_l),
+                    Create(mfl_bez_r),
+                ),
+                Write(matched_filter_label),
+            )
+        )
+
+        self.wait(0.5)
+
+        mf_eqn = (
+            MathTex(r"\Rightarrow s_{rx}(t) \circledast s^{*}_{tx}(-t)")
+            .scale(1.3)
+            .next_to(matched_filter_label, RIGHT)
+        )
+
+        self.play(GrowFromCenter(mf_eqn[0][0]))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(mf_eqn[0][7]))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(mf_eqn[0][1:7]))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(mf_eqn[0][12:]))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(mf_eqn[0][9]))
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(mf_eqn[0][8]), GrowFromCenter(mf_eqn[0][10:12]))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore().scale(1.2).shift(DOWN))
+
+        self.wait(0.5)
+
+        rx_arrow = CubicBezier(
+            mf_eqn[0][1:7].get_top() + [0, 0.1, 0],
+            mf_eqn[0][1:7].get_top() + [-0.5, 2, 0],
+            pulse_rtn.get_bottom() + [-2, -1, 0],
+            pulse_rtn.get_bottom() + [-1.5, 0.3, 0],
+            color=RX_COLOR,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        tx_arrow = CubicBezier(
+            mf_eqn[0][8:].get_top() + [0, 0.1, 0],
+            mf_eqn[0][8:].get_top() + [0, 2, 0],
+            pulse.get_bottom() + [3, -3, 0],
+            pulse.get_bottom() + [3, -0.1, 0],
+            color=TX_COLOR,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.play(
+            Create(rx_arrow),
+            mf_eqn[0][1:7].animate.set_color(RX_COLOR),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Create(tx_arrow),
+            mf_eqn[0][8:].animate.set_color(TX_COLOR),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale(0.9).shift(UP * 0.2),
+            xcorr_label.animate.set_color(GREEN),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(matched_filter_label, tx_arrow, rx_arrow, *mf_eqn[0]),
+                    Uncreate(mfl_bez_l),
+                    Uncreate(mfl_bez_r),
                 ),
                 AnimationGroup(
                     pulse_opacity @ 0.3,
@@ -4620,6 +4773,8 @@ class WrapUp(MovingCameraScene):
         pw_plot = VT(0.5)
         pulse_amp = VT(0.5)
         pulse_f = 20
+        pulse_start = VT(0)
+        pulse_end = VT(1)
 
         pulse_f1 = VT(pulse_f)
         pulse_phase_1 = VT(0)
@@ -4636,7 +4791,7 @@ class WrapUp(MovingCameraScene):
                     amp=~pulse_amp,
                     phase=~pulse_phase_1,
                 ),
-                x_range=[0, 1, 1 / 1000],
+                x_range=[~pulse_start, ~pulse_end, 1 / 1000],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=TX_COLOR,
                 stroke_opacity=1,
@@ -4671,7 +4826,7 @@ class WrapUp(MovingCameraScene):
                     amp=~pulse_amp,
                     phase=~pulse_phase_1,
                 ),
-                x_range=[0, 1, 1 / 1000],
+                x_range=[~pulse_start, ~pulse_end, 1 / 1000],
                 stroke_width=DEFAULT_STROKE_WIDTH * 1,
                 color=RX_COLOR,
                 stroke_opacity=1,
@@ -4724,6 +4879,121 @@ class WrapUp(MovingCameraScene):
                 lag_ratio=0.3,
             ),
             run_time=2,
+        )
+
+        self.wait(0.5)
+
+        xcorr_ax = (
+            Axes(
+                x_range=[offset - ~pw_plot, ~pw_plot, 0.5],
+                y_range=[-1, 2, 0.5],
+                tips=False,
+                x_length=fw(self, 0.7),
+                y_length=fh(self, 0.7),
+            )
+            .set_z_index(-1)
+            .set_opacity(0)
+        )
+        xcorr_ax.shift((pulse_rtn_ax.c2p(offset, 0) - xcorr_ax.c2p(0, 0)))
+        self.add(xcorr_ax)
+
+        xcorr_amp = VT(1)
+
+        xcorr_x_offset = VT(~pw_plot)
+
+        fs = 2**10
+
+        rtn_amp_1 = VT(1)
+        rtn_amp_2 = VT(0)
+
+        def get_xcorr():
+            t_discreet = np.arange(0, 1, 1 / fs)
+            tau = 0.3
+            pulse = np.array(
+                [
+                    chirp_pulse(
+                        t_val=t_val,
+                        pulse_start=0,
+                        pulse_width=tau,
+                        f0=pulse_f,
+                        f1=~pulse_f1,
+                        amp=1,
+                        phase=0,
+                        ramp="linear",
+                    )
+                    for t_val in t_discreet
+                ]
+            )
+            pulse_starts = [tau, tau * 1.05]
+            pulse_amps = [~rtn_amp_1, ~rtn_amp_2]
+            rtn = np.array(
+                np.sum(
+                    [
+                        [
+                            pa
+                            * chirp_pulse(
+                                t_val=t_val,
+                                pulse_start=ps,
+                                pulse_width=tau,
+                                f0=pulse_f,
+                                f1=~pulse_f1,
+                                amp=1,
+                                phase=0,
+                                ramp="linear",
+                            )
+                            for t_val in t_discreet
+                        ]
+                        for ps, pa in zip(pulse_starts, pulse_amps)
+                    ],
+                    axis=0,
+                )
+            )
+
+            h_matched = np.conj(pulse[t_discreet < tau][::-1])
+            rtn_matched = signal.fftconvolve(rtn, h_matched, mode="full")
+            rtn_matched /= rtn_matched.max()
+            rtn_matched *= 2 * ~xcorr_amp
+            t_full = np.arange(rtn_matched.size) / fs - tau
+
+            # rtn_matched_db = np.clip(10 * np.log10(np.abs(rtn_matched)), -50, None)
+            # rtn_matched_db -= np.nanmin(rtn_matched_db)
+            # rtn_matched_db /= np.nanmax(rtn_matched_db)
+            # rtn_matched_db *= rtn_matched.max()
+            # rtn_matched_db *= 4
+            # rtn_matched_db -= 6
+
+            func = interp1d(t_full - tau, rtn_matched, fill_value="extrapolate")
+
+            xcorr_plot = always_redraw(
+                lambda: xcorr_ax.plot(
+                    func,
+                    color=GREEN,
+                    x_range=[
+                        -~pw_plot + ~xcorr_x_offset,
+                        ~pw_plot - ~xcorr_x_offset,
+                        1 / (fs * 1),
+                    ],
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                )
+            )
+            return xcorr_plot
+
+        xcorr_plot = always_redraw(get_xcorr)
+        self.add(xcorr_plot)
+
+        self.wait(0.5)
+
+        self.play(xcorr_x_offset @ 0, run_time=2)
+
+        self.play(
+            self.camera.frame.animate.scale(1.2).shift(LEFT),
+            wrapup_label.animate.next_to(
+                self.camera.frame.copy().scale(1.2).shift(LEFT).get_corner(UL),
+                DR,
+                MED_LARGE_BUFF,
+            ),
+            pulse_start @ (offset - ~pw_plot),
+            pulse_start_offset @ (offset - ~pw_plot),
         )
 
         self.wait(2)
@@ -4868,6 +5138,43 @@ class ThumbnailRenders(MovingCameraScene):
 
 class EndScreen(MovingCameraScene):
     def construct(self):
+        hours = pd.read_csv(
+            "../../../downloads/Work Hours - Hours - 2025 (1).csv"
+        ).dropna(subset=["In", "Out", "Category Fill"])
+        hours = hours[
+            (hours["Category Fill"] == "Videos")
+            & (hours["Video Fill"] == "Pulse Compression")
+        ]
+        hours["In_dt"] = pd.to_datetime(hours["In"], errors="coerce")
+        hours["Out_dt"] = pd.to_datetime(hours["Out"], errors="coerce")
+        hours["In_mins"] = hours["In_dt"].dt.hour * 60 + hours["In_dt"].dt.minute
+        hours["Out_mins"] = hours["Out_dt"].dt.hour * 60 + hours["Out_dt"].dt.minute
+
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "5,142"],
+                    ["Hours", f"{hours['Session Hours'].sum():.1f}"],
+                    ["Days", "xxx"],
+                ],
+                element_to_mobject=Text,
+                element_to_mobject_config=dict(
+                    font=FONT, font_size=DEFAULT_FONT_SIZE * 0.7
+                ),
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        thank_you_sabrina = Text(
+            "Thank you, Sabrina, for\nediting the whole video :)",
+            font=FONT,
+            font_size=DEFAULT_FONT_SIZE * 0.4,
+        ).to_corner(DL)
+
         def coverage_array(spans, allow_wrap=True):
             cov = np.zeros(24 * 60, dtype=int)
             for a, b in spans:
@@ -4878,18 +5185,6 @@ class EndScreen(MovingCameraScene):
                     cov[a:b] += 1
             return cov
 
-        hours = pd.read_csv("../../../Downloads/Work Hours 2025.csv").dropna(
-            subset=["In", "Out", "Category Fill"]
-        )
-        hours = hours[
-            (hours["Category Fill"] == "Videos")
-            & (hours["Video Fill"] == "Pulse Compression")
-        ]
-        hours["In_dt"] = pd.to_datetime(hours["In"], errors="coerce")
-        hours["Out_dt"] = pd.to_datetime(hours["Out"], errors="coerce")
-        hours["In_mins"] = hours["In_dt"].dt.hour * 60 + hours["In_dt"].dt.minute
-        hours["Out_mins"] = hours["Out_dt"].dt.hour * 60 + hours["Out_dt"].dt.minute
-
         spans = list(hours[["In_mins", "Out_mins"]].itertuples(index=None, name=None))
         cov = coverage_array(spans)
         filter_len = 61
@@ -4897,7 +5192,44 @@ class EndScreen(MovingCameraScene):
 
         t = np.linspace(0, 24, cov.size)
 
-        ax = Axes(x_range=[0, 24, 3], y_range=[0, 5, 1], tips=False)
+        ax = Axes(
+            x_range=[0, 24, 3],
+            y_range=[0, 6, 1],
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.3),
+            tips=False,
+        )
+        hours_title = (
+            Text("Hours Distribution", font=FONT)
+            .scale(0.5)
+            .next_to(ax, UP, MED_SMALL_BUFF)
+        )
+
+        times = np.arange(0, 27, 3)
+        time_labels = Group(
+            *[
+                Text(f"{h % 12 or 12}{'am' if h < 12 else 'pm'}", font=FONT)
+                .scale(0.5)
+                .next_to(ax.c2p(h, 0), DOWN, MED_SMALL_BUFF)
+                for h in times
+            ]
+        )
+        hour_yaxis = np.arange(1, 7, 1)
+        hour_labels = Group(
+            *[
+                Text(f"{h}", font=FONT)
+                .scale(0.5)
+                .next_to(ax.c2p(0, h), LEFT, MED_SMALL_BUFF)
+                for h in hour_yaxis
+            ]
+        )
+
+        Group(
+            stats_title,
+            stats_table,
+            Group(ax, time_labels, hour_labels, hours_title),
+            # thank_you_sabrina,
+        ).arrange(DOWN, MED_LARGE_BUFF).to_edge(RIGHT, MED_LARGE_BUFF)
 
         scale = VT(0)
 
@@ -4919,32 +5251,15 @@ class EndScreen(MovingCameraScene):
         plot = always_redraw(lambda: get_plot()[0])
         area = always_redraw(lambda: get_plot()[1])
 
-        times = np.arange(0, 27, 3)
-        time_labels = Group(
-            *[
-                Text(f"{h % 12 or 12}{'am' if h < 12 else 'pm'}", font=FONT)
-                .scale(0.5)
-                .next_to(ax.c2p(h, 0), DOWN, MED_SMALL_BUFF)
-                for h in times
-            ]
-        )
-        hour_yaxis = np.arange(1, 6, 1)
-        hour_labels = Group(
-            *[
-                Text(f"{h}", font=FONT)
-                .scale(0.5)
-                .next_to(ax.c2p(0, h), LEFT, MED_SMALL_BUFF)
-                for h in hour_yaxis
-            ]
-        )
-
         self.play(
             LaggedStart(
-                AnimationGroup(Create(ax), FadeIn(plot, area)),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                AnimationGroup(Create(ax), FadeIn(plot, area, hours_title)),
                 AnimationGroup(
                     LaggedStart(*[FadeIn(m) for m in time_labels], lag_ratio=0.1),
                     LaggedStart(*[FadeIn(m) for m in hour_labels], lag_ratio=0.1),
                 ),
+                Write(thank_you_sabrina),
                 lag_ratio=0.3,
             )
         )
