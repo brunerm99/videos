@@ -5440,9 +5440,9 @@ class ThumbnailRendering2(MovingCameraScene):
 
 class EndScreen(MovingCameraScene):
     def construct(self):
-        hours = pd.read_csv(
-            "../../../downloads/Work Hours - Hours - 2025 (1).csv"
-        ).dropna(subset=["In", "Out", "Category Fill"])
+        hours = pd.read_csv("../../../Downloads/Work Hours 2025 (1).csv").dropna(
+            subset=["In", "Out", "Category Fill"]
+        )
         hours = hours[
             (hours["Category Fill"] == "Videos")
             & (hours["Video Fill"] == "Pulse Compression")
@@ -5456,9 +5456,9 @@ class EndScreen(MovingCameraScene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "5,515"],
+                    ["Lines of code", "5,572"],
                     ["Hours", f"{hours['Session Hours'].sum():.1f}"],
-                    ["Days", "xxx"],
+                    ["Days", "103"],
                 ],
                 element_to_mobject=Text,
                 element_to_mobject_config=dict(
