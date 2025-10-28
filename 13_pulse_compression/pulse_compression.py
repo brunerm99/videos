@@ -18,7 +18,6 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 config.background_color = BACKGROUND_COLOR
 
 SKIP_ANIMATIONS_OVERRIDE = True
-SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -66,7 +65,331 @@ def chirp_pulse(t_val, pulse_start, pulse_width, f0, f1, amp, phase, ramp="quadr
 
 
 class Intro(MovingCameraScene):
-    def construct(self): ...
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        f1 = VT(1.5)
+        f2 = VT(2.7)
+        power_norm_1 = VT(-5)
+        power_norm_2 = VT(-5)
+
+        stop_time = 8
+        fs = 1000
+        N = fs * stop_time
+        t = np.linspace(0, stop_time, N)
+
+        noise_mu = 0
+        noise_sigma_db = -10
+        noise_sigma = 10 ** (noise_sigma_db / 10)
+
+        np.random.seed(0)
+        noise = np.random.normal(loc=noise_mu, scale=noise_sigma, size=t.size)
+
+        ymin = -50
+        ax = Axes(
+            x_range=[0, 4, 0.5],
+            y_range=[0, -5 - ymin, (-ymin - 5) / 8],
+            tips=False,
+            x_length=fw(self, 0.7),
+            y_length=fh(self, 0.6),
+        ).to_edge(DOWN, MED_LARGE_BUFF)
+        rres_eqn = Tex(r"| $\Delta R$")
+        rres_text = Text("Range resolution", font=FONT).scale_to_fit_height(
+            rres_eqn.height
+        )
+        rres_group = (
+            Group(rres_text, rres_eqn)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(ax, UP, LARGE_BUFF)
+        )
+        rres_text.shift(UP * (rres_eqn[0][0].get_center() - rres_text.get_center()))
+
+        snr_eqn = Tex(r"| SNR")
+        snr_text = Text("Signal-to-noise Ratio", font=FONT).scale_to_fit_height(
+            snr_eqn.height
+        )
+        snr_group = (
+            Group(snr_text, snr_eqn)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(ax, UP, LARGE_BUFF)
+        )
+        snr_text.shift(UP * (snr_eqn[0][0].get_center() - snr_text.get_center()))
+
+        x1 = VT(0)
+
+        def get_x_n():
+            A_1 = 10 ** (~power_norm_1 / 10)
+            A_2 = 10 ** (~power_norm_2 / 10)
+            x_n = (
+                A_1 * np.sin(2 * PI * ~f1 * t) + A_2 * np.sin(2 * PI * ~f2 * t) + noise
+            ) / (A_1 + A_2 + noise_sigma)
+
+            blackman_window = signal.windows.blackman(N)
+            x_n_windowed = x_n * blackman_window
+
+            fft_len = N * 4
+
+            X_k = fftshift(fft(x_n_windowed, fft_len))
+            X_k /= N / 2
+            X_k = np.abs(X_k)
+            X_k = 10 * np.log10(X_k)
+
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+            func = interp1d(freq, X_k - ymin, fill_value="extrapolate")
+
+            plot = ax.plot(
+                func,
+                x_range=[0, ~x1, 1 / 1000],
+                color=BLUE,
+                use_smoothing=True,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            return plot
+
+        plot = always_redraw(get_x_n)
+
+        self.add(plot)
+
+        rres_l = always_redraw(
+            lambda: Line(
+                ax.c2p(~f1, -ymin - 5),
+                ax.c2p(~f1, -ymin - 5) + UP / 4,
+            )
+        )
+        rres_mid = always_redraw(
+            lambda: Line(
+                Line(
+                    ax.c2p(~f1, -ymin - 5),
+                    ax.c2p(~f1, -ymin - 5) + UP / 4,
+                ).get_midpoint(),
+                Line(
+                    ax.c2p(~f2, -ymin - 5),
+                    ax.c2p(~f2, -ymin - 5) + UP / 4,
+                ).get_midpoint(),
+            ),
+        )
+        rres_r = always_redraw(
+            lambda: Line(
+                ax.c2p(~f2, -ymin - 5),
+                ax.c2p(~f2, -ymin - 5) + UP / 4,
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                Create(ax),
+                x1 @ 4,
+                Write(rres_text),
+                FadeIn(rres_eqn),
+                Create(rres_l),
+                Create(rres_mid),
+                Create(rres_r),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(f1 + 1, run_time=5, rate_func=rate_functions.there_and_back)
+
+        self.wait(0.5)
+
+        print(~f1)
+        print(ax.input_to_graph_coords(1, plot))
+        snr_u = always_redraw(
+            lambda: Line(
+                ax.c2p(~f1, ax.i2gc(~f1, get_x_n())[1]),
+                ax.c2p(~f1, ax.i2gc(~f1, get_x_n())[1]) + LEFT / 4,
+            ).shift(LEFT)
+        )
+        snr_mid = always_redraw(
+            lambda: Line(
+                Line(
+                    ax.c2p(~f1, ax.i2gc(~f1, get_x_n())[1]),
+                    ax.c2p(~f1, ax.i2gc(~f1, get_x_n())[1]) + LEFT / 4,
+                ).get_midpoint(),
+                Line(
+                    ax.c2p(~f1, -ymin - 25),
+                    ax.c2p(~f1, -ymin - 25) + LEFT / 4,
+                ).get_midpoint(),
+            ).shift(LEFT),
+        )
+        snr_d = always_redraw(
+            lambda: Line(
+                ax.c2p(~f1, -ymin - 25),
+                ax.c2p(~f1, -ymin - 25) + LEFT / 4,
+            ).shift(LEFT)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                # Uncreate(rres_l),
+                # Uncreate(rres_mid),
+                # Uncreate(rres_r),
+                ReplacementTransform(rres_l, snr_u),
+                ReplacementTransform(rres_mid, snr_mid),
+                ReplacementTransform(rres_r, snr_d),
+                rres_group.animate.shift(UP * 5),
+                snr_group.shift(UP * 5).animate.shift(DOWN * 5),
+                # Create(snr_u),
+                # Create(snr_mid),
+                # Create(snr_d),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(power_norm_1 - 13, run_time=4)
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        copy_group = (
+            Group(rres_group.copy(), snr_group.copy())
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .move_to(self.camera.frame.copy().shift(UP * fh(self)))
+            .shift(LEFT * 3)
+        )
+        classification = (
+            Text("Classification", font=FONT)
+            .scale_to_fit_height(rres_text.height)
+            .next_to(
+                self.camera.frame.copy().shift(UP * fh(self)).get_right(),
+                LEFT,
+                LARGE_BUFF,
+            )
+        )
+        snr_bez = CubicBezier(
+            copy_group[0].get_right() + [0.1, 0, 0],
+            copy_group[0].get_right() + [1, 0, 0],
+            classification.get_left() + [-1, 0, 0],
+            classification.get_left() + [-0.1, 0, 0],
+        )
+        rres_bez = CubicBezier(
+            copy_group[1].get_right() + [0.1, 0, 0],
+            copy_group[1].get_right() + [1, 0, 0],
+            classification.get_left() + [-1, 0, 0],
+            classification.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * fh(self)),
+                Group(rres_group, snr_group)
+                .animate.arrange(DOWN, MED_LARGE_BUFF)
+                .move_to(self.camera.frame.copy().shift(UP * fh(self)))
+                .shift(LEFT * 3),
+                AnimationGroup(Create(snr_bez), Create(rres_bez)),
+                Write(classification),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .next_to(classification, RIGHT, LARGE_BUFF * 3)
+            .shift(UP)
+        )
+        plane = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_width(cloud.width)
+            .rotate(PI * 0.75)
+            .set_fill(WHITE)
+            .next_to(classification, RIGHT, LARGE_BUFF * 3)
+            .shift(DOWN * 2 + RIGHT)
+        )
+
+        cloud_bez = CubicBezier(
+            classification.get_right() + [0.1, 0, 0],
+            classification.get_right() + [1, 0, 0],
+            cloud.get_left() + [-1, 0, 0],
+            cloud.get_left() + [-0.1, 0, 0],
+        )
+        plane_bez = CubicBezier(
+            classification.get_right() + [0.1, 0, 0],
+            classification.get_right() + [1, 0, 0],
+            plane.get_left() + [-1, 0, 0],
+            plane.get_left() + [-0.1, 0, 0],
+        )
+
+        class_group = Group(classification, plane, cloud)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(class_group),
+                Create(plane_bez),
+                Create(cloud_bez),
+                GrowFromCenter(plane),
+                GrowFromCenter(cloud),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rres_thumbnail = (
+            ImageMobject("../09_resolution/static/Resolution Thumbnail.png")
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(rres_group, LEFT, LARGE_BUFF * 3)
+            .shift(UP + LEFT)
+        )
+        snr_thumbnail = (
+            ImageMobject(
+                "../07_snr_equation/media/images/snr/Thumbnail2_ManimCE_v0.18.1.png"
+            )
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(snr_group, LEFT, LARGE_BUFF * 3)
+            .shift(DOWN * 2 + RIGHT)
+        )
+        rres_thumbnail_rect = SurroundingRectangle(rres_thumbnail, buff=0)
+        snr_thumbnail_rect = SurroundingRectangle(snr_thumbnail, buff=0)
+        thumbnail_group = Group(snr_thumbnail, rres_thumbnail, snr_group, rres_group)
+        snr_bez_thumbnail = CubicBezier(
+            snr_group.get_left() + [-0.1, 0, 0],
+            snr_group.get_left() + [-1, 0, 0],
+            snr_thumbnail.get_right() + [1, 0, 0],
+            snr_thumbnail.get_right() + [0.1, 0, 0],
+        )
+        rres_bez_thumbnail = CubicBezier(
+            rres_group.get_left() + [-0.1, 0, 0],
+            rres_group.get_left() + [-1, 0, 0],
+            rres_thumbnail.get_right() + [1, 0, 0],
+            rres_thumbnail.get_right() + [0.1, 0, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).move_to(thumbnail_group),
+                Create(snr_bez_thumbnail),
+                AnimationGroup(
+                    GrowFromCenter(snr_thumbnail),
+                    GrowFromCenter(snr_thumbnail_rect),
+                ),
+                Create(rres_bez_thumbnail),
+                AnimationGroup(
+                    GrowFromCenter(rres_thumbnail),
+                    GrowFromCenter(rres_thumbnail_rect),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
 
 
 class Issue(MovingCameraScene):
