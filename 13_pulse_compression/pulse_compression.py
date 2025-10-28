@@ -18,6 +18,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 config.background_color = BACKGROUND_COLOR
 
 SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -62,6 +63,10 @@ def chirp_pulse(t_val, pulse_start, pulse_width, f0, f1, amp, phase, ramp="quadr
         )
     else:
         return 0
+
+
+class Intro(MovingCameraScene):
+    def construct(self): ...
 
 
 class Issue(MovingCameraScene):
@@ -4594,16 +4599,16 @@ class BarkerCodes(MovingCameraScene):
             y_length=fh(self, 0.5),
         )
         barker_len = 13
-        barker_codes = [VT(1) for _ in range(barker_len)]
+        barker_codes = [VT(0) for _ in range(barker_len)]
 
         ts = np.linspace(0, 1, 1000)
-        f = 20
+        f = 13 / 2
 
         def get_tx():
             x = np.sum(
                 [
                     [
-                        np.sin(2 * PI * f * t + np.deg2rad((~phi - 1) / 2 * 180))
+                        np.sin(2 * PI * f * t + np.deg2rad(~phi))
                         if (idx / barker_len) < t < ((idx + 1) / barker_len)
                         else 0
                         for t in ts
@@ -4615,9 +4620,10 @@ class BarkerCodes(MovingCameraScene):
             func = interp1d(ts, x)
             tx = ax.plot(
                 func,
-                x_range=[0, 1, 1 / 1000],
+                x_range=[0, 1, 1 / 5000],
                 color=TX_COLOR,
                 stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
             )
             return tx
 
@@ -4736,9 +4742,9 @@ class BarkerCodes(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
-        barker_codes_actual = [1, 1, 1, 1, 1, -1, -1, 1, 1, -1, 1, -1, 1]
+        barker_codes_actual = [0, 0, 0, 0, 0, 180, 180, 0, 0, 180, 0, 180, 0]
 
         self.play(
             LaggedStart(
@@ -4746,6 +4752,167 @@ class BarkerCodes(MovingCameraScene):
             ),
             run_time=5,
         )
+
+        self.wait(0.5)
+
+        # self.play(*[Uncreate(m) for m in lines])
+
+        self.wait(0.5)
+
+        rxx_min = -60
+        rxx_ax = (
+            Axes(
+                x_range=[-1, 1, 0.5],
+                y_range=[0, -rxx_min, 10],
+                tips=False,
+                x_length=fw(self, 0.8),
+                y_length=fh(self, 0.5),
+            )
+            .next_to(ax, RIGHT, LARGE_BUFF * 8)
+            .shift(DOWN * 6)
+        )
+
+        rxx_x1 = VT(-1)
+
+        def get_rxx():
+            x = np.sum(
+                [
+                    [
+                        np.sin(2 * PI * f * t + np.deg2rad(~phi))
+                        if (idx / barker_len) < t < ((idx + 1) / barker_len)
+                        else 0
+                        for t in ts
+                    ]
+                    for idx, phi in enumerate(barker_codes)
+                ],
+                axis=0,
+            )
+
+            Rxx_sig = np.abs(np.correlate(x, x, mode="full"))
+            Rxx_sig /= Rxx_sig.max()
+            Rxx_sig = np.maximum(Rxx_sig, 1e-12)
+            Rxx_sig_db = 20 * np.log10(Rxx_sig)
+
+            ts_rxx = np.linspace(-ts.max(), ts.max(), 2 * ts.size - 1)
+            func = interp1d(ts_rxx, np.clip(Rxx_sig_db - rxx_min, 0, None))
+
+            rxx = rxx_ax.plot(
+                func,
+                x_range=[-1, ~rxx_x1, 1 / 5000],
+                color=GREEN,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+            return rxx
+
+        rxx = always_redraw(get_rxx)
+        self.add(rxx_ax, rxx)
+
+        rxx_rect = SurroundingRectangle(
+            rxx_ax,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            stroke_opacity=0,
+            buff=SMALL_BUFF,
+        ).set_z_index(-1)
+        ax_rect = SurroundingRectangle(
+            ax,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            stroke_opacity=0,
+            buff=SMALL_BUFF,
+        ).set_z_index(-1)
+        self.add(rxx_rect, ax_rect)
+
+        rxx_bez = CubicBezier(
+            ax.get_center(),
+            ax.get_right() + [5, 2, 0],
+            rxx_ax.get_left() + [-5, -2, 0],
+            rxx_ax.get_center(),
+        ).set_z_index(-2)
+        rxx_eqn = Tex(r"| $R_{xx}(\tau)$").next_to(rxx_ax, UP, MED_LARGE_BUFF)
+        rxx_text = Text("Barker Code Autocorrelation", font=FONT).scale_to_fit_height(
+            rxx_eqn.height
+        )
+        Group(rxx_text, rxx_eqn).arrange(RIGHT, MED_SMALL_BUFF).scale_to_fit_width(
+            rxx_ax.width * 0.9
+        ).next_to(rxx_ax, UP, MED_LARGE_BUFF)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                Create(rxx_bez),
+                MoveAlongPath(self.camera.frame, rxx_bez),
+                Write(rxx_text),
+                FadeIn(rxx_eqn),
+                rxx_x1 @ 1,
+                lag_ratio=0.3,
+            ),
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        sll = DashedLine(
+            rxx_ax.c2p(-1, -22.3 - rxx_min),
+            rxx_ax.c2p(1, -22.3 - rxx_min),
+            dashed_ratio=0.6,
+            dash_length=DEFAULT_DASH_LENGTH * 4,
+            color=YELLOW,
+        )
+        sll_label = (
+            Text("-22.3 dB Side Lobes", font=FONT, color=YELLOW)
+            .scale_to_fit_width(rxx_ax.width * 0.3)
+            .next_to(sll.get_right(), UL)
+        )
+
+        self.play(LaggedStart(Create(sll), FadeIn(sll_label), lag_ratio=0.4))
+
+        self.wait(0.5)
+
+        self.play(MoveAlongPath(self.camera.frame, rxx_bez.reverse_direction()))
+
+        self.wait(0.5)
+
+        barker_codes_poly = [0, 90, 0, 0, 0, 0, 90, 0, 180, 0, 0, 180, 90]
+
+        self.play(
+            LaggedStart(
+                *[bc @ barker_codes_poly[idx] for idx, bc in enumerate(barker_codes)]
+            ),
+            run_time=5,
+        )
+
+        self.wait(0.5)
+
+        self.remove(sll, sll_label)
+
+        poly_text = Text(
+            "Polyphase Code Autocorrelation", font=FONT
+        ).scale_to_fit_height(rxx_eqn.height)
+        Group(poly_text, rxx_eqn).arrange(RIGHT, MED_SMALL_BUFF).scale_to_fit_width(
+            rxx_ax.width * 0.9
+        ).next_to(rxx_ax, UP, MED_LARGE_BUFF)
+        self.add(poly_text)
+        self.remove(rxx_text)
+
+        self.play(MoveAlongPath(self.camera.frame, rxx_bez.reverse_direction()))
+
+        self.wait(0.5)
+
+        barker_codes_poly_2 = [90, 0, 180, 0, 90, 0, 180, 0, 0, 0, 0, 0, 180]
+
+        self.play(
+            LaggedStart(
+                *[bc @ barker_codes_poly_2[idx] for idx, bc in enumerate(barker_codes)]
+            ),
+            run_time=5,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
 
         self.wait(2)
 
