@@ -3627,7 +3627,8 @@ class RRes(MovingCameraScene):
             .set_color(TARGET1_COLOR)
         )
 
-        self.add(pulse)
+        # TODO: add animation here
+        self.play(Create(pulse))
 
         next_point = target1.get_left()
         offset = pulse_ax.p2c(next_point)[0] - ~pw_plot
