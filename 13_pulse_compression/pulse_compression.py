@@ -3627,7 +3627,6 @@ class RRes(MovingCameraScene):
             .set_color(TARGET1_COLOR)
         )
 
-        # TODO: add animation here
         self.play(Create(pulse))
 
         next_point = target1.get_left()
