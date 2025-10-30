@@ -2,6 +2,7 @@
 
 import os
 import sys
+from random import shuffle
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -12,7 +13,7 @@ from scipy import signal
 from scipy.interpolate import interp1d
 
 sys.path.insert(0, "..")
-from props import WeatherRadarTower, get_blocks
+from props import VideoMobject, WeatherRadarTower, get_blocks
 from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
@@ -48,6 +49,143 @@ def fw(scene, scale=1):
 
 def lin2db(x):
     return 10 * np.log10(x)
+
+
+class Intro(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        npages = 23
+        theta_step = PI * 0.005
+        pages = Group(
+            *[
+                ImageMobject(
+                    f"./static/adl8154-{npages + 1 - idx:02}.png"
+                ).scale_to_fit_height(fh(self, 0.8))
+                # .rotate(-theta_step * npages / 2 + idx * theta_step)
+                for idx in range(1, npages + 1)
+            ]
+        ).move_to(self.camera.frame)
+
+        pages_new = (
+            pages.copy()[::-1]
+            .arrange_in_grid(rows=3, cols=8, buff=MED_SMALL_BUFF)
+            .scale_to_fit_width(fw(self, 0.9))
+        )
+
+        self.play(GrowFromCenter(pages))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[Transform(a, b) for a, b in zip(pages, pages_new[::-1])],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        pages_list = list(pages)
+
+        shuffle(pages_list)
+
+        self.play(
+            LaggedStart(
+                *[
+                    Succession(
+                        ShrinkToCenter(m),
+                        FadeOut(m, run_time=0.1),
+                    )
+                    for m in pages_list
+                ],
+                lag_ratio=0.1,
+            ),
+            run_time=1.5,
+        )
+        gain_label = Text("Gain", font=FONT, color=GREEN).scale_to_fit_width(
+            fw(self, 0.3)
+        )
+        self.play(Write(gain_label))
+
+        self.wait(0.5)
+
+        spec1 = Text("1 dB Compression", font=FONT).scale(0.7)
+        spec2 = Text("Saturated output power", font=FONT).scale(0.7)
+        spec3 = Text("Power added efficiency", font=FONT).scale(0.7)
+        spec4 = Text("Return loss", font=FONT).scale(0.7)
+        spec5 = Text("...", font=FONT).scale(0.7)
+        Group(spec1, spec2, spec3, spec4, spec5).arrange(
+            DOWN, MED_SMALL_BUFF, aligned_edge=LEFT
+        ).next_to(gain_label, RIGHT, LARGE_BUFF * 2)
+        unit1 = Tex(r"| $P_{1dB}$").next_to(spec1, RIGHT, SMALL_BUFF)
+        unit2 = Tex(r"| $P_{\text{sat}}$").next_to(spec2, RIGHT, SMALL_BUFF)
+        unit3 = Tex(r"| PAE").next_to(spec3, RIGHT, SMALL_BUFF)
+        unit4 = Tex(r"| $S_{11}$, $S_{22}$").next_to(spec4, RIGHT, SMALL_BUFF)
+
+        bez1 = CubicBezier(
+            gain_label.get_right() + [0.1, 0, 0],
+            gain_label.get_right() + [1, 0, 0],
+            spec1.get_left() + [-1, 0, 0],
+            spec1.get_left() + [-0.1, 0, 0],
+        )
+        bez2 = CubicBezier(
+            gain_label.get_right() + [0.1, 0, 0],
+            gain_label.get_right() + [1, 0, 0],
+            spec2.get_left() + [-1, 0, 0],
+            spec2.get_left() + [-0.1, 0, 0],
+        )
+        bez3 = CubicBezier(
+            gain_label.get_right() + [0.1, 0, 0],
+            gain_label.get_right() + [1, 0, 0],
+            spec3.get_left() + [-1, 0, 0],
+            spec3.get_left() + [-0.1, 0, 0],
+        )
+        bez4 = CubicBezier(
+            gain_label.get_right() + [0.1, 0, 0],
+            gain_label.get_right() + [1, 0, 0],
+            spec4.get_left() + [-1, 0, 0],
+            spec4.get_left() + [-0.1, 0, 0],
+        )
+        bez5 = CubicBezier(
+            gain_label.get_right() + [0.1, 0, 0],
+            gain_label.get_right() + [1, 0, 0],
+            spec5.get_left() + [-1, 0, 0],
+            spec5.get_left() + [-0.1, 0, 0],
+        )
+
+        all_group = Group(gain_label, spec1, unit1, spec2, unit2, unit3, unit4, spec5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    all_group.width * 1.1
+                ).move_to(all_group),
+                Create(bez1),
+                Write(spec1),
+                LaggedStart(*[FadeIn(m) for m in unit1[0]], lag_ratio=0.2),
+                Create(bez2),
+                Write(spec2),
+                LaggedStart(*[FadeIn(m) for m in unit2[0]], lag_ratio=0.2),
+                Create(bez3),
+                Write(spec3),
+                LaggedStart(*[FadeIn(m) for m in unit3[0]], lag_ratio=0.2),
+                Create(bez4),
+                Write(spec4),
+                LaggedStart(*[FadeIn(m) for m in unit4[0]], lag_ratio=0.2),
+                Create(bez5),
+                Write(spec5),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(2)
 
 
 class Amp(MovingCameraScene):
@@ -465,4 +603,9 @@ class Amp(MovingCameraScene):
         self.remove(ip_ld, ip_line, ip_lu, op_ld, op_line, op_lu)
         self.play(self.camera.frame.animate.restore())
 
+        self.wait(2)
+
+
+class BD(MovingCameraScene):
+    def construct(self):
         self.wait(2)
