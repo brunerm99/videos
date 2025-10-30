@@ -1127,12 +1127,14 @@ class Options(MovingCameraScene):
         )
 
         rres_bad_label = (
-            Text("Bad", color=BAD, font=FONT)
+            Text("Bad", font=FONT)
+            .set_color(BAD)
             .scale(0.5)
             .next_to(rres_nl.n2p(10), RIGHT, MED_SMALL_BUFF)
         )
         snr_good_label = (
-            Text("Good", color=GOOD, font=FONT)
+            Text("Good", font=FONT)
+            .set_color(GOOD)
             .scale(0.5)
             .next_to(snr_nl.n2p(10), LEFT, MED_SMALL_BUFF)
         )
@@ -1147,12 +1149,14 @@ class Options(MovingCameraScene):
             .next_to(snr_nl.n2p(5), LEFT, MED_SMALL_BUFF)
         )
         rres_good_label = (
-            Text("Good", color=GOOD, font=FONT)
+            Text("Good", font=FONT)
+            .set_color(GOOD)
             .scale(0.5)
             .next_to(rres_nl.n2p(0), RIGHT, MED_SMALL_BUFF)
         )
         snr_bad_label = (
-            Text("Bad", color=BAD, font=FONT)
+            Text("Bad", font=FONT)
+            .set_color(BAD)
             .scale(0.5)
             .next_to(snr_nl.n2p(0), LEFT, MED_SMALL_BUFF)
         )
@@ -4908,12 +4912,36 @@ class Tradeoffs(MovingCameraScene):
 
         self.play(self.camera.frame.animate.shift(DOWN * fh(self, 2)))
 
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
         self.wait(2)
 
 
 class BarkerCodes(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
+        self.camera.frame.shift(UP * fh(self))
+        bc = (
+            Text("Barker Codes", font=FONT, color=GREEN)
+            .scale_to_fit_width(fw(self, 0.6))
+            .move_to(self.camera.frame)
+        )
+        soln = (
+            Text("Possible solution:", font=FONT)
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(bc, UP, MED_LARGE_BUFF)
+        )
+        self.add(bc, soln)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
         ax = Axes(
             x_range=[0, 1, 0.5],
             y_range=[-1, 1, 0.5],
@@ -4965,6 +4993,7 @@ class BarkerCodes(MovingCameraScene):
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         label1 = always_redraw(
             lambda: Text(f"{int(~barker_codes[0])}", font=FONT)
@@ -5161,7 +5190,7 @@ class BarkerCodes(MovingCameraScene):
             rxx_ax.width * 0.9
         ).next_to(rxx_ax, UP, MED_LARGE_BUFF)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
