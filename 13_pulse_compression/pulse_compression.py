@@ -5686,18 +5686,15 @@ class WrapUp(MovingCameraScene):
             "ZacJW",
             "db-isJustARatio",
             "Jea99",
-            "Leon",
-            "dplynch",
-            "Kris",
-            "zachdc",
+            "zackdc",
             "misspeled",
-            "Florian",
-            "Cminor102",
+            "Florian Euchner",
             "w1gx",
-            "Ioan",
-            "nakribc",
             "alikarb0724",
-            "Mark",
+            "Mark Humes",
+            "Bob Van Valzah",
+            "Randy Gumabong",
+            "noleteman",
         ]
         people_text = (
             Group(
@@ -5971,11 +5968,11 @@ class EndScreen(MovingCameraScene):
         hours["In_mins"] = hours["In_dt"].dt.hour * 60 + hours["In_dt"].dt.minute
         hours["Out_mins"] = hours["Out_dt"].dt.hour * 60 + hours["Out_dt"].dt.minute
 
-        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_title = Text("Stats For This Video", font=FONT).scale(0.7)
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "5,572"],
+                    ["Lines of code", "6,088"],
                     ["Hours", f"{hours['Session Hours'].sum():.1f}"],
                     ["Days", "103"],
                 ],
