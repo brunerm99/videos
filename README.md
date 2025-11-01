@@ -110,3 +110,11 @@ There's a lot of information packed into the magnitude and phase of a received s
 In this video, I'll go over in-phase and quadrature (I/Q) sampling and how it allows you to extract phase information from a received signal, which is important for applications from radar to communications.
 
 ![thumbnail](./12_iq_sampling/static/IQ%20Sampling%20Thumbnail.png)
+
+## [13 - Pulse Compression: How Matched Filtering Boosts Weak Signals and Sharpens Resolution ADD LINK]()
+
+Pulse compression and matched filtering let radars have both high range resolution and strong signal-to-noise ratio.
+
+In this video, we’ll break down how long pulses can be processed to act like short ones, how correlation and matched filters extract targets from noise, and why techniques like LFM and Barker codes matter.
+
+![thumbnail](./13_pulse_compression/static/Pulse%20Compression%20Thumbnail.png)
