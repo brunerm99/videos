@@ -607,6 +607,194 @@ class Amp(MovingCameraScene):
         self.wait(2)
 
 
+class DB(MovingCameraScene):
+    def construct(self):
+        db_label = Text("dB", font=FONT).scale(2)
+        self.add(db_label)
+
+        self.wait(0.5)
+
+        of_vpv = (
+            MathTex(r"\left( \frac{V}{V} \right)")
+            .scale_to_fit_height(db_label.height * 2)
+            .next_to(self.camera.frame.get_right(), RIGHT)
+        )
+
+        self.play(Group(db_label, of_vpv).animate.arrange(RIGHT, MED_SMALL_BUFF))
+
+        self.wait(0.5)
+
+        of_wpw = (
+            MathTex(r"\left( \frac{W}{W} \right)")
+            .scale_to_fit_height(db_label.height * 2)
+            .move_to(of_vpv, LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                *[ReplacementTransform(a, b) for a, b in zip(of_vpv[0], of_wpw[0])],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        add = (
+            Text("+", font=FONT, color=GREEN)
+            .scale_to_fit_height(db_label.height)
+            .next_to(db_label, DOWN, LARGE_BUFF * 2)
+            .shift(LEFT)
+        )
+        mult = (
+            Text("x", font=FONT, color=RED)
+            .scale_to_fit_height(db_label.height)
+            .next_to(of_wpw, DOWN, LARGE_BUFF * 2)
+            .shift(RIGHT)
+            .set_y(add.get_y())
+        )
+        add_bez = CubicBezier(
+            db_label.get_bottom() + [0, -0.1, 0],
+            db_label.get_bottom() + [0, -1, 0],
+            add.get_top() + [0, 1, 0],
+            add.get_top() + [0, 0.1, 0],
+        )
+        mult_bez = CubicBezier(
+            of_wpw.get_bottom() + [0, -0.1, 0],
+            of_wpw.get_bottom() + [0, -1, 0],
+            mult.get_top() + [0, 1, 0],
+            mult.get_top() + [0, 0.1, 0],
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN),
+                Create(mult_bez),
+                GrowFromCenter(mult),
+                Create(add_bez),
+                GrowFromCenter(add),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        osc = BLOCKS.get("oscillator").copy()
+        lp_filter = BLOCKS.get("lp_filter").copy()
+        amp = BLOCKS.get("amp").copy()
+        bp_filter = BLOCKS.get("filter").copy()
+
+        cascade_bd = (
+            Group(
+                osc,
+                Line(ORIGIN, RIGHT),
+                lp_filter,
+                Line(ORIGIN, RIGHT),
+                amp,
+                Line(ORIGIN, RIGHT),
+                bp_filter,
+            )
+            .arrange(RIGHT, 0)
+            .scale_to_fit_width(fw(self, 0.8))
+            .next_to(self.camera.frame.get_bottom(), DOWN)
+        )
+
+        bd_group = Group(db_label, cascade_bd)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    bd_group.height * 1.3
+                ).move_to(bd_group),
+                *[
+                    GrowFromCenter(m) if idx % 2 == 0 else Create(m)
+                    for idx, m in enumerate(cascade_bd)
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(*cascade_bd),
+                self.camera.frame.animate.restore(),
+                AnimationGroup(
+                    ShrinkToCenter(mult),
+                    ShrinkToCenter(add),
+                ),
+                AnimationGroup(
+                    Uncreate(mult_bez),
+                    Uncreate(add_bez),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        vpv_to_log = MathTex(
+            r"20 \cdot \log_{10}{\left( \frac{V}{V} \right)}"
+        ).scale_to_fit_height(db_label.height * 2)
+        wpw_to_log = MathTex(
+            r"10 \cdot \log_{10}{\left( \frac{W}{W} \right)}"
+        ).scale_to_fit_height(db_label.height * 2)
+
+        xpx_group = Group(vpv_to_log, wpw_to_log).arrange(DOWN, LARGE_BUFF)
+
+        db_group = Group(db_label.copy(), xpx_group).arrange(RIGHT, LARGE_BUFF * 3)
+
+        vpv_bez = CubicBezier(
+            db_group[0].get_right() + [0.1, 0, 0],
+            db_group[0].get_right() + [1, 0, 0],
+            vpv_to_log.get_left() + [-1, 0, 0],
+            vpv_to_log.get_left() + [-0.1, 0, 0],
+        )
+        wpw_bez = CubicBezier(
+            db_group[0].get_right() + [0.1, 0, 0],
+            db_group[0].get_right() + [1, 0, 0],
+            wpw_to_log.get_left() + [-1, 0, 0],
+            wpw_to_log.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                db_label.animate.move_to(db_group[0]),
+                ReplacementTransform(of_wpw[0], wpw_to_log[0][8:]),
+                Create(wpw_bez),
+                LaggedStart(*[FadeIn(m) for m in wpw_to_log[0][:8]]),
+                Create(vpv_bez),
+                LaggedStart(*[FadeIn(m) for m in vpv_to_log[0]]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        amp_gain = (
+            MathTex(r"G_{\text{dB}} = 14 \text{ dB}")
+            .scale(2)
+            .next_to(wpw_to_log, DOWN, LARGE_BUFF)
+        )
+        amp_gain[0][:3].set_color(GREEN)
+
+        all_group = Group(amp_gain, wpw_to_log, db_label, vpv_to_log)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    all_group.height * 1.3
+                ).move_to(all_group),
+                *[FadeIn(m) for m in amp_gain[0]],
+                lag_ratio=0.1,
+            ),
+            run_time=2,
+        )
+
+        self.wait(2)
+
+
 class FrequencyDependence(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
