@@ -5,6 +5,7 @@ import sys
 from random import shuffle
 
 import pandas as pd
+import skrf as rf
 from dotenv import load_dotenv
 from manim import *
 from MF_Tools import VT
@@ -602,6 +603,243 @@ class Amp(MovingCameraScene):
 
         self.remove(ip_ld, ip_line, ip_lu, op_ld, op_line, op_lu)
         self.play(self.camera.frame.animate.restore())
+
+        self.wait(2)
+
+
+class FrequencyDependence(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        page = ImageMobject(f"./static/adl8154-07.png").scale_to_fit_height(
+            fh(self, 0.8)
+        )
+        self.add(page)
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(page.height * 0.3).shift(
+                RIGHT * 1.12 + UP * 0.215
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        amp = rf.Network("../../notebooks/data/ADL8154ACPZN_SParameters_25C.S2p")
+        bw_mask = (amp.f > 300e6) & (amp.f < 7e9)
+        s21 = interp1d(
+            amp.f[bw_mask] / 1e9,
+            amp.s_db[bw_mask][:, 1, 0],
+            fill_value="extrapolate",
+        )
+
+        ax_x = VT(self.camera.frame.get_center()[0])
+        ax_y = VT(self.camera.frame.get_center()[1])
+        x_length = VT(fw(self, 0.42))
+        y_length = VT(fh(self, 0.595))
+
+        x_ticks = np.arange(1, 7 + 1, 1).astype(int)
+        y_ticks = np.arange(4, 20 + 4, 4).astype(int)
+
+        def get_s21_ax():
+            s21_ax = (
+                Axes(
+                    x_range=[0, 7, 0.5],
+                    y_range=[0, 20, 2],
+                    tips=False,
+                    x_length=~x_length,
+                    y_length=~y_length,
+                    x_axis_config=dict(
+                        numbers_with_elongated_ticks=x_ticks,
+                        include_numbers=True,
+                        numbers_to_include=x_ticks,
+                        font_size=DEFAULT_FONT_SIZE * 0.15,
+                        label_constructor=lambda x: Text(x, font=FONT),
+                        line_to_number_buff=SMALL_BUFF,
+                        decimal_number_config=dict(num_decimal_places=0),
+                        longer_tick_multiple=2,
+                    ),
+                    y_axis_config=dict(
+                        numbers_with_elongated_ticks=y_ticks,
+                        include_numbers=True,
+                        numbers_to_include=y_ticks,
+                        font_size=DEFAULT_FONT_SIZE * 0.15,
+                        label_constructor=lambda x: Text(x, font=FONT),
+                        line_to_number_buff=SMALL_BUFF,
+                        decimal_number_config=dict(num_decimal_places=0),
+                        longer_tick_multiple=2,
+                    ),
+                    axis_config=dict(
+                        stroke_width=DEFAULT_STROKE_WIDTH * 0.2,
+                        tick_size=0.025,
+                        # stroke_color=BLACK,
+                    ),
+                )
+                .move_to([~ax_x, ~ax_y, 0])
+                .set_z_index(-2)
+            )
+            return s21_ax
+
+        def get_s21_plot():
+            s21_ax = get_s21_ax()
+            s21_plot = s21_ax.plot(
+                s21,
+                x_range=[0.3, 7, 1 / 200],
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.6,
+                color=ORANGE,
+                use_smoothing=False,
+            ).set_z_index(1)
+            return s21_plot
+
+        ax = always_redraw(get_s21_ax)
+        plot = always_redraw(get_s21_plot)
+
+        f1_line = Line(
+            ax.c2p(0.1, 0) + DOWN * 0.05,
+            ax.c2p(0.1, 0) + UP * 0.05,
+            color=BLACK,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
+        ).set_z_index(1)
+        f2_line = Line(
+            ax.c2p(6, 0) + DOWN * 0.05,
+            ax.c2p(6, 0) + UP * 0.05,
+            color=BLACK,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
+        ).set_z_index(1)
+        f_line = Line(
+            f1_line.get_midpoint(),
+            f2_line.get_midpoint(),
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
+            color=BLACK,
+        ).set_z_index(1)
+        f_label = (
+            MathTex(r"10 \text{ MHz} \le f \le 6 \text{ GHz}", color=BLACK)
+            .scale_to_fit_width(f_line.width * 0.8)
+            .next_to(f_line, UP, SMALL_BUFF)
+        ).set_z_index(2)
+        f_box = SurroundingRectangle(
+            f_label,
+            color=BLACK,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.3,
+            buff=SMALL_BUFF * 0.5,
+            corner_radius=0.05,
+            fill_color=BLUE,
+            fill_opacity=1,
+        ).set_z_index(1)
+
+        self.play(
+            LaggedStart(
+                Create(f1_line),
+                Create(f_line),
+                Create(f2_line),
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
+                FadeIn(f_box),
+                FadeIn(f_label),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        temp_box = Polygon(
+            ax.c2p(0.1, 8),
+            ax.c2p(0.1, 13.7),
+            ax.c2p(1.85, 13.7),
+            ax.c2p(1.85, 8),
+            color=BLACK,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.3,
+        ).set_z_index(1)
+
+        self.play(Create(temp_box))
+
+        self.wait(0.5)
+
+        volt_box = temp_box.copy().shift(DOWN * 1.7)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * 1.5),
+                Create(volt_box),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        page2 = (
+            ImageMobject(f"./static/adl8154-08.png")
+            .scale_to_fit_height(page.height)
+            .next_to(page, DOWN, SMALL_BUFF * 0.5)
+        )
+        self.add(page2)
+
+        curr_box = volt_box.copy().stretch(1.2, dim=1).shift(DOWN * 3.12)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * 3.3),
+                Create(curr_box),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+        self.remove(page2, volt_box, curr_box)
+
+        self.wait(0.5)
+
+        self.add(ax)
+
+        self.play(Create(plot), run_time=2)
+
+        self.wait(0.5)
+
+        gain_label = (
+            Text("Gain (dB)", font=FONT)
+            .scale(0.2)
+            .rotate(PI / 2)
+            .next_to(ax, LEFT, SMALL_BUFF)
+        )
+        freq_label = (
+            Text("Frequency (GHz)", font=FONT).scale(0.2).next_to(ax, DOWN, SMALL_BUFF)
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(temp_box),
+                    Uncreate(f1_line),
+                    Uncreate(f_line),
+                    Uncreate(f2_line),
+                    FadeOut(f_label, f_box),
+                ),
+                FadeOut(page),
+                Create(ax),
+                Write(freq_label),
+                Write(gain_label),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale(1.2).shift(DOWN * 0.1),
+            AnimationGroup(
+                freq_label.animate.shift(DOWN * 0.07),
+                gain_label.animate.shift(LEFT * 0.5),
+            ),
+            x_length @ fw(self, 0.7),
+            run_time=3,
+        )
 
         self.wait(2)
 
