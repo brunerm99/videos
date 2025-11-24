@@ -14,7 +14,14 @@ from scipy import signal
 from scipy.interpolate import interp1d
 
 sys.path.insert(0, "..")
-from props import VideoMobject, WeatherRadarTower, get_blocks
+from props import (
+    VideoMobject,
+    WeatherRadarTower,
+    get_blocks,
+    get_filt_block,
+    get_phase_shifter,
+    get_splitter,
+)
 from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
@@ -50,6 +57,268 @@ def fw(scene, scale=1):
 
 def lin2db(x):
     return 10 * np.log10(x)
+
+
+class IntroV2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        you = ImageMobject(
+            "../../../media/rf-channel-assets/VintageRaccoonStanding_NoBackground.png"
+        ).scale_to_fit_height(fh(self, 0.5))
+        you_label = Text("You", font=FONT).next_to(you, DOWN, MED_SMALL_BUFF)
+        an_rf = (
+            Text("(an RF engineer)", font=FONT)
+            .scale(0.6)
+            .next_to(you_label, DOWN, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(you),
+                Write(you_label),
+                Write(an_rf),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        datasheet_scrolling = (
+            VideoMobject("./static/datasheet-scrolling.mkv", speed=2)
+            .next_to(self.camera.frame.get_left(), LEFT)
+            .scale_to_fit_width(fw(self, 0.6))
+        )
+        self.add(datasheet_scrolling)
+
+        self.wait(2)
+
+        self.play(
+            Group(datasheet_scrolling, Group(you, you_label, an_rf)).animate.arrange(
+                RIGHT
+            )
+        )
+
+        self.wait(8)
+
+        op1db = Text("OP1dB", font=FONT)
+        oip3 = Text("OIP3", font=FONT)
+        pn = Text("Phase Noise", font=FONT)
+        gain = Text("Gain", font=FONT)
+        etc = Text("etc.", font=FONT)
+        Group(op1db, oip3, pn, gain, etc).arrange(RIGHT, SMALL_BUFF).move_to(
+            self.camera.frame
+        ).shift(DOWN * fh(self))
+        oip3.shift(DOWN)
+        gain.shift(DOWN)
+
+        bez1 = CubicBezier(
+            datasheet_scrolling.get_bottom() + [0, -0.1, 0],
+            datasheet_scrolling.get_bottom() + [0, -1, 0],
+            op1db.get_top() + [0, 2, 0],
+            op1db.get_top() + [0, 0.1, 0],
+        )
+        bez2 = CubicBezier(
+            datasheet_scrolling.get_bottom() + [0, -0.1, 0],
+            datasheet_scrolling.get_bottom() + [0, -1, 0],
+            oip3.get_top() + [0, 2, 0],
+            oip3.get_top() + [0, 0.1, 0],
+        )
+        bez3 = CubicBezier(
+            datasheet_scrolling.get_bottom() + [0, -0.1, 0],
+            datasheet_scrolling.get_bottom() + [0, -1, 0],
+            pn.get_top() + [0, 2, 0],
+            pn.get_top() + [0, 0.1, 0],
+        )
+        bez4 = CubicBezier(
+            datasheet_scrolling.get_bottom() + [0, -0.1, 0],
+            datasheet_scrolling.get_bottom() + [0, -1, 0],
+            gain.get_top() + [0, 2, 0],
+            gain.get_top() + [0, 0.1, 0],
+        )
+        bez5 = CubicBezier(
+            datasheet_scrolling.get_bottom() + [0, -0.1, 0],
+            datasheet_scrolling.get_bottom() + [0, -1, 0],
+            etc.get_top() + [0, 2, 0],
+            etc.get_top() + [0, 0.1, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            self.camera.frame.animate(run_time=2).shift(DOWN * fh(self)),
+            LaggedStart(
+                Create(bez1),
+                Create(bez2),
+                Create(bez3),
+                Create(bez4),
+                Create(bez5),
+                Write(op1db),
+                Write(oip3),
+                Write(pn),
+                Write(gain),
+                Write(etc),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.remove(datasheet_scrolling)
+
+        self.wait(0.5)
+
+        lna_amp_tri = (
+            Triangle(stroke_width=DEFAULT_STROKE_WIDTH * 2, color=GREEN)
+            .rotate(PI / 6)
+            .set_z_index(1)
+        )
+        lna_amp_box = (
+            RoundedRectangle(
+                width=lna_amp_tri.width * 2,
+                height=lna_amp_tri.width * 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            .move_to(lna_amp_tri)
+            .set_z_index(1)
+        )
+        lna = Group(lna_amp_box, lna_amp_tri)
+
+        bp_filt = get_filt_block(width=lna.height, passband="band")
+
+        driver_amp_tri = (
+            Triangle(stroke_width=DEFAULT_STROKE_WIDTH * 2, color=GREEN)
+            .rotate(PI / 6)
+            .set_z_index(1)
+        )
+        driver_amp_box = (
+            RoundedRectangle(
+                width=driver_amp_tri.width * 2,
+                height=driver_amp_tri.width * 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            .move_to(driver_amp_tri)
+            .set_z_index(1)
+        )
+        driver = Group(driver_amp_box, driver_amp_tri)
+        to_lna = Line(LEFT, RIGHT)
+        lna_to_filt = Line(LEFT, RIGHT)
+        bp_filt_to_driver = Line(LEFT, RIGHT)
+        from_driver = Line(LEFT, RIGHT)
+
+        bd_group = (
+            Group(
+                to_lna,
+                lna,
+                lna_to_filt,
+                bp_filt,
+                bp_filt_to_driver,
+                driver,
+                from_driver,
+            )
+            .arrange(RIGHT, 0)
+            .scale_to_fit_width(fw(self))
+            .move_to(self.camera.frame.get_bottom())
+        )
+
+        self.play(
+            LaggedStart(
+                Create(bd_group[0]),
+                GrowFromCenter(bd_group[1]),
+                Create(bd_group[2]),
+                GrowFromCenter(bd_group[3]),
+                Create(bd_group[4]),
+                GrowFromCenter(bd_group[5]),
+                Create(bd_group[6]),
+                lag_ratio=0.2,
+            ),
+            self.camera.frame.animate.scale_to_fit_width(bd_group.width * 1.1).move_to(
+                Group(bd_group, op1db, oip3, pn, gain)
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                lna[0]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_fill(opacity=0.5, color=YELLOW),
+                driver[0]
+                .animate(rate_func=rate_functions.there_and_back)
+                .set_fill(opacity=0.5, color=YELLOW),
+                lag_ratio=0.2,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        ps = get_phase_shifter(width=lna.width).move_to(bp_filt)
+        filt_to_ps = Line(LEFT, RIGHT).next_to(ps, LEFT, 0)
+        bd_group.add(ps, filt_to_ps)
+
+        new_bd_group_copy = Group(
+            to_lna.copy(), lna.copy(), lna_to_filt.copy(), bp_filt.copy()
+        ).shift(LEFT * (filt_to_ps.width + ps.width))
+
+        self.play(
+            LaggedStart(
+                Group(to_lna, lna, lna_to_filt, bp_filt).animate.shift(
+                    LEFT * (filt_to_ps.width + ps.width)
+                ),
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(bd_group, new_bd_group_copy).width * 1.1
+                ).move_to(Group(bd_group, new_bd_group_copy)),
+                GrowFromCenter(ps),
+                Create(filt_to_ps),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        splitter = (
+            get_splitter(width=lna.width, n=4)
+            .next_to(from_driver, RIGHT, 0)
+            .shift(DOWN * lna.height * 1.5)
+        )
+        bd_group.add(splitter)
+
+        p1 = splitter.get_corner(UL) + DOWN * splitter.height / 8
+        splitter_p1_bez = CubicBezier(
+            from_driver.get_start(),
+            from_driver.get_start() + [1, 0, 0],
+            p1 + [-1, 0, 0],
+            p1,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    bd_group.width * 1.1
+                ).move_to(bd_group),
+                FadeIn(splitter[0]),
+                ReplacementTransform(from_driver, splitter_p1_bez),
+                LaggedStart(
+                    *[Create(m) for m in splitter[1:]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            bp_filt[0]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_fill(opacity=0.5, color=YELLOW),
+        )
+
+        self.wait(2)
 
 
 class Intro(MovingCameraScene):
@@ -602,7 +871,8 @@ class Amp(MovingCameraScene):
         self.wait(0.5)
 
         self.remove(ip_ld, ip_line, ip_lu, op_ld, op_line, op_lu)
-        self.play(self.camera.frame.animate.restore())
+        # self.play(self.camera.frame.animate.restore())
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 3)))
 
         self.wait(2)
 
@@ -610,7 +880,7 @@ class Amp(MovingCameraScene):
 class DB(MovingCameraScene):
     def construct(self):
         db_label = Text("dB", font=FONT).scale(2)
-        self.add(db_label)
+        self.play(Write(db_label))
 
         self.wait(0.5)
 
@@ -790,6 +1060,297 @@ class DB(MovingCameraScene):
                 lag_ratio=0.1,
             ),
             run_time=2,
+        )
+
+        self.wait(2)
+
+
+class DB2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        db_label = Text("dB", font=FONT).scale(2)
+        self.play(Write(db_label))
+
+        self.wait(0.5)
+
+        lna_amp_tri = (
+            Triangle(stroke_width=DEFAULT_STROKE_WIDTH * 2, color=GREEN)
+            .rotate(PI / 6)
+            .set_z_index(1)
+        )
+        lna_amp_box = (
+            RoundedRectangle(
+                width=lna_amp_tri.width * 2,
+                height=lna_amp_tri.width * 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            .move_to(lna_amp_tri)
+            .set_z_index(1)
+        )
+        lna = Group(lna_amp_box, lna_amp_tri)
+
+        bp_filt = get_filt_block(width=lna.height, passband="band")
+
+        driver_amp_tri = (
+            Triangle(stroke_width=DEFAULT_STROKE_WIDTH * 2, color=GREEN)
+            .rotate(PI / 6)
+            .set_z_index(1)
+        )
+        driver_amp_box = (
+            RoundedRectangle(
+                width=driver_amp_tri.width * 2,
+                height=driver_amp_tri.width * 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            .move_to(driver_amp_tri)
+            .set_z_index(1)
+        )
+        driver = Group(driver_amp_box, driver_amp_tri)
+        to_lna = Line(LEFT, RIGHT)
+        lna_to_filt = Line(LEFT, RIGHT)
+        bp_filt_to_driver = Line(LEFT, RIGHT)
+        from_driver = Line(LEFT, RIGHT)
+
+        bd_group = (
+            Group(
+                to_lna,
+                lna,
+                lna_to_filt,
+                bp_filt,
+                bp_filt_to_driver,
+                driver,
+                from_driver,
+            )
+            .arrange(RIGHT, 0)
+            .scale_to_fit_width(fw(self))
+            .next_to(db_label, DOWN, LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(db_label),
+                Create(bd_group[0]),
+                GrowFromCenter(bd_group[1]),
+                Create(bd_group[2]),
+                GrowFromCenter(bd_group[3]),
+                Create(bd_group[4]),
+                GrowFromCenter(bd_group[5]),
+                Create(bd_group[6]),
+                lag_ratio=0.2,
+            ),
+            self.camera.frame.animate.scale_to_fit_width(bd_group.width * 1.1).move_to(
+                bd_group
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                bd_group[2].animate.set_opacity(0.1),
+                bd_group[3].animate.set_opacity(0.1),
+                bd_group[4].animate.set_opacity(0.1),
+                AnimationGroup(
+                    bd_group[5][0].animate.set_stroke(opacity=0.1),
+                    bd_group[5][1].animate.set_stroke(opacity=0.1),
+                ),
+                bd_group[6].animate.set_opacity(0.1),
+                lag_ratio=0.1,
+            ),
+            run_time=1,
+        )
+
+        self.wait(0.5)
+
+        lna_gain = (
+            MathTex(r"G = 17\times").scale(1.8).next_to(lna, DOWN, MED_SMALL_BUFF)
+        )
+        lna_gain[0][0].set_color(GREEN)
+        filt_gain = (
+            MathTex(r"G = 0.63\times").scale(1.8).next_to(bp_filt, DOWN, MED_SMALL_BUFF)
+        )
+        filt_gain[0][0].set_color(RED)
+        driver_gain = (
+            MathTex(r"G = 8.2\times").scale(1.8).next_to(driver, DOWN, MED_SMALL_BUFF)
+        )
+        driver_gain[0][0].set_color(GREEN)
+
+        self.play(FadeIn(lna_gain))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                bd_group[0].animate.set_opacity(0.1),
+                AnimationGroup(
+                    bd_group[1][0].animate.set_stroke(opacity=0.1),
+                    bd_group[1][1].animate.set_stroke(opacity=0.1),
+                    lna_gain.animate.set_opacity(0.1),
+                ),
+                bd_group[2].animate.set_opacity(1),
+                bd_group[3].animate.set_opacity(1),
+                FadeIn(filt_gain),
+                lag_ratio=0.15,
+            )
+        )
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                bd_group[2].animate.set_opacity(0.1),
+                bd_group[3].animate.set_opacity(0.1),
+                filt_gain.animate.set_opacity(0.1),
+                bd_group[4].animate.set_opacity(1),
+                AnimationGroup(
+                    bd_group[5][0].animate.set_stroke(opacity=1),
+                    bd_group[5][1].animate.set_stroke(opacity=1),
+                ),
+                FadeIn(driver_gain),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                bd_group[0].animate.set_opacity(1),
+                AnimationGroup(
+                    bd_group[1][0].animate.set_stroke(opacity=1),
+                    bd_group[1][1].animate.set_stroke(opacity=1),
+                ),
+                lna_gain.animate.set_opacity(1).scale(0.8),
+                bd_group[2].animate.set_opacity(1),
+                bd_group[3].animate.set_opacity(1),
+                filt_gain.animate.set_opacity(1).scale(0.8),
+                driver_gain.animate.scale(0.8),
+                bd_group[6].animate.set_opacity(1),
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        g_tot = (
+            MathTex(r"G_{\text{total}} = 17 \times 0.63 \times 8.2")
+            .scale(2)
+            .next_to(filt_gain, DOWN, LARGE_BUFF)
+        )
+        g_tot[0][0].set_color(GREEN)
+        g_tot_equal = (
+            MathTex(r"G_{\text{total}} = 17 \times 0.63 \times 8.2 = 87.7")
+            .scale(2)
+            .move_to(g_tot)
+        )
+        g_tot_equal[0][0].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN),
+                FadeIn(g_tot[0][0]),
+                FadeIn(g_tot[0][1:6]),
+                FadeIn(g_tot[0][6]),
+                TransformFromCopy(lna_gain[0][2:-1], g_tot[0][7:9]),
+                FadeIn(g_tot[0][9]),
+                TransformFromCopy(filt_gain[0][2:-1], g_tot[0][10:14]),
+                FadeIn(g_tot[0][14]),
+                TransformFromCopy(driver_gain[0][2:-1], g_tot[0][15:18]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(g_tot_equal.width * 1.2),
+                ReplacementTransform(g_tot[0], g_tot_equal[0][:-5]),
+                LaggedStart(*[FadeIn(m) for m in g_tot_equal[0][-5:]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        lna_db = (
+            MathTex(r"G_{\text{dB}} = 24.6 \text{ dB}")
+            .scale(1.4)
+            .next_to(lna_gain, DOWN, LARGE_BUFF)
+            .shift(LEFT * 2)
+        )
+        lna_db[0][:3].set_color(GREEN)
+        lna_line = CubicBezier(
+            lna_gain.get_bottom() + [0, -0.1, 0],
+            lna_gain.get_bottom() + [0, -1, 0],
+            lna_db.get_top() + [0, 1, 0],
+            lna_db.get_top() + [0, 0.1, 0],
+        )
+
+        filt_db = (
+            MathTex(r"G_{\text{dB}} = -4.0 \text{ dB}")
+            .scale(1.4)
+            .next_to(filt_gain, DOWN, LARGE_BUFF)
+        )
+        filt_db[0][:3].set_color(RED)
+        filt_line = CubicBezier(
+            filt_gain.get_bottom() + [0, -0.1, 0],
+            filt_gain.get_bottom() + [0, -1, 0],
+            filt_db.get_top() + [0, 1, 0],
+            filt_db.get_top() + [0, 0.1, 0],
+        )
+
+        driver_db = (
+            MathTex(r"G_{\text{dB}} = 18.3 \text{ dB}")
+            .scale(1.4)
+            .next_to(driver_gain, DOWN, LARGE_BUFF)
+            .shift(RIGHT * 2)
+        )
+        driver_db[0][:3].set_color(GREEN)
+        driver_line = CubicBezier(
+            driver_gain.get_bottom() + [0, -0.1, 0],
+            driver_gain.get_bottom() + [0, -1, 0],
+            driver_db.get_top() + [0, 1, 0],
+            driver_db.get_top() + [0, 0.1, 0],
+        )
+
+        self.play(
+            g_tot_equal[0].animate.set_opacity(0.1).shift(DOWN * 3.5),
+            self.camera.frame.animate.scale(1.2).shift(DOWN * 2),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(lna_line),
+                LaggedStart(*[FadeIn(m) for m in lna_db[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(filt_line),
+                LaggedStart(*[FadeIn(m) for m in filt_db[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(driver_line),
+                LaggedStart(
+                    *[FadeIn(m) for m in driver_db[0]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
         )
 
         self.wait(2)
@@ -1034,4 +1595,11 @@ class FrequencyDependence(MovingCameraScene):
 
 class BD(MovingCameraScene):
     def construct(self):
+        # bp_filt = get_filt_block(width=fh(self, 0.3), passband="band")
+        # lp_filt = get_filt_block(width=fh(self, 0.3), passband="low")
+        # hp_filt = get_filt_block(width=fh(self, 0.3), passband="high")
+        # self.add(Group(lp_filt, bp_filt, hp_filt).arrange(RIGHT))
+        # self.add(get_phase_shifter(width=fh(self, 0.3)))
+        self.add(get_splitter(width=fh(self, 0.3), n=4))
+
         self.wait(2)

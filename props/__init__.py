@@ -1,5 +1,13 @@
 # props/__init__.py
 
-from .radar import WeatherRadarTower, FMCWRadarCartoon
-from .block_diagram import get_blocks, get_bd_animation, get_resistor, get_diode
+from .block_diagram import (
+    get_bd_animation,
+    get_blocks,
+    get_diode,
+    get_filt_block,
+    get_phase_shifter,
+    get_resistor,
+    get_splitter,
+)
+from .radar import FMCWRadarCartoon, WeatherRadarTower
 from .video import VideoMobject
