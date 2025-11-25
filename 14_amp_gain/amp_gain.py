@@ -27,7 +27,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -1688,7 +1688,7 @@ class FrequencyDependence(MovingCameraScene):
         self.wait(0.5)
 
         amp = (
-            get_amp(width=fh(self, 1))
+            get_amp(width=fh(self, 0.2), stroke_width_mult=0.5)
             .move_to(self.camera.frame)
             .shift(UP * fh(self, 5))
         )
@@ -1707,7 +1707,7 @@ class FrequencyDependence(MovingCameraScene):
         A2 = VT(0)
         A3 = VT(0)
         A4 = VT(0)
-        f = 4
+        f1 = 4
         f2 = 8.8
         f3 = 16.7
         f4 = 24
@@ -1715,13 +1715,15 @@ class FrequencyDependence(MovingCameraScene):
         phi1 = VT(0)
         phi2 = VT(0)
         phi3 = VT(0)
-        stroke_width_vt = VT(2)
+        stroke_width_vt = VT(0.5)
+        input_offset = VT(0)
         input_plot = always_redraw(
             lambda: input_ax.plot(
-                lambda t: ~A1 * np.sin(2 * PI * f * t + ~phi0)
+                lambda t: ~A1 * np.sin(2 * PI * f1 * t + ~phi0)
                 + ~A2 * np.sin(2 * PI * f2 * t + ~phi1)
                 + ~A3 * np.sin(2 * PI * f3 * t + ~phi2)
-                + ~A4 * np.sin(2 * PI * f4 * t + ~phi3),
+                + ~A4 * np.sin(2 * PI * f4 * t + ~phi3)
+                + ~input_offset,
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=INPUT_COLOR,
@@ -1737,9 +1739,9 @@ class FrequencyDependence(MovingCameraScene):
         )
         output_ax.shift(amp.get_right() - output_ax.c2p(0, 0))
 
-        f = 4
+        f1 = 4
         output_plot = output_ax.plot(
-            lambda t: 2 * ~A1 * np.sin(2 * PI * f * t),
+            lambda t: 2 * ~A1 * np.sin(2 * PI * f1 * t),
             stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
             x_range=[0, 1, 1 / 200],
             color=OUTPUT_COLOR,
@@ -1761,14 +1763,14 @@ class FrequencyDependence(MovingCameraScene):
                     self.camera.frame.animate.scale_to_fit_width(
                         input_plot.width * 2
                     ).move_to(input_plot),
-                    stroke_width_vt @ 1.5,
+                    stroke_width_vt @ 0.3,
                 ),
                 lag_ratio=0.3,
             )
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         A4.save_state()
         A3.save_state()
@@ -1812,19 +1814,611 @@ class FrequencyDependence(MovingCameraScene):
 
         self.wait(0.5)
 
-        input_1 = always_redraw(
+        opacity2 = VT(0)
+        opacity3 = VT(0)
+        opacity4 = VT(0)
+        offset2 = VT(0)
+        offset3 = VT(0)
+        offset4 = VT(0)
+        A2_single = VT(0.4)
+        A3_single = VT(0.2)
+        A4_single = VT(0.1)
+        A2_single_out = VT(0.4)
+        A3_single_out = VT(0.2)
+        A4_single_out = VT(0.1)
+        input2 = always_redraw(
             lambda: input_ax.plot(
-                lambda t: ~A1 * np.sin(2 * PI * f * t + ~phi0)
-                + ~A2 * np.sin(2 * PI * f2 * t + ~phi1)
-                + ~A3 * np.sin(2 * PI * f3 * t + ~phi2)
-                + ~A4 * np.sin(2 * PI * f4 * t + ~phi3),
+                lambda t: ~A2_single * np.sin(2 * PI * f2 * t + ~phi1) + ~offset2,
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=INPUT_COLOR,
+                stroke_opacity=~opacity2,
+            )
+        )
+        input3 = always_redraw(
+            lambda: input_ax.plot(
+                lambda t: ~A3_single * np.sin(2 * PI * f3 * t + ~phi2) + ~offset3,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=INPUT_COLOR,
+                stroke_opacity=~opacity3,
+            )
+        )
+        input4 = always_redraw(
+            lambda: input_ax.plot(
+                lambda t: ~A4_single * np.sin(2 * PI * f4 * t + ~phi3) + ~offset4,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=INPUT_COLOR,
+                stroke_opacity=~opacity4,
+            )
+        )
+        self.add(input2, input3, input4)
+
+        self.play(
+            FadeOut(nz_bw),
+            self.camera.frame.animate.scale(1.4).move_to(input_ax.c2p(0.5, 1.5)),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    offset4 @ 3,
+                    opacity4 @ 3,
+                    A4 @ 0,
+                ),
+                AnimationGroup(
+                    offset3 @ 2,
+                    opacity3 @ 2,
+                    A3 @ 0,
+                ),
+                AnimationGroup(
+                    offset2 @ 1,
+                    opacity2 @ 1,
+                    A2 @ 0,
+                ),
+                lag_ratio=0.5,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        f1_label = Text("1 GHz", font=FONT).scale(0.2).next_to(input_plot, LEFT)
+        f2_label = Text("2.4 GHz", font=FONT).scale(0.2).next_to(input2, LEFT)
+        f3_label = Text("4.3 GHz", font=FONT).scale(0.2).next_to(input3, LEFT)
+        f4_label = Text("6.8 GHz", font=FONT).scale(0.2).next_to(input4, LEFT)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        decomp_group = Group(
+            f1_label, f2_label, f3_label, f4_label, input_plot, input2, input3, input4
+        )
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    decomp_group.height * 1.4
+                ).move_to(decomp_group),
+                FadeIn(f4_label),
+                FadeIn(f3_label),
+                FadeIn(f2_label),
+                FadeIn(f1_label),
+                lag_ratio=0.3,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ax_x @ (self.camera.frame.get_center() + RIGHT * fw(self, 0.9))[0],
+            ax_y @ (self.camera.frame.get_center() + RIGHT * fw(self, 0.9))[1],
+            x_length @ fw(self, 0.7),
+            y_length @ fh(self, 0.7),
+            self.camera.frame.animate.scale_to_fit_width(fw(self, 1.8)).move_to(
+                self.camera.frame.get_center() + RIGHT * fw(self, 0.45)
+            ),
+        )
+
+        self.wait(0.5)
+
+        f1_dot_x = VT(0)
+        f1_dot_y = VT(0)
+        f1_dot_scale = VT(0)
+
+        xdot = always_redraw(
+            lambda: Dot(radius=DEFAULT_DOT_RADIUS * 0.5, color=BLUE)
+            .scale(~f1_dot_scale)
+            .move_to(ax.c2p(~f1_dot_x, ~f1_dot_y))
+            .set_z_index(3)
+        )
+        line_to_dot1_x = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(~f1_dot_x, 0),
+                xdot.get_center(),
+                color=BLUE,
+                dash_length=DEFAULT_DASH_LENGTH * 0.6,
+                dashed_ratio=0.6,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
+            ).set_z_index(2)
+        )
+        line_to_dot1_y = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(0, ax.i2gc(~f1_dot_x, plot)[1]),
+                xdot.get_center(),
+                color=BLUE,
+                dash_length=DEFAULT_DASH_LENGTH * 0.6,
+                dashed_ratio=0.6,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
+            ).set_z_index(2)
+        )
+        self.add(xdot)
+
+        self.play(LaggedStart(f1_dot_scale @ 1, f1_dot_x @ 1, lag_ratio=0.3))
+        self.add(line_to_dot1_x)
+
+        self.wait(0.5)
+
+        self.play(f1_dot_y @ ax.i2gc(1, plot)[1])
+        # self.play(xdot.animate.shift(UP))
+
+        self.wait(0.5)
+
+        f1_bez = CubicBezier(
+            input_plot.get_right() + [0.05, 0, 0],
+            input_plot.get_right() + [0.4, 0, 0],
+            xdot.get_center() + [-0.2, -0.2, 0],
+            xdot.get_center() + [-0.05, -0.05, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.play(LaggedStart(Create(line_to_dot1_y), Create(f1_bez), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        f1_gain = Text(
+            f"(G={ax.i2gc(1, plot)[1]:.1f} dB)", font=FONT
+        ).scale_to_fit_height(f1_label.height)
+        f1_gain[1].set_color(GREEN)
+        f1_label_group = (
+            Group(f1_label.copy(), f1_gain)
+            .arrange(RIGHT, SMALL_BUFF * 0.8)
+            .move_to(f1_label, RIGHT)
+        )
+
+        f2_gain = Text(
+            f"(G={ax.i2gc(2.4, plot)[1]:.1f} dB)", font=FONT
+        ).scale_to_fit_height(f2_label.height)
+        f2_gain[1].set_color(GREEN)
+        f2_label_group = (
+            Group(f2_label.copy(), f2_gain)
+            .arrange(RIGHT, SMALL_BUFF * 0.8)
+            .move_to(f2_label, RIGHT)
+        )
+
+        f3_gain = Text(
+            f"(G={ax.i2gc(4.3, plot)[1]:.1f} dB)", font=FONT
+        ).scale_to_fit_height(f3_label.height)
+        f3_gain[1].set_color(GREEN)
+        f3_label_group = (
+            Group(f3_label.copy(), f3_gain)
+            .arrange(RIGHT, SMALL_BUFF * 0.8)
+            .move_to(f3_label, RIGHT)
+        )
+
+        f4_gain = Text(
+            f"(G={ax.i2gc(6.8, plot)[1]:.1f} dB)", font=FONT
+        ).scale_to_fit_height(f4_label.height)
+        f4_gain[1].set_color(GREEN)
+        f4_label_group = (
+            Group(f4_label.copy(), f4_gain)
+            .arrange(RIGHT, SMALL_BUFF * 0.8)
+            .move_to(f4_label, RIGHT)
+        )
+
+        self.play(
+            LaggedStart(
+                Uncreate(f1_bez),
+                self.camera.frame.animate.scale(1.3).shift(LEFT * 0.28),
+                f1_label.animate.move_to(f1_label_group[0]),
+                LaggedStart(*[FadeIn(m) for m in f1_gain], lag_ratio=0.1),
+                lag_ratio=0.3,
             )
         )
 
-        # self.play()
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    f1_dot_x @ 2.4,
+                    f1_dot_y @ ax.i2gc(2.4, plot)[1],
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        f2_bez = CubicBezier(
+            input2.get_right() + [0.05, 0, 0],
+            input2.get_right() + [0.4, 0, 0],
+            xdot.get_center() + [-0.2, -0.2, 0],
+            xdot.get_center() + [-0.05, -0.05, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(f2_bez),
+                f2_label.animate.move_to(f2_label_group[0]),
+                LaggedStart(*[FadeIn(m) for m in f2_gain], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(f2_bez),
+                AnimationGroup(
+                    f1_dot_x @ 4.3,
+                    f1_dot_y @ ax.i2gc(4.3, plot)[1],
+                ),
+                lag_ratio=0.5,
+            )
+        )
+        f3_bez = CubicBezier(
+            input3.get_right() + [0.05, 0, 0],
+            input3.get_right() + [0.4, 0, 0],
+            xdot.get_center() + [-0.2, -0.2, 0],
+            xdot.get_center() + [-0.05, -0.05, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(f3_bez),
+                f3_label.animate.move_to(f3_label_group[0]),
+                LaggedStart(*[FadeIn(m) for m in f3_gain], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(f3_bez),
+                AnimationGroup(
+                    f1_dot_x @ 6.8,
+                    f1_dot_y @ ax.i2gc(6.8, plot)[1],
+                ),
+                lag_ratio=0.5,
+            )
+        )
+        f4_bez = CubicBezier(
+            input4.get_right() + [0.05, 0, 0],
+            input4.get_right() + [0.4, 0, 0],
+            xdot.get_center() + [-0.2, -0.2, 0],
+            xdot.get_center() + [-0.05, -0.05, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(f4_bez),
+                f4_label.animate.move_to(f4_label_group[0]),
+                LaggedStart(*[FadeIn(m) for m in f4_gain], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        plots = Group(input_plot, input2, input3, input4)
+        amp_new = amp.copy().next_to(plots, RIGHT, MED_LARGE_BUFF)
+        into_amp_up = CubicBezier(
+            input4.get_corner(UR) + [0.05, 0, 0],
+            input4.get_corner(UR) + [0.3, 0, 0],
+            amp_new.get_left() + [-0.3, 0, 0],
+            amp_new.get_left() + [-0.05, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+        into_amp_dn = CubicBezier(
+            input_plot.get_corner(DR) + [0.05, 0, 0],
+            input_plot.get_corner(DR) + [0.3, 0, 0],
+            amp_new.get_left() + [-0.3, 0, 0],
+            amp_new.get_left() + [-0.05, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                Uncreate(f4_bez),
+                ax_x + 3,
+                AnimationGroup(
+                    Create(into_amp_up),
+                    Create(into_amp_dn),
+                ),
+                GrowFromCenter(amp_new),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        output_ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 1],
+                tips=False,
+                x_length=amp.width * 1.5,
+                y_length=amp.height,
+            )
+            .next_to(amp_new, RIGHT, MED_LARGE_BUFF)
+            .set_y(input_ax.get_y())
+        )
+
+        output_offset1 = VT(-1 - 1)
+        output_offset2 = VT(2 - 1)
+        output_offset3 = VT(5 - 1)
+        output_offset4 = VT(7 - 1)
+        output_offset = VT(1.5)
+        A1_single = VT(0.5)
+        A1_single_out = VT(0.5)
+        g1 = VT(3)
+        g2 = VT(2.8)
+        g3 = VT(2.6)
+        g4 = VT(1)
+        output_f1_opacity = VT(0)
+        output_f2_opacity = VT(0)
+        output_f3_opacity = VT(0)
+        output_f4_opacity = VT(0)
+        output_opacity = VT(0)
+        output_en_1 = VT(1)
+        output_en_2 = VT(1)
+        output_en_3 = VT(1)
+        output_en_4 = VT(1)
+        output_en_1_full = VT(0)
+        output_en_2_full = VT(0)
+        output_en_3_full = VT(0)
+        output_en_4_full = VT(0)
+        output1 = always_redraw(
+            lambda: output_ax.plot(
+                lambda t: ~output_en_1
+                * ~g1
+                * ~A1_single
+                * np.sin(2 * PI * f1 * t + ~phi0)
+                + ~output_offset1,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=OUTPUT_COLOR,
+                stroke_opacity=~output_f1_opacity,
+            )
+        )
+        output2 = always_redraw(
+            lambda: output_ax.plot(
+                lambda t: ~output_en_2
+                * ~g2
+                * ~A2_single
+                * np.sin(2 * PI * f2 * t + ~phi1)
+                + ~output_offset2,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=OUTPUT_COLOR,
+                stroke_opacity=~output_f2_opacity,
+            )
+        )
+        output3 = always_redraw(
+            lambda: output_ax.plot(
+                lambda t: ~output_en_3
+                * ~g3
+                * ~A3_single
+                * np.sin(2 * PI * f3 * t + ~phi2)
+                + ~output_offset3,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=OUTPUT_COLOR,
+                stroke_opacity=~output_f3_opacity,
+            )
+        )
+        output4 = always_redraw(
+            lambda: output_ax.plot(
+                lambda t: ~output_en_4
+                * ~g4
+                * ~A4_single
+                * np.sin(2 * PI * f4 * t + ~phi3)
+                + ~output_offset4,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=OUTPUT_COLOR,
+                stroke_opacity=~output_f4_opacity,
+            )
+        )
+        output_gain_scale = VT(1)
+        output_plot = always_redraw(
+            lambda: output_ax.plot(
+                lambda t: ~output_gain_scale
+                * (
+                    ~output_en_1_full
+                    * ~g1
+                    * ~A1_single_out
+                    * np.sin(2 * PI * f1 * t + ~phi0)
+                    + ~output_en_2_full
+                    * ~g2
+                    * ~A2_single_out
+                    * np.sin(2 * PI * f2 * t + ~phi1)
+                    + ~output_en_3_full
+                    * ~g3
+                    * ~A3_single_out
+                    * np.sin(2 * PI * f3 * t + ~phi2)
+                    + ~output_en_4_full
+                    * ~g4
+                    * ~A4_single_out
+                    * np.sin(2 * PI * f4 * t + ~phi3)
+                )
+                + ~output_offset,
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=OUTPUT_COLOR,
+                stroke_opacity=~output_opacity,
+            )
+        )
+        self.add(output1, output2, output3, output4, output_plot)
+
+        from_amp_up = CubicBezier(
+            amp_new.get_right() + [0.05, 0, 0],
+            amp_new.get_right() + [0.3, 0, 0],
+            output4.get_corner(UL) + [-0.3, 0, 0],
+            output4.get_corner(UL) + [-0.05, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+        from_amp_dn = CubicBezier(
+            amp_new.get_right() + [0.05, 0, 0],
+            amp_new.get_right() + [0.3, 0, 0],
+            output1.get_corner(DL) + [-0.3, 0, 0],
+            output1.get_corner(DL) + [-0.05, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(RIGHT * 0.5),
+                AnimationGroup(
+                    Create(from_amp_up),
+                    Create(from_amp_dn),
+                ),
+                output_f1_opacity @ 1,
+                output_f2_opacity @ 1,
+                output_f3_opacity @ 1,
+                output_f4_opacity @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        from_amp = Line(
+            [(output_plot.get_left() + [-0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
+            [(amp_new.get_right() + [0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    output_offset2 @ 1.5,
+                    output_en_2 @ 0,
+                    output_f2_opacity @ 0,
+                    output_opacity @ 1,
+                    output_en_2_full @ 1,
+                ),
+                AnimationGroup(
+                    output_offset3 @ 1.5,
+                    output_en_3 @ 0,
+                    output_f3_opacity @ 0,
+                    output_en_3_full @ 1,
+                ),
+                AnimationGroup(
+                    output_offset1 @ 1.5,
+                    output_en_1 @ 0,
+                    output_f1_opacity @ 0,
+                    output_en_1_full @ 1,
+                ),
+                AnimationGroup(
+                    output_offset4 @ 1.5,
+                    output_en_4 @ 0,
+                    output_f4_opacity @ 0,
+                    output_en_4_full @ 1,
+                ),
+                AnimationGroup(
+                    ReplacementTransform(from_amp_dn, from_amp),
+                    Transform(from_amp_up, from_amp.copy()),
+                ),
+                lag_ratio=0.3,
+            ),
+            run_time=5,
+        )
+
+        self.wait(0.5)
+
+        to_amp = Line(
+            [(input_plot.get_right() + [0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
+            [(amp_new.get_left() + [-0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                input_offset @ 1.5,
+                AnimationGroup(
+                    A2_single @ 0,
+                    offset2 @ 1.5,
+                    opacity2 @ 0,
+                    A2 @ ~A2_single,
+                ),
+                AnimationGroup(
+                    A3_single @ 0,
+                    offset3 @ 1.5,
+                    opacity3 @ 0,
+                    A3 @ ~A3_single,
+                ),
+                AnimationGroup(
+                    A4_single @ 0,
+                    offset4 @ 1.5,
+                    opacity4 @ 0,
+                    A4 @ ~A4_single,
+                ),
+                AnimationGroup(
+                    ReplacementTransform(into_amp_dn, to_amp),
+                    Transform(into_amp_up, to_amp.copy()),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(output_gain_scale @ 20)
+
+        self.wait(0.5)
+
+        self.play(output_gain_scale @ 1)
+
+        self.wait(0.5)
+
+        arrow = Line(
+            input_plot.get_bottom(),
+            input_plot.get_bottom() + DOWN * 2,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+        f_plot_label = (
+            Text("Power / Frequency", font=FONT)
+            .scale_to_fit_width(fw(self, 0.5))
+            .next_to(arrow, DOWN, SMALL_BUFF)
+        )
+        self.add(f_plot_label)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(f_plot_label),
+                Create(arrow),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Uncreate(arrow), FadeOut(f_plot_label))
 
         self.wait(2)
 

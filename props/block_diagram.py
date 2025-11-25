@@ -217,14 +217,15 @@ def get_filt_block(width, passband="band"):
     return Group(filt_box, mid, hi, lo)
 
 
-def get_amp(width):
+def get_amp(width, stroke_width_mult=2):
     amp_box = RoundedRectangle(
         width=width,
         height=width,
-        stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        corner_radius=width * 0.25,
     ).set_z_index(1)
     amp_tri = (
-        Triangle(stroke_width=DEFAULT_STROKE_WIDTH * 2, color=GREEN)
+        Triangle(stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult, color=GREEN)
         .scale_to_fit_width(amp_box.width * 0.7)
         .rotate(PI / 6)
         .move_to(amp_box)
