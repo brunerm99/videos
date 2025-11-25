@@ -4,3 +4,7 @@ file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/108
 file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00002.mp4'
 file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00003.mp4'
 file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00004.mp4'
+file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00005.mp4'
+file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00006.mp4'
+file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00007.mp4'
+file 'file:/home/marchall/documents/videos/14_amp_gain/media/videos/amp_gain/1080p60/partial_movie_files/FreqSpectrum/uncached_00008.mp4'

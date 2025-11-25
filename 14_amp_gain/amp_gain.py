@@ -27,7 +27,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
