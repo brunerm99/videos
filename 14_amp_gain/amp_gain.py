@@ -27,7 +27,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -42,6 +42,7 @@ TARGET2_COLOR = ORANGE
 TARGET3_COLOR = BLUE
 INPUT_COLOR = BLUE
 OUTPUT_COLOR = ORANGE
+GAIN_COLOR = GREEN
 
 
 def skip_animations(b):
@@ -1530,7 +1531,7 @@ class FrequencyDependence(MovingCameraScene):
                 s21,
                 x_range=[0.3, 7, 1 / 200],
                 stroke_width=DEFAULT_STROKE_WIDTH * 0.6,
-                color=ORANGE,
+                color=GAIN_COLOR,
                 use_smoothing=False,
             ).set_z_index(1)
             return s21_plot
@@ -1808,9 +1809,16 @@ class FrequencyDependence(MovingCameraScene):
         #     )
         # )
 
-        nz_bw = MathTex(r"B > 0").next_to(input_plot, UP, MED_SMALL_BUFF)
+        nz_bw = MathTex(r"B > 0").scale(0.5).next_to(input_plot, UP, SMALL_BUFF * 0.5)
 
-        self.play(LaggedStart(*[FadeIn(m) for m in nz_bw[0]], lag_ratio=0.1))
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(UP * SMALL_BUFF * 0.5),
+                *[FadeIn(m) for m in nz_bw[0]],
+                lag_ratio=0.1,
+            )
+        )
 
         self.wait(0.5)
 
@@ -1857,7 +1865,9 @@ class FrequencyDependence(MovingCameraScene):
 
         self.play(
             FadeOut(nz_bw),
-            self.camera.frame.animate.scale(1.4).move_to(input_ax.c2p(0.5, 1.5)),
+            self.camera.frame.animate.restore()
+            .scale(1.4)
+            .move_to(input_ax.c2p(0.5, 1.5)),
         )
 
         self.wait(0.5)
@@ -1945,16 +1955,6 @@ class FrequencyDependence(MovingCameraScene):
                 stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
             ).set_z_index(2)
         )
-        line_to_dot1_y = always_redraw(
-            lambda: DashedLine(
-                ax.c2p(0, ax.i2gc(~f1_dot_x, plot)[1]),
-                xdot.get_center(),
-                color=BLUE,
-                dash_length=DEFAULT_DASH_LENGTH * 0.6,
-                dashed_ratio=0.6,
-                stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
-            ).set_z_index(2)
-        )
         self.add(xdot)
 
         self.play(LaggedStart(f1_dot_scale @ 1, f1_dot_x @ 1, lag_ratio=0.3))
@@ -1975,6 +1975,16 @@ class FrequencyDependence(MovingCameraScene):
             stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
         )
 
+        line_to_dot1_y = always_redraw(
+            lambda: DashedLine(
+                ax.c2p(0, ax.i2gc(~f1_dot_x, plot)[1]),
+                xdot.get_center(),
+                color=BLUE,
+                dash_length=DEFAULT_DASH_LENGTH * 0.6,
+                dashed_ratio=0.6,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.4,
+            ).set_z_index(2)
+        )
         self.play(LaggedStart(Create(line_to_dot1_y), Create(f1_bez), lag_ratio=0.3))
 
         self.wait(0.5)
@@ -2419,6 +2429,184 @@ class FrequencyDependence(MovingCameraScene):
         self.wait(0.5)
 
         self.play(Uncreate(arrow), FadeOut(f_plot_label))
+
+        self.wait(2)
+
+
+class FreqSpectrum(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        x_length = fw(self, 0.7)
+        y_length = fh(self, 0.6)
+        x_ticks = np.arange(0, 12, 2)
+        y_ticks = np.arange(-50, 10, 10)
+        fax = Axes(
+            x_range=[0, 8, 1],
+            y_range=[-50, 0, 5],
+            tips=False,
+            x_length=x_length,
+            y_length=y_length,
+            x_axis_config=dict(
+                numbers_with_elongated_ticks=x_ticks,
+                include_numbers=True,
+                numbers_to_include=x_ticks,
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+                label_constructor=lambda x: Text(x, font=FONT),
+                line_to_number_buff=MED_LARGE_BUFF,
+                decimal_number_config=dict(num_decimal_places=0),
+                exclude_origin_tick=False,
+                longer_tick_multiple=2,
+            ),
+            y_axis_config=dict(
+                numbers_with_elongated_ticks=y_ticks,
+                include_numbers=True,
+                exclude_origin_tick=False,
+                numbers_to_include=y_ticks,
+                numbers_to_exclude=[],
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+                label_constructor=lambda x: Text(x, font=FONT),
+                line_to_number_buff=MED_LARGE_BUFF,
+                decimal_number_config=dict(num_decimal_places=0),
+                longer_tick_multiple=2,
+            ),
+            axis_config=dict(
+                stroke_width=DEFAULT_STROKE_WIDTH,
+                tick_size=0.1,
+                # stroke_color=BLACK,
+            ),
+        ).shift(UP * 0.5 + RIGHT * 0.5)
+        fax.x_axis.shift((fax.c2p(0, -50) - fax.x_axis.n2p(0)) * UP)
+        xlabel = (
+            Text("Frequency", font=FONT)
+            .scale(0.7)
+            .next_to(fax.c2p(4, -50), DOWN, LARGE_BUFF)
+        )
+        ylabel = (
+            Text("Magnitude", font=FONT)
+            .scale(0.7)
+            .rotate(PI / 2)
+            .next_to(fax, LEFT, MED_SMALL_BUFF)
+        )
+        # self.add(fax, xlabel, ylabel)
+
+        max_time = 10
+        fs = 2**4
+
+        f1 = 1
+        f2 = 2.4
+        f3 = 4.3
+        f4 = 6.8
+        A1 = VT(0)
+        A2 = VT(0)
+        A3 = VT(0)
+        A4 = VT(0)
+        # A1 = VT(10 ** (0 / 10))
+        # A2 = VT(10 ** (-0.8 / 10))
+        # A3 = VT(10 ** (-1.5 / 10))
+        # A4 = VT(10 ** (-11 / 10))
+        X_k_opacity = VT(0)
+
+        def get_fft():
+            N = max_time * fs
+            t = np.linspace(0, max_time, N)
+            sig = np.sum(
+                [
+                    ~A * np.sin(2 * PI * f * t)
+                    for A, f in zip(
+                        [A1, A2, A3, A4],
+                        [f1, f2, f3, f4],
+                    )
+                ],
+                axis=0,
+            ) * signal.windows.blackman(N)
+
+            fft_len = 2**10
+            sig_fft = fftshift(np.abs(fft(sig, fft_len) / (N / 2)))
+            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+            sig_fft_log = np.clip(10 * np.log10(sig_fft), -50, 0)
+            f_fft_log = interp1d(freq, sig_fft_log, fill_value="extrapolate")
+            return fax.plot(
+                f_fft_log,
+                x_range=[0, 8, 1 / 200],
+                color=TX_COLOR,
+                stroke_opacity=~X_k_opacity,
+            )
+
+        X_k = always_redraw(get_fft)
+        self.add(X_k)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(fax),
+                Write(xlabel),
+                Write(ylabel),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        f1_label = Text("1 GHz", font=FONT).scale(0.5).next_to(fax.c2p(1, -5), UP)
+        f2_label = Text("2.4 GHz", font=FONT).scale(0.5).next_to(fax.c2p(2.4, -6), UP)
+        f3_label = Text("4.3 GHz", font=FONT).scale(0.5).next_to(fax.c2p(4.3, -10), UP)
+        f4_label = Text("6.8 GHz", font=FONT).scale(0.5).next_to(fax.c2p(6.8, -11), UP)
+
+        self.play(
+            LaggedStart(
+                X_k_opacity @ 1,
+                AnimationGroup(
+                    FadeIn(f1_label),
+                    A1 @ 0.5,
+                ),
+                AnimationGroup(
+                    FadeIn(f2_label),
+                    A2 @ 0.4,
+                ),
+                AnimationGroup(
+                    FadeIn(f3_label),
+                    A3 @ 0.2,
+                ),
+                AnimationGroup(
+                    FadeIn(f4_label),
+                    A4 @ 0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        specan = (
+            ImageMobject("../props/static/SpecAn_Empty.png")
+            .scale(2.1)
+            .shift(RIGHT * 4.2 + DOWN * 0.5)
+        )
+        # self.add(specan)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                FadeIn(specan),
+                self.camera.frame.animate.scale_to_fit_width(
+                    specan.width * 1.1
+                ).move_to(specan),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.restore(),
+                FadeOut(specan),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(2)
 
