@@ -63,7 +63,8 @@ class IntroV2(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         you = ImageMobject(
-            "../../../media/rf-channel-assets/VintageRaccoonStanding_NoBackground.png"
+            # "../../../media/rf-channel-assets/VintageRaccoonStanding_NoBackground.png"
+            "../../../Downloads/Chill Raccoon Standing.png"
         ).scale_to_fit_height(fh(self, 0.5))
         you_label = Text("You", font=FONT).next_to(you, DOWN, MED_SMALL_BUFF)
         an_rf = (
@@ -293,7 +294,7 @@ class IntroV2(MovingCameraScene):
             p1,
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -317,6 +318,99 @@ class IntroV2(MovingCameraScene):
             .animate(rate_func=rate_functions.there_and_back)
             .set_fill(opacity=0.5, color=YELLOW),
         )
+
+        self.wait(0.5)
+
+        amp_specs = ["OP1dB", "Gain", "Noise Figure", "OIP3", "..."]
+        filt_specs = ["Passband", "Stopband", "Ripple", "Insertion loss", "..."]
+        splitter_specs = ["Insertion loss", "Isolation", "Phase unbalance", "..."]
+        ps_specs = ["Phase error", "Settle time", "Insertion loss", "..."]
+
+        lna_specs = (
+            Text("\n".join(amp_specs), font=FONT)
+            .scale(0.7)
+            .next_to(lna, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        driver_specs = (
+            Text("\n".join(amp_specs), font=FONT)
+            .scale(0.7)
+            .next_to(driver, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        filt_specs = (
+            Text("\n".join(filt_specs), font=FONT)
+            .scale(0.7)
+            .next_to(bp_filt, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        ps_specs = (
+            Text("\n".join(ps_specs), font=FONT)
+            .scale(0.7)
+            .next_to(ps, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+        splitter_specs = (
+            Text("\n".join(splitter_specs), font=FONT)
+            .scale(0.7)
+            .next_to(splitter, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        # self.add(lna_specs, driver_specs, splitter_specs, filt_specs, ps_specs)
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(DOWN + RIGHT * 0.5),
+                Write(lna_specs),
+                Write(filt_specs),
+                Write(ps_specs),
+                Write(driver_specs),
+                Write(splitter_specs),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        episode_1 = Text("Episode 1:", font=FONT).scale(0.8)
+        amp_gain = Text("RF Amplifier Gain", font=FONT)
+        title_group = (
+            Group(episode_1, amp_gain)
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+        )
+        amp_gain[-4:].set_color(GREEN)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        # self.add(title_group)
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    TransformFromCopy(
+                        lna_specs[5:9], amp_gain[-4:].copy(), path_arc=PI / 3
+                    ),
+                    TransformFromCopy(
+                        driver_specs[5:9], amp_gain[-4:].copy(), path_arc=PI / 3
+                    ),
+                    # .copy()
+                    # .animate(run_time=3)
+                    # .set_color(GREEN)
+                    # .move_to(amp_gain[-4:]),
+                    self.camera.frame.animate.scale_to_fit_width(
+                        title_group.width * 2
+                    ).move_to(title_group),
+                    lag_ratio=0.05,
+                    run_time=3,
+                ),
+                Write(episode_1),
+                Write(amp_gain[:-4]),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
