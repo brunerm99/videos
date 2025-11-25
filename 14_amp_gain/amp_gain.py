@@ -17,6 +17,7 @@ sys.path.insert(0, "..")
 from props import (
     VideoMobject,
     WeatherRadarTower,
+    get_amp,
     get_blocks,
     get_filt_block,
     get_phase_shifter,
@@ -26,7 +27,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -1652,7 +1653,7 @@ class FrequencyDependence(MovingCameraScene):
             Text("Frequency (GHz)", font=FONT).scale(0.2).next_to(ax, DOWN, SMALL_BUFF)
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -1683,6 +1684,147 @@ class FrequencyDependence(MovingCameraScene):
             x_length @ fw(self, 0.7),
             run_time=3,
         )
+
+        self.wait(0.5)
+
+        amp = (
+            get_amp(width=fh(self, 1))
+            .move_to(self.camera.frame)
+            .shift(UP * fh(self, 5))
+        )
+        self.add(amp)
+
+        input_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 1.5,
+            y_length=amp.height,
+        ).next_to(amp, LEFT, 0)
+        input_ax.shift(amp.get_left() - input_ax.c2p(1, 0))
+
+        A1 = VT(0.5)
+        A2 = VT(0)
+        A3 = VT(0)
+        A4 = VT(0)
+        f = 4
+        f2 = 8.8
+        f3 = 16.7
+        f4 = 24
+        phi0 = VT(0)
+        phi1 = VT(0)
+        phi2 = VT(0)
+        phi3 = VT(0)
+        stroke_width_vt = VT(2)
+        input_plot = always_redraw(
+            lambda: input_ax.plot(
+                lambda t: ~A1 * np.sin(2 * PI * f * t + ~phi0)
+                + ~A2 * np.sin(2 * PI * f2 * t + ~phi1)
+                + ~A3 * np.sin(2 * PI * f3 * t + ~phi2)
+                + ~A4 * np.sin(2 * PI * f4 * t + ~phi3),
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=INPUT_COLOR,
+            )
+        )
+
+        output_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 1.5,
+            y_length=amp.height,
+        )
+        output_ax.shift(amp.get_right() - output_ax.c2p(0, 0))
+
+        f = 4
+        output_plot = output_ax.plot(
+            lambda t: 2 * ~A1 * np.sin(2 * PI * f * t),
+            stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+            x_range=[0, 1, 1 / 200],
+            color=OUTPUT_COLOR,
+        )
+        self.add(output_plot, input_plot)
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(amp.height / 0.3).move_to(amp)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(amp),
+                FadeOut(output_plot),
+                AnimationGroup(
+                    self.camera.frame.animate.scale_to_fit_width(
+                        input_plot.width * 2
+                    ).move_to(input_plot),
+                    stroke_width_vt @ 1.5,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        A4.save_state()
+        A3.save_state()
+        A2.save_state()
+        A1.save_state()
+        phi0.save_state()
+        phi1.save_state()
+        phi2.save_state()
+        phi3.save_state()
+        self.play(
+            LaggedStart(
+                A4 @ 0.1,
+                phi0 @ (PI * 0.2),
+                A1 @ 0.2,
+                phi1 @ (PI * 0.4),
+                A3 @ 0.2,
+                phi2 @ (PI * 0.6),
+                phi3 @ (PI * 0.1),
+                A2 @ 0.4,
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+        # self.play(
+        #     LaggedStart(
+        #         A2 @ 0,
+        #         phi3 @ 0,
+        #         phi2 @ 0,
+        #         A3 @ 0,
+        #         phi1 @ 0,
+        #         A1 @ 0.5,
+        #         phi0 @ 0,
+        #         A4 @ 0,
+        #         lag_ratio=0.2,
+        #     )
+        # )
+
+        nz_bw = MathTex(r"B > 0").next_to(input_plot, UP, MED_SMALL_BUFF)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in nz_bw[0]], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        input_1 = always_redraw(
+            lambda: input_ax.plot(
+                lambda t: ~A1 * np.sin(2 * PI * f * t + ~phi0)
+                + ~A2 * np.sin(2 * PI * f2 * t + ~phi1)
+                + ~A3 * np.sin(2 * PI * f3 * t + ~phi2)
+                + ~A4 * np.sin(2 * PI * f4 * t + ~phi3),
+                stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
+                x_range=[0, 1, 1 / 200],
+                color=INPUT_COLOR,
+            )
+        )
+
+        # self.play()
 
         self.wait(2)
 

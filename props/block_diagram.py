@@ -215,3 +215,19 @@ def get_filt_block(width, passband="band"):
         color=BLUE if passband == "low" else RED,
     )
     return Group(filt_box, mid, hi, lo)
+
+
+def get_amp(width):
+    amp_box = RoundedRectangle(
+        width=width,
+        height=width,
+        stroke_width=DEFAULT_STROKE_WIDTH * 2,
+    ).set_z_index(1)
+    amp_tri = (
+        Triangle(stroke_width=DEFAULT_STROKE_WIDTH * 2, color=GREEN)
+        .scale_to_fit_width(amp_box.width * 0.7)
+        .rotate(PI / 6)
+        .move_to(amp_box)
+        .set_z_index(1)
+    )
+    return Group(amp_box, amp_tri)

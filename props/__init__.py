@@ -1,6 +1,7 @@
 # props/__init__.py
 
 from .block_diagram import (
+    get_amp,
     get_bd_animation,
     get_blocks,
     get_diode,
