@@ -2438,7 +2438,7 @@ class FreqSpectrum(MovingCameraScene):
         self.next_section(skip_animations=skip_animations(True))
         x_length = fw(self, 0.7)
         y_length = fh(self, 0.6)
-        x_ticks = np.arange(0, 12, 2)
+        x_ticks = np.arange(0, 10, 2)
         y_ticks = np.arange(-50, 10, 10)
         fax = Axes(
             x_range=[0, 8, 1],
@@ -2477,12 +2477,12 @@ class FreqSpectrum(MovingCameraScene):
         ).shift(UP * 0.5 + RIGHT * 0.5)
         fax.x_axis.shift((fax.c2p(0, -50) - fax.x_axis.n2p(0)) * UP)
         xlabel = (
-            Text("Frequency", font=FONT)
+            Text("Frequency (GHz)", font=FONT)
             .scale(0.7)
             .next_to(fax.c2p(4, -50), DOWN, LARGE_BUFF)
         )
         ylabel = (
-            Text("Magnitude", font=FONT)
+            Text("Power (dBm)", font=FONT)
             .scale(0.7)
             .rotate(PI / 2)
             .next_to(fax, LEFT, MED_SMALL_BUFF)
@@ -2506,34 +2506,59 @@ class FreqSpectrum(MovingCameraScene):
         # A4 = VT(10 ** (-11 / 10))
         X_k_opacity = VT(0)
 
-        def get_fft():
-            N = max_time * fs
-            t = np.linspace(0, max_time, N)
-            sig = np.sum(
-                [
-                    ~A * np.sin(2 * PI * f * t)
-                    for A, f in zip(
-                        [A1, A2, A3, A4],
-                        [f1, f2, f3, f4],
+        x1 = VT(8)
+
+        def get_fft(
+            gain=None, color=BLUE, x0_inp=None, x1_inp=None, width=DEFAULT_STROKE_WIDTH
+        ):
+            def updater():
+                if x0_inp is None:
+                    x0_local = VT(0)
+                else:
+                    x0_local = x0_inp
+                if x1_inp is None:
+                    x1_local = x1
+                else:
+                    x1_local = x1_inp
+                N = max_time * fs
+                t = np.linspace(0, max_time, N)
+                sig = np.sum(
+                    [
+                        ~A * np.sin(2 * PI * f * t)
+                        for A, f in zip(
+                            [A1, A2, A3, A4],
+                            [f1, f2, f3, f4],
+                        )
+                    ],
+                    axis=0,
+                ) * signal.windows.blackman(N)
+
+                fft_len = 2**10
+                sig_fft = fftshift(np.abs(fft(sig, fft_len) / (N / 2)))
+                freq = np.linspace(-fs / 2, fs / 2, fft_len)
+
+                sig_fft_log = 10 * np.log10(sig_fft)
+                if gain is not None:
+                    f_fft_log = interp1d(
+                        freq,
+                        np.clip(sig_fft_log + gain(freq), -50, None),
+                        fill_value="extrapolate",
                     )
-                ],
-                axis=0,
-            ) * signal.windows.blackman(N)
+                else:
+                    f_fft_log = interp1d(
+                        freq, np.clip(sig_fft_log, -50, None), fill_value="extrapolate"
+                    )
+                return fax.plot(
+                    f_fft_log,
+                    x_range=[~x0_local, ~x1_local, 1 / 200],
+                    color=color,
+                    stroke_opacity=~X_k_opacity,
+                    stroke_width=width,
+                )
 
-            fft_len = 2**10
-            sig_fft = fftshift(np.abs(fft(sig, fft_len) / (N / 2)))
-            freq = np.linspace(-fs / 2, fs / 2, fft_len)
+            return updater
 
-            sig_fft_log = np.clip(10 * np.log10(sig_fft), -50, 0)
-            f_fft_log = interp1d(freq, sig_fft_log, fill_value="extrapolate")
-            return fax.plot(
-                f_fft_log,
-                x_range=[0, 8, 1 / 200],
-                color=TX_COLOR,
-                stroke_opacity=~X_k_opacity,
-            )
-
-        X_k = always_redraw(get_fft)
+        X_k = always_redraw(get_fft())
         self.add(X_k)
 
         self.wait(0.5)
@@ -2578,7 +2603,7 @@ class FreqSpectrum(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         specan = (
             ImageMobject("../props/static/SpecAn_Empty.png")
@@ -2606,6 +2631,134 @@ class FreqSpectrum(MovingCameraScene):
                 FadeOut(specan),
                 lag_ratio=0.3,
             )
+        )
+
+        self.wait(0.5)
+
+        amp = rf.Network("../../notebooks/data/ADL8154ACPZN_SParameters_25C.S2p")
+        bw_mask = (amp.f > 0) & (amp.f < 8e9)
+        gain_top = 20
+        s21 = interp1d(
+            amp.f[bw_mask] / 1e9,
+            amp.s_db[bw_mask][:, 1, 0] - gain_top,
+            fill_value="extrapolate",
+        )
+        s21_plot = always_redraw(
+            lambda: fax.plot(s21, color=GREEN, x_range=[0, ~x1, 1 / 200])
+        )
+        gain_ticks = np.arange(0, gain_top + 4, 4)
+
+        gnl = NumberLine(
+            x_range=[0, gain_top, 2],
+            length=fax.y_axis.length,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+            tick_size=0.1,
+            numbers_with_elongated_ticks=gain_ticks,
+            include_numbers=True,
+            exclude_origin_tick=False,
+            numbers_to_include=gain_ticks,
+            numbers_to_exclude=[],
+            font_size=DEFAULT_FONT_SIZE * 0.5,
+            label_constructor=lambda x: Text(x, font=FONT),
+            line_to_number_buff=MED_LARGE_BUFF,
+            decimal_number_config=dict(num_decimal_places=0),
+            longer_tick_multiple=2,
+            label_direction=RIGHT,
+            rotation=PI / 2,
+        )
+        gnl.shift(fax.c2p(8, -50) - gnl.n2p(0))
+        gain_label = (
+            Text("Gain (dB)", font=FONT, color=GAIN_COLOR)
+            .rotate(PI / 2)
+            .scale_to_fit_width(ylabel.width)
+            .next_to(gnl, RIGHT, MED_SMALL_BUFF)
+        )
+        all_group = Group(fax, gnl, xlabel, ylabel, gain_label)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    all_group.width * 1.15
+                ).move_to(all_group),
+                Create(gnl),
+                Write(gain_label),
+                AnimationGroup(
+                    Create(s21_plot),
+                    LaggedStart(
+                        f1_label.animate.set_opacity(0),
+                        f2_label.animate.set_opacity(0),
+                        f3_label.animate.set_opacity(0),
+                        f4_label.animate.set_opacity(0),
+                        lag_ratio=0.2,
+                    ),
+                ),
+                # ylabel.animate.set_color(BLUE),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        s21_full = interp1d(
+            amp.f[bw_mask] / 1e9,
+            amp.s_db[bw_mask][:, 1, 0],
+            fill_value="extrapolate",
+        )
+
+        self.play(x1 @ 0)
+        output_plot = always_redraw(get_fft(s21_full, OUTPUT_COLOR))
+        self.add(output_plot)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            x1.animate(run_time=12).set_value(8),
+            self.camera.frame.animate.shift(UP * 0.6),
+        )
+
+        self.wait(0.5)
+
+        x0_inp = VT(0)
+        x1_inp = VT(0)
+        input_plot_highlight = always_redraw(
+            get_fft(
+                color=YELLOW,
+                x0_inp=x0_inp,
+                x1_inp=x1_inp,
+                width=DEFAULT_STROKE_WIDTH * 2,
+            )
+        )
+        self.add(input_plot_highlight)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(LaggedStart(x1_inp @ 8, x0_inp @ 8, lag_ratio=0.2), run_time=2)
+
+        self.remove(input_plot_highlight)
+        x0_inp @= 0
+        x1_inp @= 0
+
+        self.wait(0.5)
+
+        gain_plot = always_redraw(
+            lambda: fax.plot(
+                s21,
+                color=YELLOW,
+                x_range=[~x0_inp, ~x1_inp, 1 / 200],
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+        )
+        self.add(gain_plot)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(LaggedStart(x1_inp @ 8, x0_inp @ 8, lag_ratio=0.2), run_time=2)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            self.camera.frame.animate.scale(10).shift(RIGHT * 100 + DOWN * 100),
+            run_time=2,
         )
 
         self.wait(2)
