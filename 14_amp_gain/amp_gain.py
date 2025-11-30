@@ -668,16 +668,29 @@ class Amp(MovingCameraScene):
         self.wait(0.5)
 
         gain_eqn = (
-            MathTex(r"G = \frac{V_{\text{out}}}{V_{\text{in}}} = \frac{2}{1}")
+            MathTex(r"G = \frac{\text{out}}{\text{in}}")
             .scale(2)
             .move_to(gain_sym)
             .shift(DOWN / 2)
         )
         gain_eqn[0][0].set_color(GREEN)
-        gain_eqn[0][2:6].set_color(OUTPUT_COLOR)
-        gain_eqn[0][7:10].set_color(INPUT_COLOR)
-        gain_eqn[0][11].set_color(OUTPUT_COLOR)
-        gain_eqn[0][13].set_color(INPUT_COLOR)
+        gain_eqn[0][2:5].set_color(OUTPUT_COLOR)
+        gain_eqn[0][6:].set_color(INPUT_COLOR)
+
+        gain_eqn_pv = (
+            MathTex(
+                r"G = \frac{\text{out}}{\text{in}} \Rightarrow \frac{V_{\text{out}}}{V_{\text{in}}} \text{ or } \frac{P_{\text{out}}}{P_{\text{in}}}"
+            )
+            .scale(2)
+            .move_to(gain_eqn)
+        )
+        gain_eqn_pv[0][0].set_color(GREEN)
+        gain_eqn_pv[0][2:5].set_color(OUTPUT_COLOR)
+        gain_eqn_pv[0][6:8].set_color(INPUT_COLOR)
+        gain_eqn_pv[0][9:13].set_color(OUTPUT_COLOR)
+        gain_eqn_pv[0][19:23].set_color(OUTPUT_COLOR)
+        gain_eqn_pv[0][14:17].set_color(INPUT_COLOR)
+        gain_eqn_pv[0][24:].set_color(INPUT_COLOR)
 
         self.play(
             LaggedStart(
@@ -711,7 +724,7 @@ class Amp(MovingCameraScene):
             stroke_width=DEFAULT_STROKE_WIDTH * 2,
         )
         vin_label = (
-            MathTex(r"V_{\text{in}}")
+            MathTex(r"\text{in}")
             .scale(2)
             .set_color(INPUT_COLOR)
             .next_to(ip_ld, DOWN, MED_SMALL_BUFF)
@@ -737,7 +750,7 @@ class Amp(MovingCameraScene):
             stroke_width=DEFAULT_STROKE_WIDTH * 2,
         )
         vout_label = (
-            MathTex(r"V_{\text{out}}")
+            MathTex(r"\text{out}")
             .scale(2)
             .set_color(OUTPUT_COLOR)
             .next_to(op_ld, DOWN, MED_SMALL_BUFF)
@@ -751,19 +764,14 @@ class Amp(MovingCameraScene):
                 Create(ip_lu),
                 LaggedStart(*[FadeIn(m) for m in vin_label[0]], lag_ratio=0.1),
                 lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
+            ),
             LaggedStart(
                 Create(op_ld),
                 Create(op_line),
                 Create(op_lu),
                 LaggedStart(*[FadeIn(m) for m in vout_label[0]], lag_ratio=0.1),
                 lag_ratio=0.2,
-            )
+            ),
         )
 
         self.wait(0.5)
@@ -772,48 +780,58 @@ class Amp(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                ReplacementTransform(vout_label[0], gain_eqn[0][2:6], path_arc=-PI / 3),
-                Create(gain_eqn[0][6]),
-                ReplacementTransform(vin_label[0], gain_eqn[0][7:10], path_arc=PI / 3),
+                ReplacementTransform(vout_label[0], gain_eqn[0][2:5], path_arc=-PI / 3),
+                Create(gain_eqn[0][5]),
+                ReplacementTransform(vin_label[0], gain_eqn[0][6:], path_arc=PI / 3),
                 lag_ratio=0.2,
             )
         )
 
         self.wait(0.5)
 
-        self.wait(0.5)
-
         self.play(
             LaggedStart(
-                *[FadeIn(m) for m in gain_eqn[0][10:]],
-                lag_ratio=0.2,
+                ReplacementTransform(gain_eqn[0][:8], gain_eqn_pv[0][:8]),
+                GrowFromCenter(gain_eqn_pv[0][8]),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in gain_eqn_pv[0][9:17]],
+                    lag_ratio=0.05,
+                ),
+                GrowFromCenter(gain_eqn_pv[0][17:19]),
+                LaggedStart(
+                    *[GrowFromCenter(m) for m in gain_eqn_pv[0][19:]],
+                    lag_ratio=0.05,
+                ),
+                lag_ratio=0.4,
             )
         )
 
         self.wait(0.5)
 
         gain_soln = (
-            MathTex(r"G = \frac{V_{\text{out}}}{V_{\text{in}}} = 2 \ [\text{unitless}]")
+            MathTex(r"G = \frac{\text{out}}{\text{in}} = \frac{2}{1}")
             .scale(2)
-            .move_to(gain_eqn, LEFT)
+            .move_to(gain_eqn_pv)
         )
         gain_soln[0][0].set_color(GREEN)
-        gain_soln[0][2:6].set_color(OUTPUT_COLOR)
-        gain_soln[0][7:10].set_color(INPUT_COLOR)
+        gain_soln[0][2:5].set_color(OUTPUT_COLOR)
+        gain_soln[0][6:8].set_color(INPUT_COLOR)
+        gain_soln[0][9].set_color(OUTPUT_COLOR)
+        gain_soln[0][11].set_color(INPUT_COLOR)
+
+        self.next_section(skip_animations=skip_animations(False))
 
         self.play(
             LaggedStart(
-                ReplacementTransform(gain_eqn[0][:11], gain_soln[0][:11]),
-                ShrinkToCenter(gain_eqn[0][12]),
-                ShrinkToCenter(gain_eqn[0][13]),
-                ReplacementTransform(gain_eqn[0][11], gain_soln[0][11]),
+                LaggedStart(*[FadeOut(m) for m in gain_eqn_pv[0][8:]], lag_ratio=0.02),
+                ReplacementTransform(gain_eqn_pv[0][:8], gain_soln[0][:8]),
+                GrowFromCenter(gain_soln[0][8]),
+                GrowFromCenter(gain_soln[0][9]),
+                GrowFromCenter(gain_soln[0][10]),
+                GrowFromCenter(gain_soln[0][11]),
                 lag_ratio=0.3,
             )
         )
-
-        self.wait(0.5)
-
-        self.play(LaggedStart(*[FadeIn(m) for m in gain_soln[0][12:]]))
 
         self.wait(0.5)
 
@@ -822,22 +840,15 @@ class Amp(MovingCameraScene):
         vpv = (
             MathTex(r"\left[ \frac{V}{V} \right]")
             .scale(2)
-            .move_to(gain_soln[0][12:], LEFT)
+            .next_to(gain_soln, RIGHT, MED_SMALL_BUFF)
         )
-        wpw = (
-            MathTex(r"\left[ \frac{W}{W} \right]")
-            .scale(2)
-            .move_to(gain_soln[0][12:], LEFT)
-        )
+        vpv.shift((gain_soln[0][-2].get_y() - vpv[0][2].get_y()) * UP)
+        wpw = MathTex(r"\left[ \frac{W}{W} \right]").scale(2).move_to(vpv, LEFT)
+        wpw.shift((vpv[0][2].get_y() - wpw[0][2].get_y()) * UP)
 
         self.play(
             LaggedStart(
-                ReplacementTransform(gain_soln[0][12], vpv[0][0]),
-                FadeOut(gain_soln[0][13:-1]),
-                GrowFromCenter(vpv[0][1]),
-                GrowFromCenter(vpv[0][2]),
-                GrowFromCenter(vpv[0][3]),
-                ReplacementTransform(gain_soln[0][-1], vpv[0][-1]),
+                *[GrowFromCenter(m) for m in vpv[0]],
                 lag_ratio=0.2,
             )
         )
@@ -871,6 +882,12 @@ class Amp(MovingCameraScene):
 
         self.play(
             LaggedStart(
+                ShrinkToCenter(gain_soln[0][-1]),
+                ShrinkToCenter(gain_soln[0][-2]),
+                gain_soln[0][-3].animate.set_y(gain_soln[0][-2].get_y()),
+                lag_ratio=0.3,
+            ),
+            LaggedStart(
                 *[
                     FadeOut(m, shift=shift)
                     for m, shift in zip(
@@ -879,7 +896,7 @@ class Amp(MovingCameraScene):
                     )
                 ],
                 lag_ratio=0.05,
-            )
+            ),
         )
 
         self.wait(0.5)
@@ -967,8 +984,31 @@ class Amp(MovingCameraScene):
         self.wait(0.5)
 
         self.remove(ip_ld, ip_line, ip_lu, op_ld, op_line, op_lu)
-        # self.play(self.camera.frame.animate.restore())
-        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 3)))
+        self.play(self.camera.frame.animate.restore())
+        # self.play(self.camera.frame.animate.shift(DOWN * fh(self, 3)))
+
+        db_label = (
+            Text("dB", font=FONT)
+            .scale_to_fit_width(fw(self, 0.15))
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self, 1.5))
+            .set_y(gain_soln.get_y())
+        )
+        self.add(db_label)
+
+        arrow = Arrow(gain_soln.get_right(), db_label.get_left())
+
+        self.play(
+            LaggedStart(
+                GrowArrow(arrow),
+                self.camera.frame.animate.move_to(db_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(arrow))
 
         self.wait(2)
 
@@ -1164,8 +1204,92 @@ class DB(MovingCameraScene):
 class DB2(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
-        db_label = Text("dB", font=FONT).scale(2)
-        self.play(Write(db_label))
+        db_label = Text("dB", font=FONT).scale_to_fit_width(fw(self, 0.15))
+        # self.play(Write(db_label))
+        self.add(db_label)
+
+        self.wait(0.5)
+
+        of_vpv = (
+            MathTex(r"\left( \frac{V}{V} \right)")
+            .scale_to_fit_height(db_label.height * 2)
+            .next_to(self.camera.frame.get_right(), RIGHT)
+        )
+
+        self.play(Group(db_label, of_vpv).animate.arrange(RIGHT, MED_SMALL_BUFF))
+
+        self.wait(0.5)
+
+        of_wpw = (
+            MathTex(r"\left( \frac{W}{W} \right)")
+            .scale_to_fit_height(db_label.height * 2)
+            .move_to(of_vpv, LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                *[ReplacementTransform(a, b) for a, b in zip(of_vpv[0], of_wpw[0])],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        vpv_to_log = MathTex(
+            r"20 \cdot \log_{10}{\left( \frac{V}{V} \right)}"
+        ).scale_to_fit_height(db_label.height * 2)
+        wpw_to_log = MathTex(
+            r"10 \cdot \log_{10}{\left( \frac{W}{W} \right)}"
+        ).scale_to_fit_height(db_label.height * 2)
+
+        xpx_group = Group(vpv_to_log, wpw_to_log).arrange(DOWN, LARGE_BUFF)
+
+        db_group = Group(db_label.copy(), xpx_group).arrange(RIGHT, LARGE_BUFF * 3)
+
+        vpv_bez = CubicBezier(
+            db_group[0].get_right() + [0.1, 0, 0],
+            db_group[0].get_right() + [1, 0, 0],
+            vpv_to_log.get_left() + [-1, 0, 0],
+            vpv_to_log.get_left() + [-0.1, 0, 0],
+        )
+        wpw_bez = CubicBezier(
+            db_group[0].get_right() + [0.1, 0, 0],
+            db_group[0].get_right() + [1, 0, 0],
+            wpw_to_log.get_left() + [-1, 0, 0],
+            wpw_to_log.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2),
+                db_label.animate.move_to(db_group[0]),
+                ReplacementTransform(of_wpw[0], wpw_to_log[0][8:]),
+                Create(wpw_bez),
+                LaggedStart(*[FadeIn(m) for m in wpw_to_log[0][:8]]),
+                Create(vpv_bez),
+                LaggedStart(*[FadeIn(m) for m in vpv_to_log[0]]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(vpv_bez),
+                    Uncreate(wpw_bez),
+                ),
+                wpw_to_log.animate.set_opacity(0.1).shift(DOWN),
+                Unwrite(db_label),
+                self.camera.frame.animate.scale_to_fit_width(
+                    vpv_to_log.width * 1.5
+                ).move_to(vpv_to_log),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
@@ -1219,12 +1343,12 @@ class DB2(MovingCameraScene):
             )
             .arrange(RIGHT, 0)
             .scale_to_fit_width(fw(self))
-            .next_to(db_label, DOWN, LARGE_BUFF)
+            .next_to(vpv_to_log, DOWN, LARGE_BUFF * 4)
         )
+        self.remove(wpw_to_log)
 
         self.play(
             LaggedStart(
-                FadeOut(db_label),
                 Create(bd_group[0]),
                 GrowFromCenter(bd_group[1]),
                 Create(bd_group[2]),
@@ -1245,7 +1369,9 @@ class DB2(MovingCameraScene):
         self.play(
             LaggedStart(
                 bd_group[2].animate.set_opacity(0.1),
-                bd_group[3].animate.set_opacity(0.1),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in bd_group[3]]
+                ),
                 bd_group[4].animate.set_opacity(0.1),
                 AnimationGroup(
                     bd_group[5][0].animate.set_stroke(opacity=0.1),
@@ -1259,16 +1385,14 @@ class DB2(MovingCameraScene):
 
         self.wait(0.5)
 
-        lna_gain = (
-            MathTex(r"G = 17\times").scale(1.8).next_to(lna, DOWN, MED_SMALL_BUFF)
-        )
+        lna_gain = MathTex(r"G = 17").scale(1.8).next_to(lna, DOWN, MED_SMALL_BUFF)
         lna_gain[0][0].set_color(GREEN)
         filt_gain = (
-            MathTex(r"G = 0.63\times").scale(1.8).next_to(bp_filt, DOWN, MED_SMALL_BUFF)
+            MathTex(r"G = 0.63").scale(1.8).next_to(bp_filt, DOWN, MED_SMALL_BUFF)
         )
         filt_gain[0][0].set_color(RED)
         driver_gain = (
-            MathTex(r"G = 8.2\times").scale(1.8).next_to(driver, DOWN, MED_SMALL_BUFF)
+            MathTex(r"G = 8.2").scale(1.8).next_to(driver, DOWN, MED_SMALL_BUFF)
         )
         driver_gain[0][0].set_color(GREEN)
 
@@ -1285,7 +1409,7 @@ class DB2(MovingCameraScene):
                     lna_gain.animate.set_opacity(0.1),
                 ),
                 bd_group[2].animate.set_opacity(1),
-                bd_group[3].animate.set_opacity(1),
+                AnimationGroup(*[m.animate.set_stroke(opacity=1) for m in bd_group[3]]),
                 FadeIn(filt_gain),
                 lag_ratio=0.15,
             )
@@ -1295,7 +1419,9 @@ class DB2(MovingCameraScene):
         self.play(
             LaggedStart(
                 bd_group[2].animate.set_opacity(0.1),
-                bd_group[3].animate.set_opacity(0.1),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in bd_group[3]]
+                ),
                 filt_gain.animate.set_opacity(0.1),
                 bd_group[4].animate.set_opacity(1),
                 AnimationGroup(
@@ -1308,7 +1434,7 @@ class DB2(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -1319,7 +1445,7 @@ class DB2(MovingCameraScene):
                 ),
                 lna_gain.animate.set_opacity(1).scale(0.8),
                 bd_group[2].animate.set_opacity(1),
-                bd_group[3].animate.set_opacity(1),
+                AnimationGroup(*[m.animate.set_stroke(opacity=1) for m in bd_group[3]]),
                 filt_gain.animate.set_opacity(1).scale(0.8),
                 driver_gain.animate.scale(0.8),
                 bd_group[6].animate.set_opacity(1),
@@ -1342,22 +1468,26 @@ class DB2(MovingCameraScene):
         )
         g_tot_equal[0][0].set_color(GREEN)
 
+        self.next_section(skip_animations=skip_animations(True))
+
         self.play(
             LaggedStart(
                 self.camera.frame.animate.shift(DOWN),
                 FadeIn(g_tot[0][0]),
                 FadeIn(g_tot[0][1:6]),
                 FadeIn(g_tot[0][6]),
-                TransformFromCopy(lna_gain[0][2:-1], g_tot[0][7:9]),
+                TransformFromCopy(lna_gain[0][2:], g_tot[0][7:9]),
                 FadeIn(g_tot[0][9]),
-                TransformFromCopy(filt_gain[0][2:-1], g_tot[0][10:14]),
+                TransformFromCopy(filt_gain[0][2:], g_tot[0][10:14]),
                 FadeIn(g_tot[0][14]),
-                TransformFromCopy(driver_gain[0][2:-1], g_tot[0][15:18]),
+                TransformFromCopy(driver_gain[0][2:], g_tot[0][15:18]),
                 lag_ratio=0.3,
             )
         )
 
         self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -1448,6 +1578,252 @@ class DB2(MovingCameraScene):
                 lag_ratio=0.3,
             )
         )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        g_tot_db = (
+            MathTex(r"G_{\text{dB,tot}} = 24.6 - 4.0 + 18.3 \approx 40 \text{ dB}")
+            .scale(1.5)
+            .next_to(filt_db, DOWN, LARGE_BUFF)
+        )
+        g_tot_db[0][:7].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                FadeIn(g_tot_db[0][:7]),
+                GrowFromCenter(g_tot_db[0][7]),
+                TransformFromCopy(lna_db[0][4:-2], g_tot_db[0][8:12]),
+                TransformFromCopy(filt_db[0][4], g_tot_db[0][12]),
+                TransformFromCopy(filt_db[0][5:8], g_tot_db[0][13:16]),
+                GrowFromCenter(g_tot_db[0][16]),
+                TransformFromCopy(driver_db[0][4:8], g_tot_db[0][17:21]),
+                *[FadeIn(m) for m in g_tot_db[0][21:]],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        wpw_to_log = MathTex(
+            r"10 \cdot \log_{10}{\left( \frac{W}{W} \right)}"
+        ).scale_to_fit_height(db_label.height * 2)
+        ne = MathTex(r"\neq").scale(3).set_color(RED)
+
+        log_group = (
+            Group(vpv_to_log.copy(), ne, wpw_to_log)
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .move_to(vpv_to_log)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(log_group),
+                vpv_to_log.animate.move_to(log_group[0]),
+                GrowFromCenter(ne),
+                FadeIn(wpw_to_log),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        table = (
+            ImageMobject("./static/adl8154-table.png")
+            .scale_to_fit_width(fw(self, 0.7))
+            .next_to(log_group, UP, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(log_group, table).height * 1.1
+            ).move_to(Group(log_group, table)),
+            GrowFromCenter(table),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        gain_box = (
+            Rectangle(
+                height=table.height * 0.07,
+                width=table.width * 0.03,
+                color=GAIN_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            .move_to(table)
+            .shift(UP * 1.5 + LEFT * 1.5)
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(gain_box.width * 20)
+                .move_to(gain_box)
+                .shift(LEFT * 1.5),
+                Create(gain_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        self.play(
+            vpv_to_log[0][:2]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .scale(1.5)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            wpw_to_log[0][:2]
+            .animate(rate_func=rate_functions.there_and_back)
+            .set_color(YELLOW)
+            .scale(1.5)
+        )
+
+        self.wait(0.5)
+
+        vpv_val = (
+            MathTex(r"\Rightarrow 7.9 \left[\frac{V}{V}\right]")
+            .scale_to_fit_height(vpv_to_log.height)
+            .next_to(vpv_to_log.copy().shift(LEFT * 3), RIGHT, MED_SMALL_BUFF)
+        )
+        wpw_val = (
+            MathTex(r"\Rightarrow 63.1 \left[\frac{W}{W}\right]")
+            .scale_to_fit_height(vpv_to_log.height)
+            .next_to(wpw_to_log.copy().shift(LEFT * 3), RIGHT, MED_SMALL_BUFF)
+        )
+
+        vpv_bez = CubicBezier(
+            gain_box.get_right() + [0.1, 0, 0],
+            gain_box.get_right() + [1, 0, 0],
+            vpv_val[0][1:4].get_top() + [0, 1, 0],
+            vpv_val[0][1:4].get_top() + [0, 0.1, 0],
+            color=GREEN,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        wpw_bez = CubicBezier(
+            gain_box.get_right() + [0.1, 0, 0],
+            gain_box.get_right() + [10, 0, 0],
+            wpw_val[0].get_right() + [5, 1, 0],
+            wpw_val[0].get_right() + [0.1, 0.1, 0],
+            color=GREEN,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                vpv_to_log.animate.shift(LEFT * 3),
+                AnimationGroup(
+                    LaggedStart(*[FadeIn(m) for m in vpv_val[0]], lag_ratio=0.1),
+                    Create(vpv_bez),
+                ),
+                wpw_to_log.animate.shift(LEFT * 3),
+                AnimationGroup(
+                    LaggedStart(*[FadeIn(m) for m in wpw_val[0]], lag_ratio=0.1),
+                    Create(wpw_bez),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        ex = (
+            Text("Exercise", font=FONT)
+            .scale(2)
+            .next_to(self.camera.frame.get_corner(UL), DR, MED_SMALL_BUFF)
+            .shift(RIGHT * fw(self, 1.5))
+        )
+        exbox = SurroundingRectangle(
+            ex,
+            color=GREEN,
+            corner_radius=0.2,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            buff=MED_LARGE_BUFF,
+        )
+
+        problem = (
+            Paragraph(
+                "Why does a linear voltage gain, x,",
+                "correspond to a gain in dB of 20 log(x),",
+                "but a linear power gain, y, corresponds",
+                "to a gain in dB of 10 log(y)?",
+                font=FONT,
+                line_spacing=LARGE_BUFF,
+                alignment="center",
+            )
+            .scale_to_fit_width(fw(self, 0.5))
+            .next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF * 3)
+            .shift(RIGHT * fw(self, 1.5))
+        )
+
+        hint_ohm = MathTex(r"V = IR").scale(3)
+        hint_power = MathTex(r"P = VI").scale(3)
+        hint = Text("Hint:", font=FONT).scale(2)
+        hints = (
+            Group(hint, hint_ohm, hint_power)
+            .arrange(RIGHT, LARGE_BUFF * 3)
+            .next_to(problem, DOWN, LARGE_BUFF * 2)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(RIGHT * fw(self, 1.5)),
+                Write(ex),
+                Create(exbox),
+                Write(problem),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        syms = (
+            Group(
+                Tex(r"$V$ | Voltage").scale(2.5),
+                Tex(r"$I$ | Current").scale(2.5),
+                Tex(r"$P$ | Power").scale(2.5),
+                Tex(r"$R$ | Resistance").scale(2.5),
+            )
+            .arrange_in_grid(2, 2, LARGE_BUFF * 1)
+            .next_to(hints, DOWN, LARGE_BUFF * 2)
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                Write(hint),
+                FadeIn(hint_ohm),
+                FadeIn(hint_power),
+                *[GrowFromCenter(m) for m in syms],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.remove(vpv_bez, wpw_bez, vpv_to_log, wpw_to_log, *wpw_val[0], *vpv_val[0])
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(table.width * 1.1).move_to(
+                table
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
