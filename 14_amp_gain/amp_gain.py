@@ -1823,6 +1823,21 @@ class DB2(MovingCameraScene):
 
         self.wait(0.5)
 
+        min_box = gain_box.copy().stretch(1.2, 0).shift(UP * 0.7 + LEFT * 0.8)
+        typ_box = gain_box.copy().stretch(1.2, 0).shift(UP * 0.7)
+        max_box = gain_box.copy().stretch(1.2, 0).shift(UP * 0.7 + RIGHT * 0.85)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(gain_box, min_box),
+                TransformFromCopy(gain_box, typ_box),
+                TransformFromCopy(gain_box, max_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
         self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
@@ -1834,7 +1849,7 @@ class FrequencyDependence(MovingCameraScene):
         page = ImageMobject(f"./static/adl8154-07.png").scale_to_fit_height(
             fh(self, 0.8)
         )
-        self.add(page)
+        self.play(GrowFromCenter(page))
         self.wait(0.5)
 
         self.play(
@@ -1842,6 +1857,43 @@ class FrequencyDependence(MovingCameraScene):
                 RIGHT * 1.12 + UP * 0.215
             ),
             run_time=2,
+        )
+
+        self.wait(0.5)
+
+        top = (
+            ImageMobject("./static/adl8154-top.png")
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(self.camera.frame.get_corner(UR), UR, MED_SMALL_BUFF)
+        )
+        top_box = SurroundingRectangle(top, buff=0, color=RED)
+        top_arrow = Arrow(
+            top.get_corner(DL),
+            top.get_corner(UR) + [-top.width * 0.06, -top.height * 0.12, 0],
+            color=RED,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.6,
+            max_tip_length_to_length_ratio=0.1,
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(top),
+                Create(top_box),
+                FadeIn(top),
+                lag_ratio=0.2,
+            )
+        )
+        self.play(GrowArrow(top_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(top, top_box, top_arrow),
+                self.camera.frame.animate.restore(),
+                lag_ratio=0.2,
+            )
         )
 
         self.wait(0.5)
@@ -2009,14 +2061,35 @@ class FrequencyDependence(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.restore())
+        self.play(self.camera.frame.animate.restore().shift(DOWN * 0.2))
         self.remove(page2, volt_box, curr_box)
+
+        self.wait(0.5)
+
+        volt_box = (
+            temp_box.copy()
+            .stretch(0.4, dim=1)
+            .stretch(0.8, dim=0)
+            .shift(DOWN * 1 + RIGHT * 0.38)
+        )
+        curr_box = volt_box.copy().stretch(1.3, dim=0).shift(RIGHT * 0.32)
+
+        self.play(Create(volt_box))
+
+        self.wait(0.5)
+
+        self.play(ReplacementTransform(volt_box, curr_box))
 
         self.wait(0.5)
 
         self.add(ax)
 
-        self.play(Create(plot), run_time=2)
+        self.play(
+            Uncreate(curr_box),
+            Create(plot),
+            self.camera.frame.animate.shift(UP * 0.2),
+            run_time=2,
+        )
 
         self.wait(0.5)
 
@@ -2699,6 +2772,12 @@ class FrequencyDependence(MovingCameraScene):
             stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
         )
 
+        to_amp = Line(
+            [(input_plot.get_right() + [0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
+            [(amp_new.get_left() + [-0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
         self.play(
             LaggedStart(
                 AnimationGroup(
@@ -2732,18 +2811,6 @@ class FrequencyDependence(MovingCameraScene):
                 ),
                 lag_ratio=0.3,
             ),
-            run_time=5,
-        )
-
-        self.wait(0.5)
-
-        to_amp = Line(
-            [(input_plot.get_right() + [0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
-            [(amp_new.get_left() + [-0.05, 0, 0])[0], input_ax.c2p(0, 1.5)[1], 0],
-            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
-        )
-
-        self.play(
             LaggedStart(
                 input_offset @ 1.5,
                 AnimationGroup(
@@ -2769,7 +2836,8 @@ class FrequencyDependence(MovingCameraScene):
                     Transform(into_amp_up, to_amp.copy()),
                 ),
                 lag_ratio=0.3,
-            )
+            ),
+            run_time=5,
         )
 
         self.wait(0.5)
@@ -3135,6 +3203,265 @@ class FreqSpectrum(MovingCameraScene):
         self.play(
             self.camera.frame.animate.scale(10).shift(RIGHT * 100 + DOWN * 100),
             run_time=2,
+        )
+
+        self.wait(2)
+
+
+class Wrapup(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        def amp_graphic(pn, f0, f1, g):
+            amp = (
+                get_amp(width=fh(self, 0.2), stroke_width_mult=1.5)
+                .move_to(self.camera.frame)
+                .shift(UP * fh(self, 5))
+            )
+            freq_label = Text(f"{g} dB @ {f0} → {f1} GHz", font=FONT)
+            freq_label[: len(f"{g}")].set_color(GREEN)
+            freq_label[len(f"{g}") + 3 : len(f"{g}") + 3 + len(f"{f0}")].set_color(BLUE)
+            freq_label[
+                len(f"{g}") + 4 + len(f"{f0}") : len(f"{g}")
+                + 4
+                + len(f"{f0}")
+                + len(f"{f1}")
+            ].set_color(BLUE)
+            pn_label = Text(f"{pn}", font=FONT).next_to(
+                freq_label, DOWN, MED_SMALL_BUFF, LEFT
+            )
+            return Group(
+                amp, Group(freq_label, pn_label).next_to(amp, RIGHT, MED_SMALL_BUFF)
+            )
+
+        amps = Group(
+            *[
+                amp_graphic(pn, f0, f1, g)
+                for pn, f0, f1, g in [
+                    ("ADL8154", 0.1, 6, 18),
+                    ("TRF1208", 0.01, 11, 16),
+                    ("PMA3-24323LN+", 24, 32, 16.6),
+                    ("AD8353", 0.001, 2.7, 15.6),
+                ]
+            ]
+        ).arrange(DOWN, LARGE_BUFF, aligned_edge=LEFT)
+        amps.shift((self.camera.frame.get_center()[1] - amps[0].get_y()) * UP).shift(
+            DOWN
+        )
+        # self.add(amps)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[FadeIn(m, shift=LEFT * 3) for m in amps],
+                    lag_ratio=0.35,
+                    run_time=5,
+                ),
+                self.camera.frame.animate(
+                    rate_func=rate_functions.linear, run_time=6
+                ).set_y(amps[-1].get_y()),
+                # lag_ratio=0.2,
+            )
+        )
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(amps.height * 1.1).move_to(
+                amps
+            )
+        )
+
+        self.wait(0.5)
+
+        sat = (
+            ImageMobject("../props/static/Satellite Cartoon.png")
+            .scale_to_fit_height(fh(self, 0.5))
+            .next_to(amps, LEFT, MED_SMALL_BUFF)
+        )
+        sat_group = Group(sat, amps)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(sat_group),
+                GrowFromCenter(sat),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in amps[0][0]],
+                    amps[0][1][0].animate.set_opacity(0.1),
+                    amps[0][1][1].animate.set_opacity(0.1),
+                ),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in amps[-1][0]],
+                    amps[-1][1][0].animate.set_opacity(0.1),
+                    amps[-1][1][1].animate.set_opacity(0.1),
+                ),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in amps[1][0]],
+                    amps[1][1][0].animate.set_opacity(0.1),
+                    amps[1][1][1].animate.set_opacity(0.1),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        router = (
+            ImageMobject("../props/static/Router Cartoon.png")
+            .scale_to_fit_height(fh(self, 0.5))
+            .move_to(sat)
+        )
+
+        self.play(
+            LaggedStart(
+                sat.animate.shift(UP * 10),
+                router.shift(DOWN * 10).animate.shift(UP * 10),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in amps[2][0]],
+                    amps[2][1][0].animate.set_opacity(0.1),
+                    amps[2][1][1].animate.set_opacity(0.1),
+                ),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=1) for m in amps[0][0]],
+                    amps[0][1][0].animate.set_opacity(1),
+                    amps[0][1][1].animate.set_opacity(1),
+                ),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=1) for m in amps[-1][0]],
+                    amps[-1][1][0].animate.set_opacity(1),
+                    amps[-1][1][1].animate.set_opacity(1),
+                ),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=1) for m in amps[1][0]],
+                    amps[1][1][0].animate.set_opacity(1),
+                    amps[1][1][1].animate.set_opacity(1),
+                ),
+            ),
+        )
+
+        self.wait(0.5)
+
+        op1db = Text("OP1dB", font=FONT)
+        oip3 = Text("OIP3", font=FONT)
+        pn = Text("Phase Noise", font=FONT)
+        gain = Text("Gain", font=FONT)
+        etc = Text("etc.", font=FONT)
+        Group(op1db, oip3, pn, gain, etc).arrange(RIGHT, SMALL_BUFF).move_to(
+            self.camera.frame
+        ).shift(DOWN * fh(self))
+        oip3.shift(DOWN)
+        gain.shift(DOWN)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                GrowFromCenter(op1db),
+                GrowFromCenter(oip3),
+                GrowFromCenter(pn),
+                GrowFromCenter(gain),
+                GrowFromCenter(etc),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        sub = (
+            ImageMobject("../props/static/subscribe.png")
+            .scale_to_fit_width(fw(self, 0.6))
+            .move_to(self.camera.frame)
+            .shift(DOWN * 2.5)
+        )
+
+        bez1 = CubicBezier(
+            op1db.copy().shift(UP * 2.5).get_bottom() + [0, -0.1, 0],
+            op1db.copy().shift(UP * 2.5).get_bottom() + [0, -2, 0],
+            sub.get_top() + [0, 1, 0],
+            sub.get_top() + [0, 0.1, 0],
+        )
+        bez2 = CubicBezier(
+            oip3.copy().shift(UP * 2.5).get_bottom() + [0, -0.1, 0],
+            oip3.copy().shift(UP * 2.5).get_bottom() + [0, -1, 0],
+            sub.get_top() + [0, 1, 0],
+            sub.get_top() + [0, 0.1, 0],
+        )
+        bez3 = CubicBezier(
+            pn.copy().shift(UP * 2.5).get_bottom() + [0, -0.1, 0],
+            pn.copy().shift(UP * 2.5).get_bottom() + [0, -2, 0],
+            sub.get_top() + [0, 1, 0],
+            sub.get_top() + [0, 0.1, 0],
+        )
+        bez4 = CubicBezier(
+            gain.copy().shift(UP * 2.5).get_bottom() + [0, -0.1, 0],
+            gain.copy().shift(UP * 2.5).get_bottom() + [0, -1, 0],
+            sub.get_top() + [0, 1, 0],
+            sub.get_top() + [0, 0.1, 0],
+        )
+        bez5 = CubicBezier(
+            etc.copy().shift(UP * 2.5).get_bottom() + [0, -0.1, 0],
+            etc.copy().shift(UP * 2.5).get_bottom() + [0, -2, 0],
+            sub.get_top() + [0, 1, 0],
+            sub.get_top() + [0, 0.1, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                op1db.animate.shift(UP * 2.5),
+                oip3.animate.shift(UP * 2.5),
+                pn.animate.shift(UP * 2.5),
+                gain.animate.shift(UP * 2.5),
+                etc.animate.shift(UP * 2.5),
+                Create(bez1),
+                Create(bez2),
+                Create(bez3),
+                Create(bez4),
+                Create(bez5),
+                sub.shift(DOWN * 5).animate.shift(UP * 5),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        nb0 = ImageMobject("./static/nb0.png").scale_to_fit_height(fh(self, 0.8))
+        nb1 = ImageMobject("./static/nb1.png").scale_to_fit_height(fh(self, 0.8))
+        nb2 = ImageMobject("./static/nb2.png").scale_to_fit_height(fh(self, 0.8))
+        nbs = Group(nb0, nb1, nb2).arrange(RIGHT, LARGE_BUFF)
+        nbs.shift(self.camera.frame.get_center() - nb0.get_center())
+
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(sub),
+                AnimationGroup(
+                    Uncreate(bez1),
+                    Uncreate(bez2),
+                    Uncreate(bez3),
+                    Uncreate(bez4),
+                    Uncreate(bez5),
+                ),
+                AnimationGroup(
+                    ShrinkToCenter(op1db),
+                    ShrinkToCenter(oip3),
+                    ShrinkToCenter(pn),
+                    ShrinkToCenter(gain),
+                    ShrinkToCenter(etc),
+                ),
+                GrowFromCenter(nb0),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.move_to(nb1),
+            GrowFromCenter(nb1),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.move_to(nb2),
+            GrowFromCenter(nb2),
         )
 
         self.wait(2)
