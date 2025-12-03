@@ -819,7 +819,7 @@ class Amp(MovingCameraScene):
         gain_soln[0][9].set_color(OUTPUT_COLOR)
         gain_soln[0][11].set_color(INPUT_COLOR)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -835,7 +835,7 @@ class Amp(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
 
         vpv = (
             MathTex(r"\left[ \frac{V}{V} \right]")
@@ -848,7 +848,7 @@ class Amp(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                *[GrowFromCenter(m) for m in vpv[0]],
+                *[GrowFromCenter(m) for m in wpw[0]],
                 lag_ratio=0.2,
             )
         )
@@ -857,16 +857,16 @@ class Amp(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                *[ReplacementTransform(a, b) for a, b in zip(vpv[0], wpw[0])],
+                *[ReplacementTransform(a, b) for a, b in zip(wpw[0], vpv[0])],
                 lag_ratio=0.1,
             )
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(True))
+        self.next_section(skip_animations=skip_animations(False))
 
-        xu = Text("x", font=FONT, color=RED).scale(2).move_to(wpw[0][1])
-        xd = Text("x", font=FONT, color=RED).scale(2).move_to(wpw[0][3])
+        xu = Text("x", font=FONT, color=RED).scale(2).move_to(vpv[0][1])
+        xd = Text("x", font=FONT, color=RED).scale(2).move_to(vpv[0][3])
 
         self.play(
             LaggedStart(
@@ -891,7 +891,7 @@ class Amp(MovingCameraScene):
                 *[
                     FadeOut(m, shift=shift)
                     for m, shift in zip(
-                        [*wpw[0], xu, xd],
+                        [*vpv[0], xu, xd],
                         np.random.random((7, 3)) * 2 - 1,
                     )
                 ],
@@ -901,6 +901,7 @@ class Amp(MovingCameraScene):
 
         self.wait(0.5)
         self.camera.frame.save_state()
+        self.next_section(skip_animations=skip_animations(True))
 
         desired_page = 3
         npages = desired_page * 2
@@ -923,7 +924,7 @@ class Amp(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         width = pages.width
         self.play(
@@ -3401,7 +3402,7 @@ class Wrapup(MovingCameraScene):
             sub.get_top() + [0, 0.1, 0],
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -3464,6 +3465,300 @@ class Wrapup(MovingCameraScene):
             GrowFromCenter(nb2),
         )
 
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        new_merch = Text("New Merch", font=FONT).next_to(
+            self.camera.frame.get_top(), DOWN, MED_LARGE_BUFF
+        )
+
+        merch1 = ImageMobject("./static/merch1.png").scale_to_fit_height(fh(self, 0.6))
+        merch2 = ImageMobject("./static/merch2.png").scale_to_fit_height(fh(self, 0.6))
+        merch3 = ImageMobject("./static/merch3.png").scale_to_fit_height(fh(self, 0.6))
+        merch4 = ImageMobject("./static/merch4.png").scale_to_fit_height(fh(self, 0.6))
+        merch5 = ImageMobject("./static/merch5.png").scale_to_fit_height(fh(self, 0.6))
+        merch6 = ImageMobject("./static/merch6.png").scale_to_fit_height(fh(self, 0.6))
+        merch7 = ImageMobject("./static/merch7.png").scale_to_fit_height(fh(self, 0.6))
+        # merch8 = ImageMobject("./static/merch8.png").scale_to_fit_height(fh(self, 0.8))
+        merch9 = ImageMobject("./static/merch9.png").scale_to_fit_height(fh(self, 0.6))
+        merch10 = ImageMobject("./static/merch10.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+        merch11 = ImageMobject("./static/merch11.png").scale_to_fit_height(
+            fh(self, 0.6)
+        )
+
+        merch = (
+            Group(
+                merch1,
+                merch3,
+                merch9,
+                # merch2,
+                merch4,
+                merch5,
+                merch6,
+                merch7,
+                # merch8,
+                merch10,
+                merch11,
+            )
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .move_to(self.camera.frame, LEFT)
+            .shift(RIGHT * fw(self) + RIGHT)
+        )
+
+        merch1_name = (
+            Text("Weather Radar Equation Mug", font=FONT)
+            .scale(0.5)
+            .next_to(merch1, DOWN, MED_SMALL_BUFF)
+        )
+        merch2_name = (
+            Text("Weather Radar Equation Mug", font=FONT)
+            .scale(0.5)
+            .next_to(merch2, DOWN, MED_SMALL_BUFF)
+        )
+        merch3_name = (
+            Text("Kraken v2 Shirt", font=FONT)
+            .scale(0.5)
+            .next_to(merch3, DOWN, MED_SMALL_BUFF)
+        )
+        merch4_name = (
+            Text("Chill Raccoon Shirt", font=FONT)
+            .scale(0.5)
+            .next_to(merch4, DOWN, MED_SMALL_BUFF)
+        )
+        merch5_name = (
+            Text("Bringing You The Weather\nEmbroidered Shirt", font=FONT)
+            .scale(0.5)
+            .next_to(merch5, DOWN, MED_SMALL_BUFF)
+        )
+        merch6_name = (
+            Text("Python Essentials Mug", font=FONT)
+            .scale(0.5)
+            .next_to(merch6, DOWN, MED_SMALL_BUFF)
+        )
+        merch7_name = (
+            Text("Python Essentials Mug", font=FONT)
+            .scale(0.5)
+            .next_to(merch7, DOWN, MED_SMALL_BUFF)
+        )
+        merch9_name = (
+            Group(
+                Text("Antenna Pattern", font=FONT),
+                Text("Embroidered Shirt", font=FONT),
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .scale(0.5)
+            .next_to(merch9, DOWN, MED_SMALL_BUFF)
+        )
+        merch10_name = (
+            Text("Bringing You The Weather Mug", font=FONT)
+            .scale(0.5)
+            .next_to(merch10, DOWN, MED_SMALL_BUFF)
+        )
+        merch11_name = (
+            Text("Kraken v2 Mug", font=FONT)
+            .scale(0.5)
+            .next_to(merch11, DOWN, MED_SMALL_BUFF)
+        )
+
+        merch.add(
+            merch4_name,
+            merch5_name,
+            merch6_name,
+            merch7_name,
+            merch9_name,
+            merch10_name,
+            merch11_name,
+        )
+
+        self.play(
+            LaggedStart(
+                Write(new_merch),
+                Group(merch1, merch1_name).animate.shift(LEFT * fw(self)),
+                Group(merch3, merch3_name).animate.shift(LEFT * fw(self)),
+                merch[2:].animate.shift(LEFT * fw(self)),
+                lag_ratio=0.3,
+            )
+        )
+
+        merch.add(merch1_name, merch3_name)
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 6))
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 6))
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 6))
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 7))
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 6))
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 7.5))
+
+        self.wait(0.5)
+
+        self.play(merch.animate.shift(LEFT * 7.5))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        new_group = (
+            Group(
+                Group(merch1.copy(), merch1_name.copy()),
+                Group(merch3.copy(), merch3_name.copy()),
+                Group(merch4.copy(), merch4_name.copy()),
+                Group(merch5.copy(), merch5_name.copy()),
+                Group(merch6.copy(), merch6_name.copy()),
+                Group(merch7.copy(), merch7_name.copy()),
+                Group(merch9.copy(), merch9_name.copy()),
+                Group(merch10.copy(), merch10_name.copy()),
+                Group(merch11.copy(), merch11_name.copy()),
+            )
+            .arrange_in_grid(3, 4, MED_LARGE_BUFF)
+            .next_to(new_merch, DOWN, MED_LARGE_BUFF)
+        )
+        new_group.add(new_merch)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                new_group.height * 1.1
+            ).move_to(new_group),
+            Group(
+                Group(merch1, merch1_name),
+                Group(merch3, merch3_name),
+                Group(merch4, merch4_name),
+                Group(merch5, merch5_name),
+                Group(merch6, merch6_name),
+                Group(merch7, merch7_name),
+                Group(merch9, merch9_name),
+                Group(merch10, merch10_name),
+                Group(merch11, merch11_name),
+            )
+            .animate.arrange_in_grid(3, 4, MED_LARGE_BUFF)
+            .next_to(new_merch, DOWN, MED_LARGE_BUFF),
+        )
+
+        self.wait(0.5)
+
+        merch_list = list(merch)
+        shuffle(merch_list)
+        merch = Group(*merch_list)
+        self.play(
+            LaggedStart(
+                new_merch.animate.shift(UP * 10),
+                *[FadeOut(m) for m in merch],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        osc = ImageMobject("../08_beamforming/static/osc_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        kraken = ImageMobject("../08_beamforming/static/kraken.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        weather = ImageMobject(
+            "../08_beamforming/static/weather.png"
+        ).scale_to_fit_width(config.frame_width * 0.3)
+        eqn = ImageMobject("../08_beamforming/static/eqn_mug.png").scale_to_fit_width(
+            config.frame_width * 0.3
+        )
+        old_merch_label = (
+            Text("Old Merch", font=FONT)
+            .scale_to_fit_height(fh(self, 0.07))
+            .next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF * 1.5)
+        )
+        old_merch = (
+            Group(kraken, osc, eqn, weather)
+            .arrange_in_grid(2, 2)
+            .scale_to_fit_height(fh(self, 0.7))
+            .next_to(self.camera.frame.get_bottom(), UP, LARGE_BUFF * 1.5)
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                old_merch_label.shift(UP * 10).animate.shift(DOWN * 10),
+                *[GrowFromCenter(m) for m in old_merch],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(0.5)
+
+        channel_mems = Group(
+            Text("Channel Memberships", font=FONT),
+            Text("(in the description)", font=FONT).scale(0.7),
+        ).arrange(DOWN, MED_LARGE_BUFF)
+        # channel_mems[0][7:].set_color(ORANGE)
+        shoutout = Text("Huge thanks to:", font=FONT)
+        shoutout[4:10].set_color(ORANGE)
+
+        people = [
+            "ZacJW",
+            "db-isJustARatio",
+            "Jea99",
+            "zackdc",
+            "misspeled",
+            "Florian Euchner",
+            "w1gx",
+            "alikarb0724",
+            "Mark Humes",
+            "Bob Van Valzah",
+            "Randy Gumabong",
+            "noleteman",
+            "ebkimaru",
+        ]
+        people_text = (
+            Group(
+                *[Text(p, font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6) for p in people]
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(shoutout, DOWN)
+        )
+        people_group = Group(shoutout, people_text)
+        group = (
+            Group(channel_mems, people_group)
+            .arrange(RIGHT, LARGE_BUFF)
+            .move_to(self.camera.frame)
+            .scale_to_fit_height(fh(self, 0.9))
+        )
+
+        self.play(
+            LaggedStart(
+                *[Write(m) for m in [*channel_mems, shoutout, *people_text]],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
         self.wait(2)
 
 
@@ -3475,5 +3770,138 @@ class BD(MovingCameraScene):
         # self.add(Group(lp_filt, bp_filt, hp_filt).arrange(RIGHT))
         # self.add(get_phase_shifter(width=fh(self, 0.3)))
         self.add(get_splitter(width=fh(self, 0.3), n=4))
+
+        self.wait(2)
+
+
+class EndScreen(MovingCameraScene):
+    def construct(self):
+        hours = pd.read_csv(
+            "../../../downloads/Work Hours - 2025 - Hours - 2025.csv"
+        ).dropna(subset=["In", "Out", "Category Fill"])
+        hours = hours[
+            (hours["Category Fill"] == "Videos")
+            & (hours["Video Fill"] == "RF Datasheet - Gain")
+        ]
+        hours["In_dt"] = pd.to_datetime(hours["In"], errors="coerce")
+        hours["Out_dt"] = pd.to_datetime(hours["Out"], errors="coerce")
+        hours["In_mins"] = hours["In_dt"].dt.hour * 60 + hours["In_dt"].dt.minute
+        hours["Out_mins"] = hours["Out_dt"].dt.hour * 60 + hours["Out_dt"].dt.minute
+
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "3,868"],
+                    ["Hours", f"{hours['Session Hours'].sum():.1f}"],
+                    ["Days", "31"],
+                ],
+                element_to_mobject=Text,
+                element_to_mobject_config=dict(
+                    font=FONT, font_size=DEFAULT_FONT_SIZE * 0.7
+                ),
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        thank_you_sabrina = Text(
+            "Thank you, Sabrina, for\nediting the whole video :)",
+            font=FONT,
+            font_size=DEFAULT_FONT_SIZE * 0.4,
+        ).to_corner(DL)
+
+        def coverage_array(spans, allow_wrap=True):
+            cov = np.zeros(24 * 60, dtype=int)
+            for a, b in spans:
+                if allow_wrap and b < a:
+                    cov[a:] += 1
+                    cov[:b] += 1
+                else:
+                    cov[a:b] += 1
+            return cov
+
+        spans = list(hours[["In_mins", "Out_mins"]].itertuples(index=None, name=None))
+        cov = coverage_array(spans)
+        filter_len = 61
+        window = np.ones(filter_len) / filter_len
+
+        t = np.linspace(0, 24, cov.size)
+
+        ax = Axes(
+            x_range=[0, 24, 3],
+            y_range=[0, 6, 1],
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.3),
+            tips=False,
+        )
+        hours_title = (
+            Text("Hours Distribution", font=FONT)
+            .scale(0.5)
+            .next_to(ax, UP, MED_SMALL_BUFF)
+        )
+
+        times = np.arange(0, 27, 3)
+        time_labels = Group(
+            *[
+                Text(f"{h % 12 or 12}{'am' if h < 12 else 'pm'}", font=FONT)
+                .scale(0.5)
+                .next_to(ax.c2p(h, 0), DOWN, MED_SMALL_BUFF)
+                for h in times
+            ]
+        )
+        hour_yaxis = np.arange(1, 7, 1)
+        hour_labels = Group(
+            *[
+                Text(f"{h}", font=FONT)
+                .scale(0.5)
+                .next_to(ax.c2p(0, h), LEFT, MED_SMALL_BUFF)
+                for h in hour_yaxis
+            ]
+        )
+
+        Group(
+            stats_title,
+            stats_table,
+            Group(ax, time_labels, hour_labels, hours_title),
+            # thank_you_sabrina,
+        ).arrange(DOWN, MED_LARGE_BUFF).to_edge(RIGHT, MED_LARGE_BUFF)
+
+        scale = VT(0)
+
+        def get_plot():
+            plot = always_redraw(
+                lambda: ax.plot(
+                    interp1d(
+                        t,
+                        ~scale * np.convolve(cov, window, mode="same"),
+                        fill_value="extrapolate",
+                    ),
+                    color=BLUE,
+                    use_smoothing=False,
+                )
+            )
+            area = ax.get_area(plot, color=BLUE, opacity=0.5)
+            return plot, area
+
+        plot = always_redraw(lambda: get_plot()[0])
+        area = always_redraw(lambda: get_plot()[1])
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                AnimationGroup(Create(ax), FadeIn(plot, area, hours_title)),
+                AnimationGroup(
+                    LaggedStart(*[FadeIn(m) for m in time_labels], lag_ratio=0.1),
+                    LaggedStart(*[FadeIn(m) for m in hour_labels], lag_ratio=0.1),
+                ),
+                Write(thank_you_sabrina),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.play(scale @ 1)
 
         self.wait(2)
