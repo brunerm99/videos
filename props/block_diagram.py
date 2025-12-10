@@ -134,3 +134,101 @@ def get_resistor():
     )
 
     return resistor
+
+
+def get_splitter(width, n=2):
+    box = RoundedRectangle(
+        width=width,
+        height=width * (n / 2),
+        stroke_width=DEFAULT_STROKE_WIDTH * 2,
+    ).set_z_index(1)
+    out = box.get_edge_center(RIGHT)
+    jump = 1 / n
+
+    def get_bez(idx):
+        start = box.get_corner(UL) + DOWN * box.height * (idx * jump + jump / 2)
+        return CubicBezier(
+            start,
+            start + [box.width / 2, 0, 0],
+            out + [-box.width / 2, 0, 0],
+            out,
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+    bezs = [get_bez(idx) for idx in range(n)]
+
+    return Group(box, *bezs)
+
+
+def get_phase_shifter(width):
+    box = RoundedRectangle(
+        width=width,
+        height=width,
+        stroke_width=DEFAULT_STROKE_WIDTH * 2,
+    ).set_z_index(1)
+    phi = MathTex(r"\Large \phi").scale_to_fit_height(box.height * 0.7).move_to(box)
+    arrow = Arrow(
+        box.get_corner(DL),
+        box.get_corner(UR),
+        buff=MED_LARGE_BUFF,
+        color=BLUE,
+        stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+    )
+    return Group(box, phi, arrow)
+
+
+def get_filt_block(width, passband="band"):
+    filt_box = RoundedRectangle(
+        width=width,
+        height=width,
+        stroke_width=DEFAULT_STROKE_WIDTH * 2,
+    ).set_z_index(1)
+    ax = (
+        Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=filt_box.width * 0.9,
+            y_length=filt_box.height * 0.9,
+            x_axis_config={"include_ticks": False},
+            y_axis_config={"include_ticks": False},
+        )
+        .set_opacity(0)
+        .move_to(filt_box)
+    )
+    A = 0.4
+    diff = 0.5
+    mid = ax.plot(
+        lambda t: A * np.sin(2 * PI * t),
+        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        color=BLUE if passband == "band" else RED,
+    )
+    hi = ax.plot(
+        lambda t: A * np.sin(2 * PI * t) + diff,
+        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        color=BLUE if passband == "high" else RED,
+    )
+    lo = ax.plot(
+        lambda t: A * np.sin(2 * PI * t) - diff,
+        stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        color=BLUE if passband == "low" else RED,
+    )
+    return Group(filt_box, mid, hi, lo)
+
+
+def get_amp(width, stroke_width_mult=2):
+    amp_box = RoundedRectangle(
+        width=width,
+        height=width,
+        stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        corner_radius=width * 0.25,
+    ).set_z_index(1)
+    amp_tri = (
+        Triangle(stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult, color=GREEN)
+        .scale_to_fit_width(amp_box.width * 0.7)
+        .rotate(PI / 6)
+        .move_to(amp_box)
+        .set_z_index(1)
+    )
+    return Group(amp_box, amp_tri)
