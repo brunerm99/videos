@@ -118,3 +118,11 @@ Pulse compression and matched filtering let radars have both high range resoluti
 In this video, we’ll break down how long pulses can be processed to act like short ones, how correlation and matched filters extract targets from noise, and why techniques like LFM and Barker codes matter.
 
 ![thumbnail](./13_pulse_compression/static/Pulse%20Compression%20Thumbnail.png)
+
+## [14 - RF Amplifier Gain | How to Read an RF Datasheet | An Animated Explanation](https://youtu.be/UuE2NTwdLyU)
+
+Understanding gain is the key to reading any RF amplifier datasheet. In this video, I break down what gain really means, why datasheets use decibels (dB) instead of linear ratios, and how to interpret frequency-dependent gain plots.
+
+We'll walk through clear examples, animations, and real datasheet plots so you can see exactly how an amplifier shapes your signal across frequency.
+
+![thumbnail](./14_amp_gain/static/Gain%20Thumbnail.png)
