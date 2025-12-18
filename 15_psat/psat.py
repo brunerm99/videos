@@ -27,7 +27,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT")
@@ -161,7 +161,7 @@ class LinearRegion(MovingCameraScene):
 
         gain_label = MathTex(r"G = 20 \text{ dB}").scale(1.5).next_to(amp, DOWN)
         lin_gain_label = (
-            MathTex(r"= 100 \ \frac{V}{V}")
+            MathTex(r"= 100 \ \frac{W}{W}")
             .scale(1.5)
             .next_to(gain_label[0][1:], DOWN, aligned_edge=LEFT)
         )
@@ -328,6 +328,19 @@ class LinearRegion(MovingCameraScene):
         inp_pow_label = Text("10.0 mW", font=FONT).next_to(inp_line, LEFT)
         outp_pow_label = Text("1.0 W", font=FONT).next_to(outp_line, RIGHT)
 
+        inp_level = VT(10)
+        outp_level = VT(1)
+        inp_pow_label = always_redraw(
+            lambda: Text(f"{~inp_level:.2f} mW", font=FONT).next_to(
+                inp_line, LEFT, MED_SMALL_BUFF
+            )
+        )
+        outp_pow_label = always_redraw(
+            lambda: Text(f"{~outp_level:.2f} W", font=FONT).next_to(
+                outp_line, RIGHT, MED_SMALL_BUFF
+            )
+        )
+
         all_group = Group(inp_pow_label, amp, outp_pow_label)
         self.play(
             LaggedStart(
@@ -346,7 +359,7 @@ class LinearRegion(MovingCameraScene):
             )
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.remove(
             inp_line,
@@ -370,50 +383,31 @@ class LinearRegion(MovingCameraScene):
             outp_line_upd,
             outp_line_u_upd,
             outp_line_d_upd,
+            inp_pow_label,
+            outp_pow_label,
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
 
         scale_2 = 2
-        inp_pow_label_2 = Text(f"{10 * scale_2:.1f} mW", font=FONT).move_to(
-            inp_pow_label, RIGHT
-        )
-        outp_pow_label_2 = Text(f"{2 * scale_2:.1f} W", font=FONT).move_to(
-            outp_pow_label, RIGHT
-        )
 
         self.play(
-            *[
-                ReplacementTransform(a, b)
-                for a, b in zip(inp_pow_label, inp_pow_label_2)
-            ],
-            *[
-                ReplacementTransform(a, b)
-                for a, b in zip(outp_pow_label, outp_pow_label_2)
-            ],
+            inp_level @ (~inp_level * scale_2),
+            outp_level @ (~outp_level * scale_2),
             A @ (~A * scale_2),
             run_time=2,
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
 
         scale_3 = 1.5
-        inp_pow_label_3 = Text(f"{10 * scale_2 * scale_3:.1f} mW", font=FONT).move_to(
-            inp_pow_label, RIGHT
-        )
-        outp_pow_label_3 = Text(f"{2 * scale_2 * scale_3:.1f} W", font=FONT).move_to(
-            outp_pow_label, RIGHT
-        )
+        scale_3_comp = 1.2
 
         self.play(
-            *[
-                ReplacementTransform(a, b)
-                for a, b in zip(inp_pow_label_2, inp_pow_label_3)
-            ],
-            *[
-                ReplacementTransform(a, b)
-                for a, b in zip(outp_pow_label_2, outp_pow_label_3)
-            ],
+            inp_level @ (~inp_level * scale_3),
+            outp_level @ (~outp_level * scale_3_comp),
             A @ (~A * scale_3),
             run_time=2,
         )
@@ -425,25 +419,34 @@ class LinearRegion(MovingCameraScene):
         # This is the linear region, and it's where we want to operate most of the time because the amplifier behaves predictably.
 
         scale_4 = 1.5
-        inp_pow_label_4 = Text(
-            f"{10 * scale_2 * scale_3 * scale_4:.1f} mW", font=FONT
-        ).move_to(inp_pow_label, RIGHT)
-        outp_pow_label_4 = Text(
-            f"{2 * scale_2 * scale_3 * scale_4:.1f} W", font=FONT
-        ).move_to(outp_pow_label, RIGHT)
+        scale_4_comp = 1.1
 
         self.play(
-            *[
-                ReplacementTransform(a, b)
-                for a, b in zip(inp_pow_label_3, inp_pow_label_4)
-            ],
-            *[
-                ReplacementTransform(a, b)
-                for a, b in zip(outp_pow_label_3, outp_pow_label_4)
-            ],
+            inp_level @ (~inp_level * scale_4),
+            outp_level @ (~outp_level * scale_4_comp),
             A @ (~A * scale_4),
             run_time=2,
         )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        scale_5 = 3
+        scale_5_comp = 1.05
+
+        self.play(
+            inp_level @ (~inp_level * scale_5),
+            outp_level @ (~outp_level * scale_5_comp),
+            A @ (~A * scale_5),
+            run_time=2,
+        )
+
+        self.wait(2)
+
+
+class CompressionStarts(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(False))
 
         self.wait(2)
 
