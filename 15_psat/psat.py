@@ -27,10 +27,10 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
-FONT = os.getenv("FONT")
+FONT = os.getenv("FONT", "")
 
 BLOCKS = get_blocks()
 
@@ -250,7 +250,7 @@ class LinearRegion(MovingCameraScene):
         G = 10
         x1_in = VT(0)
         x1_out = VT(0)
-        clip = 3
+        psat = 3.2
         inp = always_redraw(
             lambda: inp_ax.plot(
                 lambda t: ~A * np.sin(2 * PI * f * t),
@@ -262,7 +262,7 @@ class LinearRegion(MovingCameraScene):
         )
         outp = always_redraw(
             lambda: outp_ax.plot(
-                lambda t: np.clip(~A * G * np.sin(2 * PI * f * t), -clip, clip),
+                lambda t: np.clip(~A * G * np.sin(2 * PI * f * t), -psat, psat),
                 x_range=[0, ~x1_out, 1 / 1000],
                 color=OUTPUT_COLOR,
                 stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
