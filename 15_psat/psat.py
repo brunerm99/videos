@@ -15,6 +15,11 @@ from scipy.interpolate import interp1d
 
 sys.path.insert(0, "..")
 from props import (
+    Bjt,
+    Capacitor,
+    Ground,
+    Inductor,
+    Resistor,
     VideoMobject,
     WeatherRadarTower,
     get_amp,
@@ -388,7 +393,7 @@ class LinearRegion(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         scale_2 = 2
 
@@ -400,7 +405,7 @@ class LinearRegion(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         scale_3 = 1.5
         scale_3_comp = 1.2
@@ -429,7 +434,7 @@ class LinearRegion(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         scale_5 = 3
         scale_5_comp = 1.05
@@ -440,6 +445,130 @@ class LinearRegion(MovingCameraScene):
             A @ (~A * scale_5),
             run_time=2,
         )
+
+        self.wait(0.5)
+
+        whats_happening = Text("What's happening here?", font=FONT).move_to(
+            self.camera.frame.get_top()
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.1).shift(UP),
+                Write(whats_happening),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        new_cam = self.camera.frame.copy().move_to(amp).scale(0.01)
+
+        width = self.camera.frame.width * 0.1
+        spacing = width / 2
+        stroke_width_mult = 1.5  # * new_cam.width / self.camera.frame.width
+        bjt = Bjt(width, stroke_width_mult=stroke_width_mult)
+        self.add(bjt)
+
+        cap1 = Capacitor(width, stroke_width_mult=stroke_width_mult).next_to(
+            bjt, LEFT, spacing * 2
+        )
+        l1 = Line(
+            cap1.get_right(),
+            bjt.base,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        ind1: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(l1, DOWN, spacing)
+        )
+        choke_line = Line(
+            ind1.get_top(),
+            l1.get_midpoint(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        vb_line = Line(
+            ind1.get_bottom(),
+            ind1.get_bottom() + DOWN * spacing,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        vb_term: Circle = bjt.base.copy().set_color(RED).next_to(vb_line, DOWN, 0)
+        vb = MathTex(r"V_b").next_to(vb_term, DOWN, MED_SMALL_BUFF)
+
+        ind_emitter: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(bjt.emitter.get_end(), DOWN, spacing)
+        )
+        le = Line(
+            bjt.emitter.get_end(),
+            ind_emitter.get_top(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        lc = Line(
+            bjt.collector.get_end(),
+            bjt.collector.get_end() + UP * spacing,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        ind_collector: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(lc, UP, 0)
+        )
+
+        load = (
+            Resistor(width=width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(lc.get_midpoint(), RIGHT, spacing)
+        )
+        ll = Line(
+            lc.get_midpoint(),
+            load.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        dddr = MathTex(r"\cdots").next_to(load, RIGHT, MED_LARGE_BUFF)
+        dddl = MathTex(r"\cdots").next_to(cap1, LEFT, MED_LARGE_BUFF)
+        dddu = (
+            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_emitter, DOWN, MED_LARGE_BUFF)
+        )
+        dddd = (
+            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_collector, UP, MED_LARGE_BUFF)
+        )
+        bd = (
+            Group(
+                ind1,
+                l1,
+                cap1,
+                choke_line,
+                vb_line,
+                vb_term,
+                vb,
+                le,
+                ind_emitter,
+                lc,
+                ind_collector,
+                load,
+                ll,
+                dddr,
+                dddl,
+                dddu,
+                dddd,
+            )
+            # .scale_to_fit_width(new_cam.width)
+            .move_to(new_cam)
+        )
+
+        self.play(
+            LaggedStart(
+                # Transform(self.camera.frame, new_cam),
+                FadeIn(bd),
+                lag_ratio=0.3,
+            )
+        )
+
+        # self.play(self.camera.frame.animate.shift(UP * fh(self)))
 
         self.wait(2)
 
@@ -467,3 +596,98 @@ class Counter(Scene):
         # self.add(text)
 
         # self.wait(2)
+
+
+class BJT(MovingCameraScene):
+    def construct(self):
+        width = self.camera.frame.width * 0.1
+        spacing = width / 2
+        stroke_width_mult = 1.5
+        bjt = Bjt(width, stroke_width_mult=stroke_width_mult)
+        self.add(bjt)
+
+        cap1 = Capacitor(width, stroke_width_mult=stroke_width_mult).next_to(
+            bjt, LEFT, spacing * 2
+        )
+        l1 = Line(
+            cap1.get_right(),
+            bjt.base,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        ind1: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(l1, DOWN, spacing)
+        )
+        choke_line = Line(
+            ind1.get_top(),
+            l1.get_midpoint(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        vb_line = Line(
+            ind1.get_bottom(),
+            ind1.get_bottom() + DOWN * spacing,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        vb_term: Circle = bjt.base.copy().set_color(RED).next_to(vb_line, DOWN, 0)
+        vb = MathTex(r"V_b").next_to(vb_term, DOWN, MED_SMALL_BUFF)
+
+        ind_emitter: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(bjt.emitter.get_end(), DOWN, spacing)
+        )
+        le = Line(
+            bjt.emitter.get_end(),
+            ind_emitter.get_top(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        lc = Line(
+            bjt.collector.get_end(),
+            bjt.collector.get_end() + UP * spacing,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        ind_collector: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(lc, UP, 0)
+        )
+
+        load = (
+            Resistor(width=width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(lc.get_midpoint(), RIGHT, spacing)
+        )
+        ll = Line(
+            lc.get_midpoint(),
+            load.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        dddr = MathTex(r"\cdots").next_to(load, RIGHT, MED_LARGE_BUFF)
+        dddl = MathTex(r"\cdots").next_to(cap1, LEFT, MED_LARGE_BUFF)
+        dddu = (
+            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_emitter, DOWN, MED_LARGE_BUFF)
+        )
+        dddd = (
+            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_collector, UP, MED_LARGE_BUFF)
+        )
+
+        self.add(
+            ind1,
+            l1,
+            cap1,
+            choke_line,
+            vb_line,
+            vb_term,
+            vb,
+            le,
+            ind_emitter,
+            lc,
+            ind_collector,
+            load,
+            ll,
+            dddr,
+            dddl,
+            dddu,
+            dddd,
+        )
