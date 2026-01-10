@@ -17,6 +17,7 @@ sys.path.insert(0, "..")
 from props import (
     Bjt,
     Capacitor,
+    Fet,
     Ground,
     Inductor,
     Resistor,
@@ -465,110 +466,7 @@ class LinearRegion(MovingCameraScene):
 
         new_cam = self.camera.frame.copy().move_to(amp).scale(0.01)
 
-        width = self.camera.frame.width * 0.1
-        spacing = width / 2
-        stroke_width_mult = 1.5  # * new_cam.width / self.camera.frame.width
-        bjt = Bjt(width, stroke_width_mult=stroke_width_mult)
-        self.add(bjt)
-
-        cap1 = Capacitor(width, stroke_width_mult=stroke_width_mult).next_to(
-            bjt, LEFT, spacing * 2
-        )
-        l1 = Line(
-            cap1.get_right(),
-            bjt.base,
-            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
-        )
-        ind1: Inductor = (
-            Inductor(width, stroke_width_mult=stroke_width_mult)
-            .rotate(PI / 2)
-            .next_to(l1, DOWN, spacing)
-        )
-        choke_line = Line(
-            ind1.get_top(),
-            l1.get_midpoint(),
-            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
-        )
-        vb_line = Line(
-            ind1.get_bottom(),
-            ind1.get_bottom() + DOWN * spacing,
-            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
-        )
-        vb_term: Circle = bjt.base.copy().set_color(RED).next_to(vb_line, DOWN, 0)
-        vb = MathTex(r"V_b").next_to(vb_term, DOWN, MED_SMALL_BUFF)
-
-        ind_emitter: Inductor = (
-            Inductor(width, stroke_width_mult=stroke_width_mult)
-            .rotate(PI / 2)
-            .next_to(bjt.emitter.get_end(), DOWN, spacing)
-        )
-        le = Line(
-            bjt.emitter.get_end(),
-            ind_emitter.get_top(),
-            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
-        )
-        lc = Line(
-            bjt.collector.get_end(),
-            bjt.collector.get_end() + UP * spacing,
-            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
-        )
-        ind_collector: Inductor = (
-            Inductor(width, stroke_width_mult=stroke_width_mult)
-            .rotate(PI / 2)
-            .next_to(lc, UP, 0)
-        )
-
-        load = (
-            Resistor(width=width, stroke_width_mult=stroke_width_mult)
-            .rotate(PI / 2)
-            .next_to(lc.get_midpoint(), RIGHT, spacing)
-        )
-        ll = Line(
-            lc.get_midpoint(),
-            load.get_left(),
-            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
-        )
-        dddr = MathTex(r"\cdots").next_to(load, RIGHT, MED_LARGE_BUFF)
-        dddl = MathTex(r"\cdots").next_to(cap1, LEFT, MED_LARGE_BUFF)
-        dddu = (
-            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_emitter, DOWN, MED_LARGE_BUFF)
-        )
-        dddd = (
-            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_collector, UP, MED_LARGE_BUFF)
-        )
-        bd = (
-            Group(
-                ind1,
-                l1,
-                cap1,
-                choke_line,
-                vb_line,
-                vb_term,
-                vb,
-                le,
-                ind_emitter,
-                lc,
-                ind_collector,
-                load,
-                ll,
-                dddr,
-                dddl,
-                dddu,
-                dddd,
-            )
-            # .scale_to_fit_width(new_cam.width)
-            .move_to(new_cam)
-        )
-
-        self.play(
-            LaggedStart(
-                # Transform(self.camera.frame, new_cam),
-                FadeIn(bd),
-                lag_ratio=0.3,
-            )
-        )
-
-        # self.play(self.camera.frame.animate.shift(UP * fh(self)))
+        self.play(Transform(self.camera.frame, new_cam))
 
         self.wait(2)
 
@@ -600,11 +498,11 @@ class Counter(Scene):
 
 class BJT(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         width = self.camera.frame.width * 0.1
         spacing = width / 2
         stroke_width_mult = 1.5
         bjt = Bjt(width, stroke_width_mult=stroke_width_mult)
-        self.add(bjt)
 
         cap1 = Capacitor(width, stroke_width_mult=stroke_width_mult).next_to(
             bjt, LEFT, spacing * 2
@@ -630,7 +528,11 @@ class BJT(MovingCameraScene):
             stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
         )
         vb_term: Circle = bjt.base.copy().set_color(RED).next_to(vb_line, DOWN, 0)
-        vb = MathTex(r"V_b").next_to(vb_term, DOWN, MED_SMALL_BUFF)
+        vb = (
+            MathTex(r"V_b")
+            .scale_to_fit_width(ind1.width)
+            .next_to(vb_term, DOWN, MED_SMALL_BUFF)
+        )
 
         ind_emitter: Inductor = (
             Inductor(width, stroke_width_mult=stroke_width_mult)
@@ -672,13 +574,14 @@ class BJT(MovingCameraScene):
             MathTex(r"\cdots").rotate(PI / 2).next_to(ind_collector, UP, MED_LARGE_BUFF)
         )
 
-        self.add(
+        g = Group(
             ind1,
             l1,
             cap1,
             choke_line,
             vb_line,
             vb_term,
+            bjt,
             vb,
             le,
             ind_emitter,
@@ -691,3 +594,129 @@ class BJT(MovingCameraScene):
             dddu,
             dddd,
         )
+
+        self.camera.frame.scale_to_fit_height(g.height * 1.1).move_to(g)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in g], lag_ratio=0.15))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.9).move_to(bjt),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.2) for m in g[:6]],
+                    *[m.animate.set_stroke(opacity=0.2) for m in g[7:]],
+                    *[m.animate.set_opacity(0.2) for m in [dddr, dddl, dddu, dddd, vb]],
+                ),
+                *[m.animate.set_color(GREEN) for m in bjt.main_body],
+                lag_ratio=0.2,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        active_label = (
+            Text("active,\nnon-linear", font=FONT)
+            .scale(0.7)
+            .move_to(self.camera.frame.get_corner(UR))
+            .shift(LEFT + DOWN)
+        )
+        active_label_bez = CubicBezier(
+            bjt.get_right() + [0.1, 0, 0],
+            bjt.get_right() + [1, 0, 0],
+            active_label.get_left() + [-1, 0, 0],
+            active_label.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(
+                    Group(bjt, active_label, active_label_bez)
+                ),
+                Create(active_label_bez),
+                Write(active_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        bjt_new = Bjt(bjt.width, stroke_width_mult)
+        fet = Fet(
+            width, stroke_width_mult=stroke_width_mult, mode="enhancement", channel="n"
+        )
+        other = Text("...", font=FONT).rotate(PI / 2)
+
+        transistor_types = (
+            Group(bjt_new, fet, other)
+            .arrange(DOWN, MED_LARGE_BUFF, aligned_edge=LEFT)
+            .move_to(active_label, LEFT)
+            .set_y(bjt.get_y())
+        )
+
+        types_bez_u = CubicBezier(
+            bjt.get_right() + [0.1, 0, 0],
+            bjt.get_right() + [1, 0, 0],
+            transistor_types.get_corner(UL) + [-1, 0, 0],
+            transistor_types.get_corner(UL) + [-0.1, 0.2, 0],
+        )
+        types_bez_d = CubicBezier(
+            bjt.get_right() + [0.1, 0, 0],
+            bjt.get_right() + [1, 0, 0],
+            transistor_types.get_corner(DL) + [-1, 0, 0],
+            transistor_types.get_corner(DL) + [-0.1, -0.2, 0],
+        )
+
+        bjt_label = Text("BJT", font=FONT).next_to(bjt_new, RIGHT, MED_LARGE_BUFF)
+        fet_label = Text("FET", font=FONT).next_to(fet, RIGHT, MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeOut(m) for m in active_label], lag_ratio=0.08),
+                self.camera.frame.animate.set_y(bjt.get_y()),
+                ReplacementTransform(active_label_bez, types_bez_u),
+                FadeIn(bjt_new),
+                Write(bjt_label),
+                FadeIn(fet),
+                Write(fet_label),
+                FadeIn(other),
+                Create(types_bez_d),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    fet_label,
+                    bjt_label,
+                    g,
+                    other,
+                    types_bez_u,
+                    types_bez_d,
+                    bjt_new,
+                ),
+                self.camera.frame.animate.scale_to_fit_height(fet.height * 2).move_to(
+                    fet
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
+
+
+class FET(MovingCameraScene):
+    def construct(self):
+        width = self.camera.frame.width * 0.1
+        spacing = width / 2
+        stroke_width_mult = 1.5
+        fet = Fet(
+            width, stroke_width_mult=stroke_width_mult, mode="enhancement", channel="n"
+        )
+        self.add(fet)

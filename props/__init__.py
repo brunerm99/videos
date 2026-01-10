@@ -3,6 +3,7 @@
 from .block_diagram import (
     Bjt,
     Capacitor,
+    Fet,
     Ground,
     Inductor,
     Resistor,

@@ -1,6 +1,6 @@
 # props/block_diagram.py
-
 from manim import *
+from pyglet.image.codecs.gdkpixbuf2 import ArgumentError
 
 
 def get_blocks(color=WHITE):
@@ -110,17 +110,29 @@ class Resistor(VMobject):
         ).rotate(-rotation / 2)
         res_line_1 = VGroup(res_line_start, res_line_start_inv)
         res_line_2 = (
-            Line(LEFT / 2, RIGHT / 2, stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult)
+            Line(
+                LEFT / 2,
+                RIGHT / 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+            )
             .rotate(rotation / 2)
             .next_to(res_line_1, direction=DOWN, buff=0)
         )
         res_line_3 = (
-            Line(LEFT / 2, RIGHT / 2, stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult)
+            Line(
+                LEFT / 2,
+                RIGHT / 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+            )
             .rotate(-rotation / 2)
             .next_to(res_line_2, direction=DOWN, buff=0)
         )
         res_line_4 = (
-            Line(LEFT / 2, RIGHT / 2, stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult)
+            Line(
+                LEFT / 2,
+                RIGHT / 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+            )
             .rotate(rotation / 2)
             .next_to(res_line_3, direction=DOWN, buff=0)
         )
@@ -284,6 +296,110 @@ def get_amp(width, stroke_width_mult=2):
         .set_z_index(1)
     )
     return Group(amp_box, amp_tri)
+
+
+class Fet(VMobject):
+    def __init__(
+        self, width=1, stroke_width_mult=2, mode="depletion", channel="n", **kwargs
+    ):
+        super().__init__(**kwargs)
+
+        center_line = Line(
+            UP, DOWN, stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult
+        )
+
+        right_line_buff = 0
+        right_line_len = center_line.height / 3
+        if mode == "enhancement":
+            right_line_buff = center_line.height * 0.2
+            right_line_len = center_line.height * 0.2
+
+        l1 = Line(
+            center_line.get_top(),
+            center_line.get_top() + DOWN * right_line_len,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        l2 = l1.copy().next_to(l1, DOWN, right_line_buff)
+        l3 = l1.copy().next_to(l2, DOWN, right_line_buff)
+        right_line = VGroup(l1, l2, l3)
+        right_line.next_to(center_line, RIGHT, MED_SMALL_BUFF)
+
+        self.gate = Line(
+            center_line.get_bottom(),
+            center_line.get_bottom() + LEFT * center_line.height * 0.5,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+
+        drain_start = Line(
+            l1.get_midpoint(),
+            l1.get_midpoint() + RIGHT * self.gate.width * 0.5,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        self.drain = Line(
+            drain_start.get_end(),
+            drain_start.get_end() + UP * self.gate.width,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+
+        source_start = Line(
+            l3.get_midpoint(),
+            l3.get_midpoint() + RIGHT * self.gate.width * 0.5,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        self.source = Line(
+            source_start.get_end(),
+            source_start.get_end() + DOWN * self.gate.width,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+
+        if channel == "n":
+            source_dir = Arrow(
+                l2.get_midpoint() + RIGHT * self.gate.width * 0.5,
+                l2.get_midpoint(),
+                buff=0,
+                stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+                max_stroke_width_to_length_ratio=999,
+                max_tip_length_to_length_ratio=0.5,
+            )
+        elif channel == "p":
+            source_dir = Arrow(
+                l2.get_midpoint(),
+                l2.get_midpoint() + RIGHT * self.gate.width * 0.5,
+                buff=0,
+                max_stroke_width_to_length_ratio=999,
+                max_tip_length_to_length_ratio=0.5,
+                stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+            )
+        else:
+            raise ArgumentError("channel must be 'p' or 'n'")
+
+        from_source_dir = Line(
+            [source_start.get_right()[0], source_dir.get_y(), 0],
+            source_start.get_right(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+
+        self.main_body = VGroup(
+            center_line,
+            right_line,
+            self.gate,
+            drain_start,
+            self.drain,
+            source_start,
+            self.source,
+            source_dir,
+            from_source_dir,
+        ).scale_to_fit_width(width)
+
+        self.add(self.main_body)
+
+    def get_terminals(self, val):
+        if val == "drain":
+            return self.drain.get_top()
+        elif val == "source":
+            return self.source.get_bottom()
+        elif val == "gate":
+            return self.gate.get_left()
 
 
 class Bjt(VMobject):
