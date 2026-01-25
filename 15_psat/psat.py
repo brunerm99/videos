@@ -33,7 +33,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -720,3 +720,331 @@ class FET(MovingCameraScene):
             width, stroke_width_mult=stroke_width_mult, mode="enhancement", channel="n"
         )
         self.add(fet)
+
+
+class P1dB(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        amp = get_amp(width=fh(self, 0.3)).shift(DOWN * fh(self))
+        gain_label = (
+            Text(r"20 dB", font=FONT, color=GAIN_COLOR)
+            .scale(1.5)
+            .next_to(amp, DOWN, MED_LARGE_BUFF)
+        )
+
+        self.add(amp)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(gain_label))
+
+        self.wait(0.5)
+
+        pin = Arrow(
+            amp.get_left() + LEFT * 4, amp.get_left(), buff=0, color=INPUT_COLOR
+        )
+        pout = Arrow(
+            amp.get_right(), amp.get_right() + RIGHT * 4, buff=0, color=OUTPUT_COLOR
+        )
+
+        low_power_label = (
+            Text("low power", font=FONT, color=INPUT_COLOR)
+            .scale(0.7)
+            .next_to(pin, UP, MED_SMALL_BUFF)
+        )
+
+        output_power_label = (
+            Text("low power + 20 dB", font=FONT, color=OUTPUT_COLOR)
+            .scale(0.7)
+            .next_to(pout, UP, MED_SMALL_BUFF)
+            .shift(RIGHT * 0.8)
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(pin),
+                Write(low_power_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(pout),
+                Write(output_power_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        small_signal_label = (
+            Text('"small signal gain"', font=FONT)
+            .scale(0.8)
+            .next_to(gain_label, DOWN, MED_LARGE_BUFF)
+        )
+
+        ss_gain_bez_l = CubicBezier(
+            gain_label.get_left() + [-0.1, 0, 0],
+            gain_label.get_left() + [-1, 0, 0],
+            small_signal_label.get_corner(UL) + [-0.1, 1, 0],
+            small_signal_label.get_corner(UL) + [-0.1, 0.1, 0],
+        )
+        ss_gain_bez_r = CubicBezier(
+            gain_label.get_right() + [0.1, 0, 0],
+            gain_label.get_right() + [1, 0, 0],
+            small_signal_label.get_corner(UR) + [0.1, 1, 0],
+            small_signal_label.get_corner(UR) + [0.1, 0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN),
+                AnimationGroup(
+                    Create(ss_gain_bez_l),
+                    Create(ss_gain_bez_r),
+                ),
+                Write(small_signal_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        ax = Axes(
+            x_range=[0, 10, 1],
+            y_range=[0, 10, 1],
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.7),
+            tips=False,
+            axis_config=dict(
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.3,
+            ),
+        ).next_to(self.camera.frame.get_bottom(), DOWN, LARGE_BUFF * 2)
+
+        x_ticks = np.arange(2, 12, 2).astype(int)
+        y_ticks = np.arange(22, 32, 2).astype(int)
+
+        ax = Axes(
+            x_range=[0, 10, 1],
+            y_range=[20, 30, 1],
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.7),
+            tips=False,
+            x_axis_config=dict(
+                numbers_with_elongated_ticks=x_ticks,
+                include_numbers=True,
+                numbers_to_include=x_ticks,
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+                label_constructor=lambda x: Text(x, font=FONT),
+                line_to_number_buff=MED_SMALL_BUFF,
+                decimal_number_config=dict(num_decimal_places=0),
+                longer_tick_multiple=2,
+            ),
+            y_axis_config=dict(
+                numbers_with_elongated_ticks=y_ticks,
+                include_numbers=True,
+                numbers_to_include=y_ticks,
+                font_size=DEFAULT_FONT_SIZE * 0.5,
+                label_constructor=lambda x: Text(x, font=FONT),
+                line_to_number_buff=MED_SMALL_BUFF,
+                decimal_number_config=dict(num_decimal_places=0),
+                longer_tick_multiple=2,
+            ),
+            axis_config=dict(
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                tick_size=0.1,
+                # stroke_color=BLACK,
+            ),
+        )
+
+        pin_sym_ax_label = Tex("| $P_{in}$")
+        pin_ax_label = Text("Input Power", font=FONT).scale_to_fit_height(
+            pin_sym_ax_label.height
+        )
+        pin_label_group = (
+            Group(pin_ax_label, pin_sym_ax_label)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(ax, DOWN, MED_SMALL_BUFF)
+            .shift(UP * 0.5)
+        )
+
+        pout_sym_ax_label = Tex("| $P_{out}$")
+        pout_ax_label = Text("Output Power", font=FONT).scale_to_fit_height(
+            pout_sym_ax_label.height
+        )
+        pout_label_group = (
+            Group(pout_ax_label, pout_sym_ax_label)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .rotate(PI / 2)
+            .next_to(ax, LEFT, MED_SMALL_BUFF)
+            .shift(RIGHT * 0.5)
+        )
+
+        self.add(ax)
+
+        ax.x_axis.numbers.set_opacity(0)
+        ax.y_axis.numbers.set_opacity(0)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(ax),
+                LaggedStart(
+                    *[FadeIn(m) for m in [*pout_ax_label, *pout_sym_ax_label[0]]]
+                ),
+                LaggedStart(
+                    *[FadeIn(m) for m in [*pin_ax_label, *pin_sym_ax_label[0]]]
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        x_labels = [m.copy().set_opacity(1) for m in ax.x_axis.numbers]
+        y_labels = [m.copy().set_opacity(1) for m in ax.y_axis.numbers]
+
+        self.play(
+            LaggedStart(
+                pin_label_group.animate.shift(DOWN * 0.5),
+                LaggedStart(
+                    *[FadeIn(m) for m in x_labels],
+                    lag_ratio=0.2,
+                ),
+                pout_label_group.animate.shift(LEFT * 0.5),
+                LaggedStart(
+                    *[FadeIn(m) for m in y_labels],
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        ideal_plot = ax.plot(lambda x: x + 20, color=GREEN, x_range=[0, 10, 1 / 100])
+
+        G = 20
+        P_sat = 28.5
+
+        actual_x1 = VT(0)
+
+        actual_plot = always_redraw(
+            lambda: ax.plot(
+                lambda x: x
+                + G
+                + np.maximum(P_sat - np.log(1 + np.exp(3 * (x + G - P_sat + 1))) / 3, G)
+                - P_sat,
+                color=OUTPUT_COLOR,
+                x_range=[0, ~actual_x1, 1 / 100],
+            )
+        )
+
+        ideal_sym_label = Tex(r"Ideal $P_{out}(P_{in})$")
+        ideal_legend = Line(ORIGIN, RIGHT, color=GREEN)
+        ideal_label_group = (
+            Group(ideal_legend, ideal_sym_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .next_to(self.camera.frame.get_corner(UR), DL)
+            .shift(RIGHT * 2)
+        )
+
+        actual_sym_label = Tex(r"Actual $P_{out}(P_{in})$")
+        actual_legend = Line(ORIGIN, RIGHT, color=OUTPUT_COLOR)
+        actual_label_group = (
+            Group(actual_legend, actual_sym_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .next_to(ideal_label_group, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                Create(ideal_plot),
+                self.camera.frame.animate.scale(1.1).set_x(
+                    Group(ax, ideal_label_group).get_x()
+                ),
+                FadeIn(ideal_label_group),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.add(actual_plot)
+
+        compression_box = DashedVMobject(
+            Rectangle(width=ax.width * 0.35, height=ax.height * 0.35)
+        ).move_to(ax.c2p(8.5, 28.5))
+
+        self.play(
+            LaggedStart(
+                actual_x1 @ 7,
+                FadeIn(actual_label_group),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(compression_box),
+                actual_x1 @ 10,
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        p1db_sym_label = Tex(r"$P_{1 \text{dB}}$ |")
+        p1db_label = Text("1 dB Compression Point", font=FONT).scale_to_fit_height(
+            p1db_sym_label.height
+        )
+        p1db_label_group = (
+            Group(p1db_sym_label, p1db_label)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .move_to(self.camera.frame.get_top())
+        )
+
+        all_group = Group(
+            ax,
+            p1db_label_group,
+            ideal_label_group,
+            actual_label_group,
+            pin_ax_label,
+            pout_ax_label,
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    all_group.height * 1.1
+                ).move_to(all_group),
+                LaggedStart(
+                    *[FadeIn(m) for m in [*p1db_sym_label[0], *p1db_label]],
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    compression_box.height * 1.2
+                ).move_to(compression_box),
+                FadeOut(compression_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
