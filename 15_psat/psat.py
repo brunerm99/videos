@@ -33,7 +33,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -974,7 +974,7 @@ class P1dB(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.add(actual_plot)
 
@@ -1043,6 +1043,201 @@ class P1dB(MovingCameraScene):
                     compression_box.height * 1.2
                 ).move_to(compression_box),
                 FadeOut(compression_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        ip1db = 8.2
+        p_ideal = Dot(ax.i2gp(ip1db, ideal_plot))
+        p_real = Dot(ax.i2gp(ip1db, actual_plot))
+        ip1db_line = Line(p_real.get_center(), p_ideal.get_center())
+
+        ip1db_label = (
+            Text("1dB?", font=FONT)
+            .scale(0.6)
+            .next_to(ip1db_line, RIGHT, MED_SMALL_BUFF)
+        )
+        ip1db_label[-1].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                Create(p_real),
+                Create(ip1db_line),
+                Create(p_ideal),
+                LaggedStart(*[FadeIn(m) for m in ip1db_label[:-1]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(ip1db_label[-1]))
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(ip1db_label[-1]),
+            self.camera.frame.animate.scale_to_fit_height(
+                all_group.height * 1.2
+            ).move_to(all_group),
+        )
+
+        self.wait(0.5)
+
+        amp = get_amp(width=fh(self, 0.15)).next_to(ax, RIGHT, LARGE_BUFF * 3)
+
+        inp_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 2,
+            y_length=amp.height,
+        )
+        inp_ax.shift(amp.get_left() - inp_ax.c2p(1, 0))
+        outp_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 2,
+            y_length=amp.height,
+        )
+        outp_ax.shift(amp.get_right() - outp_ax.c2p(0, 0))
+
+        A = VT(0.15)
+        f = 3
+        G_new_amp = 10
+        x1_in = VT(0)
+        x1_out = VT(0)
+        psat = 3.2
+        inp = always_redraw(
+            lambda: inp_ax.plot(
+                lambda t: ~A * np.sin(2 * PI * f * t),
+                x_range=[0, ~x1_in, 1 / 1000],
+                color=INPUT_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+        )
+        outp = always_redraw(
+            lambda: outp_ax.plot(
+                lambda t: np.clip(~A * G_new_amp * np.sin(2 * PI * f * t), -psat, psat),
+                x_range=[0, ~x1_out, 1 / 1000],
+                color=OUTPUT_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+        )
+        self.add(inp, outp)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        amp_ax_group = Group(amp, ax, inp_ax, outp_ax)
+
+        ip1db_vt = VT(8.2)
+        p_ideal_vt = always_redraw(lambda: Dot(ax.i2gp(~ip1db_vt, ideal_plot)))
+        p_real_vt = always_redraw(lambda: Dot(ax.i2gp(~ip1db_vt, actual_plot)))
+
+        self.add(p_real_vt, p_ideal_vt)
+        self.remove(p_real, p_ideal)
+
+        self.camera.frame.save_state()
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    *[
+                        m.animate.set_opacity(0)
+                        for m in [*actual_label_group, *ideal_label_group]
+                    ]
+                ),
+                self.camera.frame.animate.move_to(amp_ax_group),
+                LaggedStart(
+                    GrowFromCenter(
+                        amp[0], rate_func=rate_functions.ease_out_elastic, run_time=1.4
+                    ),
+                    GrowFromCenter(
+                        amp[1], rate_func=rate_functions.ease_out_elastic, run_time=1.4
+                    ),
+                    lag_ratio=0.15,
+                ),
+                AnimationGroup(
+                    ip1db_vt @ 4,
+                    FadeOut(ip1db_line, ip1db_label),
+                ),
+                x1_in @ 1,
+                x1_out @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(A @ (~A * 3), ip1db_vt @ ip1db, run_time=8)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(*amp),
+                    x1_in @ 0,
+                    x1_out @ 0,
+                ),
+                self.camera.frame.animate.restore(),
+                AnimationGroup(
+                    *[
+                        m.animate.set_opacity(1)
+                        for m in [*actual_label_group, *ideal_label_group]
+                    ]
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        op1db_box = SurroundingRectangle(pout_label_group)
+        ip1db_box = SurroundingRectangle(pin_label_group)
+
+        op1db_line = DashedLine(
+            [ax.c2p(0, 0)[0], ax.i2gp(ip1db, actual_plot)[1], 0],
+            ax.i2gp(ip1db, actual_plot),
+            dashed_ratio=0.6,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+
+        ip1db_line = DashedLine(
+            ax.c2p(ip1db, 20),
+            ax.i2gp(ip1db, actual_plot),
+            dashed_ratio=0.6,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+
+        self.play(Create(op1db_box))
+
+        self.wait(0.5)
+
+        self.play(Create(op1db_line))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(op1db_box),
+                Create(ip1db_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                op1db_line.animate.set_opacity(0.3),
+                Create(ip1db_line),
                 lag_ratio=0.3,
             )
         )
