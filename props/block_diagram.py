@@ -1,6 +1,5 @@
 # props/block_diagram.py
 from manim import *
-from pyglet.image.codecs.gdkpixbuf2 import ArgumentError
 
 
 def get_blocks(color=WHITE):
@@ -371,7 +370,7 @@ class Fet(VMobject):
                 stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
             )
         else:
-            raise ArgumentError("channel must be 'p' or 'n'")
+            raise ValueError("channel must be 'p' or 'n'")
 
         from_source_dir = Line(
             [source_start.get_right()[0], source_dir.get_y(), 0],

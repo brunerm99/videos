@@ -33,7 +33,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -927,7 +927,12 @@ class P1dB(MovingCameraScene):
 
         self.wait(0.5)
 
-        ideal_plot = ax.plot(lambda x: x + 20, color=GREEN, x_range=[0, 10, 1 / 100])
+        ideal_plot_x1 = VT(10)
+        ideal_plot = always_redraw(
+            lambda: ax.plot(
+                lambda x: x + 20, color=GREEN, x_range=[0, ~ideal_plot_x1, 1 / 100]
+            )
+        )
 
         G = 20
         P_sat = 28.5
@@ -938,7 +943,8 @@ class P1dB(MovingCameraScene):
             lambda: ax.plot(
                 lambda x: x
                 + G
-                + np.maximum(P_sat - np.log(1 + np.exp(3 * (x + G - P_sat + 1))) / 3, G)
+                + P_sat
+                - np.logaddexp(0, 3 * (x + G - P_sat + 1)) / 3
                 - P_sat,
                 color=OUTPUT_COLOR,
                 x_range=[0, ~actual_x1, 1 / 100],
@@ -1164,7 +1170,7 @@ class P1dB(MovingCameraScene):
                 ),
                 AnimationGroup(
                     ip1db_vt @ 4,
-                    FadeOut(ip1db_line, ip1db_label),
+                    FadeOut(ip1db_line, ip1db_label[:-1]),
                 ),
                 x1_in @ 1,
                 x1_out @ 1,
@@ -1216,11 +1222,24 @@ class P1dB(MovingCameraScene):
             dash_length=DEFAULT_DASH_LENGTH * 2,
         )
 
+        op1db_label = (
+            Text("OP1dB", font=FONT).scale(0.7).next_to(op1db_line.get_start(), UR)
+        )
+        ip1db_label = (
+            Text("IP1dB", font=FONT).scale(0.7).next_to(ip1db_line.get_start(), UR)
+        )
+
         self.play(Create(op1db_box))
 
         self.wait(0.5)
 
-        self.play(Create(op1db_line))
+        self.play(
+            LaggedStart(
+                Create(op1db_line),
+                Write(op1db_label),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
@@ -1236,10 +1255,65 @@ class P1dB(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                op1db_line.animate.set_opacity(0.3),
+                AnimationGroup(
+                    op1db_line.animate.set_opacity(0.3),
+                    op1db_label.animate.set_opacity(0.3),
+                ),
                 Create(ip1db_line),
+                Write(ip1db_label),
                 lag_ratio=0.3,
             )
         )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(actual_label_group, ideal_label_group, p1db_label_group),
+                Uncreate(op1db_line),
+                FadeOut(op1db_label),
+                Uncreate(ip1db_line),
+                FadeOut(ip1db_label),
+                self.camera.frame.animate.scale_to_fit_height(
+                    compression_box.height * 1.5
+                ).move_to(compression_box),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        psat_sym_label = Tex(r"$P_{\text{sat}}$ |")
+        psat_label = Text("Saturated power", font=FONT).scale_to_fit_height(
+            p1db_sym_label.height
+        )
+        psat_label_group = (
+            Group(psat_sym_label, psat_label)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .scale(0.6)
+            .move_to(self.camera.frame.get_center() + RIGHT * 2 + DOWN)
+        )
+        # self.add(psat_label_group)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ip1db_vt @ 18,
+                    ideal_plot_x1 @ 18,
+                    actual_x1 @ 18,
+                    run_time=4,
+                ),
+                self.camera.frame.animate.shift(RIGHT * 2),
+                LaggedStart(
+                    *[FadeIn(m) for m in [*psat_sym_label[0], *psat_label]],
+                    lag_ratio=0.05,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(psat_label_group), actual_x1 @ 0, ideal_plot_x1 @ 0)
 
         self.wait(2)
