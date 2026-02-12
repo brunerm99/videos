@@ -18,7 +18,6 @@ from props import (
     Bjt,
     Capacitor,
     Fet,
-    Ground,
     Inductor,
     Resistor,
     VideoMobject,
@@ -33,7 +32,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -98,11 +97,13 @@ class LinearRegion(MovingCameraScene):
 
         dot_opacity = VT(0)
         dot = always_redraw(
-            lambda: Dot(color=YELLOW)
-            .scale(2)
-            .set_opacity(~dot_opacity)
-            .move_to(linax.c2p(~x1, ~x1))
-            .set_z_index(1)
+            lambda: (
+                Dot(color=YELLOW)
+                .scale(2)
+                .set_opacity(~dot_opacity)
+                .move_to(linax.c2p(~x1, ~x1))
+                .set_z_index(1)
+            )
         )
         xline = always_redraw(
             lambda: DashedLine(
@@ -941,11 +942,9 @@ class P1dB(MovingCameraScene):
 
         actual_plot = always_redraw(
             lambda: ax.plot(
-                lambda x: x
-                + G
-                + P_sat
-                - np.logaddexp(0, 3 * (x + G - P_sat + 1)) / 3
-                - P_sat,
+                lambda x: (
+                    x + G + P_sat - np.logaddexp(0, 3 * (x + G - P_sat + 1)) / 3 - P_sat
+                ),
                 color=OUTPUT_COLOR,
                 x_range=[0, ~actual_x1, 1 / 100],
             )
@@ -1315,5 +1314,192 @@ class P1dB(MovingCameraScene):
         self.wait(0.5)
 
         self.play(FadeOut(psat_label_group), actual_x1 @ 0, ideal_plot_x1 @ 0)
+
+        self.wait(2)
+
+
+class Psat(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        amp = get_amp(width=fh(self, 0.15)).move_to(self.camera.frame)
+
+        inp_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 4,
+            y_length=amp.height,
+        )
+        inp_ax.shift(amp.get_left() - inp_ax.c2p(1, 0))
+        outp_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 4,
+            y_length=amp.height,
+        )
+        outp_ax.shift(amp.get_right() - outp_ax.c2p(0, 0))
+
+        A = VT(1)
+        f = 3
+        G_new_amp = 10
+        x1_in = VT(0)
+        x1_out = VT(0)
+        psat = 3.2
+        inp = always_redraw(
+            lambda: inp_ax.plot(
+                lambda t: ~A * np.sin(2 * PI * f * t),
+                x_range=[0, ~x1_in, 1 / 1000],
+                color=INPUT_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+        )
+        outp = always_redraw(
+            lambda: outp_ax.plot(
+                lambda t: np.clip(~A * G_new_amp * np.sin(2 * PI * f * t), -psat, psat),
+                x_range=[0, ~x1_out, 1 / 1000],
+                color=OUTPUT_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+        )
+        outp_cam = outp_ax.plot(
+            lambda t: psat * np.sin(2 * PI * f * t),
+            # lambda t: np.clip(~A * G_new_amp * np.sin(2 * PI * f * t), -psat, psat),
+            x_range=[0, 1, 1 / 1000],
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            use_smoothing=False,
+        )
+        self.add(
+            inp,
+            outp,
+            # outp_cam,
+        )
+        self.add(amp)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                x1_in @ 1,
+                self.camera.frame.animate.scale(0.4).move_to(outp_ax.c2p(0, 0)),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        top_rail = DashedLine(
+            outp_ax.c2p(0, psat + 0.08),
+            outp_ax.c2p(1, psat + 0.08),
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        bot_rail = DashedLine(
+            outp_ax.c2p(0, -(psat + 0.08)),
+            outp_ax.c2p(1, -(psat + 0.08)),
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(top_rail), Create(bot_rail)),
+                AnimationGroup(
+                    x1_out @ 1,
+                    MoveAlongPath(self.camera.frame, outp_cam),
+                ),
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        pterm = Line(UP, DOWN)
+        nterm = Line(UP, ORIGIN)
+        batt = (
+            Group(nterm, pterm)
+            .scale(0.5)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(amp, UP, LARGE_BUFF * 2)
+            .shift(LEFT)
+        )
+        to_nterm = CubicBezier(
+            amp.get_top() + [-amp.width / 4, 0, 0],
+            amp.get_top() + [-amp.width / 4 - 0.5, 1, 0],
+            nterm.get_left() + [-1, 0, 0],
+            nterm.get_left(),
+        ).set_z_index(-1)
+        to_pterm = CubicBezier(
+            amp.get_top() + [amp.width / 4, 0, 0],
+            amp.get_top() + [amp.width / 4, 1, 0],
+            pterm.get_right() + [0.5, 0, 0],
+            pterm.get_right(),
+        ).set_z_index(-1)
+        minus = Text("-", font=FONT, color=GRAY).next_to(nterm.get_top(), UL)
+        plus = (
+            Text("+", font=FONT, color=YELLOW)
+            .next_to(pterm.get_top(), UR)
+            .set_y(minus.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP),
+                Create(to_nterm),
+                Create(to_pterm),
+                Create(nterm),
+                Create(pterm),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(plus),
+                to_pterm.animate.set_color(YELLOW),
+                GrowFromCenter(minus),
+                to_nterm.animate.set_color(GRAY),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        width = self.camera.frame.width * 0.1
+        stroke_width_mult = 1
+
+        outp_line = Line(outp_ax.c2p(0, 0), outp_ax.c2p(1, 0)).set_z_index(-1)
+        load = (
+            Resistor(width=width, stroke_width_mult=stroke_width_mult)
+            .next_to(outp_line.get_end(), DR, LARGE_BUFF)
+            .set_z_index(-1)
+        )
+        outp_to_load = CubicBezier(
+            outp_line.get_end() + [0, 0, 0],
+            outp_line.get_end() + [1, 0, 0],
+            load.get_top() + [0, 1, 0],
+            load.get_top() + [0, 0, 0],
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            self.camera.frame.animate(run_time=2).shift(RIGHT * 2).scale(0.9),
+            Succession(
+                Create(outp_line, rate_func=rate_functions.ease_in_sine),
+                Create(outp_to_load, rate_func=rate_functions.linear, run_time=0.5),
+                GrowFromCenter(
+                    load, rate_func=rate_functions.ease_out_sine, run_time=0.5
+                ),
+            ),
+        )
 
         self.wait(2)
