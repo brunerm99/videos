@@ -1503,3 +1503,8 @@ class Psat(MovingCameraScene):
         )
 
         self.wait(2)
+
+
+class WhoCares(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(False))
