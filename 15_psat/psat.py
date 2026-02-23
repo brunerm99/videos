@@ -32,7 +32,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -64,6 +64,224 @@ def fw(scene, scale=1):
 
 def lin2db(x):
     return 10 * np.log10(x)
+
+
+class Intro(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        amp = get_amp(width=fh(self, 0.3))
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(
+                    amp[0], rate_func=rate_functions.ease_out_elastic, run_time=1.4
+                ),
+                GrowFromCenter(
+                    amp[1], rate_func=rate_functions.ease_out_elastic, run_time=1.4
+                ),
+                lag_ratio=0.15,
+            ),
+        )
+
+        self.wait(0.5)
+
+        inp_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 2,
+            y_length=amp.height,
+        )
+        inp_ax.shift(amp.get_left() - inp_ax.c2p(1, 0))
+        outp_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            tips=False,
+            x_length=amp.width * 2,
+            y_length=amp.height,
+        )
+        outp_ax.shift(amp.get_right() - outp_ax.c2p(0, 0))
+
+        A = VT(0.15)
+        f = 3
+        G = 10
+        x1_in = VT(0)
+        x1_out = VT(0)
+        psat = 3.2
+        inp = always_redraw(
+            lambda: inp_ax.plot(
+                lambda t: ~A * np.sin(2 * PI * f * t),
+                x_range=[0, ~x1_in, 1 / 1000],
+                color=INPUT_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+        )
+        outp = always_redraw(
+            lambda: outp_ax.plot(
+                lambda t: np.clip(~A * G * np.sin(2 * PI * f * t), -psat, psat),
+                x_range=[0, ~x1_out, 1 / 1000],
+                color=OUTPUT_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                use_smoothing=False,
+            )
+        )
+        self.add(inp, outp)
+
+        self.play(
+            LaggedStart(
+                x1_in @ 1,
+                x1_out @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(A @ 0.45, self.camera.frame.animate.scale(1.2), run_time=4)
+
+        self.wait(0.5)
+
+        datasheet = (
+            ImageMobject("../14_amp_gain/static/adl8154-03.png")
+            .scale_to_fit_height(fh(self, 0.7))
+            .rotate(-PI * 0.05)
+            .next_to(self.camera.frame.get_right(), LEFT, MED_LARGE_BUFF)
+            .shift(UP * fh(self))
+        )
+        psat_label = MathTex(r"P_{\mathrm{sat}}", color=BLUE)
+        p1db_label = MathTex(r"P_{\mathrm{1dB}}", color=GREEN)
+        labels = (
+            Group(p1db_label, psat_label)
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .scale_to_fit_width(fw(self, 0.25))
+            .next_to(datasheet, LEFT, LARGE_BUFF * 2)
+        )
+        psat_bez = CubicBezier(
+            datasheet.get_center()
+            + [-datasheet.width * 0.27, datasheet.height * 0.12, 0],
+            datasheet.get_center() + [-datasheet.width / 4 - 2, -2, 0],
+            psat_label.get_corner(UR) + [2, 1, 0],
+            psat_label.get_corner(UR) + [-0.5, 0, 0],
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        )
+        p1db_bez = CubicBezier(
+            datasheet.get_center()
+            + [-datasheet.width * 0.29, datasheet.height * 0.18, 0],
+            datasheet.get_center() + [-datasheet.width / 4, datasheet.height * 0.5, 0],
+            p1db_label.get_right() + [2, 1, 0],
+            p1db_label.get_right() + [0.1, 0, 0],
+            color=GREEN,
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * fh(self)),
+                FadeIn(datasheet),
+                Create(p1db_bez),
+                GrowFromCenter(p1db_label),
+                Create(psat_bez),
+                GrowFromCenter(psat_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        p1db_rect = SurroundingRectangle(
+            p1db_label, stroke_width=DEFAULT_STROKE_WIDTH * 3
+        )
+        psat_rect = SurroundingRectangle(
+            psat_label, stroke_width=DEFAULT_STROKE_WIDTH * 3
+        )
+
+        self.play(Create(p1db_rect))
+
+        self.wait(0.5)
+
+        self.play(ReplacementTransform(p1db_rect, psat_rect))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                Uncreate(p1db_bez),
+                ShrinkToCenter(datasheet.set_z_index(-10)),
+                FadeOut(psat_rect),
+                ShrinkToCenter(p1db_label),
+                Uncreate(psat_bez),
+                ShrinkToCenter(psat_label),
+                FadeOut(p1db_rect),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        p1_thumbnail = ImageMobject(
+            "../14_amp_gain/static/Gain Thumbnail.png"
+        ).scale_to_fit_width(fw(self, 0.25))
+        p1_box = SurroundingRectangle(p1_thumbnail, buff=0, stroke_opacity=0)
+        p1 = Group(p1_thumbnail, p1_box)
+        p2_thumbnail = ImageMobject(
+            "../14_amp_gain/static/Gain Thumbnail.png"
+        ).scale_to_fit_width(fw(self, 0.25))
+        p2_box = SurroundingRectangle(p2_thumbnail, buff=0, stroke_opacity=0)
+        p2 = Group(p2_thumbnail, p2_box)
+        p3_thumbnail = ImageMobject(
+            "../14_amp_gain/static/Gain Thumbnail.png"
+        ).scale_to_fit_width(fw(self, 0.25))
+        p3_box = SurroundingRectangle(p3_thumbnail, buff=0, stroke_opacity=0)
+        p3 = Group(p3_thumbnail, p3_box)
+        ps = Group(p1, p2, p3).arrange(RIGHT, LARGE_BUFF).move_to(self.camera.frame)
+        p1_label = Text("Gain", font=FONT).next_to(p1, DOWN, MED_SMALL_BUFF)
+        p2_label = Text("Compression", font=FONT).next_to(p2, DOWN, MED_SMALL_BUFF)
+        p3_label = Text("???", font=FONT).next_to(p3, DOWN, MED_SMALL_BUFF)
+
+        a12 = Arrow(p1.get_right(), p2.get_left(), buff=0)
+        a23 = Arrow(p2.get_right(), p3.get_left(), buff=0)
+        a3x = Arrow(p3.get_right(), p3.get_right() + [4, 0, 0], buff=0)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                p1.shift(DOWN * fh(self, 0.8)).animate.shift(UP * fh(self, 0.8)),
+                Write(p1_label),
+                GrowArrow(a12),
+                p2.shift(DOWN * fh(self, 0.8)).animate.shift(UP * fh(self, 0.8)),
+                Write(p2_label),
+                GrowArrow(a23),
+                p3.shift(DOWN * fh(self, 0.8)).animate.shift(UP * fh(self, 0.8)),
+                Write(p3_label),
+                lag_ratio=0.5,
+            )
+        )
+        self.play(
+            LaggedStart(
+                p1_box.animate.set_stroke(opacity=0.2),
+                p2_box.animate.set_stroke(opacity=1),
+                p3_box.animate.set_stroke(opacity=0.2),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(a3x),
+                self.camera.frame.animate.shift(RIGHT * fw(self, 2)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
 
 
 class LinearRegion(MovingCameraScene):
@@ -147,10 +365,12 @@ class LinearRegion(MovingCameraScene):
         self.wait(0.5)
         self.next_section(skip_animations=skip_animations(True))
 
-        amp = get_amp(width=fh(self, 0.3))
+        amp = get_amp(width=fh(self, 0.3)).shift(RIGHT * fw(self, 2.8))
+        self.camera.frame.save_state()
         self.play(
             LaggedStart(
-                FadeOut(*self.mobjects),
+                # FadeOut(*self.mobjects),
+                self.camera.frame.animate.shift(RIGHT * fw(self, 2.8)),
                 LaggedStart(
                     GrowFromCenter(
                         amp[0], rate_func=rate_functions.ease_out_elastic, run_time=1.4
@@ -407,6 +627,62 @@ class LinearRegion(MovingCameraScene):
         )
 
         self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.8).shift(
+                    linax.c2p(5, 5) - self.camera.frame.get_center()
+                ),
+                x1 @ 5,
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        xshift = 4
+        xarrow = Arrow(
+            dot.get_center(),
+            [linax.c2p(~x1 + xshift)[0], dot.get_center()[1], 0],
+            buff=0,
+        )
+
+        self.play(GrowArrow(xarrow))
+
+        self.wait(0.5)
+
+        yarrow = xarrow.copy()
+
+        self.play(
+            yarrow.animate.rotate(PI / 2, about_point=yarrow.get_start()).shift(
+                RIGHT * xarrow.width
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(x1 + xshift)
+
+        self.wait(0.5)
+
+        lin_region = Polygon(
+            linax.c2p(0, 0),
+            linax.c2p(0, 10),
+            linax.c2p(10, 10),
+            linax.c2p(10, 0),
+            stroke_opacity=0,
+            fill_opacity=0.3,
+            fill_color=GREEN,
+        )
+
+        self.play(FadeIn(lin_region))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
         self.next_section(skip_animations=skip_animations(True))
 
         scale_3 = 1.5
@@ -421,9 +697,9 @@ class LinearRegion(MovingCameraScene):
 
         self.wait(0.5)
 
-        # TODO: need to include this part
-        # And for a while, that's exactly what happens. Every time we increase the input power by some amount, the output power increases by that same amount plus the gain.
-        # This is the linear region, and it's where we want to operate most of the time because the amplifier behaves predictably.
+        # # TODO: need to include this part
+        # # And for a while, that's exactly what happens. Every time we increase the input power by some amount, the output power increases by that same amount plus the gain.
+        # # This is the linear region, and it's where we want to operate most of the time because the amplifier behaves predictably.
 
         scale_4 = 1.5
         scale_4_comp = 1.1
@@ -475,6 +751,318 @@ class LinearRegion(MovingCameraScene):
 class CompressionStarts(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(False))
+        width = self.camera.frame.width * 0.1
+        spacing = width / 2
+        stroke_width_mult = 1.5
+        bjt = Bjt(width, stroke_width_mult=stroke_width_mult)
+
+        cap1 = Capacitor(width, stroke_width_mult=stroke_width_mult).next_to(
+            bjt, LEFT, spacing * 2
+        )
+        l1 = Line(
+            cap1.get_right(),
+            bjt.base,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        ind1: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(l1, DOWN, spacing)
+        )
+        choke_line = Line(
+            ind1.get_top(),
+            l1.get_midpoint(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        vb_line = Line(
+            ind1.get_bottom(),
+            ind1.get_bottom() + DOWN * spacing,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        vb_term: Circle = bjt.base.copy().set_color(RED).next_to(vb_line, DOWN, 0)
+        vb = (
+            MathTex(r"V_b")
+            .scale_to_fit_width(ind1.width)
+            .next_to(vb_term, DOWN, MED_SMALL_BUFF)
+        )
+
+        ind_emitter: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(bjt.emitter.get_end(), DOWN, spacing)
+        )
+        le = Line(
+            bjt.emitter.get_end(),
+            ind_emitter.get_top(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        lc = Line(
+            bjt.collector.get_end(),
+            bjt.collector.get_end() + UP * spacing,
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        ind_collector: Inductor = (
+            Inductor(width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(lc, UP, 0)
+        )
+
+        load = (
+            Resistor(width=width, stroke_width_mult=stroke_width_mult)
+            .rotate(PI / 2)
+            .next_to(lc.get_midpoint(), RIGHT, spacing)
+        )
+        ll = Line(
+            lc.get_midpoint(),
+            load.get_left(),
+            stroke_width=DEFAULT_STROKE_WIDTH * stroke_width_mult,
+        )
+        dddr = MathTex(r"\cdots").next_to(load, RIGHT, MED_LARGE_BUFF)
+        dddl = MathTex(r"\cdots").next_to(cap1, LEFT, MED_LARGE_BUFF)
+        dddu = (
+            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_emitter, DOWN, MED_LARGE_BUFF)
+        )
+        dddd = (
+            MathTex(r"\cdots").rotate(PI / 2).next_to(ind_collector, UP, MED_LARGE_BUFF)
+        )
+
+        g = Group(
+            ind1,
+            l1,
+            cap1,
+            choke_line,
+            vb_line,
+            vb_term,
+            bjt,
+            vb,
+            le,
+            ind_emitter,
+            lc,
+            ind_collector,
+            load,
+            ll,
+            dddr,
+            dddl,
+            dddu,
+            dddd,
+        )
+
+        self.camera.frame.scale_to_fit_height(g.height * 1.1).move_to(g)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in g], lag_ratio=0.15))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.9).move_to(bjt),
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0.1) for m in g[:6]],
+                    *[m.animate.set_stroke(opacity=0.1) for m in g[7:]],
+                    *[m.animate.set_opacity(0.1) for m in [dddr, dddl, dddu, dddd, vb]],
+                ),
+                *[m.animate.set_color(GREEN) for m in bjt.main_body],
+                lag_ratio=0.2,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        ax = (
+            Axes(
+                x_range=[0, 1, 1],
+                y_range=[-1, 1, 1],
+                tips=False,
+                x_length=bjt.width * 3,
+                y_length=bjt.height * 1.3,
+            )
+            .set_opacity(1)
+            .next_to(bjt, RIGHT, LARGE_BUFF * 2)
+        )
+
+        A = VT(0)
+        plot_opacity = VT(0)
+        plot = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.clip(~A * np.sin(2 * PI * 5 * t), -1, 1),
+                x_range=[0, 1, 1 / 200],
+                color=OUTPUT_COLOR,
+                stroke_opacity=~plot_opacity,
+                use_smoothing=False,
+            )
+        )
+        self.add(plot)
+
+        top_lim = DashedLine(
+            ax.c2p(0, 1),
+            ax.c2p(1, 1),
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=RED,
+        )
+        bot_lim = DashedLine(
+            ax.c2p(0, -1),
+            ax.c2p(1, -1),
+            dash_length=DEFAULT_DASH_LENGTH * 3,
+            color=RED,
+        )
+        top_bez = CubicBezier(
+            bjt.get_right() + [0.1, 0, 0],
+            bjt.get_right() + [1, 0, 0],
+            top_lim.get_start() + [-1, 0, 0],
+            top_lim.get_start() + [0, 0, 0],
+        )
+        bot_bez = CubicBezier(
+            bjt.get_right() + [0.1, 0, 0],
+            bjt.get_right() + [1, 0, 0],
+            bot_lim.get_start() + [-1, 0, 0],
+            bot_lim.get_start() + [0, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(Group(bjt, ax)),
+                AnimationGroup(Create(top_bez), Create(bot_bez)),
+                AnimationGroup(Create(top_lim), Create(bot_lim)),
+                plot_opacity @ 1,
+                A @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        # self.wait(0.5)
+
+        # self.play(A @ 2)
+
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    *[m.animate.set_stroke(opacity=0) for m in g[:6]],
+                    *[m.animate.set_stroke(opacity=0) for m in g[7:]],
+                    *[m.animate.set_opacity(0) for m in [dddr, dddl, dddu, dddd, vb]],
+                ),
+                self.camera.frame.animate.set_x(bjt.get_x()),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        fet = (
+            Fet(
+                width,
+                stroke_width_mult=stroke_width_mult,
+                mode="enhancement",
+                channel="n",
+            )
+            .next_to(bjt, UP)
+            .shift(UP * fh(self))
+        )
+        other = (
+            Text("...", font=FONT)
+            .rotate(PI / 2)
+            .next_to(bjt, DOWN)
+            .shift(DOWN * fh(self))
+        )
+        types = (
+            Group(fet.copy(), bjt.copy().set_color(WHITE), other.copy())
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .move_to(bjt)
+            .shift(LEFT / 2)
+        )
+
+        lbrace = BraceBetweenPoints(
+            types.get_corner(UL), types.get_corner(DL), color=YELLOW
+        )
+        rbrace = BraceBetweenPoints(
+            types.get_corner(UR), types.get_corner(DR), RIGHT, color=YELLOW
+        )
+
+        self.play(
+            LaggedStart(
+                Transform(fet, types[0]),
+                Transform(bjt, types[1]),
+                Transform(other, types[2]),
+                FadeIn(lbrace),
+                FadeIn(rbrace),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        bias = Text("bias", font=FONT).next_to(lbrace, LEFT).shift(UP * 2 + LEFT)
+        bias_bez = CubicBezier(
+            lbrace.get_left() + [0, 0, 0],
+            lbrace.get_left() + [-1, 0, 0],
+            bias.get_right() + [1, 0, 0],
+            bias.get_right() + [0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                Create(bias_bez),
+                Write(bias),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_width(ax.width * 1.3).move_to(ax),
+        )
+
+        self.wait(0.5)
+
+        self.play(A @ 4, run_time=4)
+
+        self.wait(0.5)
+
+        harmonic = Text("harmonics", font=FONT)
+        distortion = Text("distortion", font=FONT)
+        etc = Text("etc.", font=FONT)
+
+        effects = (
+            Group(harmonic, distortion, etc)
+            .arrange(DOWN, MED_LARGE_BUFF, aligned_edge=LEFT)
+            .next_to(ax, RIGHT, LARGE_BUFF)
+        )
+        effects_bez_u = CubicBezier(
+            ax.get_right() + [0.1, 0, 0],
+            ax.get_right() + [1, 0, 0],
+            effects.get_corner(UL) + [-1, 0, 0],
+            effects.get_corner(UL) + [-0.1, 0, 0],
+        )
+        effects_bez_d = CubicBezier(
+            ax.get_right() + [0.1, 0, 0],
+            ax.get_right() + [1, 0, 0],
+            effects.get_corner(DL) + [-1, 0, 0],
+            effects.get_corner(DL) + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(effects_bez_u),
+                    Create(effects_bez_d),
+                ),
+                self.camera.frame.animate.scale(2).move_to(Group(ax, effects)),
+                Write(effects[0]),
+                Write(effects[1]),
+                Write(effects[2]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(A @ 20, run_time=5)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.scale(1000))
 
         self.wait(2)
 
