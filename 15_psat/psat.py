@@ -48,6 +48,7 @@ TARGET3_COLOR = BLUE
 INPUT_COLOR = BLUE
 OUTPUT_COLOR = ORANGE
 GAIN_COLOR = GREEN
+PAE_COLOR = YELLOW
 
 
 def skip_animations(b):
@@ -1537,6 +1538,18 @@ class P1dB(MovingCameraScene):
                 x_range=[0, ~actual_x1, 1 / 100],
             )
         )
+        pae_plot = always_redraw(
+            lambda: ax.plot(
+                lambda x: (
+                    20
+                    + 0.08 * x
+                    + 7.2 / (1 + np.exp(-1.3 * (x - 6.2)))
+                    - 0.10 * np.clip(x - 8.4, 0, None) ** 2
+                ),
+                color=PAE_COLOR,
+                x_range=[0, ~actual_x1, 1 / 100],
+            )
+        )
 
         ideal_sym_label = Tex(r"Ideal $P_{out}(P_{in})$")
         ideal_legend = Line(ORIGIN, RIGHT, color=GREEN)
@@ -1555,6 +1568,14 @@ class P1dB(MovingCameraScene):
             .next_to(ideal_label_group, DOWN, MED_SMALL_BUFF, LEFT)
         )
 
+        pae_sym_label = Tex(r"PAE$(P_{in})$")
+        pae_legend = Line(ORIGIN, RIGHT, color=PAE_COLOR)
+        pae_label_group = (
+            Group(pae_legend, pae_sym_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .next_to(actual_label_group, DOWN, MED_SMALL_BUFF, LEFT)
+        )
+
         self.play(
             LaggedStart(
                 Create(ideal_plot),
@@ -1569,7 +1590,7 @@ class P1dB(MovingCameraScene):
         self.wait(0.5)
         self.next_section(skip_animations=skip_animations(True))
 
-        self.add(actual_plot)
+        self.add(actual_plot, pae_plot)
 
         compression_box = DashedVMobject(
             Rectangle(width=ax.width * 0.35, height=ax.height * 0.35)
@@ -1579,6 +1600,7 @@ class P1dB(MovingCameraScene):
             LaggedStart(
                 actual_x1 @ 7,
                 FadeIn(actual_label_group),
+                FadeIn(pae_label_group),
                 lag_ratio=0.3,
             )
         )
@@ -1611,6 +1633,7 @@ class P1dB(MovingCameraScene):
             p1db_label_group,
             ideal_label_group,
             actual_label_group,
+            pae_label_group,
             pin_ax_label,
             pout_ax_label,
         )
@@ -2095,7 +2118,7 @@ class Psat(MovingCameraScene):
 
 class WhoCares(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         ax = Axes(
             x_range=[0, 10, 1],
@@ -2108,7 +2131,7 @@ class WhoCares(MovingCameraScene):
         G = 20
         P_sat = 28.5
 
-        actual_x1 = VT(10)
+        actual_x1 = VT(0)
 
         actual_plot = always_redraw(
             lambda: ax.plot(
@@ -2116,10 +2139,249 @@ class WhoCares(MovingCameraScene):
                     x + G + P_sat - np.logaddexp(0, 3 * (x + G - P_sat + 1)) / 3 - P_sat
                 ),
                 color=OUTPUT_COLOR,
-                x_range=[0, ~actual_x1, 1 / 100],
+                x_range=[0, ~actual_x1, 1 / 1000],
+            )
+        )
+        pae_plot = always_redraw(
+            lambda: ax.plot(
+                lambda x: (
+                    20
+                    + 0.08 * x
+                    + 7.2 / (1 + np.exp(-1.3 * (x - 6.2)))
+                    - 0.10 * np.clip(x - 8.4, 0, None) ** 2
+                ),
+                color=PAE_COLOR,
+                x_range=[0, ~actual_x1, 1 / 1000],
             )
         )
 
-        self.add(ax, actual_plot)
+        actual_sym_label = Tex(r"| $P_{out}(P_{in})$")
+        actual_label = Text("Power", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5)
+        actual_legend = Line(ORIGIN, RIGHT / 2, color=OUTPUT_COLOR)
+        actual_label_group = (
+            Group(actual_legend, actual_label, actual_sym_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .scale(0.7)
+            .next_to(self.camera.frame.get_corner(UR), DL)
+            .shift(LEFT * 0.8 + DOWN * 0.3)
+        )
+
+        pae_sym_label = Tex(r"| $\mathrm{PAE}(P_{in})$")
+        pae_label = Text("Efficiency", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5)
+        pae_legend = Line(ORIGIN, RIGHT / 2, color=PAE_COLOR)
+        pae_label_group = (
+            Group(pae_legend, pae_label, pae_sym_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .scale(0.7)
+            .next_to(actual_label_group, DOWN, SMALL_BUFF, LEFT)
+        )
+
+        region_boundary = P_sat - G - 1.5
+        linear_region = always_redraw(
+            lambda: Polygon(
+                ax.c2p(0, 0 + 20),
+                ax.c2p(0, 10 + 20),
+                ax.c2p(min(region_boundary, ~actual_x1), 10 + 20),
+                ax.c2p(min(region_boundary, ~actual_x1), 0 + 20),
+                fill_color=GREEN,
+                fill_opacity=0.2,
+                stroke_opacity=0,
+            )
+        )
+        sat_region = always_redraw(
+            lambda: Polygon(
+                ax.c2p(region_boundary, 0 + 20),
+                ax.c2p(region_boundary, 10 + 20),
+                ax.c2p(max(region_boundary, ~actual_x1), 10 + 20),
+                ax.c2p(max(region_boundary, ~actual_x1), 0 + 20),
+                fill_color=BLUE,
+                fill_opacity=0.2,
+                stroke_opacity=0,
+            )
+        )
+
+        linear_region_label = (
+            Paragraph("Linear", "Region", alignment="center", font=FONT)
+            .scale(0.4)
+            .next_to(ax.c2p(region_boundary / 2, 30), DOWN, SMALL_BUFF)
+        )
+        sat_region_label = (
+            Paragraph("Saturation", "Region", alignment="center", font=FONT)
+            .scale(0.4)
+            .next_to(
+                ax.c2p((10 - region_boundary) / 2 + region_boundary, 30),
+                DOWN,
+                SMALL_BUFF,
+            )
+        )
+
+        self.add(actual_plot, pae_plot, linear_region, sat_region)
+
+        self.play(
+            Create(ax),
+            FadeIn(actual_label_group),
+            FadeIn(pae_label_group),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                actual_x1.animate(run_time=8).set_value(10),
+                FadeIn(linear_region_label),
+                FadeIn(sat_region_label),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        comms = (
+            Paragraph(
+                "LTE",
+                "WiFi",
+                alignment="center",
+                font=FONT,
+                line_spacing=MED_LARGE_BUFF,
+            )
+            .next_to(ax, LEFT, LARGE_BUFF * 2.5)
+            .shift(UP * ax.height * 0.25)
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(LEFT),
+                GrowFromCenter(comms[0]),
+                GrowFromCenter(comms[1]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            Broadcast(
+                Circle(comms.width * 2),
+                focal_point=comms.get_center(),
+                initial_width=comms.width * 1.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        select_linear = SurroundingRectangle(linear_region, buff=0)
+        select_sat = SurroundingRectangle(sat_region, buff=0)
+
+        self.play(Create(select_linear))
+
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale(0.6).next_to(comms, DOWN, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                comms.animate.scale(0.7).shift(UP).set_opacity(0.2),
+                radar.get_animation(),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        for x in radar.vgroup:
+            x.set_z_index(1)
+
+        radar_background = (
+            SurroundingRectangle(
+                Group(radar.left_leg, radar.right_leg, radar.middle_leg),
+                fill_opacity=1,
+                fill_color=BACKGROUND_COLOR,
+                stroke_opacity=0,
+            )
+            .stretch(2, 1)
+            .move_to(
+                Group(radar.left_leg, radar.right_leg, radar.middle_leg),
+                aligned_edge=UP,
+            )
+            .set_z_index(0)
+        )
+        self.add(radar_background)
+        self.play(
+            LaggedStart(
+                Broadcast(
+                    Circle(radar.radome.radius * 3.5, color=YELLOW).set_z_index(-1),
+                    focal_point=radar.radome.get_center(),
+                    initial_width=radar.radome.radius * 1.08,
+                ),
+                ReplacementTransform(select_linear, select_sat),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(radar.vgroup, comms),
+                self.camera.frame.animate.restore(),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rightarrow = MathTex(r"\Rightarrow")
+        lnot = MathTex(r"\lnot")
+        linearity_headroom = (
+            Group(
+                Text("Linearity", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6),
+                rightarrow.copy(),
+                Text("Headroom", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6),
+                rightarrow.copy(),
+                lnot.copy(),
+                Text("Efficiency", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.6),
+            )
+            .arrange(RIGHT, MED_SMALL_BUFF, aligned_edge=UP)
+            .next_to(ax, DOWN, LARGE_BUFF)
+        )
+        linearity_headroom[1].set_y(linearity_headroom.get_y())
+        linearity_headroom[3].set_y(linearity_headroom.get_y())
+        linearity_headroom[4].set_y(linearity_headroom.get_y())
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.3).shift(DOWN),
+                LaggedStart(
+                    *[
+                        GrowFromCenter(m)
+                        for m in [
+                            *linearity_headroom[0],
+                            *linearity_headroom[1],
+                            *linearity_headroom[2],
+                        ]
+                    ],
+                    lag_ratio=0.03,
+                ),
+                LaggedStart(
+                    *[
+                        GrowFromCenter(m)
+                        for m in [
+                            *linearity_headroom[3],
+                            *linearity_headroom[4],
+                            *linearity_headroom[5],
+                        ]
+                    ],
+                    lag_ratio=0.03,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
