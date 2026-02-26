@@ -2096,3 +2096,30 @@ class Psat(MovingCameraScene):
 class WhoCares(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(False))
+
+        ax = Axes(
+            x_range=[0, 10, 1],
+            y_range=[20, 30, 1],
+            x_length=fh(self, 0.7),
+            y_length=fh(self, 0.7),
+            tips=False,
+        )
+
+        G = 20
+        P_sat = 28.5
+
+        actual_x1 = VT(10)
+
+        actual_plot = always_redraw(
+            lambda: ax.plot(
+                lambda x: (
+                    x + G + P_sat - np.logaddexp(0, 3 * (x + G - P_sat + 1)) / 3 - P_sat
+                ),
+                color=OUTPUT_COLOR,
+                x_range=[0, ~actual_x1, 1 / 100],
+            )
+        )
+
+        self.add(ax, actual_plot)
+
+        self.wait(2)
