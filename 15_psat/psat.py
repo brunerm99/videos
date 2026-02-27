@@ -1538,18 +1538,6 @@ class P1dB(MovingCameraScene):
                 x_range=[0, ~actual_x1, 1 / 100],
             )
         )
-        pae_plot = always_redraw(
-            lambda: ax.plot(
-                lambda x: (
-                    20
-                    + 0.08 * x
-                    + 7.2 / (1 + np.exp(-1.3 * (x - 6.2)))
-                    - 0.10 * np.clip(x - 8.4, 0, None) ** 2
-                ),
-                color=PAE_COLOR,
-                x_range=[0, ~actual_x1, 1 / 100],
-            )
-        )
 
         ideal_sym_label = Tex(r"Ideal $P_{out}(P_{in})$")
         ideal_legend = Line(ORIGIN, RIGHT, color=GREEN)
@@ -1568,14 +1556,6 @@ class P1dB(MovingCameraScene):
             .next_to(ideal_label_group, DOWN, MED_SMALL_BUFF, LEFT)
         )
 
-        pae_sym_label = Tex(r"PAE$(P_{in})$")
-        pae_legend = Line(ORIGIN, RIGHT, color=PAE_COLOR)
-        pae_label_group = (
-            Group(pae_legend, pae_sym_label)
-            .arrange(RIGHT, SMALL_BUFF)
-            .next_to(actual_label_group, DOWN, MED_SMALL_BUFF, LEFT)
-        )
-
         self.play(
             LaggedStart(
                 Create(ideal_plot),
@@ -1590,20 +1570,13 @@ class P1dB(MovingCameraScene):
         self.wait(0.5)
         self.next_section(skip_animations=skip_animations(True))
 
-        self.add(actual_plot, pae_plot)
+        self.add(actual_plot)
 
         compression_box = DashedVMobject(
             Rectangle(width=ax.width * 0.35, height=ax.height * 0.35)
         ).move_to(ax.c2p(8.5, 28.5))
 
-        self.play(
-            LaggedStart(
-                actual_x1 @ 7,
-                FadeIn(actual_label_group),
-                FadeIn(pae_label_group),
-                lag_ratio=0.3,
-            )
-        )
+        self.play(actual_x1 @ 7)
 
         self.wait(0.5)
 
@@ -1633,7 +1606,6 @@ class P1dB(MovingCameraScene):
             p1db_label_group,
             ideal_label_group,
             actual_label_group,
-            pae_label_group,
             pin_ax_label,
             pout_ax_label,
         )
@@ -1924,7 +1896,57 @@ class P1dB(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(psat_label_group), actual_x1 @ 0, ideal_plot_x1 @ 0)
+        # self.play(FadeOut(psat_label_group), actual_x1 @ 0, ideal_plot_x1 @ 0)
+
+        number_plane = NumberPlane(
+            ax.x_range, ax.y_range, ax.x_length, ax.y_length
+        ).set_z_index(-10)
+        number_plane.shift(ax.c2p(0, 0) - number_plane.c2p(0, 0))
+
+        self.play(
+            FadeOut(p_real_vt, p_ideal_vt, psat_label_group),
+            self.camera.frame.animate.scale_to_fit_height(ax.height * 1.4).move_to(ax),
+            ideal_plot_x1 @ 10,
+            actual_x1 @ 10,
+            Create(number_plane),
+        )
+
+        self.wait(0.5)
+
+        # number_plane.x_lines[7].set_color(YELLOW)
+        # number_plane.x_lines[8].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                *[
+                    number_plane.y_lines[idx].animate.set_opacity(0.2)
+                    for idx in range(len(number_plane.y_lines))
+                ],
+                lag_ratio=0.08,
+            ),
+            LaggedStart(
+                *[
+                    number_plane.x_lines[idx].animate.set_opacity(0.2)
+                    for idx in range(len(number_plane.x_lines))
+                    if idx not in [7, 8]
+                ],
+                lag_ratio=0.08,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Uncreate(number_plane),
+            actual_x1 @ 0,
+            ideal_plot_x1 @ 0,
+            Uncreate(ax),
+            FadeOut(pin_label_group, shift=DOWN),
+            FadeOut(pout_label_group, shift=LEFT),
+            FadeOut(*x_labels, *y_labels, ip1db_box),
+        )
+
+        # FIXME: some issues with stuff coming up before it should
 
         self.wait(2)
 
