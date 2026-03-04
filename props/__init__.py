@@ -17,3 +17,4 @@ from .block_diagram import (
 )
 from .radar import FMCWRadarCartoon, WeatherRadarTower
 from .video import VideoMobject
+from .easing import ease_in_elastic, ease_in_out_elastic, ease_out_elastic

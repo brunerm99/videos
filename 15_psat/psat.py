@@ -1,5 +1,4 @@
 # psat.py
-
 import os
 import sys
 from random import shuffle
@@ -22,6 +21,8 @@ from props import (
     Resistor,
     VideoMobject,
     WeatherRadarTower,
+    ease_in_out_elastic,
+    ease_out_elastic,
     get_amp,
     get_blocks,
     get_filt_block,
@@ -67,6 +68,10 @@ def lin2db(x):
     return 10 * np.log10(x)
 
 
+intro_elastic = ease_out_elastic(1.34, 0.61)
+in_out_elastic = ease_in_out_elastic(1.34, 0.61)
+
+
 class Intro(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -74,12 +79,8 @@ class Intro(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                GrowFromCenter(
-                    amp[0], rate_func=rate_functions.ease_out_elastic, run_time=1.4
-                ),
-                GrowFromCenter(
-                    amp[1], rate_func=rate_functions.ease_out_elastic, run_time=1.4
-                ),
+                GrowFromCenter(amp[0], rate_func=intro_elastic, run_time=1.4),
+                GrowFromCenter(amp[1], rate_func=intro_elastic, run_time=1.4),
                 lag_ratio=0.15,
             ),
         )
@@ -373,12 +374,8 @@ class LinearRegion(MovingCameraScene):
                 # FadeOut(*self.mobjects),
                 self.camera.frame.animate.shift(RIGHT * fw(self, 2.8)),
                 LaggedStart(
-                    GrowFromCenter(
-                        amp[0], rate_func=rate_functions.ease_out_elastic, run_time=1.4
-                    ),
-                    GrowFromCenter(
-                        amp[1], rate_func=rate_functions.ease_out_elastic, run_time=1.4
-                    ),
+                    GrowFromCenter(amp[0], rate_func=intro_elastic, run_time=1.4),
+                    GrowFromCenter(amp[1], rate_func=intro_elastic, run_time=1.4),
                     lag_ratio=0.15,
                 ),
                 lag_ratio=0.5,
@@ -1535,7 +1532,7 @@ class P1dB(MovingCameraScene):
                     x + G + P_sat - np.logaddexp(0, 3 * (x + G - P_sat + 1)) / 3 - P_sat
                 ),
                 color=OUTPUT_COLOR,
-                x_range=[0, ~actual_x1, 1 / 100],
+                x_range=[0, ~actual_x1, 1 / 500],
             )
         )
 
@@ -1674,24 +1671,24 @@ class P1dB(MovingCameraScene):
 
         self.wait(0.5)
 
-        amp = get_amp(width=fh(self, 0.15)).next_to(ax, RIGHT, LARGE_BUFF * 3)
+        new_amp = get_amp(width=fh(self, 0.15)).next_to(ax, RIGHT, LARGE_BUFF * 3)
 
         inp_ax = Axes(
             x_range=[0, 1, 0.5],
             y_range=[-1, 1, 1],
             tips=False,
-            x_length=amp.width * 2,
-            y_length=amp.height,
+            x_length=new_amp.width * 2,
+            y_length=new_amp.height,
         )
-        inp_ax.shift(amp.get_left() - inp_ax.c2p(1, 0))
+        inp_ax.shift(new_amp.get_left() - inp_ax.c2p(1, 0))
         outp_ax = Axes(
             x_range=[0, 1, 0.5],
             y_range=[-1, 1, 1],
             tips=False,
-            x_length=amp.width * 2,
-            y_length=amp.height,
+            x_length=new_amp.width * 2,
+            y_length=new_amp.height,
         )
-        outp_ax.shift(amp.get_right() - outp_ax.c2p(0, 0))
+        outp_ax.shift(new_amp.get_right() - outp_ax.c2p(0, 0))
 
         A = VT(0.15)
         f = 3
@@ -1721,7 +1718,7 @@ class P1dB(MovingCameraScene):
 
         self.next_section(skip_animations=skip_animations(True))
 
-        amp_ax_group = Group(amp, ax, inp_ax, outp_ax)
+        amp_ax_group = Group(new_amp, ax, inp_ax, outp_ax)
 
         ip1db_vt = VT(8.2)
         p_ideal_vt = always_redraw(lambda: Dot(ax.i2gp(~ip1db_vt, ideal_plot)))
@@ -1742,12 +1739,8 @@ class P1dB(MovingCameraScene):
                 ),
                 self.camera.frame.animate.move_to(amp_ax_group),
                 LaggedStart(
-                    GrowFromCenter(
-                        amp[0], rate_func=rate_functions.ease_out_elastic, run_time=1.4
-                    ),
-                    GrowFromCenter(
-                        amp[1], rate_func=rate_functions.ease_out_elastic, run_time=1.4
-                    ),
+                    GrowFromCenter(new_amp[0], rate_func=intro_elastic, run_time=1.4),
+                    GrowFromCenter(new_amp[1], rate_func=intro_elastic, run_time=1.4),
                     lag_ratio=0.15,
                 ),
                 AnimationGroup(
@@ -1761,7 +1754,7 @@ class P1dB(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(A @ (~A * 3), ip1db_vt @ ip1db, run_time=8)
 
@@ -1770,7 +1763,7 @@ class P1dB(MovingCameraScene):
         self.play(
             LaggedStart(
                 AnimationGroup(
-                    FadeOut(*amp),
+                    FadeOut(*new_amp),
                     x1_in @ 0,
                     x1_out @ 0,
                 ),
@@ -1935,43 +1928,52 @@ class P1dB(MovingCameraScene):
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
-        self.play(
-            Uncreate(number_plane),
-            actual_x1 @ 0,
-            ideal_plot_x1 @ 0,
-            Uncreate(ax),
-            FadeOut(pin_label_group, shift=DOWN),
-            FadeOut(pout_label_group, shift=LEFT),
-            FadeOut(*x_labels, *y_labels, ip1db_box),
+        # self.play(
+        #     Uncreate(number_plane),
+        #     actual_x1 @ 0,
+        #     ideal_plot_x1 @ 0,
+        #     FadeOut(ax),
+        #     FadeOut(pin_label_group, shift=DOWN),
+        #     FadeOut(pout_label_group, shift=LEFT),
+        #     FadeOut(*x_labels, *y_labels, ip1db_box),
+        # )
+
+        self.remove(
+            small_signal_label,
+            pin,
+            pout,
+            gain_label,
+            ss_gain_bez_l,
+            ss_gain_bez_r,
+            low_power_label,
+            output_power_label,
+            amp,
         )
 
-        # FIXME: some issues with stuff coming up before it should
-
-        self.wait(2)
-
-
-class Psat(MovingCameraScene):
-    def construct(self):
         self.next_section(skip_animations=skip_animations(True))
-        amp = get_amp(width=fh(self, 0.15)).move_to(self.camera.frame)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.5)))
+
+        amp_3 = get_amp(width=fh(self, 0.15)).move_to(self.camera.frame)
 
         inp_ax = Axes(
             x_range=[0, 1, 0.5],
             y_range=[-1, 1, 1],
             tips=False,
-            x_length=amp.width * 4,
-            y_length=amp.height,
+            x_length=amp_3.width * 4,
+            y_length=amp_3.height,
         )
-        inp_ax.shift(amp.get_left() - inp_ax.c2p(1, 0))
+        inp_ax.shift(amp_3.get_left() - inp_ax.c2p(1, 0))
         outp_ax = Axes(
             x_range=[0, 1, 0.5],
             y_range=[-1, 1, 1],
             tips=False,
-            x_length=amp.width * 4,
-            y_length=amp.height,
+            x_length=amp_3.width * 4,
+            y_length=amp_3.height,
         )
-        outp_ax.shift(amp.get_right() - outp_ax.c2p(0, 0))
+        outp_ax.shift(amp_3.get_right() - outp_ax.c2p(0, 0))
 
         A = VT(1)
         f = 3
@@ -2005,12 +2007,70 @@ class Psat(MovingCameraScene):
             stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
             use_smoothing=False,
         )
-        self.add(
-            inp,
-            outp,
-            # outp_cam,
+        self.add(inp, outp)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(amp_3[0], rate_func=intro_elastic, run_time=1),
+                GrowFromCenter(amp_3[1], rate_func=intro_elastic, run_time=1),
+                lag_ratio=0.15,
+            ),
         )
-        self.add(amp)
+
+        self.wait(0.5)
+
+        pterm = Line(UP, DOWN)
+        nterm = Line(UP, ORIGIN)
+        batt = (
+            Group(nterm, pterm)
+            .scale(0.5)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(amp_3, UP, LARGE_BUFF * 2)
+            .shift(LEFT)
+        )
+        to_nterm = CubicBezier(
+            amp_3.get_top() + [-amp_3.width / 4, 0, 0],
+            amp_3.get_top() + [-amp_3.width / 4 - 0.5, 1, 0],
+            nterm.get_left() + [-1, 0, 0],
+            nterm.get_left(),
+        ).set_z_index(-1)
+        to_pterm = CubicBezier(
+            amp_3.get_top() + [amp_3.width / 4, 0, 0],
+            amp_3.get_top() + [amp_3.width / 4, 1, 0],
+            pterm.get_right() + [0.5, 0, 0],
+            pterm.get_right(),
+        ).set_z_index(-1)
+        minus = Text("-", font=FONT, color=GRAY).next_to(nterm.get_top(), UL)
+        plus = (
+            Text("+", font=FONT, color=YELLOW)
+            .next_to(pterm.get_top(), UR)
+            .set_y(minus.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP),
+                Create(to_nterm),
+                Create(to_pterm),
+                Create(nterm),
+                Create(pterm),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(plus),
+                to_pterm.animate.set_color(YELLOW),
+                GrowFromCenter(minus),
+                to_nterm.animate.set_color(GRAY),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
 
         self.camera.frame.save_state()
         self.play(
@@ -2053,56 +2113,14 @@ class Psat(MovingCameraScene):
 
         self.wait(0.5)
 
-        pterm = Line(UP, DOWN)
-        nterm = Line(UP, ORIGIN)
-        batt = (
-            Group(nterm, pterm)
-            .scale(0.5)
-            .arrange(RIGHT, MED_SMALL_BUFF)
-            .next_to(amp, UP, LARGE_BUFF * 2)
-            .shift(LEFT)
-        )
-        to_nterm = CubicBezier(
-            amp.get_top() + [-amp.width / 4, 0, 0],
-            amp.get_top() + [-amp.width / 4 - 0.5, 1, 0],
-            nterm.get_left() + [-1, 0, 0],
-            nterm.get_left(),
-        ).set_z_index(-1)
-        to_pterm = CubicBezier(
-            amp.get_top() + [amp.width / 4, 0, 0],
-            amp.get_top() + [amp.width / 4, 1, 0],
-            pterm.get_right() + [0.5, 0, 0],
-            pterm.get_right(),
-        ).set_z_index(-1)
-        minus = Text("-", font=FONT, color=GRAY).next_to(nterm.get_top(), UL)
-        plus = (
-            Text("+", font=FONT, color=YELLOW)
-            .next_to(pterm.get_top(), UR)
-            .set_y(minus.get_y())
+        supply_box = DashedVMobject(
+            SurroundingRectangle(
+                Group(batt, plus, minus), color=GREEN, buff=SMALL_BUFF
+            ),
+            dashed_ratio=0.6,
         )
 
-        self.play(
-            LaggedStart(
-                self.camera.frame.animate.shift(UP),
-                Create(to_nterm),
-                Create(to_pterm),
-                Create(nterm),
-                Create(pterm),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                GrowFromCenter(plus),
-                to_pterm.animate.set_color(YELLOW),
-                GrowFromCenter(minus),
-                to_nterm.animate.set_color(GRAY),
-                lag_ratio=0.2,
-            )
-        )
+        self.play(Create(supply_box))
 
         self.wait(0.5)
 
@@ -2122,18 +2140,138 @@ class Psat(MovingCameraScene):
             load.get_top() + [0, 0, 0],
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        load_box = DashedVMobject(
+            SurroundingRectangle(Group(load), color=GREEN, buff=SMALL_BUFF),
+            dashed_ratio=0.6,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
-            self.camera.frame.animate(run_time=2).shift(RIGHT * 2).scale(0.9),
+            self.camera.frame.animate(run_time=2)
+            .shift(RIGHT * 2 + DOWN / 2)
+            .scale(0.9),
             Succession(
                 Create(outp_line, rate_func=rate_functions.ease_in_sine),
                 Create(outp_to_load, rate_func=rate_functions.linear, run_time=0.5),
                 GrowFromCenter(
                     load, rate_func=rate_functions.ease_out_sine, run_time=0.5
                 ),
+                ReplacementTransform(supply_box, load_box),
             ),
         )
+
+        self.wait(0.5)
+
+        ax_group = Group(
+            number_plane,
+            ax,
+            pin_label_group,
+            pout_label_group,
+            *x_labels,
+            *y_labels,
+            ip1db_box,
+        )
+        self.play(
+            *[
+                number_plane.x_lines[idx].animate.set_opacity(0.2)
+                for idx in range(len(number_plane.x_lines))
+                if idx in [7, 8]
+            ],
+            self.camera.frame.animate.scale_to_fit_height(
+                ax_group.height * 1.2
+            ).move_to(ax_group),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        p1db_x = 7.7
+        psat_x = 9
+        psat_xline = Line(ax.c2p(psat_x, 20), ax.i2gp(psat_x, actual_plot), color=RED)
+        p1db_xline = Line(ax.c2p(p1db_x, 20), ax.i2gp(p1db_x, actual_plot), color=RED)
+        p1db_dot = Dot(ax.i2gp(p1db_x, actual_plot), color=RED)
+        psat_dot = Dot(ax.i2gp(psat_x, actual_plot), color=RED)
+
+        area_x1 = VT(p1db_x)
+        area_opacity = VT(0.3)
+
+        area = always_redraw(
+            lambda: ax.get_area(
+                actual_plot,
+                x_range=[p1db_x, ~area_x1],
+                color=RED,
+                opacity=~area_opacity,
+                stroke_width=0,
+                bounded_graph=ax.plot(lambda _: 20, x_range=[0, 10, 1 / 500]),
+            ).set_z_index(-1)
+        )
+
+        self.add(area)
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.play(
+            LaggedStart(
+                Create(psat_xline, rate_func=in_out_elastic),
+                GrowFromCenter(psat_dot, rate_func=in_out_elastic),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(p1db_xline, rate_func=in_out_elastic),
+                GrowFromCenter(p1db_dot, rate_func=in_out_elastic),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(area_x1 @ psat_x, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    p1db_dot.animate.set_opacity(0.2),
+                    p1db_xline.animate.set_opacity(0.2),
+                ),
+                area_opacity @ 0.1,
+                self.camera.frame.animate.set_x(psat_dot.get_x()),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).move_to(amp_3),
+                LaggedStart(
+                    AnimationGroup(Unwrite(plus), FadeOut(load_box)),
+                    Unwrite(minus),
+                    AnimationGroup(Uncreate(pterm), Uncreate(nterm)),
+                    ShrinkToCenter(load),
+                    AnimationGroup(
+                        Uncreate(outp_to_load),
+                        Uncreate(to_nterm),
+                        Uncreate(to_pterm),
+                    ),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
