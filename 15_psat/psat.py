@@ -10,6 +10,7 @@ from manim import *
 from MF_Tools import VT
 from networkx import center
 from numpy.fft import fft, fftshift
+from pyglet.media.drivers.pulse.interface import PA_INVALID_WRITABLE_SIZE
 from scipy import signal
 from scipy.interpolate import interp1d
 
@@ -287,6 +288,7 @@ class Intro(MovingCameraScene):
         self.wait(2)
 
 
+# TODO: re-render
 class LinearRegion(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -428,6 +430,23 @@ class LinearRegion(MovingCameraScene):
             gain_thumbnail.get_left() + [-0.1, 0, 0],
         )
 
+        # TODO: update thumbnail for notebook
+        notebook_thumbnail_img = (
+            ImageMobject("../14_amp_gain/static/Gain Thumbnail.png")
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(gain_thumbnail, UP, LARGE_BUFF)
+            .shift(RIGHT / 2)
+        )
+        thumbnail_box = SurroundingRectangle(notebook_thumbnail_img, buff=0)
+        notebook_thumbnail = Group(notebook_thumbnail_img, thumbnail_box)
+
+        notebook_bez = CubicBezier(
+            lin_gain_label.get_right() + [0.1, 0, 0],
+            lin_gain_label.get_right() + [1, 0, 0],
+            notebook_thumbnail.get_left() + [-1, 0, 0],
+            notebook_thumbnail.get_left() + [-0.1, 0, 0],
+        )
+
         all_group = Group(amp, gain_label, lin_gain_label, gain_thumbnail)
         self.camera.frame.save_state()
         self.play(
@@ -436,7 +455,9 @@ class LinearRegion(MovingCameraScene):
                     all_group.height * 1.1
                 ).move_to(all_group),
                 Create(thumbnail_bez),
+                Create(notebook_bez),
                 GrowFromCenter(gain_thumbnail),
+                GrowFromCenter(notebook_thumbnail),
                 lag_ratio=0.2,
             )
         )
@@ -446,7 +467,9 @@ class LinearRegion(MovingCameraScene):
         self.play(
             LaggedStart(
                 ShrinkToCenter(gain_thumbnail),
+                ShrinkToCenter(notebook_thumbnail),
                 Uncreate(thumbnail_bez),
+                Uncreate(notebook_bez),
                 self.camera.frame.animate.restore(),
                 lag_ratio=0.1,
             )
@@ -2801,6 +2824,191 @@ class Practical(MovingCameraScene):
                 *[FadeOut(m) for m in pages[:5]],
                 lag_ratio=0.2,
             ),
+        )
+
+        self.wait(2)
+
+
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        pass
+
+
+class Plug(MovingCameraScene):
+    def construct(self):
+        mems = (
+            Text("Channel memberships", font=FONT)
+            .scale(0.7)
+            .next_to(self.camera.frame.get_top(), DOWN, MED_LARGE_BUFF)
+        )
+
+        self.play(Write(mems))
+
+        self.wait(0.5)
+
+        paview_vid = (
+            VideoMobject("/home/marchall/media/obs/paview_overview.mp4", speed=2)
+            .scale_to_fit_width(fw(self, 0.7))
+            .next_to(mems, DOWN, MED_LARGE_BUFF)
+        )
+        paview_box = SurroundingRectangle(paview_vid, buff=0, color=GREEN)
+        paview = Group(paview_vid, paview_box)
+
+        self.play(paview.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
+
+        self.wait(10)
+
+        walkthrough_vid = (
+            VideoMobject("/home/marchall/media/obs/walkthrough_clip.mp4", speed=1)
+            .scale_to_fit_width(fw(self, 0.7))
+            .next_to(mems, DOWN, MED_LARGE_BUFF)
+        )
+        walkthrough_box = SurroundingRectangle(walkthrough_vid, buff=0, color=GREEN)
+        walkthrough = Group(walkthrough_vid, walkthrough_box)
+
+        self.play(
+            paview.animate.scale_to_fit_width(fw(self, 0.45)).next_to(
+                self.camera.frame.get_left(), RIGHT
+            )
+        )
+
+        self.play(walkthrough.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
+        self.play(
+            walkthrough.animate.scale_to_fit_width(fw(self, 0.45)).next_to(
+                self.camera.frame.get_right(), LEFT
+            )
+        )
+
+        self.wait(10)
+
+        in_the_description = (
+            Text("In the description", font=FONT)
+            .scale(0.7)
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self) + DOWN * 2)
+        )
+        self.add(in_the_description)
+
+        source_code = (
+            Text("// source code", font=FONT, color=GRAY)
+            .scale(0.5)
+            .next_to(in_the_description, UR, LARGE_BUFF)
+            .shift(UP * 2)
+        )
+        resources = (
+            Text("Resources", font=FONT)
+            .scale(0.5)
+            .next_to(in_the_description, UL, LARGE_BUFF)
+            .shift(UP * 3)
+        )
+
+        mugs = (
+            ImageMobject("./static/mug.png")
+            .scale_to_fit_height(fh(self, 0.3))
+            .next_to(self.camera.frame.get_corner(DL), UR)
+            .shift(RIGHT / 2 + UP + DOWN * fh(self))
+        )
+
+        walkthrough_bez = CubicBezier(
+            walkthrough.get_bottom() + [0, -0.1, 0],
+            walkthrough.get_bottom() + [0, -3, 0],
+            in_the_description.get_top() + [0, 3, 0],
+            in_the_description.get_top() + [0, 0.1, 0],
+        )
+
+        paview_bez = CubicBezier(
+            paview.get_bottom() + [0, -0.1, 0],
+            paview.get_bottom() + [0, -3, 0],
+            in_the_description.get_top() + [0, 3, 0],
+            in_the_description.get_top() + [0, 0.1, 0],
+        )
+
+        source_code_bez = CubicBezier(
+            source_code.get_bottom() + [0, -0.1, 0],
+            source_code.get_bottom() + [0, -1, 0],
+            in_the_description.get_top() + [in_the_description.width * 0.3, 1, 0],
+            in_the_description.get_top() + [in_the_description.width * 0.3, 0.1, 0],
+        )
+
+        resources_bez = CubicBezier(
+            resources.get_bottom() + [0, -0.1, 0],
+            resources.get_bottom() + [0, -2, 0],
+            in_the_description.get_top() + [-in_the_description.width / 4, 1.5, 0],
+            in_the_description.get_top() + [-in_the_description.width / 4, 0.1, 0],
+        )
+
+        mugs_bez = CubicBezier(
+            mugs.get_bottom() + [0.5, -0.1, 0],
+            mugs.get_bottom() + [0.5, -1.5, 0],
+            in_the_description.get_bottom() + [0, -1.5, 0],
+            in_the_description.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                Create(paview_bez),
+                Create(walkthrough_bez),
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                Write(source_code),
+                Write(resources),
+                Create(resources_bez),
+                Create(source_code_bez),
+                GrowFromCenter(mugs),
+                Create(mugs_bez),
+                lag_ratio=0.2,
+            )
+        )
+        self.remove(walkthrough, paview)
+
+        self.wait(0.5)
+
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", "5,822"],
+                    ["Script word count", "1,959"],
+                    ["Days to make", "22"],
+                    ["Git commits", "15"],
+                ],
+                element_to_mobject=Text,
+                element_to_mobject_config=dict(
+                    font=FONT, font_size=DEFAULT_FONT_SIZE * 0.7
+                ),
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .next_to(self.camera.frame.get_corner(UR), DL, LARGE_BUFF * 2)
+            .shift(DOWN * fh(self))
+        )
+
+        thank_you_sabrina = Text(
+            "Thank you, Sabrina, for\nediting the whole video :)",
+            font=FONT,
+            font_size=DEFAULT_FONT_SIZE * 0.5,
+        ).next_to(stats_group, DOWN)
+
+        marshall_bruner = (
+            Text("Marshall Bruner", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5)
+            .set_y(thank_you_sabrina.get_y())
+            .set_x(self.camera.frame.get_x() - fw(self, 0.25))
+        )
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Write(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
         )
 
         self.wait(2)
