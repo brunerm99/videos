@@ -8,6 +8,7 @@ import skrf as rf
 from dotenv import load_dotenv
 from manim import *
 from MF_Tools import VT
+from networkx import center
 from numpy.fft import fft, fftshift
 from scipy import signal
 from scipy.interpolate import interp1d
@@ -2543,5 +2544,263 @@ class WhoCares(MovingCameraScene):
         self.wait(0.5)
 
         self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class Practical(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        title = (
+            Text("Practical\nConsiderations", font=FONT)
+            .scale(0.5)
+            .next_to(self.camera.frame.get_corner(UL), DR, MED_SMALL_BUFF)
+        ).set_z_index(2)
+        title_box = (
+            SurroundingRectangle(
+                title,
+                buff=MED_LARGE_BUFF,
+                corner_radius=0.2,
+                color=GREEN,
+            )
+            .shift(UL * MED_SMALL_BUFF)
+            .set_z_index(2)
+        )
+
+        self.play(
+            LaggedStart(
+                Write(title),
+                Create(title_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        npages = 13
+        pages = Group(
+            *[
+                ImageMobject(
+                    f"../14_amp_gain/static/adl8154-{idx:02}.png"
+                ).scale_to_fit_height(fh(self, 0.6))
+                # .rotate(-theta_step * npages / 2 + idx * theta_step)
+                for idx in range(1, npages + 1)
+            ]
+        ).arrange(DOWN, SMALL_BUFF)
+        # pages.next_to(self.camera.frame.get_right(), LEFT, LARGE_BUFF * 1.5)
+        pages.set_x(self.camera.frame.get_x())
+        pages.shift(UP * (self.camera.frame.get_center() - pages[0].get_center()))
+
+        # self.add(pages)
+
+        self.play(
+            pages.shift(DOWN * fh(self, 2)).animate.shift(UP * fh(self, 2)),
+            rate_func=in_out_elastic,
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        desired_page = 11
+
+        page_height = (pages[0].get_center() - pages[1].get_center())[1]
+        self.play(
+            pages.animate.shift(UP * page_height * 11),
+            rate_func=in_out_elastic,
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        center_dot = Dot(
+            pages[desired_page].get_center()
+            + RIGHT * pages[desired_page].width * 0.24
+            + UP * 0.15,
+            # radius=DEFAULT_DOT_RADIUS * 0.25,
+            color=RED,
+        )
+        # self.add(center_dot)
+        box_u = Rectangle(
+            width=pages[0].width * 2,
+            height=pages[0].width,
+            color=RED,
+            stroke_opacity=0,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=0.7,
+        ).next_to(center_dot, UP, pages[0].height * 0.09)
+        box_d = Rectangle(
+            width=pages[0].width * 2,
+            height=pages[0].width,
+            color=RED,
+            stroke_opacity=0,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=0.7,
+        ).next_to(center_dot, DOWN, pages[0].height * 0.13)
+        box_l = (
+            Rectangle(
+                width=pages[0].width * 2,
+                height=(box_u.get_bottom() - box_d.get_top())[1] * 1.0007,
+                color=RED,
+                stroke_opacity=0,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=0.7,
+            )
+            .next_to(center_dot, LEFT, pages[0].width * 0.2)
+            .set_y(Group(box_u, box_d).get_y())
+        )
+        box_r = (
+            Rectangle(
+                width=pages[0].width * 2,
+                height=(box_u.get_bottom() - box_d.get_top())[1] * 1.0007,
+                color=RED,
+                stroke_opacity=0,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=0.7,
+            )
+            .next_to(center_dot, RIGHT, pages[0].width * 0.2)
+            .set_y(Group(box_u, box_d).get_y())
+        )
+
+        background = Cutout(
+            BackgroundRectangle(self.camera.frame),
+            *[BackgroundRectangle(m) for m in pages],
+            color=BLACK,
+            stroke_opacity=0,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+        ).set_z_index(1)
+        self.add(background)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                box_u.shift(UP * 5).animate.shift(DOWN * 5),
+                box_l.shift(LEFT * 5).animate.shift(RIGHT * 5),
+                box_d.shift(DOWN * 5).animate.shift(UP * 5),
+                box_r.shift(RIGHT * 5).animate.shift(LEFT * 5),
+                self.camera.frame.animate.scale(0.25).move_to(center_dot),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        room_temp = (
+            Rectangle(
+                width=fw(self, 0.07),
+                height=center_dot.radius * 0.7,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.25,
+                color=GREEN,
+            )
+            .move_to(center_dot)
+            .shift(LEFT * fw(self, 0.11) + DOWN * fh(self, 0.12))
+        )
+
+        self.play(Create(room_temp))
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(
+                room_temp,
+                Rectangle(
+                    width=fw(self, 0.08),
+                    height=center_dot.radius * 0.7,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 0.25,
+                    color=RED,
+                )
+                .move_to(center_dot)
+                .shift(LEFT * fw(self, 0.11) + DOWN * fh(self, 0.17)),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(
+                room_temp,
+                Rectangle(
+                    width=fw(self, 0.07),
+                    height=center_dot.radius * 0.7,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 0.25,
+                    color=BLUE,
+                )
+                .move_to(center_dot)
+                .shift(LEFT * fw(self, 0.11) + DOWN * fh(self, 0.07)),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Transform(
+                room_temp,
+                Rectangle(
+                    width=fw(self, 0.33),
+                    height=center_dot.radius * 1.5,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 0.25,
+                    color=GREEN,
+                )
+                .move_to(center_dot)
+                .shift(RIGHT * fw(self, 0.01) + DOWN * fh(self, 0.22)),
+            )
+        )
+
+        self.wait(0.5)
+
+        clip = (
+            VideoMobject("/home/marchall/Downloads/clip.mkv")
+            .scale_to_fit_height(fh(self))
+            .next_to(self.camera.frame, RIGHT, LARGE_BUFF)
+        ).set_z_index(5)
+        clip_box = SurroundingRectangle(clip, buff=0, color=GREEN).set_z_index(6)
+        self.add(clip, clip_box)
+
+        clip_bez = CubicBezier(
+            room_temp.get_right() + [0.1, 0, 0],
+            room_temp.get_right() + [1, 0, 0],
+            clip.get_left() + [-1, 0, 0],
+            clip.get_left() + [-0.1, 0, 0],
+            color=GREEN,
+        ).set_z_index(5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(2.2).move_to(Group(clip, room_temp)),
+                Create(clip_bez),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(6)
+
+        self.play(
+            self.camera.frame.animate.restore(),
+            Uncreate(clip_bez),
+            Uncreate(room_temp),
+            FadeOut(box_l, box_d, box_r, box_u),
+            Group(clip, clip_box).animate.shift(RIGHT * fw(self)),
+        )
+        self.remove(background)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            pages.animate.shift(DOWN * page_height * 9),
+            rate_func=in_out_elastic,
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(title, title_box),
+            LaggedStart(
+                *[FadeOut(m) for m in pages[:5]],
+                lag_ratio=0.2,
+            ),
+        )
 
         self.wait(2)
