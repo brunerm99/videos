@@ -7,6 +7,7 @@ import pandas as pd
 import skrf as rf
 from dotenv import load_dotenv
 from manim import *
+from manim.utils.color.X11 import BROWN1
 from MF_Tools import VT
 from networkx import center
 from numpy.fft import fft, fftshift
@@ -23,6 +24,7 @@ from props import (
     Resistor,
     VideoMobject,
     WeatherRadarTower,
+    cubic_bezier,
     ease_in_out_elastic,
     ease_out_elastic,
     get_amp,
@@ -81,8 +83,8 @@ class Intro(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                GrowFromCenter(amp[0], rate_func=intro_elastic, run_time=1.4),
-                GrowFromCenter(amp[1], rate_func=intro_elastic, run_time=1.4),
+                GrowFromCenter(amp[0], rate_func=intro_elastic, run_time=1),
+                GrowFromCenter(amp[1], rate_func=intro_elastic, run_time=1),
                 lag_ratio=0.15,
             ),
         )
@@ -117,16 +119,16 @@ class Intro(MovingCameraScene):
                 lambda t: ~A * np.sin(2 * PI * f * t),
                 x_range=[0, ~x1_in, 1 / 1000],
                 color=INPUT_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
                 use_smoothing=False,
             )
         )
         outp = always_redraw(
             lambda: outp_ax.plot(
                 lambda t: np.clip(~A * G * np.sin(2 * PI * f * t), -psat, psat),
-                x_range=[0, ~x1_out, 1 / 1000],
+                x_range=[0.001, ~x1_out, 1 / 1000],
                 color=OUTPUT_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
                 use_smoothing=False,
             )
         )
@@ -142,6 +144,8 @@ class Intro(MovingCameraScene):
 
         self.wait(0.5)
 
+        # self.remove(inp)
+        # self.camera.frame.move_to(Group(amp, outp_ax))
         self.play(A @ 0.45, self.camera.frame.animate.scale(1.2), run_time=4)
 
         self.wait(0.5)
@@ -232,20 +236,18 @@ class Intro(MovingCameraScene):
         ).scale_to_fit_width(fw(self, 0.25))
         p1_box = SurroundingRectangle(p1_thumbnail, buff=0, stroke_opacity=0)
         p1 = Group(p1_thumbnail, p1_box)
-        p2_thumbnail = ImageMobject(
-            "../14_amp_gain/static/Gain Thumbnail.png"
-        ).scale_to_fit_width(fw(self, 0.25))
+        p2_thumbnail = ImageMobject("./static/Psat Thumbnail.png").scale_to_fit_width(
+            fw(self, 0.25)
+        )
         p2_box = SurroundingRectangle(p2_thumbnail, buff=0, stroke_opacity=0)
         p2 = Group(p2_thumbnail, p2_box)
-        p3_thumbnail = ImageMobject(
-            "../14_amp_gain/static/Gain Thumbnail.png"
-        ).scale_to_fit_width(fw(self, 0.25))
-        p3_box = SurroundingRectangle(p3_thumbnail, buff=0, stroke_opacity=0)
+        p3_thumbnail = Text("???", font=FONT)
+        p3_box = p2_box.copy().move_to(p3_thumbnail)
         p3 = Group(p3_thumbnail, p3_box)
         ps = Group(p1, p2, p3).arrange(RIGHT, LARGE_BUFF).move_to(self.camera.frame)
         p1_label = Text("Gain", font=FONT).next_to(p1, DOWN, MED_SMALL_BUFF)
         p2_label = Text("Compression", font=FONT).next_to(p2, DOWN, MED_SMALL_BUFF)
-        p3_label = Text("???", font=FONT).next_to(p3, DOWN, MED_SMALL_BUFF)
+        p3_label = Text("Next...", font=FONT).next_to(p3, DOWN, MED_SMALL_BUFF)
 
         a12 = Arrow(p1.get_right(), p2.get_left(), buff=0)
         a23 = Arrow(p2.get_right(), p3.get_left(), buff=0)
@@ -288,7 +290,6 @@ class Intro(MovingCameraScene):
         self.wait(2)
 
 
-# TODO: re-render
 class LinearRegion(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -718,10 +719,6 @@ class LinearRegion(MovingCameraScene):
         )
 
         self.wait(0.5)
-
-        # # TODO: need to include this part
-        # # And for a while, that's exactly what happens. Every time we increase the input power by some amount, the output power increases by that same amount plus the gain.
-        # # This is the linear region, and it's where we want to operate most of the time because the amplifier behaves predictably.
 
         scale_4 = 1.5
         scale_4_comp = 1.1
@@ -1541,7 +1538,9 @@ class P1dB(MovingCameraScene):
         ideal_plot_x1 = VT(10)
         ideal_plot = always_redraw(
             lambda: ax.plot(
-                lambda x: x + 20, color=GREEN, x_range=[0, ~ideal_plot_x1, 1 / 100]
+                lambda x: x + 20,
+                color=GREEN,
+                x_range=[0, ~ideal_plot_x1, 1 / 100],
             )
         )
 
@@ -1605,9 +1604,10 @@ class P1dB(MovingCameraScene):
             LaggedStart(
                 Create(compression_box),
                 actual_x1 @ 10,
+                FadeIn(actual_label_group),
                 lag_ratio=0.3,
             ),
-            run_time=2,
+            run_time=2.5,
         )
 
         self.wait(0.5)
@@ -1808,15 +1808,15 @@ class P1dB(MovingCameraScene):
         ip1db_box = SurroundingRectangle(pin_label_group)
 
         op1db_line = DashedLine(
-            [ax.c2p(0, 0)[0], ax.i2gp(ip1db, actual_plot)[1], 0],
-            ax.i2gp(ip1db, actual_plot),
+            [ax.c2p(0, 0)[0], ax.i2gp(ip1db, ideal_plot)[1], 0],
+            ax.i2gp(ip1db, ideal_plot),
             dashed_ratio=0.6,
             dash_length=DEFAULT_DASH_LENGTH * 2,
         )
 
         ip1db_line = DashedLine(
             ax.c2p(ip1db, 20),
-            ax.i2gp(ip1db, actual_plot),
+            ax.i2gp(ip1db, ideal_plot),
             dashed_ratio=0.6,
             dash_length=DEFAULT_DASH_LENGTH * 2,
         )
@@ -2571,6 +2571,7 @@ class WhoCares(MovingCameraScene):
         self.wait(2)
 
 
+# TODO: re-render
 class Practical(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -2808,7 +2809,7 @@ class Practical(MovingCameraScene):
         )
         self.remove(background)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             pages.animate.shift(DOWN * page_height * 9),
@@ -2818,20 +2819,229 @@ class Practical(MovingCameraScene):
 
         self.wait(0.5)
 
+        system = (
+            ImageMobject("./static/shipping_container.png")
+            .scale_to_fit_width(fw(self, 0.3))
+            .next_to(pages[2], RIGHT, LARGE_BUFF * 2)
+            .shift(DOWN * 1.5)
+        )
+        antenna_u = (
+            ImageMobject("../props/static/dish_antenna.png")
+            .scale_to_fit_width(system.width * 0.6)
+            .next_to(system, UP, -LARGE_BUFF * 1.1)
+        ).set_z_index(-3)
+        antenna_d = (
+            ImageMobject("../props/static/dish_antenna.png")
+            .scale_to_fit_width(system.width * 0.8)
+            .flip(UP + RIGHT)
+            .next_to(system, DOWN, 0)
+        )
+
+        spec1_bez = CubicBezier(
+            pages[2].get_center() + [-pages[2].width / 4, pages[2].height * 0.1, 0],
+            pages[2].get_center() + [-pages[2].width / 4 + 1, pages[2].height * 0.1, 0],
+            system.get_left() + [-1, 0, 0],
+            system.get_left() + [-0.1, 0, 0],
+            color=GREEN,
+        )
+
+        spec2_bez = CubicBezier(
+            pages[2].get_center() + [-pages[2].width / 3, pages[2].height * 0.15, 0],
+            pages[2].get_center()
+            + [-pages[2].width / 3 + 1, pages[2].height * 0.15, 0],
+            system.get_left() + [-1, 0, 0],
+            system.get_left() + [-0.1, 0, 0],
+            color=GREEN,
+        )
+
+        spec3_bez = CubicBezier(
+            pages[2].get_center() + [-pages[2].width / 4, pages[2].height * 0.2, 0],
+            pages[2].get_center() + [-pages[2].width / 4 + 2, pages[2].height * 0.2, 0],
+            system.get_left() + [-1, 0, 0],
+            system.get_left() + [-0.1, 0, 0],
+            color=GREEN,
+        )
+
         self.play(
-            FadeOut(title, title_box),
             LaggedStart(
-                *[FadeOut(m) for m in pages[:5]],
+                FadeOut(title),
+                FadeOut(title_box),
+                *[FadeOut(m) for m in [*pages[:2], *pages[3:]]],
+                self.camera.frame.animate.scale(0.8).move_to(Group(system, pages[2])),
+                Create(spec1_bez),
+                Create(spec2_bez),
+                Create(spec3_bez),
+                system.shift(RIGHT * 5).animate.shift(LEFT * 5),
                 lag_ratio=0.2,
             ),
         )
 
+        self.wait(0.5)
+
+        u_y = antenna_u.get_y()
+        self.add(antenna_u)
+        self.play(
+            LaggedStart(
+                antenna_u.set_z_index(-3).move_to(system).animate.set_y(u_y),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        lb = Text("link budget", font=FONT)
+        psu = Text("PSU", font=FONT)
+        therm = Text("thermal", font=FONT)
+        Group(lb, psu, therm).arrange(DOWN, LARGE_BUFF).next_to(
+            system, RIGHT, LARGE_BUFF * 2
+        ).set_y(self.camera.frame.get_y())
+        psu.shift(LEFT)
+
+        bezs = [
+            CubicBezier(
+                system.get_right() + [0.1, 0, 0],
+                system.get_right() + [1, 0, 0],
+                m.get_left() + [-1, 0, 0],
+                m.get_left() + [-0.1, 0, 0],
+                color=GREEN,
+            )
+            for m in [lb, psu, therm]
+        ]
+
+        self.remove(clip, clip_box)
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(RIGHT * fw(self, 0.5)),
+                *[
+                    LaggedStart(Create(m), Write(t), lag_ratio=0.3)
+                    for m, t in zip(bezs, [lb, psu, therm])
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        nb0 = ImageMobject("./static/nb0.png").scale_to_fit_height(fh(self, 0.7))
+        nb1 = ImageMobject("./static/nb1.png").scale_to_fit_height(fh(self, 0.7))
+        nb_group = (
+            Group(nb0, nb1)
+            .arrange(RIGHT, LARGE_BUFF)
+            .scale_to_fit_width(fw(self, 0.8))
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+        )
+        nb_title = Text("op1db_psat.ipynb", font=FONT).next_to(nb_group, UP, LARGE_BUFF)
+        Group(nb_title, nb_group).move_to(self.camera.frame).shift(DOWN * fh(self))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                Write(nb_title),
+                GrowFromCenter(nb0),
+                GrowFromCenter(nb1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(nb_title),
+                FadeOut(nb0),
+                FadeOut(nb1),
+                lag_ratio=0.2,
+            )
+        )
+
+        comment = Text(
+            "I don't believe that man has ever been to medical school", font=FONT
+        )
+        send_comment = Text("Send", font=FONT).next_to(comment, RIGHT, LARGE_BUFF * 1.2)
+        send_comment_box = SurroundingRectangle(
+            send_comment,
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.3,
+            color=DARK_BLUE,
+            fill_color=DARK_BLUE,
+            fill_opacity=1,
+        )
+
+        comments = SurroundingRectangle(
+            Group(comment, send_comment_box, send_comment),
+            corner_radius=0.7,
+            buff=MED_LARGE_BUFF,
+            color=DARK_BLUE,
+        )
+        send_comment_group = Group(send_comment_box, send_comment)
+        comment_group = (
+            Group(comments, comment, send_comment_group)
+            .scale_to_fit_width(fw(self, 0.8))
+            .move_to(self.camera.frame.copy().shift(DOWN * fh(self, 1)))
+        )
+        self.next_section(skip_animations=skip_animations(False))
+        self.add(comments, send_comment_box, send_comment)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1)))
+
+        cursor = Rectangle(
+            color=GREY_A,
+            fill_color=GREY_A,
+            fill_opacity=1.0,
+            height=comment.height,
+            width=comment[0].width,
+        ).move_to(comment[0])
+
+        self.play(
+            TypeWithCursor(comment, cursor, leave_cursor_on=False),
+            run_time=3,
+            rate_func=cubic_bezier(0.181, 0.524, 0.744, 0.203),
+        )
+        # self.play(Blink(cursor, blinks=2))
+        # self.play(FadeOut(cursor, run_time=0.5))
+
+        self.wait(0.5)
+
+        comment_opacity = VT(0)
+        comment_bubble = always_redraw(
+            lambda: SurroundingRectangle(
+                comment,
+                color=DARK_BLUE,
+                stroke_opacity=~comment_opacity,
+                fill_color=DARK_BLUE,
+                fill_opacity=~comment_opacity,
+                corner_radius=0.2,
+            ).move_to(comment)
+        )
+        self.add(comment_bubble)
+
+        self.play(
+            LaggedStart(
+                send_comment_group.animate(
+                    rate_func=rate_functions.there_and_back, run_time=0.6
+                ).scale(0.7),
+                comment_opacity @ 1,
+                comment.animate(run_time=4)
+                .next_to(self.camera.frame.get_top(), UP, LARGE_BUFF)
+                .set_x(comment.get_x()),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeIn(
+                BackgroundRectangle(
+                    self.camera.frame,
+                    color=BACKGROUND_COLOR,
+                    fill_opacity=1,
+                    stroke_opacity=0,
+                ).set_z_index(10)
+            )
+        )
+
         self.wait(2)
-
-
-class WrapUp(MovingCameraScene):
-    def construct(self):
-        pass
 
 
 class Plug(MovingCameraScene):
