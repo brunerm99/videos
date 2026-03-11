@@ -11,7 +11,6 @@ from manim.utils.color.X11 import BROWN1
 from MF_Tools import VT
 from networkx import center
 from numpy.fft import fft, fftshift
-from pyglet.media.drivers.pulse.interface import PA_INVALID_WRITABLE_SIZE
 from scipy import signal
 from scipy.interpolate import interp1d
 
@@ -2571,7 +2570,6 @@ class WhoCares(MovingCameraScene):
         self.wait(2)
 
 
-# TODO: re-render
 class Practical(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
