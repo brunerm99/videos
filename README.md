@@ -126,3 +126,11 @@ Understanding gain is the key to reading any RF amplifier datasheet. In this vid
 We'll walk through clear examples, animations, and real datasheet plots so you can see exactly how an amplifier shapes your signal across frequency.
 
 ![thumbnail](./14_amp_gain/static/Gain%20Thumbnail.png)
+
+## [15 - How Hard Can You Push an RF Amplifier? | P1dB, Psat, and Compression](https://youtu.be/JBsucv4GKy8)
+
+An amplifier's job is to make signals bigger... but there's a limit. Push the input too hard and the output stops keeping up. This is compression, and two key datasheet specs define where it starts and where it maxes out: P1dB and Psat.
+
+In this video, I'll break down what these specs actually mean, why they matter for your RF system, and how to interpret them on a real datasheet. This is part 2 of my RF datasheet series following the video on gain.
+
+![thumbnail](./15_psat/static/Psat%20Thumbnail.png)
