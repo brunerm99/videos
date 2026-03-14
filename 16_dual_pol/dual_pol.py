@@ -2,6 +2,7 @@
 import os
 import sys
 from random import shuffle
+from turtle import width
 
 import pandas as pd
 import skrf as rf
@@ -54,8 +55,10 @@ OUTPUT_COLOR = ORANGE
 GAIN_COLOR = GREEN
 PAE_COLOR = YELLOW
 PRECIP_COLOR = BLUE
-H_COLOR = GREEN
-V_COLOR = ORANGE
+HPOL_TX_COLOR = BLUE
+VPOL_TX_COLOR = RED
+HPOL_RX_COLOR = PURPLE
+VPOL_RX_COLOR = ORANGE
 
 
 def skip_animations(b):
@@ -76,7 +79,7 @@ def lin2db(x):
 
 class DualPol(ThreeDScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
         axes = ThreeDAxes(
             x_range=[-2, 2, 0.5],
             y_range=[-1, 1, 0.5],
@@ -107,27 +110,63 @@ class DualPol(ThreeDScene):
         u0 = VT(-2)
         u1 = VT(2)
         u0_rx = VT(target_dist)
-        u1_rx = VT(target_dist + 2)
+        u1_rx = VT(target_dist + 4)
         hpol_tx_opacity = VT(1)
         hpol_rx_opacity = VT(0)
         vpol_tx_opacity = VT(0)
         vpol_rx_opacity = VT(0)
         hpol_tx_amp = VT(1)
+        vpol_tx_amp = VT(1)
         hpol_rx_amp = VT(1)
-        vpol_rx_amp = VT(0.2)
+        vpol_rx_amp = VT(0.6)
+        hpol_rotation = VT(0)
+        hpol_tx_highlight_opacity = VT(0)
+        hpol_tx_highlight_x0 = VT(0)
+        hpol_tx_highlight_x1 = VT(0)
+        vpol_tx_highlight_x0 = VT(0)
+        vpol_tx_highlight_x1 = VT(0)
+        vpol_tx_width = VT(0)
+        vpol_tx_rotation = VT(-PI / 2)
         hpol_tx = always_redraw(
             lambda: axes.plot_parametric_curve(
                 lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
-                color=BLUE,
+                color=HPOL_TX_COLOR,
                 t_range=(~u0, ~u1, 1 / 100),
                 stroke_width=DEFAULT_STROKE_WIDTH * 2,
                 stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~hpol_rotation, RIGHT)
+        ).set_shade_in_3d(True)
+        hpol_tx_highlight = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
+                color=YELLOW,
+                t_range=(~hpol_tx_highlight_x0, ~hpol_tx_highlight_x1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                stroke_opacity=~hpol_tx_highlight_opacity,
             )
+        ).set_shade_in_3d(True)
+        vpol_tx_highlight = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=YELLOW,
+                t_range=(~vpol_tx_highlight_x0, ~vpol_tx_highlight_x1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                stroke_opacity=~hpol_tx_highlight_opacity,
+            )
+        ).set_shade_in_3d(True)
+        vpol_tx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=VPOL_TX_COLOR,
+                t_range=(~u0, ~u1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * ~vpol_tx_width,
+                stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~vpol_tx_rotation, RIGHT)
         ).set_shade_in_3d(True)
         hpol_rx = always_redraw(
             lambda: axes.plot_parametric_curve(
                 lambda u: (u, ~hpol_rx_amp * np.sin(2 * PI * u), 0),
-                color=PURPLE,
+                color=HPOL_RX_COLOR,
                 t_range=(~u0_rx, ~u1_rx, 1 / 100),
                 stroke_width=DEFAULT_STROKE_WIDTH * 2,
                 stroke_opacity=~hpol_rx_opacity,
@@ -136,14 +175,21 @@ class DualPol(ThreeDScene):
         vpol_rx = always_redraw(
             lambda: axes.plot_parametric_curve(
                 lambda u: (u, 0, ~vpol_rx_amp * np.sin(2 * PI * u)),
-                color=ORANGE,
+                color=VPOL_RX_COLOR,
                 t_range=(~u0_rx, ~u1_rx, 1 / 100),
                 stroke_width=DEFAULT_STROKE_WIDTH * 2,
                 stroke_opacity=~vpol_rx_opacity,
             )
         ).set_shade_in_3d(True)
 
-        self.add(hpol_tx, hpol_rx, vpol_rx)
+        self.add(
+            hpol_tx,
+            hpol_rx,
+            vpol_tx,
+            vpol_rx,
+            hpol_tx_highlight,
+            vpol_tx_highlight,
+        )
 
         self.set_camera_orientation(
             zoom=0.4,
@@ -215,12 +261,64 @@ class DualPol(ThreeDScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.play(hpol_rotation @ (2 * PI), run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                hpol_tx_highlight_opacity @ 1,
+                hpol_tx_highlight_x1 @ (~u1),
+                hpol_tx_highlight_x0 @ (~u1),
+                lag_ratio=0.3,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                vpol_tx_width @ 2,
+                vpol_tx_rotation @ 0,
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        hpol_tx_highlight_x0 @= 0
+        hpol_tx_highlight_x1 @= 0
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                hpol_tx_highlight_x1 @ (~u1),
+                hpol_tx_highlight_x0 @ (~u1),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                vpol_tx_highlight_x1 @ (~u1),
+                vpol_tx_highlight_x0 @ (~u1),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
                 AnimationGroup(u0 + target_dist, u1 + target_dist),
-                hpol_tx_opacity @ 0,
+                AnimationGroup(hpol_tx_opacity @ 0, vpol_tx_opacity @ 0),
                 AnimationGroup(
                     hpol_rx_opacity @ 1,
                     vpol_rx_opacity @ 1,
@@ -230,6 +328,54 @@ class DualPol(ThreeDScene):
                 lag_ratio=0.3,
             ),
             run_time=10,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                sp1.animate.set_fill(opacity=0),
+                sp3.animate.set_fill(opacity=0),
+                sp2.animate.set_y(axes.c2p(0, 0, 0)[1]).set_z(axes.c2p(0, 0, 0)[2]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.move_camera(
+            phi=PI / 2,
+            theta=PI,
+            # zoom=0.25,
+            added_anims=[
+                Group(sp3, sp2, sp1).animate.shift(-(IN * 5 + UP * 5)),
+                axes.animate.set_stroke(opacity=0.3).shift(-(IN * 5 + UP * 5)),
+                hpol_rx_opacity @ 0.7,
+                vpol_rx_opacity @ 0.7,
+            ],
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        hv_relation = MathTex(r"\lvert H \rvert = \lvert V \rvert")
+        hv_relation[0][1].set_color(HPOL_RX_COLOR)
+        hv_relation[0][5].set_color(VPOL_RX_COLOR)
+        for char in hv_relation[0]:
+            char.set_opacity(0)
+        self.add_fixed_in_frame_mobjects(hv_relation)
+        hv_relation.scale(2).to_corner(DL, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                vpol_rx_amp @ 1,
+                LaggedStart(
+                    *[m.animate.set_opacity(1) for m in hv_relation[0]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
         )
 
         self.wait(2)
