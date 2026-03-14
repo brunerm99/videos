@@ -432,7 +432,7 @@ class LinearRegion(MovingCameraScene):
 
         # TODO: update thumbnail for notebook
         notebook_thumbnail_img = (
-            ImageMobject("../14_amp_gain/static/Gain Thumbnail.png")
+            ImageMobject("./static/nb3.png")
             .scale_to_fit_width(fw(self, 0.4))
             .next_to(gain_thumbnail, UP, LARGE_BUFF)
             .shift(RIGHT / 2)
@@ -3174,10 +3174,10 @@ class Plug(MovingCameraScene):
         stats_table = (
             Table(
                 [
-                    ["Lines of code", "5,822"],
-                    ["Script word count", "1,959"],
-                    ["Days to make", "22"],
-                    ["Git commits", "15"],
+                    ["Lines of code", "3,223"],
+                    ["Script word count", "1,576"],
+                    ["Days to make", "85 "],
+                    ["Git commits", "18"],
                 ],
                 element_to_mobject=Text,
                 element_to_mobject_config=dict(
