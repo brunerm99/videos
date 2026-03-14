@@ -77,7 +77,7 @@ def lin2db(x):
     return 10 * np.log10(x)
 
 
-class DualPol(ThreeDScene):
+class Idea3D(ThreeDScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
         axes = ThreeDAxes(
@@ -378,7 +378,30 @@ class DualPol(ThreeDScene):
             )
         )
 
+        self.wait(0.5)
+
+        self.play(
+            sp2.animate.stretch(1.5, dim=1),
+            vpol_rx_amp @ (~vpol_rx_amp / 1.5),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                axes.animate.shift([0, 0, 20]),
+                Group(sp2, sp3, sp1).animate.shift([0, 0, 100]),
+                hv_relation.animate.set_opacity(0),
+                lag_ratio=0.3,
+            )
+        )
+
         self.wait(2)
+
+
+class Idea2D(MovingCameraScene):
+    def construct(self): ...
 
 
 class DropShape(Scene):
