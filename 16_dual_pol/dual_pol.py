@@ -94,29 +94,37 @@ class Background(MovingCameraScene):
             .shift(LEFT * 2 + UP * 2)
         )
         raindrop1 = (
-            ImageMobject("../props/static/raindrop.png")
-            .scale_to_fit_width(cloud.width * 0.2)
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
             .next_to(cloud, DOWN, MED_SMALL_BUFF)
             .shift(LEFT * cloud.width * 0.3)
             .set_opacity(0.7)
         )
         raindrop2 = (
-            ImageMobject("../props/static/raindrop.png")
-            .scale_to_fit_width(cloud.width * 0.2)
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
             .next_to(cloud, DOWN, SMALL_BUFF)
             .shift(RIGHT * cloud.width * 0.4)
             .set_opacity(0.7)
         )
         raindrop3 = (
-            ImageMobject("../props/static/raindrop.png")
-            .scale_to_fit_width(cloud.width * 0.2)
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
             .next_to(cloud, DOWN, MED_SMALL_BUFF)
             .shift(LEFT * cloud.width * 0.1 + DOWN * 0.4)
             .set_opacity(0.7)
         )
         raindrop4 = (
-            ImageMobject("../props/static/raindrop.png")
-            .scale_to_fit_width(cloud.width * 0.2)
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
             .next_to(cloud, DOWN, MED_SMALL_BUFF)
             .shift(RIGHT * cloud.width * 0.3 + DOWN * 0.7)
             .set_opacity(0.7)
@@ -140,8 +148,10 @@ class Background(MovingCameraScene):
             .shift(LEFT * 0.5)
         )
         raindrop5 = (
-            ImageMobject("../props/static/raindrop.png")
-            .scale_to_fit_width(cloud.width * 0.2)
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
             .next_to(snowflake3, LEFT)
             .shift(DOWN * 0.1)
             .set_opacity(0.7)
@@ -163,7 +173,7 @@ class Background(MovingCameraScene):
         #     snowflake3,
         # )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -232,10 +242,393 @@ class Background(MovingCameraScene):
                 lambda t: np.sin(2 * PI * f * t),
                 color=HPOL_TX_COLOR,
                 x_range=[max(0, ~tx_x1 - pw), ~tx_x1, 1 / 200],
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
             ).set_z_index(1)
         )
 
-        self.add(tx_plot)
+        raindrop_rx_amp = 0.3
+        snowflake_rx_amp = 0.1
+        building_rx_amp = 0.5
+        plane_rx_amp = 0.4
+
+        plane_rx_x1 = VT(0)
+
+        building_rx_x1 = VT(0)
+
+        snowflake1_rx_x1 = VT(0)
+        snowflake2_rx_x1 = VT(0)
+        snowflake3_rx_x1 = VT(0)
+
+        raindrop1_rx_x1 = VT(0)
+        raindrop2_rx_x1 = VT(0)
+        raindrop3_rx_x1 = VT(0)
+        raindrop4_rx_x1 = VT(0)
+        raindrop5_rx_x1 = VT(0)
+
+        raindrop1_rx_line = Line(raindrop1.get_left(), radar.radome.get_right())
+        raindrop1_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=raindrop1_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(raindrop1_rx_line.get_angle())
+        raindrop1_rx_ax.shift(raindrop1.get_left() - raindrop1_rx_ax.c2p(0, 0))
+        raindrop1_rx_plot = always_redraw(
+            lambda: raindrop1_rx_ax.plot(
+                lambda t: raindrop_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~raindrop1_rx_x1 - pw),
+                    min(1, ~raindrop1_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        raindrop2_rx_line = Line(raindrop2.get_left(), radar.radome.get_right())
+        raindrop2_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=raindrop2_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(raindrop2_rx_line.get_angle())
+        raindrop2_rx_ax.shift(raindrop2.get_left() - raindrop2_rx_ax.c2p(0, 0))
+        raindrop2_rx_plot = always_redraw(
+            lambda: raindrop2_rx_ax.plot(
+                lambda t: raindrop_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~raindrop2_rx_x1 - pw),
+                    min(1, ~raindrop2_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        raindrop3_rx_line = Line(raindrop3.get_left(), radar.radome.get_right())
+        raindrop3_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=raindrop3_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(raindrop3_rx_line.get_angle())
+        raindrop3_rx_ax.shift(raindrop3.get_left() - raindrop3_rx_ax.c2p(0, 0))
+        raindrop3_rx_plot = always_redraw(
+            lambda: raindrop3_rx_ax.plot(
+                lambda t: raindrop_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~raindrop3_rx_x1 - pw),
+                    min(1, ~raindrop3_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        raindrop4_rx_line = Line(raindrop4.get_left(), radar.radome.get_right())
+        raindrop4_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=raindrop4_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(raindrop4_rx_line.get_angle())
+        raindrop4_rx_ax.shift(raindrop4.get_left() - raindrop4_rx_ax.c2p(0, 0))
+        raindrop4_rx_plot = always_redraw(
+            lambda: raindrop4_rx_ax.plot(
+                lambda t: raindrop_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~raindrop4_rx_x1 - pw),
+                    min(1, ~raindrop4_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        raindrop5_rx_line = Line(raindrop5.get_left(), radar.radome.get_right())
+        raindrop5_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=raindrop5_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(raindrop5_rx_line.get_angle())
+        raindrop5_rx_ax.shift(raindrop5.get_left() - raindrop5_rx_ax.c2p(0, 0))
+        raindrop5_rx_plot = always_redraw(
+            lambda: raindrop5_rx_ax.plot(
+                lambda t: raindrop_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~raindrop5_rx_x1 - pw),
+                    min(1, ~raindrop5_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        snowflake1_rx_line = Line(snowflake1.get_left(), radar.radome.get_right())
+        snowflake1_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=snowflake1_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(snowflake1_rx_line.get_angle())
+        snowflake1_rx_ax.shift(snowflake1.get_left() - snowflake1_rx_ax.c2p(0, 0))
+        snowflake1_rx_plot = always_redraw(
+            lambda: snowflake1_rx_ax.plot(
+                lambda t: snowflake_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~snowflake1_rx_x1 - pw),
+                    min(1, ~snowflake1_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        snowflake2_rx_line = Line(snowflake2.get_left(), radar.radome.get_right())
+        snowflake2_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=snowflake2_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(snowflake2_rx_line.get_angle())
+        snowflake2_rx_ax.shift(snowflake2.get_left() - snowflake2_rx_ax.c2p(0, 0))
+        snowflake2_rx_plot = always_redraw(
+            lambda: snowflake2_rx_ax.plot(
+                lambda t: snowflake_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~snowflake2_rx_x1 - pw),
+                    min(1, ~snowflake2_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        snowflake3_rx_line = Line(snowflake3.get_left(), radar.radome.get_right())
+        snowflake3_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=snowflake3_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(snowflake3_rx_line.get_angle())
+        snowflake3_rx_ax.shift(snowflake3.get_left() - snowflake3_rx_ax.c2p(0, 0))
+        snowflake3_rx_plot = always_redraw(
+            lambda: snowflake3_rx_ax.plot(
+                lambda t: snowflake_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~snowflake3_rx_x1 - pw),
+                    min(1, ~snowflake3_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        building_rx_line = Line(building.get_left(), radar.radome.get_right())
+        building_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=building_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(building_rx_line.get_angle())
+        building_rx_ax.shift(building.get_left() - building_rx_ax.c2p(0, 0))
+        building_rx_plot = always_redraw(
+            lambda: building_rx_ax.plot(
+                lambda t: building_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[
+                    max(0, ~building_rx_x1 - pw),
+                    min(1, ~building_rx_x1),
+                    1 / 200,
+                ],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        plane_rx_line = Line(plane.get_left(), radar.radome.get_right())
+        plane_rx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=plane_rx_line.get_length(),
+            y_length=fh(self, 0.3),
+            tips=False,
+        ).rotate(plane_rx_line.get_angle())
+        plane_rx_ax.shift(plane.get_left() - plane_rx_ax.c2p(0, 0))
+        plane_rx_plot = always_redraw(
+            lambda: plane_rx_ax.plot(
+                lambda t: plane_rx_amp * np.sin(2 * PI * f * t),
+                color=HPOL_RX_COLOR,
+                x_range=[max(0, ~plane_rx_x1 - pw), min(1, ~plane_rx_x1), 1 / 200],
+                stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+            ).set_z_index(1)
+        )
+
+        self.add(
+            tx_plot,
+            raindrop1_rx_plot,
+            raindrop2_rx_plot,
+            raindrop3_rx_plot,
+            raindrop4_rx_plot,
+            raindrop5_rx_plot,
+            snowflake1_rx_plot,
+            snowflake2_rx_plot,
+            snowflake3_rx_plot,
+            plane_rx_plot,
+            building_rx_plot,
+        )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                tx_x1.animate(run_time=5).set_value(1.1 + pw),
+                LaggedStart(
+                    raindrop1_rx_x1 @ (1 + pw),
+                    snowflake2_rx_x1 @ (1 + pw),
+                    raindrop3_rx_x1 @ (1 + pw),
+                    raindrop5_rx_x1 @ (1 + pw),
+                    snowflake1_rx_x1 @ (1 + pw),
+                    snowflake3_rx_x1 @ (1 + pw),
+                    raindrop4_rx_x1 @ (1 + pw),
+                    raindrop2_rx_x1 @ (1 + pw),
+                    building_rx_x1 @ (1 + pw),
+                    plane_rx_x1 @ (1 + pw),
+                    lag_ratio=0.03,
+                    run_time=4,
+                ),
+                lag_ratio=0.4,
+            ),
+            # run_time=5,
+        )
+
+        self.wait(0.5)
+
+        def echo(t, center, width, amplitude, ripple_freq=0, phase=0):
+            envelope = amplitude * np.exp(-0.5 * ((t - center) / width) ** 2)
+            if ripple_freq == 0:
+                return envelope
+
+            return envelope * (
+                0.55 + 0.45 * np.cos(2 * PI * ripple_freq * (t - center) + phase) ** 2
+            )
+
+        def radar_return(t):
+            noise_floor = (
+                0.02
+                + 0.006 * np.sin(2 * PI * 17 * t) ** 2
+                + 0.004 * np.sin(2 * PI * 31 * t + 0.8) ** 2
+            )
+
+            rain = (
+                echo(t, 0.17, 0.035, 0.11, ripple_freq=18, phase=0.2)
+                + echo(t, 0.24, 0.045, 0.16, ripple_freq=16, phase=1.0)
+                + echo(t, 0.31, 0.03, 0.09, ripple_freq=14, phase=2.1)
+            )
+            snow = echo(t, 0.48, 0.055, 0.08, ripple_freq=8, phase=0.5) + echo(
+                t, 0.55, 0.035, 0.05, ripple_freq=6, phase=1.4
+            )
+            plane = echo(t, 0.69, 0.018, 0.28, ripple_freq=24, phase=0.4) + echo(
+                t, 0.72, 0.01, 0.08, ripple_freq=30, phase=1.1
+            )
+            building = echo(t, 0.84, 0.015, 0.55) + echo(
+                t, 0.88, 0.025, 0.12, ripple_freq=10, phase=0.7
+            )
+
+            return np.clip(noise_floor + rain + snow + plane + building, 0, 0.95)
+
+        rtn_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[0, 1, 0.25],
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.5),
+            tips=False,
+            # axis_config={
+            #     "stroke_opacity": 0.55,
+            # },
+        )
+        xlabel = Text("time", font=FONT).scale(0.5).next_to(rtn_ax, DOWN, SMALL_BUFF)
+        ylabel = (
+            Text("amplitude", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(rtn_ax, LEFT, SMALL_BUFF)
+        )
+        rx_box = SurroundingRectangle(
+            Group(rtn_ax, xlabel, ylabel),
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.2,
+            color=HPOL_RX_COLOR,
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+        ).set_z_index(-1)
+        rx_label = (
+            Text("Received Signal", font=FONT)
+            .scale_to_fit_width(rx_box.width * 0.4)
+            .next_to(rx_box.get_corner(UL), UR, SMALL_BUFF)
+        )
+        rx_group = Group(rtn_ax, rx_box, xlabel, ylabel, rx_label).next_to(
+            radar.left_leg, LEFT, LARGE_BUFF * 3, aligned_edge=DOWN
+        )
+        self.add(rx_group, rx_box)
+
+        rtn_plot = rtn_ax.plot(
+            radar_return,
+            color=HPOL_RX_COLOR,
+            x_range=[0, 1, 1 / 500],
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        ).set_z_index(2)
+
+        radar.radome.set_fill(opacity=1, color=BACKGROUND_COLOR)
+        rtn_bez = CubicBezier(
+            radar.radome.get_left() + [0.1, 0, 0],
+            radar.radome.get_left() + [-1, 0, 0],
+            rx_box.get_right() + [1, -rx_box.height / 4, 0],
+            rx_box.get_right() + [-0.1, -rx_box.height / 4, 0],
+        ).set_z_index(-10)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.set_x(
+                    Group(rtn_ax, radar.vgroup).get_x()
+                ).shift(LEFT),
+                Create(rtn_bez),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(rtn_plot))
+
+        self.wait(0.5)
+
+        doppler_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[0, 1, 0.25],
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.5),
+            tips=False,
+        ).next_to(rtn_ax, DOWN, LARGE_BUFF)
+
+        self.play(self.camera.frame.animate.move_to(doppler_ax))
 
         self.wait(2)
 
