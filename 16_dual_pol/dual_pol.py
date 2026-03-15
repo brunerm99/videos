@@ -77,6 +77,169 @@ def lin2db(x):
     return 10 * np.log10(x)
 
 
+class Background(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(fh(self, 0.5)).set_stroke(
+            width=DEFAULT_STROKE_WIDTH * 3
+        ).to_corner(DL, MED_LARGE_BUFF).shift(RIGHT).set_z_index(10)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(LEFT * 2 + UP * 2)
+        )
+        raindrop1 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.3)
+            .set_opacity(0.7)
+        )
+        raindrop2 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.4)
+            .set_opacity(0.7)
+        )
+        raindrop3 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.1 + DOWN * 0.4)
+            .set_opacity(0.7)
+        )
+        raindrop4 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.3 + DOWN * 0.7)
+            .set_opacity(0.7)
+        )
+        snowflake1 = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.1 + DOWN * 0.3)
+        )
+        snowflake2 = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.2 + DOWN * 1)
+        )
+        snowflake3 = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(raindrop4, DOWN, SMALL_BUFF)
+            .shift(LEFT * 0.5)
+        )
+        raindrop5 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(snowflake3, LEFT)
+            .shift(DOWN * 0.1)
+            .set_opacity(0.7)
+        )
+
+        self.play(radar.vgroup.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        # self.add(
+        #     cloud,
+        #     raindrop1,
+        #     raindrop2,
+        #     raindrop3,
+        #     raindrop4,
+        #     raindrop5,
+        #     snowflake1,
+        #     snowflake2,
+        #     snowflake3,
+        # )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                FadeIn(cloud),
+                FadeIn(raindrop1, shift=DOWN),
+                FadeIn(raindrop2, shift=DOWN),
+                FadeIn(raindrop3, shift=DOWN),
+                FadeIn(raindrop4, shift=DOWN),
+                FadeIn(raindrop5, shift=DOWN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(snowflake1, shift=DOWN),
+                FadeIn(snowflake2, shift=DOWN),
+                FadeIn(snowflake3, shift=DOWN),
+                lag_ratio=0.3,
+            )
+        )
+
+        plane = (
+            SVGMobject("../props/static/plane.svg")
+            .scale_to_fit_height(fh(self, 0.3))
+            .rotate(PI * 0.7)
+            .set_fill(TARGET1_COLOR)
+            .next_to(raindrop2, RIGHT, SMALL_BUFF)
+        )
+
+        building = (
+            SVGMobject("../props/static/Icon 12.svg")
+            .scale_to_fit_height(fh(self, 0.4))
+            .to_corner(DR, MED_SMALL_BUFF)
+            .shift(LEFT)
+            .set_fill(WHITE)
+            .set_stroke(color=WHITE, width=DEFAULT_STROKE_WIDTH * 1.5)
+        )
+
+        self.wait(0.5)
+
+        self.play(plane.shift(RIGHT * 8).animate.shift(LEFT * 8))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(building))
+
+        self.wait(0.5)
+
+        tx_ax = Axes(
+            x_range=[0, 1, 0.125],
+            y_range=[-1, 1, 1],
+            x_length=(self.camera.frame.get_right() - radar.radome.get_right())[0],
+            y_length=fh(self, 0.3),
+            tips=False,
+        )
+        tx_ax.shift(radar.radome.get_right() - tx_ax.c2p(0, 0))
+
+        pw = 0.2
+        f = 10
+        tx_x1 = VT(0)
+        tx_plot = always_redraw(
+            lambda: tx_ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                color=HPOL_TX_COLOR,
+                x_range=[max(0, ~tx_x1 - pw), ~tx_x1, 1 / 200],
+            ).set_z_index(1)
+        )
+
+        self.add(tx_plot)
+
+        self.wait(2)
+
+
 class Idea3D(ThreeDScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -402,6 +565,515 @@ class Idea3D(ThreeDScene):
 
 class Idea2D(MovingCameraScene):
     def construct(self): ...
+
+
+CHILL_BD_SHOW_REFERENCE = os.getenv("CHILL_BD_SHOW_REFERENCE", "").lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+CHILL_BD_REFERENCE_OPACITY = 0.22
+
+
+class ChillBlockDiagram(Group):
+    SOURCE_WIDTH = 487
+    SOURCE_HEIGHT = 607
+
+    def __init__(
+        self,
+        show_reference=CHILL_BD_SHOW_REFERENCE,
+        reference_opacity=CHILL_BD_REFERENCE_OPACITY,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+
+        asset_path = os.path.join(os.path.dirname(__file__), "static", "chill_bd.png")
+        self.reference = ImageMobject(asset_path)
+        self.reference.height = config.frame_height * 0.96
+        self.reference.move_to(ORIGIN)
+
+        self.px_scale = self.reference.width / self.SOURCE_WIDTH
+        self.py_scale = self.reference.height / self.SOURCE_HEIGHT
+        self.unit = min(self.px_scale, self.py_scale)
+        self.stroke = 1.45
+        self.font = FONT or "Liberation Serif"
+        self.font_scale = 0.52
+
+        if show_reference:
+            self.add(self.reference.copy().set_opacity(reference_opacity))
+        self.add(self.build_diagram())
+
+    def p(self, x, y):
+        return (
+            self.reference.get_corner(UL)
+            + RIGHT * self.px_scale * x
+            + DOWN * self.py_scale * y
+        )
+
+    def s(self, px):
+        return self.unit * px
+
+    def rp(self, x1, y1, x2, y2, fx, fy):
+        return self.p(x1 + (x2 - x1) * fx, y1 + (y2 - y1) * fy)
+
+    def wire(self, start, end, arrow=False):
+        if arrow:
+            return Arrow(
+                self.p(*start),
+                self.p(*end),
+                buff=0,
+                color=BLACK,
+                stroke_width=self.stroke,
+                tip_length=self.s(8),
+                max_stroke_width_to_length_ratio=999,
+                max_tip_length_to_length_ratio=0.35,
+            )
+        return Line(
+            self.p(*start),
+            self.p(*end),
+            color=BLACK,
+            stroke_width=self.stroke,
+        )
+
+    def polywire(self, *points, end_arrow=False):
+        segs = VGroup()
+        for idx, (start, end) in enumerate(zip(points, points[1:])):
+            segs.add(self.wire(start, end, arrow=end_arrow and idx == len(points) - 2))
+        return segs
+
+    def box(self, x1, y1, x2, y2):
+        rect = Rectangle(
+            width=(x2 - x1) * self.px_scale,
+            height=(y2 - y1) * self.py_scale,
+            color=BLACK,
+            stroke_width=self.stroke,
+        )
+        rect.move_to((self.p(x1, y1) + self.p(x2, y2)) / 2)
+        return rect
+
+    def selector_box(self, x1, y1, x2, y2):
+        rect = self.box(x1, y1, x2, y2)
+        slash = self.wire(
+            (x1 + (x2 - x1) * 0.2, y1 + (y2 - y1) * 0.68),
+            (x1 + (x2 - x1) * 0.8, y1 + (y2 - y1) * 0.28),
+        )
+        return VGroup(rect, slash)
+
+    def switch_box(self, x1, y1, x2, y2):
+        rect = self.box(x1, y1, x2, y2)
+        return VGroup(
+            rect,
+            self.wire((x1, (y1 + y2) / 2), (x2, (y1 + y2) / 2)),
+            self.wire((x1, y1), (x2, y2)),
+            self.wire((x1, y2), (x2, y1)),
+        )
+
+    def filter_box(self, x1, y1, x2, y2):
+        rect = self.box(x1, y1, x2, y2)
+        curve = VMobject(color=BLACK, stroke_width=self.stroke)
+        curve.set_points_smoothly(
+            [
+                self.rp(x1, y1, x2, y2, 0.23, 0.72),
+                self.rp(x1, y1, x2, y2, 0.35, 0.42),
+                self.rp(x1, y1, x2, y2, 0.5, 0.18),
+                self.rp(x1, y1, x2, y2, 0.65, 0.42),
+                self.rp(x1, y1, x2, y2, 0.78, 0.72),
+            ]
+        )
+        return VGroup(rect, curve)
+
+    def amp(self, x1, y1, x2, y2):
+        return Polygon(
+            self.p(x1, y1),
+            self.p(x1, y2),
+            self.p(x2, (y1 + y2) / 2),
+            color=BLACK,
+            stroke_width=self.stroke,
+            fill_opacity=0,
+        )
+
+    def mixer(self, cx, cy, r=14):
+        radius = self.s(r)
+        circle = Circle(radius=radius, color=BLACK, stroke_width=self.stroke).move_to(
+            self.p(cx, cy)
+        )
+        diag_1 = Line(
+            circle.get_corner(UL) + DR * radius * 0.12,
+            circle.get_corner(DR) + UL * radius * 0.12,
+            color=BLACK,
+            stroke_width=self.stroke,
+        )
+        diag_2 = Line(
+            circle.get_corner(UR) + DL * radius * 0.12,
+            circle.get_corner(DL) + UR * radius * 0.12,
+            color=BLACK,
+            stroke_width=self.stroke,
+        )
+        return VGroup(circle, diag_1, diag_2)
+
+    def arrow_circle(self, cx, cy, r=14):
+        radius = self.s(r)
+        circle = Circle(radius=radius, color=BLACK, stroke_width=self.stroke).move_to(
+            self.p(cx, cy)
+        )
+        inner = Arrow(
+            circle.get_center() + LEFT * radius * 0.45,
+            circle.get_center() + RIGHT * radius * 0.45,
+            buff=0,
+            color=BLACK,
+            stroke_width=self.stroke,
+            tip_length=radius * 0.38,
+            max_stroke_width_to_length_ratio=999,
+            max_tip_length_to_length_ratio=0.9,
+        )
+        return VGroup(circle, inner)
+
+    def circulator(self, cx, cy, r=14):
+        radius = self.s(r)
+        center = self.p(cx, cy)
+        circle = Circle(radius=radius, color=BLACK, stroke_width=self.stroke).move_to(
+            center
+        )
+        start = center + LEFT * radius * 0.36 + UP * radius * 0.08
+        end = center + LEFT * radius * 0.22 + DOWN * radius * 0.24
+        inner = CubicBezier(
+            start,
+            start + DOWN * radius * 0.22,
+            end + LEFT * radius * 0.18 + UP * radius * 0.02,
+            end,
+            color=BLACK,
+            stroke_width=self.stroke * 1.15,
+        )
+        tip = Triangle(
+            stroke_width=0,
+            fill_color=BLACK,
+            fill_opacity=1,
+        ).scale(radius * 0.19)
+        tip.rotate(-PI * 0.77)
+        tip.shift(end - tip.get_top())
+        return VGroup(circle, inner, tip)
+
+    def fit_mobject(self, mob, max_width_px=None, max_height_px=None):
+        if max_width_px is not None:
+            max_width = self.s(max_width_px)
+            if mob.width > max_width:
+                mob.scale_to_fit_width(max_width)
+        if max_height_px is not None:
+            max_height = self.s(max_height_px)
+            if mob.height > max_height:
+                mob.scale_to_fit_height(max_height)
+        return mob
+
+    def text(
+        self, text, x, y, font_size=22, max_width_px=None, max_height_px=None, **kwargs
+    ):
+        mob = Text(
+            text,
+            font=self.font,
+            fill_color=BLACK,
+            stroke_width=0,
+            font_size=font_size * self.font_scale,
+            **kwargs,
+        )
+        self.fit_mobject(mob, max_width_px=max_width_px, max_height_px=max_height_px)
+        mob.move_to(self.p(x, y))
+        return mob
+
+    def para(
+        self,
+        *lines,
+        x,
+        y,
+        font_size=20,
+        line_spacing=0.62,
+        max_width_px=None,
+        max_height_px=None,
+        **kwargs,
+    ):
+        mob = Paragraph(
+            *lines,
+            font=self.font,
+            color=BLACK,
+            alignment="left",
+            line_spacing=line_spacing,
+            font_size=font_size * self.font_scale,
+            **kwargs,
+        )
+        self.fit_mobject(mob, max_width_px=max_width_px, max_height_px=max_height_px)
+        mob.move_to(self.p(x, y))
+        return mob
+
+    def build_diagram(self):
+        diagram = VGroup()
+
+        diagram.add(self.text("Frequency Chain:", 62, 18, font_size=24))
+        diagram.add(self.box(20, 48, 96, 116))
+        diagram.add(
+            self.para(
+                "DRX Processor",
+                "Clocks",
+                x=58,
+                y=74,
+                font_size=16.5,
+                max_width_px=58,
+                max_height_px=40,
+            ).shift(LEFT * self.s(8))
+        )
+        diagram.add(self.box(20, 130, 112, 154))
+        diagram.add(
+            self.text(
+                "STALO (HP7268)",
+                66,
+                142,
+                font_size=16,
+                max_width_px=78,
+                max_height_px=13,
+            )
+        )
+
+        diagram.add(self.polywire((96, 60), (164, 60), (164, 66), end_arrow=True))
+        diagram.add(self.text("40 MHZ (LO)", 135, 49, font_size=14))
+        diagram.add(self.polywire((96, 104), (164, 104), (164, 92), end_arrow=True))
+        diagram.add(self.text("10 MHZ", 122, 96, font_size=14))
+        diagram.add(self.mixer(164, 79))
+
+        diagram.add(self.wire((178, 79), (197, 79), arrow=True))
+        diagram.add(self.filter_box(198, 68, 229, 100))
+        diagram.add(self.polywire((229, 83), (248, 83), (248, 98), end_arrow=True))
+
+        diagram.add(self.polywire((112, 140), (245, 140), (245, 126), end_arrow=True))
+        diagram.add(self.mixer(245, 112))
+        diagram.add(self.polywire((156, 140), (156, 168), (176, 168), end_arrow=True))
+        diagram.add(self.text("To Receivers  (? Mixers)", 222, 164, font_size=14))
+
+        diagram.add(self.wire((259, 112), (272, 112), arrow=True))
+        diagram.add(self.filter_box(272, 98, 303, 128))
+        diagram.add(self.wire((303, 112), (319, 112)))
+        diagram.add(self.amp(319, 97, 350, 128))
+
+        diagram.add(self.box(296, 48, 355, 81))
+        diagram.add(
+            self.para(
+                "I/Q",
+                "Modulator",
+                x=325,
+                y=63,
+                font_size=16,
+                max_width_px=40,
+                max_height_px=22,
+            )
+        )
+        diagram.add(
+            self.polywire(
+                (353, 113), (353, 95), (287, 95), (287, 56), (296, 56), end_arrow=True
+            )
+        )
+
+        diagram.add(self.arrow_circle(385, 62))
+        diagram.add(self.arrow_circle(385, 112))
+        diagram.add(self.selector_box(411, 49, 439, 77))
+        diagram.add(self.selector_box(411, 97, 439, 125))
+        diagram.add(self.wire((355, 62), (371, 62)))
+        diagram.add(self.wire((399, 62), (411, 62)))
+        diagram.add(self.wire((439, 62), (469, 62), arrow=True))
+        diagram.add(self.wire((350, 112), (371, 112)))
+        diagram.add(self.wire((399, 112), (411, 112)))
+        diagram.add(self.wire((439, 112), (469, 112), arrow=True))
+        diagram.add(self.text("RF to Transmitters", 430, 90, font_size=14))
+        diagram.add(self.text("V", 479, 64, font_size=16))
+        diagram.add(self.text("H", 479, 112, font_size=16))
+
+        diagram.add(
+            self.text("Transmitter/Receiver: (H only shown)", 108, 195, font_size=23)
+        )
+        diagram.add(
+            self.polywire((440, 125), (440, 201), (48, 201), (48, 236), (66, 236))
+        )
+        diagram.add(self.amp(66, 214, 95, 240))
+        diagram.add(
+            self.para(
+                "IPA",
+                "(Staclb)",
+                x=82,
+                y=214,
+                font_size=15,
+                max_width_px=26,
+                max_height_px=18,
+            )
+        )
+        diagram.add(self.wire((95, 227), (103, 227)))
+        diagram.add(self.arrow_circle(117, 227))
+        diagram.add(self.wire((131, 227), (147, 227)))
+        diagram.add(self.amp(147, 214, 178, 240))
+        diagram.add(
+            self.para(
+                "Power Amp",
+                "(VA-87B)",
+                x=175,
+                y=213,
+                font_size=15,
+                max_width_px=56,
+                max_height_px=20,
+            )
+        )
+        diagram.add(self.wire((178, 227), (232, 227), arrow=True))
+
+        diagram.add(self.polywire((206, 227), (206, 245), (187, 245), (187, 293)))
+        diagram.add(self.text("50 dB", 189, 257, font_size=15))
+        diagram.add(self.text("Coupler", 190, 274, font_size=15))
+
+        diagram.add(self.circulator(246, 227))
+        diagram.add(
+            DoubleArrow(
+                self.p(246, 241),
+                self.p(246, 269),
+                buff=0,
+                color=BLACK,
+                stroke_width=self.stroke,
+                tip_length=self.s(8),
+                max_stroke_width_to_length_ratio=999,
+                max_tip_length_to_length_ratio=0.28,
+            )
+        )
+        diagram.add(self.text("To Antenna H", 258, 274, font_size=15))
+        diagram.add(self.text("Port", 232, 292, font_size=15))
+
+        diagram.add(self.wire((260, 227), (271, 227), arrow=True))
+        diagram.add(self.box(271, 210, 320, 251))
+        diagram.add(
+            self.para(
+                "Power",
+                "Limit",
+                x=295,
+                y=229,
+                font_size=15,
+                max_width_px=32,
+                max_height_px=22,
+            )
+        )
+        diagram.add(self.wire((320, 227), (338, 227), arrow=True))
+        diagram.add(self.filter_box(340, 212, 370, 243))
+        diagram.add(self.wire((370, 227), (389, 227)))
+        diagram.add(self.amp(389, 213, 421, 240))
+        diagram.add(self.text("LNA", 414, 211, font_size=16))
+        diagram.add(
+            self.polywire((421, 227), (437, 227), (437, 293), (15, 293), (15, 469))
+        )
+
+        diagram.add(self.polywire((48, 323), (48, 356), (63, 356), end_arrow=True))
+        diagram.add(self.text("Transfer Sw.", 97, 340, font_size=16))
+        diagram.add(self.switch_box(63, 356, 96, 387))
+        diagram.add(self.wire((37, 387), (63, 387), arrow=True))
+        diagram.add(self.para("From V", "LNA", x=38, y=392, font_size=16))
+        diagram.add(self.wire((96, 387), (135, 387), arrow=True))
+        diagram.add(self.para("To V", "Receiver", x=147, y=400, font_size=16))
+
+        diagram.add(self.wire((96, 356), (168, 356)))
+        diagram.add(self.filter_box(168, 344, 197, 374))
+        diagram.add(self.polywire((197, 356), (240, 356), (240, 383), end_arrow=True))
+        diagram.add(self.mixer(240, 397))
+        diagram.add(self.polywire((160, 440), (240, 440), (240, 412), end_arrow=True))
+        diagram.add(self.text("STALO", 168, 434, font_size=18))
+
+        diagram.add(self.wire((254, 397), (268, 397)))
+        diagram.add(self.filter_box(268, 385, 297, 415))
+        diagram.add(self.polywire((297, 399), (329, 399), (329, 439), end_arrow=True))
+        diagram.add(self.text("50 MHZ IF", 330, 390, font_size=16))
+
+        diagram.add(self.mixer(329, 453))
+        diagram.add(self.polywire((271, 479), (329, 479), (329, 467), end_arrow=True))
+        diagram.add(self.text("40 MHZ LO", 246, 477, font_size=16))
+        diagram.add(self.wire((343, 453), (355, 453)))
+        diagram.add(self.filter_box(355, 439, 384, 469))
+        diagram.add(self.polywire((384, 453), (398, 453), (398, 500), (177, 500)))
+
+        diagram.add(self.wire((15, 469), (63, 469)))
+        diagram.add(self.wire((63, 469), (63, 488), arrow=True))
+        diagram.add(self.box(30, 488, 98, 548))
+        diagram.add(
+            self.para(
+                "Down",
+                "Conversion",
+                "Similar to",
+                "Receiver",
+                x=63,
+                y=519,
+                font_size=15,
+                line_spacing=0.58,
+                max_width_px=44,
+                max_height_px=48,
+            )
+        )
+        diagram.add(self.polywire((63, 548), (63, 588), (273, 588), end_arrow=True))
+        diagram.add(self.text("10 MHZ IF", 134, 580, font_size=16))
+
+        diagram.add(self.box(176, 500, 266, 548))
+        diagram.add(
+            self.text(
+                "10 MHZ IF",
+                220,
+                523,
+                font_size=16,
+                max_width_px=62,
+                max_height_px=18,
+            )
+        )
+        diagram.add(self.wire((266, 548), (273, 548), arrow=True))
+
+        diagram.add(self.box(273, 516, 370, 602))
+        diagram.add(
+            self.text(
+                "DRX Processor",
+                321,
+                530,
+                font_size=16,
+                max_width_px=74,
+                max_height_px=13,
+            )
+        )
+        diagram.add(
+            self.text(
+                "Low Chan.",
+                321,
+                558,
+                font_size=16,
+                max_width_px=68,
+                max_height_px=13,
+            )
+        )
+        diagram.add(
+            self.text(
+                "High Chan.",
+                323,
+                586,
+                font_size=16,
+                max_width_px=70,
+                max_height_px=13,
+            )
+        )
+        diagram.add(
+            self.text(
+                "Txmit Chan.",
+                325,
+                594,
+                font_size=16,
+                max_width_px=72,
+                max_height_px=13,
+            )
+        )
+
+        diagram.add(self.text("25 dB", 194, 558, font_size=15))
+        diagram.add(self.text("Coupler", 197, 574, font_size=15))
+        diagram.add(self.polywire((222, 561), (222, 574), (273, 574), end_arrow=True))
+
+        return diagram
+
+
+class ChillBD(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = WHITE
+        self.add(ChillBlockDiagram())
 
 
 class DropShape(Scene):
