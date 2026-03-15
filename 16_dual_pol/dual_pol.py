@@ -37,7 +37,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -575,7 +575,7 @@ class Background(MovingCameraScene):
             Group(rtn_ax, xlabel, ylabel),
             buff=MED_SMALL_BUFF,
             corner_radius=0.2,
-            color=HPOL_RX_COLOR,
+            color=GREEN,
             fill_opacity=1,
             fill_color=BACKGROUND_COLOR,
         ).set_z_index(-1)
@@ -620,15 +620,285 @@ class Background(MovingCameraScene):
 
         self.wait(0.5)
 
-        doppler_ax = Axes(
+        reflectivity_ax = Axes(
             x_range=[0, 1, 0.25],
+            y_range=[-10, 60, 10],
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.5),
+            tips=False,
+        ).next_to(rtn_ax, UP, LARGE_BUFF)
+        reflectivity_xlabel = (
+            Text("range", font=FONT)
+            .scale(0.5)
+            .next_to(reflectivity_ax, DOWN, SMALL_BUFF)
+        )
+        reflectivity_ylabel = (
+            Text("reflectivity (dBZ)", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(reflectivity_ax, LEFT, SMALL_BUFF)
+        )
+        reflectivity_box = SurroundingRectangle(
+            Group(reflectivity_ax, reflectivity_xlabel, reflectivity_ylabel),
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.2,
+            color=GREEN,
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+        ).set_z_index(-1)
+        reflectivity_label = (
+            Text("Reflectivity", font=FONT)
+            .scale(0.6)
+            .next_to(reflectivity_box.get_corner(UL), UR, SMALL_BUFF)
+        )
+        reflectivity_group = Group(
+            reflectivity_ax,
+            reflectivity_xlabel,
+            reflectivity_ylabel,
+            reflectivity_box,
+            reflectivity_label,
+        )
+
+        doppler_ax = Axes(
+            x_range=[-0.5, 0.5, 0.25],
             y_range=[0, 1, 0.25],
             x_length=fw(self, 0.5),
             y_length=fh(self, 0.5),
             tips=False,
-        ).next_to(rtn_ax, DOWN, LARGE_BUFF)
+        )
+        doppler_xlabel = (
+            Text("velocity (m/s)", font=FONT)
+            .scale(0.5)
+            .next_to(doppler_ax, DOWN, SMALL_BUFF)
+        )
+        doppler_ylabel = (
+            Text("amplitude", font=FONT)
+            .scale(0.5)
+            .rotate(PI / 2)
+            .next_to(doppler_ax, LEFT, SMALL_BUFF)
+        )
+        doppler_box = SurroundingRectangle(
+            Group(doppler_ax, doppler_xlabel, doppler_ylabel),
+            buff=MED_SMALL_BUFF,
+            corner_radius=0.2,
+            color=GREEN,
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+        ).set_z_index(-1)
+        doppler_label = (
+            Text("Doppler Velocity", font=FONT)
+            .scale(0.6)
+            .next_to(doppler_box.get_corner(UL), UR, SMALL_BUFF)
+        )
+        doppler_group = Group(
+            doppler_ax,
+            doppler_xlabel,
+            doppler_ylabel,
+            doppler_box,
+            doppler_label,
+        )
 
-        self.play(self.camera.frame.animate.move_to(doppler_ax))
+        Group(reflectivity_group, doppler_group).arrange(DOWN, SMALL_BUFF).next_to(
+            rtn_ax, LEFT, LARGE_BUFF * 3
+        )
+
+        def doppler_peak(t, center, width, amplitude, ripple_freq=0, phase=0):
+            envelope = amplitude * np.exp(-0.5 * ((t - center) / width) ** 2)
+            if ripple_freq == 0:
+                return envelope
+
+            return envelope * (
+                0.6 + 0.4 * np.cos(2 * PI * ripple_freq * (t - center) + phase) ** 2
+            )
+
+        def doppler_spectrum(t):
+            noise_floor = (
+                0.015
+                + 0.004 * np.sin(2 * PI * 19 * t + 0.4) ** 2
+                + 0.003 * np.sin(2 * PI * 37 * t + 1.2) ** 2
+            )
+
+            building = doppler_peak(t, 0.0, 0.015, 0.58) + doppler_peak(
+                t, 0, 0.055, 0.08, ripple_freq=5, phase=0.6
+            )
+            rain = doppler_peak(
+                t, -0.06, 0.07, 0.12, ripple_freq=12, phase=0.3
+            ) + doppler_peak(t, 0.05, 0.055, 0.08, ripple_freq=10, phase=1.7)
+            snow = doppler_peak(t, -0.015, 0.035, 0.05, ripple_freq=7, phase=0.9)
+            plane = (
+                doppler_peak(t, 0.27, 0.016, 0.32)
+                + doppler_peak(t, 0.24, 0.035, 0.10, ripple_freq=18, phase=0.2)
+                + doppler_peak(t, 0.31, 0.018, 0.07, ripple_freq=22, phase=1.1)
+            )
+
+            return np.clip(noise_floor + building + rain + snow + plane, 0, 0.95)
+
+        doppler_plot = doppler_ax.plot(
+            doppler_spectrum,
+            color=HPOL_RX_COLOR,
+            x_range=[-0.5, 0.5, 1 / 500],
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        ).set_z_index(2)
+
+        def reflectivity_blob(r, center, width, peak_dbz, ripple_freq=0, phase=0):
+            peak_z = 10 ** (peak_dbz / 10)
+            envelope = peak_z * np.exp(-0.5 * ((r - center) / width) ** 2)
+            if ripple_freq == 0:
+                return envelope
+
+            return envelope * (
+                0.7 + 0.3 * np.cos(2 * PI * ripple_freq * (r - center) + phase) ** 2
+            )
+
+        def reflectivity_profile(r):
+            background_z = 10 ** (-8 / 10)
+
+            rain_z = (
+                reflectivity_blob(r, 0.17, 0.035, 27, ripple_freq=10, phase=0.3)
+                + reflectivity_blob(r, 0.24, 0.045, 34, ripple_freq=8, phase=1.1)
+                + reflectivity_blob(r, 0.31, 0.03, 25, ripple_freq=9, phase=2.0)
+            )
+            snow_z = reflectivity_blob(
+                r, 0.48, 0.055, 16, ripple_freq=5, phase=0.6
+            ) + reflectivity_blob(r, 0.55, 0.035, 11, ripple_freq=4, phase=1.2)
+            plane_z = reflectivity_blob(r, 0.69, 0.018, 43) + reflectivity_blob(
+                r, 0.72, 0.012, 32, ripple_freq=12, phase=0.4
+            )
+            building_z = reflectivity_blob(r, 0.84, 0.015, 55) + reflectivity_blob(
+                r, 0.88, 0.025, 36, ripple_freq=6, phase=0.9
+            )
+
+            return np.clip(
+                lin2db(background_z + rain_z + snow_z + plane_z + building_z), -10, 60
+            )
+
+        reflectivity_plot = reflectivity_ax.plot(
+            reflectivity_profile,
+            color=HPOL_RX_COLOR,
+            x_range=[0, 1, 1 / 500],
+            stroke_width=DEFAULT_STROKE_WIDTH * 1.5,
+        ).set_z_index(2)
+
+        reflectivity_bez = CubicBezier(
+            rx_box.get_left(),
+            rx_box.get_left() + [-2, 0, 0],
+            reflectivity_box.get_right() + [2, 0, 0],
+            reflectivity_box.get_right(),
+        )
+
+        doppler_bez = CubicBezier(
+            rx_box.get_left(),
+            rx_box.get_left() + [-2, 0, 0],
+            doppler_box.get_right() + [2, 0, 0],
+            doppler_box.get_right(),
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(reflectivity_group, doppler_group, rx_group).height * 1.2
+                ).move_to(Group(reflectivity_group, doppler_group, rx_group)),
+                LaggedStart(
+                    Create(reflectivity_bez),
+                    Write(reflectivity_label),
+                    Create(reflectivity_box),
+                    Create(reflectivity_ax),
+                    Write(reflectivity_xlabel),
+                    Write(reflectivity_ylabel),
+                    Create(reflectivity_plot),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(doppler_bez),
+                Write(doppler_label),
+                Create(doppler_box),
+                Create(doppler_ax),
+                Write(doppler_xlabel),
+                Write(doppler_ylabel),
+                Create(doppler_plot),
+                lag_ratio=0.1,
+            ),
+        )
+
+        # self.play(Create(doppler_ax), Create(doppler_plot))
+
+        # self.add(doppler_group, doppler_plot, reflectivity_group, reflectivity_plot)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                doppler_label.animate.set_opacity(0.2),
+                doppler_box.animate.set_opacity(0.2),
+                doppler_ax.animate.set_opacity(0.2),
+                doppler_xlabel.animate.set_opacity(0.2),
+                doppler_ylabel.animate.set_opacity(0.2),
+                doppler_plot.animate.set_stroke_opacity(0.2),
+                self.camera.frame.animate.scale_to_fit_height(
+                    reflectivity_group.height * 1.4
+                ).move_to(reflectivity_group),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        rain_qmark = (
+            Text("rain?", font=FONT)
+            .scale(0.3)
+            .next_to(reflectivity_ax.i2gp(0.3, reflectivity_plot), UP, SMALL_BUFF)
+            .shift(UP * 0.5 + LEFT)
+        )
+        hail_qmark = (
+            Text("hail?", font=FONT)
+            .scale(0.3)
+            .next_to(rain_qmark, RIGHT, SMALL_BUFF)
+            .shift(DOWN * 0.2)
+        )
+        bird_qmark = (
+            Text("bird?", font=FONT)
+            .scale(0.3)
+            .next_to(hail_qmark, RIGHT, SMALL_BUFF)
+            .shift(DOWN * 0.1 + RIGHT * 0.1)
+        )
+
+        self.play(FadeIn(rain_qmark))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(hail_qmark))
+
+        self.wait(0.5)
+
+        self.play(FadeIn(bird_qmark))
+
+        self.wait(0.5)
+
+        dual_pol = (
+            Text("Dual-Pol", font=FONT)
+            .scale_to_fit_width(fw(self, 0.5))
+            .move_to(self.camera.frame)
+            .shift(UP * fh(self, 2))
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * fh(self, 2)),
+                Write(dual_pol),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(dual_pol))
 
         self.wait(2)
 
