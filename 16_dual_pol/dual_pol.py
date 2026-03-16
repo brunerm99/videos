@@ -1206,8 +1206,14 @@ class Idea3D(ThreeDScene):
 
         self.wait(0.5)
 
+        hv_relation_gt = MathTex(r"\lvert H \rvert > \lvert V \rvert")
+        hv_relation_gt[0][1].set_color(HPOL_RX_COLOR)
+        hv_relation_gt[0][5].set_color(VPOL_RX_COLOR)
+        hv_relation_gt.scale(2).move_to(hv_relation)
+
         self.play(
             sp2.animate.stretch(1.5, dim=1),
+            *[Transform(a, b) for a, b in zip(hv_relation[0], hv_relation_gt[0])],
             vpol_rx_amp @ (~vpol_rx_amp / 1.5),
             run_time=3,
         )
@@ -1218,7 +1224,12 @@ class Idea3D(ThreeDScene):
             LaggedStart(
                 axes.animate.shift([0, 0, 20]),
                 Group(sp2, sp3, sp1).animate.shift([0, 0, 100]),
-                hv_relation.animate.set_opacity(0),
+                AnimationGroup(
+                    *[
+                        m.animate.set_opacity(0)
+                        for m in [*hv_relation[0], *hv_relation_gt[0]]
+                    ]
+                ),
                 lag_ratio=0.3,
             )
         )
