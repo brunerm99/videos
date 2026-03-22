@@ -1270,7 +1270,7 @@ class Background(MovingCameraScene):
             rects_color.animate.rotate(PI / 2)
             .stretch(0.82, dim=1)
             .next_to(origin_marker, UP, MED_SMALL_BUFF)
-            .shift(RIGHT * 0.5)
+            # .shift(RIGHT * 0.5)
         )
 
         self.play(
