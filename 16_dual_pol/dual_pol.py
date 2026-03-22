@@ -1,9 +1,12 @@
 # dual_pol.py
 import os
 import sys
+from copy import deepcopy
+from math import sqrt
 from random import shuffle
 from turtle import width
 
+import numpy as np
 import pandas as pd
 import skrf as rf
 from dotenv import load_dotenv
@@ -1237,10 +1240,6 @@ class Idea3D(ThreeDScene):
         self.wait(2)
 
 
-class Idea2D(MovingCameraScene):
-    def construct(self): ...
-
-
 CHILL_BD_SHOW_REFERENCE = os.getenv("CHILL_BD_SHOW_REFERENCE", "").lower() in (
     "1",
     "true",
@@ -1276,7 +1275,8 @@ class ChillBlockDiagram(Group):
 
         if show_reference:
             self.add(self.reference.copy().set_opacity(reference_opacity))
-        self.add(self.build_diagram())
+        self.diagram = self.build_diagram()
+        self.add(self.diagram)
 
     def p(self, x, y):
         return (
@@ -1346,6 +1346,8 @@ class ChillBlockDiagram(Group):
     def filter_box(self, x1, y1, x2, y2):
         rect = self.box(x1, y1, x2, y2)
         curve = VMobject(color=BLACK, stroke_width=self.stroke)
+        rect.is_filter = True
+        curve.is_filter = True
         curve.set_points_smoothly(
             [
                 self.rp(x1, y1, x2, y2, 0.23, 0.72),
@@ -1373,17 +1375,20 @@ class ChillBlockDiagram(Group):
             self.p(cx, cy)
         )
         diag_1 = Line(
-            circle.get_corner(UL) + DR * radius * 0.12,
-            circle.get_corner(DR) + UL * radius * 0.12,
+            circle.get_corner(UL) + DR * radius * 0.25,
+            circle.get_corner(DR) + UL * radius * 0.25,
             color=BLACK,
             stroke_width=self.stroke,
         )
         diag_2 = Line(
-            circle.get_corner(UR) + DL * radius * 0.12,
-            circle.get_corner(DL) + UR * radius * 0.12,
+            circle.get_corner(UR) + DL * radius * 0.25,
+            circle.get_corner(DL) + UR * radius * 0.25,
             color=BLACK,
             stroke_width=self.stroke,
         )
+        circle.is_mixer = True
+        diag_1.is_mixer = True
+        diag_2.is_mixer = True
         return VGroup(circle, diag_1, diag_2)
 
     def arrow_circle(self, cx, cy, r=14):
@@ -1409,12 +1414,12 @@ class ChillBlockDiagram(Group):
         circle = Circle(radius=radius, color=BLACK, stroke_width=self.stroke).move_to(
             center
         )
-        start = center + LEFT * radius * 0.36 + UP * radius * 0.08
-        end = center + LEFT * radius * 0.22 + DOWN * radius * 0.24
+        start = center + LEFT * radius * 0.52 + UP * radius * 0.24
+        end = center + LEFT * radius * 0.12 + DOWN * radius * 0.36
         inner = CubicBezier(
             start,
-            start + DOWN * radius * 0.22,
-            end + LEFT * radius * 0.18 + UP * radius * 0.02,
+            start + DOWN * radius * 0.40,
+            end + LEFT * radius * 0.18 + UP * radius * 0.12,
             end,
             color=BLACK,
             stroke_width=self.stroke * 1.15,
@@ -1423,9 +1428,9 @@ class ChillBlockDiagram(Group):
             stroke_width=0,
             fill_color=BLACK,
             fill_opacity=1,
-        ).scale(radius * 0.19)
-        tip.rotate(-PI * 0.77)
-        tip.shift(end - tip.get_top())
+        ).scale(radius * 0.26)
+        tip.rotate(-PI * 0.66)
+        tip.shift(end - tip.get_center())
         return VGroup(circle, inner, tip)
 
     def fit_mobject(self, mob, max_width_px=None, max_height_px=None):
@@ -1514,25 +1519,25 @@ class ChillBlockDiagram(Group):
 
         diagram.add(self.wire((178, 79), (197, 79), arrow=True))
         diagram.add(self.filter_box(198, 68, 229, 100))
-        diagram.add(self.polywire((229, 83), (248, 83), (248, 98), end_arrow=True))
+        diagram.add(self.polywire((229, 83), (245, 83), (245, 98), end_arrow=True))
 
         diagram.add(self.polywire((112, 140), (245, 140), (245, 126), end_arrow=True))
         diagram.add(self.mixer(245, 112))
         diagram.add(self.polywire((156, 140), (156, 168), (176, 168), end_arrow=True))
-        diagram.add(self.text("To Receivers  (? Mixers)", 222, 164, font_size=14))
+        diagram.add(self.text("To Receivers", 210, 168, font_size=14))
 
         diagram.add(self.wire((259, 112), (272, 112), arrow=True))
         diagram.add(self.filter_box(272, 98, 303, 128))
-        diagram.add(self.wire((303, 112), (319, 112)))
+        diagram.add(self.wire((303, 113), (319, 113)))
         diagram.add(self.amp(319, 97, 350, 128))
 
-        diagram.add(self.box(296, 48, 355, 81))
+        diagram.add(self.box(296, 48 - 10, 355, 81 - 10))
         diagram.add(
             self.para(
                 "I/Q",
                 "Modulator",
                 x=325,
-                y=63,
+                y=63 - 10,
                 font_size=16,
                 max_width_px=40,
                 max_height_px=22,
@@ -1540,38 +1545,49 @@ class ChillBlockDiagram(Group):
         )
         diagram.add(
             self.polywire(
-                (353, 113), (353, 95), (287, 95), (287, 56), (296, 56), end_arrow=True
+                (353, 113),
+                (353, 82),
+                (272, 82),
+                (272, 52),
+                (296, 52),
+                end_arrow=True,
             )
         )
 
-        diagram.add(self.arrow_circle(385, 62))
+        diagram.add(self.arrow_circle(385, 62 - 10))
         diagram.add(self.arrow_circle(385, 112))
-        diagram.add(self.selector_box(411, 49, 439, 77))
+        diagram.add(self.selector_box(411, 49 - 10, 439, 77 - 10))
         diagram.add(self.selector_box(411, 97, 439, 125))
-        diagram.add(self.wire((355, 62), (371, 62)))
-        diagram.add(self.wire((399, 62), (411, 62)))
-        diagram.add(self.wire((439, 62), (469, 62), arrow=True))
+        diagram.add(self.wire((355, 62 - 10), (371, 62 - 10)))
+        diagram.add(self.wire((399, 62 - 10), (411, 62 - 10)))
+        diagram.add(self.wire((439, 62 - 10), (469, 62 - 10), arrow=True))
         diagram.add(self.wire((350, 112), (371, 112)))
         diagram.add(self.wire((399, 112), (411, 112)))
-        diagram.add(self.wire((439, 112), (469, 112), arrow=True))
+        # diagram.add(self.wire((439, 112), (469, 112), arrow=True))
         diagram.add(self.text("RF to Transmitters", 430, 90, font_size=14))
-        diagram.add(self.text("V", 479, 64, font_size=16))
+        diagram.add(self.text("V", 479, 52, font_size=16))
         diagram.add(self.text("H", 479, 112, font_size=16))
 
         diagram.add(
-            self.text("Transmitter/Receiver: (H only shown)", 108, 195, font_size=23)
+            self.text("Transmitter/Receiver: (H only shown)", 108, 192, font_size=23)
         )
         diagram.add(
-            self.polywire((440, 125), (440, 201), (48, 201), (48, 236), (66, 236))
+            self.polywire(
+                (440, 111),
+                (450, 111),
+                (450, 201),
+                (48, 201),
+                (48, 227),
+                (66, 227),
+            )
         )
         diagram.add(self.amp(66, 214, 95, 240))
         diagram.add(
-            self.para(
+            self.text(
                 "IPA",
-                "(Staclb)",
                 x=82,
                 y=214,
-                font_size=15,
+                font_size=16,
                 max_width_px=26,
                 max_height_px=18,
             )
@@ -1581,21 +1597,29 @@ class ChillBlockDiagram(Group):
         diagram.add(self.wire((131, 227), (147, 227)))
         diagram.add(self.amp(147, 214, 178, 240))
         diagram.add(
-            self.para(
+            self.text(
                 "Power Amp",
-                "(VA-87B)",
                 x=175,
                 y=213,
-                font_size=15,
+                font_size=16,
                 max_width_px=56,
                 max_height_px=20,
             )
         )
         diagram.add(self.wire((178, 227), (232, 227), arrow=True))
 
-        diagram.add(self.polywire((206, 227), (206, 245), (187, 245), (187, 293)))
-        diagram.add(self.text("50 dB", 189, 257, font_size=15))
-        diagram.add(self.text("Coupler", 190, 274, font_size=15))
+        diagram.add(
+            self.polywire(
+                (192, 246 - 6),
+                (192, 238 - 6),
+                (212, 238 - 6),
+                (212, 292),
+                (15, 292),
+                (15, 469),
+            )
+        )
+        diagram.add(self.text("50 dB", 190, 248, font_size=15))
+        diagram.add(self.text("Coupler", 190, 260, font_size=15))
 
         diagram.add(self.circulator(246, 227))
         diagram.add(
@@ -1610,8 +1634,8 @@ class ChillBlockDiagram(Group):
                 max_tip_length_to_length_ratio=0.28,
             )
         )
-        diagram.add(self.text("To Antenna H", 258, 274, font_size=15))
-        diagram.add(self.text("Port", 232, 292, font_size=15))
+        diagram.add(self.text("To Antenna H", 246, 274, font_size=15))
+        diagram.add(self.text("Port", 246, 286, font_size=15))
 
         diagram.add(self.wire((260, 227), (271, 227), arrow=True))
         diagram.add(self.box(271, 210, 320, 251))
@@ -1632,18 +1656,23 @@ class ChillBlockDiagram(Group):
         diagram.add(self.amp(389, 213, 421, 240))
         diagram.add(self.text("LNA", 414, 211, font_size=16))
         diagram.add(
-            self.polywire((421, 227), (437, 227), (437, 293), (15, 293), (15, 469))
+            self.polywire(
+                (421, 227),
+                (437, 227),
+                (437, 323),
+                (48, 323),
+            )
         )
 
-        diagram.add(self.polywire((48, 323), (48, 356), (63, 356), end_arrow=True))
+        diagram.add(self.polywire((48, 323), (48, 358), (84, 358), end_arrow=True))
         diagram.add(self.text("Transfer Sw.", 97, 340, font_size=16))
-        diagram.add(self.switch_box(63, 356, 96, 387))
-        diagram.add(self.wire((37, 387), (63, 387), arrow=True))
+        diagram.add(self.switch_box(84, 350, 120, 386))
+        diagram.add(self.wire((48, 376), (84, 376), arrow=True))
         diagram.add(self.para("From V", "LNA", x=38, y=392, font_size=16))
-        diagram.add(self.wire((96, 387), (135, 387), arrow=True))
-        diagram.add(self.para("To V", "Receiver", x=147, y=400, font_size=16))
+        diagram.add(self.wire((120, 376), (144, 376), arrow=True))
+        diagram.add(self.para("To V", "Receiver", x=147, y=392, font_size=16))
 
-        diagram.add(self.wire((96, 356), (168, 356)))
+        diagram.add(self.wire((120, 358), (168, 358)))
         diagram.add(self.filter_box(168, 344, 197, 374))
         diagram.add(self.polywire((197, 356), (240, 356), (240, 383), end_arrow=True))
         diagram.add(self.mixer(240, 397))
@@ -1660,7 +1689,17 @@ class ChillBlockDiagram(Group):
         diagram.add(self.text("40 MHZ LO", 246, 477, font_size=16))
         diagram.add(self.wire((343, 453), (355, 453)))
         diagram.add(self.filter_box(355, 439, 384, 469))
-        diagram.add(self.polywire((384, 453), (398, 453), (398, 500), (177, 500)))
+        diagram.add(
+            self.polywire(
+                (384, 453),
+                (398, 453),
+                (398, 500),
+                (177, 500),
+                (177, 548),
+                (273, 548),
+                end_arrow=True,
+            )
+        )
 
         diagram.add(self.wire((15, 469), (63, 469)))
         diagram.add(self.wire((63, 469), (63, 488), arrow=True))
@@ -1680,27 +1719,26 @@ class ChillBlockDiagram(Group):
             )
         )
         diagram.add(self.polywire((63, 548), (63, 588), (273, 588), end_arrow=True))
-        diagram.add(self.text("10 MHZ IF", 134, 580, font_size=16))
+        diagram.add(self.text("10 MHz IF", 138, 580, font_size=16))
 
-        diagram.add(self.box(176, 500, 266, 548))
         diagram.add(
             self.text(
-                "10 MHZ IF",
-                220,
+                "10 MHz IF",
+                204,
                 523,
                 font_size=16,
                 max_width_px=62,
                 max_height_px=18,
             )
         )
-        diagram.add(self.wire((266, 548), (273, 548), arrow=True))
+        # diagram.add(self.wire((266, 548), (273, 548), arrow=True))
 
         diagram.add(self.box(273, 516, 370, 602))
         diagram.add(
             self.text(
                 "DRX Processor",
-                321,
-                530,
+                304,
+                524,
                 font_size=16,
                 max_width_px=74,
                 max_height_px=13,
@@ -1709,8 +1747,8 @@ class ChillBlockDiagram(Group):
         diagram.add(
             self.text(
                 "Low Chan.",
-                321,
-                558,
+                304,
+                548,
                 font_size=16,
                 max_width_px=68,
                 max_height_px=13,
@@ -1719,8 +1757,8 @@ class ChillBlockDiagram(Group):
         diagram.add(
             self.text(
                 "High Chan.",
-                323,
-                586,
+                304,
+                568,
                 font_size=16,
                 max_width_px=70,
                 max_height_px=13,
@@ -1729,8 +1767,8 @@ class ChillBlockDiagram(Group):
         diagram.add(
             self.text(
                 "Txmit Chan.",
-                325,
-                594,
+                304,
+                588,
                 font_size=16,
                 max_width_px=72,
                 max_height_px=13,
@@ -1739,15 +1777,649 @@ class ChillBlockDiagram(Group):
 
         diagram.add(self.text("25 dB", 194, 558, font_size=15))
         diagram.add(self.text("Coupler", 197, 574, font_size=15))
-        diagram.add(self.polywire((222, 561), (222, 574), (273, 574), end_arrow=True))
+        diagram.add(
+            self.polywire(
+                (212, 562),
+                (212, 554),
+                (228, 554),
+                (228, 568),
+                (273, 568),
+                end_arrow=True,
+            )
+        )
+
+        # diagram.add(self.mixer(self.SOURCE_WIDTH / 2, self.SOURCE_HEIGHT / 2))
 
         return diagram
 
 
-class ChillBD(MovingCameraScene):
+class Idea2D(MovingCameraScene):
     def construct(self):
-        self.camera.background_color = WHITE
-        self.add(ChillBlockDiagram())
+        self.next_section(skip_animations=skip_animations(True))
+        bd = ChillBlockDiagram()
+
+        center = bd.diagram.get_center()
+        components = VGroup()
+        for c in deepcopy(bd.diagram):
+            if type(c) is VGroup:
+                components.add(*c)
+            else:
+                components.add(c)
+
+        diagram_sorted = sorted(
+            components,
+            key=lambda x: sqrt(np.sum((center - x.get_center()) ** 2)),
+            reverse=False,
+        )
+
+        chill_aerial = (
+            ImageMobject("../props/static/chill_aerial.jpg")
+            .scale_to_fit_width(fw(self, 0.4))
+            .next_to(bd, LEFT, LARGE_BUFF)
+        )
+        self.camera.frame.move_to(chill_aerial)
+
+        self.play(chill_aerial.shift(UP * 10).animate.shift(DOWN * 10))
+
+        self.wait(0.5)
+
+        chill_bez = CubicBezier(
+            chill_aerial.get_right() + [0.1, 0, 0],
+            chill_aerial.get_right() + [1, 0, 0],
+            bd.get_left() + [-0.6, bd.height / 4, 0],
+            bd.get_left() + [0.3, bd.height / 4, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).move_to(Group(chill_aerial, bd)),
+                Create(chill_bez),
+                FadeIn(bd.reference),
+                lag_ratio=0.3,
+            )
+        )
+
+        def get_color_anim(m):
+            color = (
+                GREEN
+                if type(m) is Polygon
+                else YELLOW
+                if hasattr(m, "is_filter")
+                else BLUE
+                if hasattr(m, "is_mixer")
+                else (WHITE)
+            )
+            return (
+                m.animate.set_color(color)
+                if type(m) in (Text, Arrow, Paragraph, Triangle, DoubleArrow)
+                else m.animate.set_stroke_color(color)
+            )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                FadeOut(chill_aerial),
+                Uncreate(chill_bez),
+                self.camera.frame.animate.move_to(bd),
+                FadeOut(bd.reference, run_time=2),
+                LaggedStart(
+                    *[
+                        Succession(
+                            GrowArrow(m, rate_func=rate_functions.ease_out_elastic),
+                            get_color_anim(m),
+                        )
+                        if type(m) is Arrow
+                        else Succession(
+                            GrowFromCenter(
+                                m, rate_func=rate_functions.ease_out_elastic
+                            ),
+                            get_color_anim(m),
+                        )
+                        for m in diagram_sorted
+                    ],
+                    lag_ratio=0.01,
+                    run_time=3,
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        # indices = [
+        #     Text(f"{idx}", color=RED, font_size=DEFAULT_FONT_SIZE * 0.3).move_to(
+        #         m.get_center()
+        #     )
+        #     for idx, m in enumerate(bd.diagram)
+        # ]
+
+        # self.add(*indices)
+
+        siggen_opacity = VT(0)
+        siggen_x1 = VT((bd.diagram[1].get_corner(UL) + LEFT * 0.1)[0])
+        siggen_x2 = VT((bd.diagram[1].get_corner(UL) + LEFT * 0.1)[0])
+        siggen_y1 = VT((bd.diagram[1].get_corner(DL) + LEFT * 0.1 + DOWN * 0.1)[1])
+        siggen_y2 = VT((bd.diagram[1].get_corner(UL) + LEFT * 0.1 + UP * 0.1)[1])
+        siggen_box = always_redraw(
+            lambda: Polygon(
+                (~siggen_x1, ~siggen_y1, 0),
+                (~siggen_x1, ~siggen_y2, 0),
+                (~siggen_x2, ~siggen_y2, 0),
+                (~siggen_x2, ~siggen_y1, 0),
+                fill_color=YELLOW,
+                fill_opacity=0.2 * ~siggen_opacity,
+                stroke_opacity=0 * ~siggen_opacity,
+                stroke_color=YELLOW,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+        self.add(siggen_box)
+
+        siggen_group = Group(bd.diagram[1], bd.diagram[9])
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.5).move_to(siggen_group),
+                siggen_opacity @ 1,
+                siggen_x2 @ ((bd.diagram[9].get_right() + RIGHT * 0.1)[0]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        siggen_group.add(
+            bd.diagram[14],
+            bd.diagram[4],
+            bd.diagram[15],
+            bd.diagram[16],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).move_to(siggen_group),
+                siggen_x2 @ ((siggen_group.get_right() + RIGHT * 0.05)[0]),
+                siggen_y1 @ ((siggen_group.get_bottom() + DOWN * 0.1)[1]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        siggen_x3 = VT(~siggen_x2)
+        siggen_x4 = VT(~siggen_x2)
+        siggen_y3 = VT((bd.diagram[18].get_corner(UL) + UL * 0.1)[1])
+        siggen_y4 = VT((bd.diagram[18].get_corner(DL) + DL * 0.1)[1])
+
+        siggen_amp_box = always_redraw(
+            lambda: Polygon(
+                (~siggen_x1, ~siggen_y1, 0),
+                (~siggen_x1, ~siggen_y2, 0),
+                (~siggen_x2, ~siggen_y2, 0),
+                (~siggen_x3, ~siggen_y3, 0),
+                (~siggen_x4, ~siggen_y3, 0),
+                (~siggen_x4, ~siggen_y4, 0),
+                (~siggen_x3, ~siggen_y4, 0),
+                (~siggen_x2, ~siggen_y1, 0),
+                fill_color=YELLOW,
+                fill_opacity=0.2 * ~siggen_opacity,
+                stroke_opacity=0 * ~siggen_opacity,
+                stroke_color=YELLOW,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+
+        self.add(siggen_amp_box)
+        self.remove(siggen_box)
+
+        self.play(siggen_x4 @ ((bd.diagram[20].get_right() + RIGHT * 0.05)[0]))
+
+        self.wait(0.5)
+
+        gap = 0.05
+        vpol_x2 = VT(~siggen_x2 + gap)
+        vpol_tx_opacity = VT(0)
+
+        vpol_tx_box = always_redraw(
+            lambda: Polygon(
+                (~siggen_x2 + gap, ~siggen_y2 + gap * 2, 0),
+                (~siggen_x2 + gap, ~siggen_y3 + gap, 0),
+                (~vpol_x2, ~siggen_y3 + gap, 0),
+                (~vpol_x2, ~siggen_y2 + gap * 2, 0),
+                # (~siggen_x3, ~siggen_y4, 0),
+                # (~siggen_x2, ~siggen_y1, 0),
+                fill_color=VPOL_TX_COLOR,
+                fill_opacity=0.2 * ~vpol_tx_opacity,
+                stroke_opacity=0 * ~vpol_tx_opacity,
+                stroke_color=VPOL_TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+
+        self.add(vpol_tx_box)
+
+        self.play(
+            LaggedStart(
+                vpol_tx_opacity @ 1,
+                vpol_x2 @ (bd.diagram[34].get_right()[0] + 0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        dots = (
+            Group(
+                Dot(radius=DEFAULT_DOT_RADIUS * 0.8),
+                Dot(radius=DEFAULT_DOT_RADIUS * 0.8),
+                Dot(radius=DEFAULT_DOT_RADIUS * 0.8),
+            )
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(bd.diagram[34], RIGHT, MED_SMALL_BUFF)
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            self.camera.frame.animate.move_to(Group(vpol_tx_box, siggen_box)),
+            LaggedStart(*[GrowFromCenter(m) for m in dots], lag_ratio=0.1),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        hpol_group = Group(
+            bd.diagram[25],
+            bd.diagram[27],
+            bd.diagram[38],
+            bd.diagram[41],
+            bd.diagram[43],
+            bd.diagram[45],
+        )
+        self.play(
+            self.camera.frame.animate.move_to(hpol_group),
+            LaggedStart(*[FadeOut(m) for m in dots[::-1]], lag_ratio=0.1),
+        )
+
+        self.wait(0.5)
+
+        hpol_tx_opacity = VT(0)
+
+        hpol_tx_x2 = VT(~siggen_x4)
+        hpol_tx_y2 = VT(~siggen_y4)
+        hpol_tx_y2_static = VT(~siggen_y4)
+
+        hpol_tx_box = always_redraw(
+            lambda: Polygon(
+                (~siggen_x4 + gap, ~siggen_y4, 0),
+                (~siggen_x4 + gap, ~siggen_y3, 0),
+                (~hpol_tx_x2, ~siggen_y3, 0),
+                (~hpol_tx_x2, ~hpol_tx_y2, 0),
+                (~hpol_tx_x2 - gap * 3, ~hpol_tx_y2, 0),
+                (~hpol_tx_x2 - gap * 3, ~hpol_tx_y2_static, 0),
+                fill_color=HPOL_TX_COLOR,
+                fill_opacity=0.2 * ~hpol_tx_opacity,
+                stroke_opacity=0 * ~hpol_tx_opacity,
+                stroke_color=HPOL_TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+        self.add(hpol_tx_box)
+
+        self.play(
+            LaggedStart(
+                hpol_tx_opacity @ 1,
+                hpol_tx_x2 @ (bd.diagram[27].get_right()[0] + 0.2),
+                lag_ratio=0.3,
+            ),
+            rate_func=rate_functions.ease_in_sine,
+        )
+
+        self.play(
+            hpol_tx_y2 @ (bd.diagram[39].get_top()[1] + 0.05),
+            rate_func=rate_functions.linear,
+            run_time=0.4,
+        )
+
+        hpol_tx_x3 = VT(~hpol_tx_x2)
+
+        hpol_tx_box_2 = always_redraw(
+            lambda: Polygon(
+                (~hpol_tx_x2 - gap * 3, ~hpol_tx_y2, 0),
+                (~hpol_tx_x2 - gap * 3, ~hpol_tx_y2 + gap * 3, 0),
+                (~hpol_tx_x3, ~hpol_tx_y2 + gap * 3, 0),
+                (~hpol_tx_x3, ~hpol_tx_y2, 0),
+                fill_color=HPOL_TX_COLOR,
+                fill_opacity=0.2 * ~hpol_tx_opacity,
+                stroke_opacity=0 * ~hpol_tx_opacity,
+                stroke_color=HPOL_TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+        self.add(hpol_tx_box_2)
+
+        self.play(
+            hpol_tx_x3 @ (bd.diagram[37].get_left()[0] - gap * 2),
+            rate_func=rate_functions.linear,
+            run_time=0.7,
+        )
+
+        hpol_tx_y3 = VT(bd.diagram[38].get_corner(DL)[1] - gap)
+        hpol_tx_x4 = VT(~hpol_tx_x3)
+        hpol_tx_box_3 = always_redraw(
+            lambda: Polygon(
+                (~hpol_tx_x3, ~hpol_tx_y2, 0),
+                (~hpol_tx_x3, ~hpol_tx_y3, 0),
+                (~hpol_tx_x4, ~hpol_tx_y3, 0),
+                (~hpol_tx_x4, ~hpol_tx_y2, 0),
+                fill_color=HPOL_TX_COLOR,
+                fill_opacity=0.2 * ~hpol_tx_opacity,
+                stroke_opacity=0 * ~hpol_tx_opacity,
+                stroke_color=HPOL_TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+        self.add(hpol_tx_box_3)
+
+        self.play(
+            hpol_tx_x4 @ (bd.diagram[45].get_right()[0]),
+            rate_func=rate_functions.linear,
+            run_time=0.5,
+        )
+
+        self.wait(0.5)
+
+        tx_indices = [
+            107,
+            117,
+            118,
+            126,
+            136,
+            137,
+            143,
+            130,
+            27,
+            76,
+            67,
+            54,
+            57,
+            38,
+            39,
+            48,
+            33,
+            23,
+            26,
+            15,
+        ]
+
+        def set_component_opacity(m, opacity, color=None):
+            # print(type(m))
+            return (
+                m.animate.set_opacity(opacity=opacity).set_color(color)
+                if type(m) in [Triangle, Arrow, DoubleArrow, Text, Paragraph]
+                else m.animate.set_stroke(opacity=opacity, color=color)
+            )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            hpol_tx_opacity @ 0,
+            vpol_tx_opacity @ 0,
+            siggen_opacity @ 0,
+            LaggedStart(
+                *[
+                    set_component_opacity(m, 0.05)
+                    for idx, m in enumerate(diagram_sorted)
+                    if idx not in tx_indices
+                ],
+                lag_ratio=0.005,
+            ),
+        )
+
+        sorted_indices = [
+            Text(f"{idx}", color=RED, font_size=DEFAULT_FONT_SIZE * 0.3).move_to(
+                m.get_center()
+            )
+            for idx, m in enumerate(diagram_sorted)
+        ]
+        # self.add(
+        #     *[si for idx, si in enumerate(sorted_indices) if idx not in tx_indices]
+        # )
+
+        self.wait(0.5)
+
+        vpol_tx_bd = Group(*[diagram_sorted[idx].copy() for idx in tx_indices[1:]])
+        vpol_tx_bd.shift(diagram_sorted[153].get_right() - vpol_tx_bd[0].get_left())
+        vpol_tx_bd[7:].shift(DOWN * 1.5)
+        line_to_copy = Line(vpol_tx_bd[5].get_end(), vpol_tx_bd[7].get_start())
+        vpol_tx_bd = Group(
+            *vpol_tx_bd[:6],
+            vpol_tx_bd[6]
+            .stretch_to_fit_height(line_to_copy.height)
+            .move_to(line_to_copy),
+            *vpol_tx_bd[7:],
+        )
+
+        # print("hi", vpol_tx_bd[0][0])
+
+        self.play(
+            LaggedStart(
+                *[
+                    TransformFromCopy(diagram_sorted[h_index], v)
+                    for h_index, v in zip(tx_indices[1:], vpol_tx_bd)
+                ]
+            )
+        )
+
+        self.wait(0.5)
+
+        # print(vpol_tx_bd[0])
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1, VPOL_TX_COLOR)
+                    for idx in [
+                        112,
+                        108,
+                        111,
+                        122,
+                        133,
+                        131,
+                        140,
+                        145,
+                        146,
+                        148,
+                        150,
+                        151,
+                        153,
+                    ]
+                ],
+                *[
+                    set_component_opacity(vpol_component, 1, VPOL_TX_COLOR)
+                    for vpol_component in vpol_tx_bd
+                ],
+                diagram_sorted[154]
+                .animate.set_opacity(1)
+                .set_color(VPOL_TX_COLOR)
+                .next_to(diagram_sorted[150], UP, MED_SMALL_BUFF),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        # self.add(vpol_tx_bd)
+
+        for idx in tx_indices:
+            diagram_sorted[idx].save_state()
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1, HPOL_TX_COLOR)
+                    for idx in tx_indices
+                ],
+                diagram_sorted[149]
+                .animate.set_opacity(1)
+                .set_color(HPOL_TX_COLOR)
+                .next_to(diagram_sorted[136], DOWN, MED_SMALL_BUFF),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.5).move_to(diagram_sorted[133]),
+                AnimationGroup(
+                    diagram_sorted[133].animate.set_color(YELLOW),
+                    diagram_sorted[131].animate.set_color(YELLOW),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        ps_inp_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.3),
+            y_length=fh(self, 0.3),
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        ).set_z_index(-2)
+        ps_outp_ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.3),
+            y_length=fh(self, 0.3),
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        ).set_z_index(-2)
+        ps_arrow = Arrow(ORIGIN, RIGHT, color=YELLOW)
+
+        ps_group = (
+            Group(ps_inp_ax, ps_arrow, ps_outp_ax)
+            .arrange(RIGHT, SMALL_BUFF)
+            .next_to(diagram_sorted[133], UP, LARGE_BUFF)
+        )
+
+        ps_inp_x1 = VT(0)
+        ps_outp_x1 = VT(0)
+        ps_inp = always_redraw(
+            lambda: ps_inp_ax.plot(
+                lambda t: np.sin(2 * PI * 2 * t),
+                x_range=[0, ~ps_inp_x1, 1 / 200],
+                color=BLUE,
+            ).set_z_index(2)
+        )
+        ps = VT(0)
+        ps_outp = always_redraw(
+            lambda: ps_outp_ax.plot(
+                lambda t: np.sin(2 * PI * 2 * t + ~ps),
+                x_range=[0, ~ps_outp_x1, 1 / 200],
+                color=RED,
+            ).set_z_index(2)
+        )
+
+        self.add(ps_inp, ps_outp)
+
+        ps_inp_bez = CubicBezier(
+            diagram_sorted[122].get_top() + [0, 0.1, 0],
+            diagram_sorted[122].get_top() + [0, 0.7, 0],
+            ps_inp_ax.get_bottom() + [0, -0.7, 0],
+            ps_inp_ax.get_bottom() + [0, -0.1, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+        ps_outp_bez = CubicBezier(
+            diagram_sorted[140].get_top() + [0, 0.1, 0],
+            diagram_sorted[140].get_top() + [0, 0.7, 0],
+            ps_outp_ax.get_bottom() + [0, -0.7, 0],
+            ps_outp_ax.get_bottom() + [0, -0.1, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(Group(ps_group, diagram_sorted[133])),
+                Create(ps_inp_bez),
+                Create(ps_inp_ax),
+                ps_inp_x1 @ 1,
+                GrowArrow(ps_arrow),
+                Create(ps_outp_bez),
+                Create(ps_outp_ax),
+                ps_outp_x1 @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            ps @ (PI / 2),
+            rate_func=rate_functions.ease_in_out_elastic,
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ps_inp_x1 @ 0,
+                    ps_outp_x1 @ 0,
+                    FadeOut(ps_inp_ax, ps_outp_ax, ps_arrow),
+                ),
+                AnimationGroup(Uncreate(ps_inp_bez), Uncreate(ps_outp_bez)),
+                self.camera.frame.animate.restore(),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                *[set_component_opacity(m, 0) for m in vpol_tx_bd[::-1]],
+                *[
+                    set_component_opacity(diagram_sorted[idx], 0.05, color=WHITE)
+                    for idx in [
+                        112,
+                        108,
+                        111,
+                        122,
+                        133,
+                        131,
+                        140,
+                        145,
+                        146,
+                        148,
+                        150,
+                        151,
+                        153,
+                        154,
+                    ][::-1]
+                ],
+                lag_ratio=0.05,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[diagram_sorted[idx].animate.restore() for idx in tx_indices],
+                lag_ratio=0.1,
+            )
+        )
+
+        # self.add(vpol_tx_bd)
+
+        self.wait(2)
 
 
 class DropShape(Scene):
