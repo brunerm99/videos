@@ -1,0 +1,11 @@
+{
+  "station": "KTLX",
+  "scan_time": "2024-05-07 02:38:11 UTC",
+  "elevation_deg": 1.32,
+  "vcp_pattern": 212,
+  "sweep": 6,
+  "max_range_km": 150.0,
+  "vmin": -20.0,
+  "vmax": 75.0,
+  "source": "Unidata NEXRAD Level II archive on AWS S3"
+}

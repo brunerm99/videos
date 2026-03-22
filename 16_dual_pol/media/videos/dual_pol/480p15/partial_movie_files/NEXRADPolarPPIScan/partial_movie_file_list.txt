@@ -1,0 +1,9 @@
+# This file is used internally by FFMPEG.
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/1142077075_315653485_269714151.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_1919025275_918448887.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_2667827677_2837616133.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_1919025275_10284916.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_2667827677_1325988109.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_1919025275_3047816418.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_340052896_2740988820.mp4'
+file 'file:/home/marchall/documents/videos/16_dual_pol/media/videos/dual_pol/480p15/partial_movie_files/NEXRADPolarPPIScan/3485069912_1772021501_4019711249.mp4'
