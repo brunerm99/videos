@@ -41,7 +41,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -909,6 +909,7 @@ class Background(MovingCameraScene):
         self.play(Create(beam_u), Create(beam_d))
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         metadata = _get_nexrad_reflectivity_ppi_data()
         rgba = _reflectivity_dbz_to_rgba(
@@ -1261,7 +1262,7 @@ class Background(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.add(scan_line)
 
@@ -1306,7 +1307,13 @@ class Background(MovingCameraScene):
         self.remove(nexrad_0_plot)
         self.add(scan_z_over_r)
 
-        self.play(scan_progress @ 360, run_time=12)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(scan_progress @ 360, run_time=30)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self, 2)))
 
         # ANIMATIONS HERE
 
@@ -3577,6 +3584,43 @@ class NEXRADPolarPPIThetaSlice(MovingCameraScene):
             stroke_width=0,
         ).move_to(plot_center)
 
+        grid = VGroup()
+        for azimuth in range(0, 360, 15):
+            is_primary = azimuth % 90 == 0
+            is_secondary = azimuth % 45 == 0
+            grid.add(
+                Line(
+                    plot_center,
+                    _polar_ppi_point(
+                        plot_center,
+                        plot_radius,
+                        metadata["max_range_km"],
+                        azimuth,
+                        metadata["max_range_km"],
+                    ),
+                    stroke_color=axis_color,
+                    stroke_width=1.6 if is_primary else 1.15 if is_secondary else 0.9,
+                    stroke_opacity=0.22
+                    if is_primary
+                    else 0.13
+                    if is_secondary
+                    else 0.06,
+                )
+            )
+
+        range_rings = VGroup()
+        for ring_km in (50, 100, 150):
+            ring_radius = plot_radius * ring_km / metadata["max_range_km"]
+            range_rings.add(
+                Circle(radius=ring_radius)
+                .move_to(plot_center)
+                .set_stroke(
+                    axis_color,
+                    width=1.7 if ring_km == 150 else 1.2,
+                    opacity=0.18 if ring_km == 150 else 0.1,
+                )
+            )
+
         plot_border = (
             Circle(radius=plot_radius)
             .move_to(plot_center)
@@ -3662,7 +3706,9 @@ class NEXRADPolarPPIThetaSlice(MovingCameraScene):
 
         self.add(
             plot_background,
+            grid,
             data_image,
+            range_rings,
             plot_border,
             slice_outline,
             scan_trail,
