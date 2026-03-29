@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-import sys
+import importlib.util
+from pathlib import Path
 
 import numpy as np
 from manim import *
 
-sys.path.insert(0, "..")
-from props.style import BACKGROUND_COLOR
+STYLE_PATH = Path(__file__).resolve().parents[1] / "props" / "style.py"
+STYLE_SPEC = importlib.util.spec_from_file_location("radar_tower_style", STYLE_PATH)
+if STYLE_SPEC is None or STYLE_SPEC.loader is None:
+    raise ImportError(f"Unable to load style module from {STYLE_PATH}")
+style_module = importlib.util.module_from_spec(STYLE_SPEC)
+STYLE_SPEC.loader.exec_module(style_module)
+BACKGROUND_COLOR = style_module.BACKGROUND_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
@@ -20,6 +26,23 @@ BASE_COLOR = ManimColor.from_hex("#4D626D")
 
 def shaded(color: ManimColor, amount: float = 0.3) -> ManimColor:
     return interpolate_color(color, BLACK, amount)
+
+
+def tripod_vertices(side_length: float, y: float = 0.0):
+    altitude = np.sqrt(3) * side_length / 2
+    front_z = altitude / 3
+    rear_z = -2 * altitude / 3
+    return (
+        np.array([-side_length / 2, y, front_z], dtype=float),
+        np.array([side_length / 2, y, front_z], dtype=float),
+        np.array([0.0, y, rear_z], dtype=float),
+    )
+
+
+def point_between(start, end, alpha: float):
+    start = np.array(start, dtype=float)
+    end = np.array(end, dtype=float)
+    return start + (end - start) * alpha
 
 
 def tube(start, end, radius, color, stroke_amount=0.35, resolution=(20, 24)):
@@ -78,21 +101,27 @@ class RadarTower3D(Group):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        front_left_base = np.array([-1.28, 0.0, 0.92])
-        front_right_base = np.array([1.28, 0.0, 0.92])
-        rear_base = np.array([0.0, -0.62, -1.0])
-
-        front_left_top = front_left_base + UP * 3.45
-        front_right_top = front_right_base + UP * 3.45
-        rear_top = rear_base + UP * 3.45
-
-        hub = np.array([0.0, 3.22, 0.0])
+        base_side = 3.3
+        top_side = 1.62
+        tower_height = 3.9
+        hub = np.array([0.0, 4.18, 0.0])
         mast_top = hub + UP * 0.72
-        radome_center = hub + UP * 1.82
+        radome_radius = 1.16
+        radome_center = np.array([0.0, 5.38, 0.0])
+
+        front_left_base, front_right_base, rear_base = tripod_vertices(base_side)
+        front_left_top, front_right_top, rear_top = tripod_vertices(
+            top_side,
+            y=tower_height,
+        )
+
+        base_points = (front_left_base, front_right_base, rear_base)
+        top_points = (front_left_top, front_right_top, rear_top)
+        edge_pairs = ((0, 1), (1, 2), (2, 0))
 
         leg_radius = 0.088
-        brace_radius = 0.055
-        support_radius = 0.07
+        brace_radius = 0.046
+        support_radius = 0.072
 
         feet = Group(
             disk(front_left_base + DOWN * 0.06, 0.16, 0.08, BASE_COLOR),
@@ -106,29 +135,50 @@ class RadarTower3D(Group):
             tube(rear_base, rear_top, leg_radius, TOWER_MID),
         )
 
-        brace_levels = (0.82, 1.82)
-        truss = Group()
+        brace_levels = (0.26, 0.52, 0.78)
+        ring_levels = [
+            tuple(
+                point_between(base_point, top_point, alpha)
+                for base_point, top_point in zip(base_points, top_points)
+            )
+            for alpha in brace_levels
+        ]
+
+        rings = Group()
+        diagonals = Group()
         nodes = Group()
-        for level in brace_levels:
-            left_node = front_left_base + UP * level
-            right_node = front_right_base + UP * level
-            rear_node = rear_base + UP * level
+        for ring_index, ring_points in enumerate([*ring_levels, top_points]):
+            for i, j in edge_pairs:
+                rings.add(tube(ring_points[i], ring_points[j], brace_radius, TOWER_MID))
 
-            truss.add(tube(left_node, right_node, brace_radius, TOWER_MID))
-            truss.add(tube(rear_node, left_node, brace_radius, TOWER_MID))
-            truss.add(tube(rear_node, right_node, brace_radius, TOWER_MID))
-
+            node_radius = 0.078 if ring_index < len(ring_levels) else 0.088
             nodes.add(
-                joint(left_node, 0.095, TOWER_LIGHT),
-                joint(right_node, 0.095, TOWER_LIGHT),
-                joint(rear_node, 0.095, TOWER_MID),
+                joint(ring_points[0], node_radius, TOWER_LIGHT),
+                joint(ring_points[1], node_radius, TOWER_LIGHT),
+                joint(ring_points[2], node_radius, TOWER_MID),
             )
 
-        upper_ring = Group(
-            tube(front_left_top, front_right_top, brace_radius, TOWER_MID),
-            tube(front_left_top, rear_top, brace_radius, TOWER_MID),
-            tube(front_right_top, rear_top, brace_radius, TOWER_MID),
-        )
+        all_levels = [base_points, *ring_levels, top_points]
+        for bay_index, (lower_points, upper_points) in enumerate(
+            zip(all_levels[:-1], all_levels[1:])
+        ):
+            for edge_index, (i, j) in enumerate(edge_pairs):
+                if (bay_index + edge_index) % 2 == 0:
+                    start_point = lower_points[i]
+                    end_point = upper_points[j]
+                else:
+                    start_point = lower_points[j]
+                    end_point = upper_points[i]
+
+                diagonals.add(
+                    tube(
+                        start_point,
+                        end_point,
+                        brace_radius * 0.92,
+                        TOWER_MID,
+                        stroke_amount=0.3,
+                    )
+                )
 
         top_supports = Group(
             tube(front_left_top, hub, support_radius, TOWER_LIGHT),
@@ -138,14 +188,22 @@ class RadarTower3D(Group):
 
         mast = Group(
             tube(hub, mast_top, 0.12, TOWER_LIGHT),
-            disk(hub + UP * 0.16, 0.36, 0.07, TOWER_MID),
+            disk(hub + UP * 0.14, 0.4, 0.08, TOWER_MID),
             joint(hub, 0.12, TOWER_LIGHT),
         )
 
-        radome = Sphere(
+        radome_mount = disk(
+            radome_center + DOWN * (radome_radius * 0.98),
+            0.46,
+            0.1,
+            TOWER_MID,
+            stroke_amount=0.24,
+        )
+
+        self.radome = Sphere(
             center=radome_center,
-            radius=1.16,
-            resolution=(24, 40),
+            radius=radome_radius,
+            resolution=(24, 42),
             fill_color=RADOME_COLOR,
             fill_opacity=1,
             checkerboard_colors=False,
@@ -156,23 +214,24 @@ class RadarTower3D(Group):
         self.add(
             feet,
             legs,
-            truss,
-            upper_ring,
+            diagonals,
+            rings,
             top_supports,
             mast,
+            radome_mount,
             nodes,
-            radome,
+            self.radome,
         )
-        self.move_to(ORIGIN)
+        self.rotate(PI / 2, axis=RIGHT, about_point=ORIGIN)
 
 
 class RadarTowerSceneBase(ThreeDScene):
-    camera_phi = 56 * DEGREES
+    camera_phi = 58 * DEGREES
     camera_theta = -128 * DEGREES
     camera_gamma = 0
-    camera_zoom = 0.9
-    frame_center = (0.0, 2.05, 0.0)
-    tower_shift = LEFT * 0.35 + UP * 0.32
+    camera_zoom = 0.96
+    frame_center = (0.0, 0.0, 3.1)
+    tower_shift = ORIGIN
 
     def setup_tower_scene(self):
         self.set_camera_orientation(
@@ -197,46 +256,44 @@ class RadarTowerSceneBase(ThreeDScene):
 
 class WeatherRadar3D(RadarTowerSceneBase):
     camera_theta = -32 * DEGREES
-    camera_zoom = 0.84
+    camera_zoom = 0.92
 
 
 class WeatherRadar3DFrontCheck(RadarTowerSceneBase):
-    camera_phi = 56 * DEGREES
     camera_theta = -90 * DEGREES
-    camera_zoom = 0.88
+    camera_zoom = 0.94
 
 
 class WeatherRadar3DSideCheck(RadarTowerSceneBase):
-    camera_phi = 56 * DEGREES
     camera_theta = -22 * DEGREES
-    camera_zoom = 0.92
+    camera_zoom = 0.94
 
 
 class WeatherRadar3DTopCheck(RadarTowerSceneBase):
     camera_phi = 24 * DEGREES
     camera_theta = -128 * DEGREES
-    camera_zoom = 0.86
-    frame_center = (0.0, 2.35, 0.0)
+    camera_zoom = 0.9
+    frame_center = (0.0, 0.0, 3.25)
 
 
 class CenteredRadarTowerSceneBase(RadarTowerSceneBase):
-    camera_phi = 0 * DEGREES
+    camera_phi = 60 * DEGREES
     camera_theta = -90 * DEGREES
-    camera_zoom = 0.72
-    frame_center = (0.0, 0.0, 0.0)
+    camera_zoom = 0.86
+    frame_center = (0.0, 0.0, 3.1)
     tower_shift = ORIGIN
 
 
 class DroneRadarTowerSceneBase(CenteredRadarTowerSceneBase):
     camera_phi = 68 * DEGREES
     camera_theta = -120 * DEGREES
-    camera_zoom = 0.74
-    frame_center = (0.0, 0.15, 0.0)
+    camera_zoom = 0.88
+    frame_center = (0.0, 0.0, 3.2)
 
 
 class WeatherRadar3DSpin(DroneRadarTowerSceneBase):
-    camera_phi = 0 * DEGREES
-    spin_duration = 1
+    camera_phi = 68 * DEGREES
+    spin_duration = 6
     camera_gamma = 0
 
     def construct(self):
@@ -244,7 +301,7 @@ class WeatherRadar3DSpin(DroneRadarTowerSceneBase):
         self.begin_ambient_camera_rotation(
             rate=-TAU / self.spin_duration, about="theta"
         )
-        # self.wait(self.spin_duration)
+        self.wait(self.spin_duration)
 
 
 class WeatherRadar3DSpinDroneCheckStart(DroneRadarTowerSceneBase):

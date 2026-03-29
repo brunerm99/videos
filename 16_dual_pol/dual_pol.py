@@ -3185,8 +3185,49 @@ def _get_nexrad_archive_volume(
     return raw_path
 
 
-@lru_cache(maxsize=8)
-def _get_nexrad_reflectivity_ppi_data_cached(
+def _get_nexrad_field_display_limits(radar, sweep, field_name, field_data):
+    if field_name == "reflectivity":
+        return -20.0, 75.0, "dBZ"
+
+    if field_name == "velocity":
+        nyquist_velocity = np.nan
+        instrument_parameters = radar.instrument_parameters or {}
+        nyquist_parameter = instrument_parameters.get("nyquist_velocity")
+        if nyquist_parameter is not None:
+            nyquist_data = np.ma.filled(nyquist_parameter["data"], np.nan).astype(
+                np.float32
+            )
+            sweep_start = int(radar.sweep_start_ray_index["data"][sweep])
+            sweep_end = int(radar.sweep_end_ray_index["data"][sweep]) + 1
+            if len(nyquist_data) >= sweep_end:
+                nyquist_velocity = float(
+                    np.nanmedian(nyquist_data[sweep_start:sweep_end])
+                )
+            elif len(nyquist_data) > sweep:
+                nyquist_velocity = float(nyquist_data[sweep])
+
+        if not np.isfinite(nyquist_velocity) or nyquist_velocity <= 0:
+            finite = np.abs(field_data[np.isfinite(field_data)])
+            nyquist_velocity = (
+                float(np.nanpercentile(finite, 99)) if finite.size else 35.0
+            )
+
+        nyquist_velocity = float(np.ceil(max(5.0, nyquist_velocity) / 5.0) * 5.0)
+        return -nyquist_velocity, nyquist_velocity, "m/s"
+
+    finite = field_data[np.isfinite(field_data)]
+    if finite.size == 0:
+        return 0.0, 1.0, str(radar.fields[field_name].get("units", ""))
+
+    return (
+        float(np.nanmin(finite)),
+        float(np.nanmax(finite)),
+        str(radar.fields[field_name].get("units", "")),
+    )
+
+
+@lru_cache(maxsize=16)
+def _get_nexrad_ppi_data_cached(
     s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
     sweep=6,
     max_range_km=150.0,
@@ -3199,24 +3240,21 @@ def _get_nexrad_reflectivity_ppi_data_cached(
 
     raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
     radar = pyart.io.read_nexrad_archive(str(raw_path))
-    reflectivity = np.ma.filled(
+    field_data = np.ma.filled(
         radar.get_field(sweep, field_name).astype(np.float32), np.nan
     )
-    azimuths = radar.azimuth["data"][
-        radar.sweep_start_ray_index["data"][sweep] : radar.sweep_end_ray_index["data"][
-            sweep
-        ]
-        + 1
-    ].astype(np.float32)
+    sweep_start = int(radar.sweep_start_ray_index["data"][sweep])
+    sweep_end = int(radar.sweep_end_ray_index["data"][sweep]) + 1
+    azimuths = radar.azimuth["data"][sweep_start:sweep_end].astype(np.float32)
     ranges_km = radar.range["data"].astype(np.float32) / 1000.0
 
     order = np.argsort(azimuths)
     azimuths = azimuths[order]
-    reflectivity = reflectivity[order]
+    field_data = field_data[order]
 
     gate_mask = ranges_km <= max_range_km
     ranges_km = ranges_km[gate_mask]
-    reflectivity = reflectivity[:, gate_mask]
+    field_data = field_data[:, gate_mask]
 
     radial_step_km = float(np.median(np.diff(ranges_km)))
     x_coords = np.linspace(-max_range_km, max_range_km, resolution, dtype=np.float32)
@@ -3249,11 +3287,15 @@ def _get_nexrad_reflectivity_ppi_data_cached(
         & (gate_index < len(ranges_km))
     )
 
-    reflectivity_dbz = np.full(range_grid_km.shape, np.nan, dtype=np.float32)
-    reflectivity_dbz[valid_mask] = reflectivity[
+    cartesian_field = np.full(range_grid_km.shape, np.nan, dtype=np.float32)
+    cartesian_field[valid_mask] = field_data[
         ray_index[valid_mask], gate_index[valid_mask]
     ]
-    valid_mask &= np.isfinite(reflectivity_dbz)
+    valid_mask &= np.isfinite(cartesian_field)
+
+    vmin, vmax, units = _get_nexrad_field_display_limits(
+        radar, sweep, field_name, cartesian_field
+    )
 
     scan_time = datetime.strptime(
         radar.time["units"].split("since ", 1)[1], "%Y-%m-%dT%H:%M:%SZ"
@@ -3267,10 +3309,12 @@ def _get_nexrad_reflectivity_ppi_data_cached(
         "vcp_pattern": int(radar.metadata.get("vcp_pattern", -1)),
         "sweep": int(sweep),
         "max_range_km": float(max_range_km),
-        "vmin": -20.0,
-        "vmax": 75.0,
+        "field_name": field_name,
+        "units": units,
+        "vmin": float(vmin),
+        "vmax": float(vmax),
         "source": "Unidata NEXRAD Level II archive on AWS S3",
-        "reflectivity_dbz": reflectivity_dbz,
+        "field_data": cartesian_field,
         "valid_mask": valid_mask,
         "azimuth_grid_deg": azimuth_grid_deg,
         "range_grid_km": range_grid_km,
@@ -3279,24 +3323,135 @@ def _get_nexrad_reflectivity_ppi_data_cached(
     }
 
 
+@lru_cache(maxsize=16)
+def _get_nexrad_fixed_angles_cached(
+    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+):
+    import pyart
+
+    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
+    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    return tuple(float(angle) for angle in radar.fixed_angle["data"])
+
+
+@lru_cache(maxsize=32)
+def _get_nexrad_valid_sweeps_cached(
+    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    field_name="reflectivity",
+):
+    import pyart
+
+    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
+    radar = pyart.io.read_nexrad_archive(str(raw_path))
+
+    if field_name not in radar.fields:
+        return tuple()
+
+    valid_sweeps = []
+    for candidate_sweep in range(radar.nsweeps):
+        try:
+            field_data = np.ma.filled(
+                radar.get_field(candidate_sweep, field_name).astype(np.float32), np.nan
+            )
+        except Exception:
+            continue
+
+        finite_fraction = float(np.isfinite(field_data).mean())
+        if finite_fraction > 0:
+            valid_sweeps.append(
+                (
+                    int(candidate_sweep),
+                    float(radar.fixed_angle["data"][candidate_sweep]),
+                    finite_fraction,
+                )
+            )
+
+    return tuple(valid_sweeps)
+
+
+def _get_nexrad_best_sweep_for_field(
+    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    requested_sweep=6,
+    field_name="reflectivity",
+):
+    valid_sweeps = _get_nexrad_valid_sweeps_cached(
+        s3_key=s3_key,
+        field_name=field_name,
+    )
+    if not valid_sweeps:
+        raise RuntimeError(f"No valid sweeps found for NEXRAD field '{field_name}'")
+
+    fixed_angles = _get_nexrad_fixed_angles_cached(s3_key=s3_key)
+    requested_angle = None
+    if 0 <= requested_sweep < len(fixed_angles):
+        requested_angle = fixed_angles[requested_sweep]
+
+    best_sweep, _, _ = min(
+        valid_sweeps,
+        key=lambda item: (
+            abs(item[1] - requested_angle) if requested_angle is not None else 0.0,
+            abs(item[0] - requested_sweep),
+            -item[2],
+        ),
+    )
+    return best_sweep
+
+
 def _get_nexrad_reflectivity_ppi_data(
     s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
     sweep=6,
     max_range_km=150.0,
     resolution=1200,
-    field_name="reflectivity",
 ):
-    data = _get_nexrad_reflectivity_ppi_data_cached(
+    data = _get_nexrad_ppi_data_cached(
         s3_key=s3_key,
         sweep=sweep,
         max_range_km=max_range_km,
         resolution=resolution,
-        field_name=field_name,
+        field_name="reflectivity",
     )
-    return {
+    data_copy = {
         key: value.copy() if isinstance(value, np.ndarray) else value
         for key, value in data.items()
     }
+    data_copy["reflectivity_dbz"] = data_copy.pop("field_data")
+    return data_copy
+
+
+def _get_nexrad_velocity_ppi_data(
+    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    sweep=6,
+    max_range_km=150.0,
+    resolution=1200,
+):
+    selected_sweep = _get_nexrad_best_sweep_for_field(
+        s3_key=s3_key,
+        requested_sweep=sweep,
+        field_name="velocity",
+    )
+    data = _get_nexrad_ppi_data_cached(
+        s3_key=s3_key,
+        sweep=selected_sweep,
+        max_range_km=max_range_km,
+        resolution=resolution,
+        field_name="velocity",
+    )
+
+    data_copy = {
+        key: value.copy() if isinstance(value, np.ndarray) else value
+        for key, value in data.items()
+    }
+    data_copy["velocity_ms"] = data_copy.pop("field_data")
+    return data_copy
+
+
+def _get_nexrad_colormap(cmap_name, fallback_name):
+    from matplotlib import colormaps
+
+    try:
+        return colormaps[cmap_name]
+    except KeyError:
+        return colormaps[fallback_name]
 
 
 def _reflectivity_dbz_to_rgba(
@@ -3307,18 +3462,43 @@ def _reflectivity_dbz_to_rgba(
     cmap_name="NWSRef",
     min_alpha=0.45,
 ):
-    from matplotlib import colormaps
-
     if valid_mask is None:
         valid_mask = np.isfinite(reflectivity_dbz)
 
     normalized = np.clip((reflectivity_dbz - vmin) / (vmax - vmin), 0.0, 1.0)
-    rgba = (colormaps[cmap_name](normalized) * 255).astype(np.uint8)
+    cmap = _get_nexrad_colormap(cmap_name, "turbo")
+    rgba = (cmap(normalized) * 255).astype(np.uint8)
 
     alpha = np.zeros(reflectivity_dbz.shape, dtype=np.uint8)
     if np.any(valid_mask):
         alpha_strength = min_alpha + (1.0 - min_alpha) * np.clip(
             (reflectivity_dbz[valid_mask] - 2.0) / 30.0, 0.0, 1.0
+        )
+        alpha[valid_mask] = np.uint8(255 * alpha_strength)
+    rgba[..., 3] = alpha
+    return rgba
+
+
+def _velocity_ms_to_rgba(
+    velocity_ms,
+    valid_mask=None,
+    vmin=-35.0,
+    vmax=35.0,
+    cmap_name="NWSVel",
+    min_alpha=0.55,
+):
+    if valid_mask is None:
+        valid_mask = np.isfinite(velocity_ms)
+
+    normalized = np.clip((velocity_ms - vmin) / (vmax - vmin), 0.0, 1.0)
+    cmap = _get_nexrad_colormap(cmap_name, "coolwarm")
+    rgba = (cmap(normalized) * 255).astype(np.uint8)
+
+    alpha = np.zeros(velocity_ms.shape, dtype=np.uint8)
+    if np.any(valid_mask):
+        max_velocity = max(abs(vmin), abs(vmax), 1.0)
+        alpha_strength = min_alpha + (1.0 - min_alpha) * np.clip(
+            np.abs(velocity_ms[valid_mask]) / max_velocity, 0.0, 1.0
         )
         alpha[valid_mask] = np.uint8(255 * alpha_strength)
     rgba[..., 3] = alpha
@@ -3338,13 +3518,17 @@ def _blend_radar_rgba(base_rgba, next_rgba, update_mask):
     return np.where(update_mask[..., None], next_rgba, base_rgba)
 
 
-def _build_nexrad_colorbar_image(height_px=900, width_px=56, vmin=-20.0, vmax=75.0):
-    from matplotlib import colormaps
-
+def _build_nexrad_colorbar_image(
+    height_px=900,
+    width_px=56,
+    vmin=-20.0,
+    vmax=75.0,
+    cmap_name="NWSRef",
+    fallback_cmap_name="turbo",
+):
     gradient = np.linspace(vmax, vmin, height_px, dtype=np.float32)[:, None]
-    rgba = (colormaps["NWSRef"]((gradient - vmin) / (vmax - vmin)) * 255).astype(
-        np.uint8
-    )
+    cmap = _get_nexrad_colormap(cmap_name, fallback_cmap_name)
+    rgba = (cmap((gradient - vmin) / (vmax - vmin)) * 255).astype(np.uint8)
     rgba = np.repeat(rgba, width_px, axis=1)
     rgba[..., 3] = 255
     return rgba
@@ -4061,3 +4245,376 @@ class DimPPIConversion(MovingCameraScene):
         self.add(ax, plot, rects)
 
         self.wait(0.5)
+
+
+class ZDR(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        s3_key = "2024/05/07/KTLX/KTLX20240507_023811_V06"
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 640
+
+        reflectivity_metadata = _get_nexrad_reflectivity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        velocity_metadata = _get_nexrad_velocity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        reflectivity_rgba = _reflectivity_dbz_to_rgba(
+            reflectivity_metadata["reflectivity_dbz"],
+            valid_mask=reflectivity_metadata["valid_mask"],
+            vmin=reflectivity_metadata["vmin"],
+            vmax=reflectivity_metadata["vmax"],
+        )
+        velocity_rgba = _velocity_ms_to_rgba(
+            velocity_metadata["velocity_ms"],
+            valid_mask=velocity_metadata["valid_mask"],
+            vmin=velocity_metadata["vmin"],
+            vmax=velocity_metadata["vmax"],
+        )
+
+        plot_fill = ManimColor.from_hex("#09151D")
+        axis_color = ManimColor.from_hex("#D6EEF7")
+        label_color = ManimColor.from_hex("#B7D4E2")
+        scan_color = ManimColor.from_hex("#9EF6FF")
+
+        plot_radius = min(fh(self, 0.23), fw(self, 0.15))
+        beam_width_deg = 4.0
+        scan_progress = VT(0.0)
+        scan_visibility = VT(0.0)
+
+        def format_tick_label(value):
+            if np.isclose(value, 0.0):
+                value = 0.0
+            if np.isclose(value, round(value)):
+                return f"{int(round(value))}"
+            return f"{value:.1f}"
+
+        def make_ppi_panel(metadata, rgba, title_text, units, tick_values, cmap_name):
+            plot_background = Circle(
+                radius=plot_radius,
+                fill_color=plot_fill,
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            plot_border = Circle(radius=plot_radius).set_stroke(
+                axis_color, width=2.2, opacity=0.76
+            )
+            origin_marker = Dot(ORIGIN, radius=0.03, color=axis_color)
+
+            grid = VGroup()
+            for azimuth in range(0, 360, 15):
+                is_primary = azimuth % 90 == 0
+                is_secondary = azimuth % 45 == 0
+                grid.add(
+                    Line(
+                        ORIGIN,
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            azimuth,
+                            metadata["max_range_km"],
+                        ),
+                        stroke_color=axis_color,
+                        stroke_width=1.6
+                        if is_primary
+                        else 1.15
+                        if is_secondary
+                        else 0.9,
+                        stroke_opacity=0.22
+                        if is_primary
+                        else 0.13
+                        if is_secondary
+                        else 0.06,
+                    )
+                )
+
+            range_rings = VGroup()
+            range_labels = VGroup()
+            for ring_km in (50, 100, 150):
+                ring_radius = plot_radius * ring_km / metadata["max_range_km"]
+                range_rings.add(
+                    Circle(radius=ring_radius).set_stroke(
+                        axis_color,
+                        width=1.7 if ring_km == 150 else 1.2,
+                        opacity=0.18 if ring_km == 150 else 0.1,
+                    )
+                )
+                range_labels.add(
+                    Text(f"{ring_km} km", font=FONT, color=label_color)
+                    .scale(0.2)
+                    .move_to(
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            230,
+                            ring_km,
+                        )
+                        + LEFT * 0.1
+                        + DOWN * 0.02
+                    )
+                )
+
+            direction_labels = VGroup()
+            for label, azimuth in (("N", 0), ("E", 90), ("S", 180), ("W", 270)):
+                direction_labels.add(
+                    Text(label, font=FONT, color=axis_color)
+                    .scale(0.22)
+                    .move_to(
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            azimuth,
+                            metadata["max_range_km"] * 1.08,
+                        )
+                    )
+                )
+
+            title = Text(title_text, font=FONT).scale(0.42)
+            title.next_to(plot_border, UP, MED_SMALL_BUFF)
+
+            colorbar = ImageMobject(
+                _build_nexrad_colorbar_image(
+                    height_px=720,
+                    vmin=metadata["vmin"],
+                    vmax=metadata["vmax"],
+                    cmap_name=cmap_name,
+                    fallback_cmap_name="coolwarm" if cmap_name == "NWSVel" else "turbo",
+                ),
+                image_mode="RGBA",
+            ).scale_to_fit_height(plot_radius * 1.68)
+            colorbar.set_resampling_algorithm(RESAMPLING_ALGORITHMS["nearest"])
+            colorbar_frame = Rectangle(
+                width=colorbar.width + 0.16,
+                height=colorbar.height + 0.16,
+                fill_opacity=0,
+                stroke_color=axis_color,
+                stroke_opacity=0.42,
+                stroke_width=1.2,
+            ).move_to(colorbar)
+            colorbar_group = Group(colorbar_frame, colorbar)
+            colorbar_group.next_to(plot_background, RIGHT, buff=0.7)
+            colorbar_group.align_to(plot_background, UP).shift(DOWN * 0.02)
+
+            colorbar_units = Text(units, font=FONT, color=label_color).scale(0.2)
+            colorbar_units.next_to(colorbar_group, UP, buff=0.12)
+
+            tick_labels = VGroup()
+            for tick in tick_values:
+                tick_y = colorbar.get_bottom()[1] + colorbar.height * (
+                    (tick - metadata["vmin"]) / (metadata["vmax"] - metadata["vmin"])
+                )
+                tick_anchor = np.array([colorbar.get_right()[0], tick_y, 0])
+                tick_line = Line(
+                    tick_anchor + RIGHT * 0.02,
+                    tick_anchor + RIGHT * 0.12,
+                    stroke_color=axis_color,
+                    stroke_width=1,
+                    stroke_opacity=0.6,
+                )
+                tick_text = Text(
+                    format_tick_label(tick), font=FONT, color=label_color
+                ).scale(0.18)
+                tick_text.next_to(tick_line, RIGHT, buff=0.06)
+                tick_labels.add(VGroup(tick_line, tick_text))
+
+            blank_rgba = np.zeros_like(rgba)
+
+            def current_scan_rgba():
+                progress_mask = _nexrad_relative_sweep_progress_mask(
+                    metadata["azimuth_grid_deg"],
+                    start_theta_deg=0.0,
+                    sweep_progress_deg=~scan_progress,
+                )
+                return _blend_radar_rgba(blank_rgba, rgba, progress_mask)
+
+            def make_data_image():
+                image = ImageMobject(current_scan_rgba(), image_mode="RGBA")
+                image.scale_to_fit_height(plot_radius * 2)
+                image.move_to(origin_marker.get_center())
+                image.set_resampling_algorithm(RESAMPLING_ALGORITHMS["nearest"])
+                return image
+
+            def make_scan_trail():
+                head_theta_deg = ~scan_progress % 360.0
+                trail = AnnularSector(
+                    inner_radius=0,
+                    outer_radius=plot_radius * 1.002,
+                    start_angle=PI / 2 - head_theta_deg * DEGREES,
+                    angle=beam_width_deg * DEGREES,
+                    fill_color=scan_color,
+                    fill_opacity=0.075 * ~scan_visibility,
+                    stroke_width=0,
+                )
+                trail.move_arc_center_to(origin_marker.get_center())
+                return trail
+
+            def make_scan_line():
+                head_theta_deg = ~scan_progress % 360.0
+                plot_center = origin_marker.get_center()
+                endpoint = _polar_ppi_point(
+                    plot_center,
+                    plot_radius,
+                    metadata["max_range_km"],
+                    head_theta_deg,
+                    metadata["max_range_km"],
+                )
+                glow = Line(plot_center, endpoint).set_stroke(
+                    scan_color, width=9, opacity=0.08 * ~scan_visibility
+                )
+                line = Line(plot_center, endpoint).set_stroke(
+                    scan_color, width=2.2, opacity=0.95 * ~scan_visibility
+                )
+                tip_halo = Dot(
+                    endpoint,
+                    radius=0.08,
+                    color=scan_color,
+                    fill_opacity=0.22 * ~scan_visibility,
+                    stroke_width=0,
+                )
+                tip = Dot(
+                    endpoint,
+                    radius=0.03,
+                    color=scan_color,
+                    fill_opacity=0.95 * ~scan_visibility,
+                    stroke_width=0,
+                )
+                return VGroup(glow, line, tip_halo, tip).set_z_index(5)
+
+            data_image = always_redraw(make_data_image)
+            scan_trail = always_redraw(make_scan_trail).set_z_index(4)
+            scan_line = always_redraw(make_scan_line)
+
+            return Group(
+                plot_background,
+                grid,
+                data_image,
+                range_rings,
+                plot_border,
+                range_labels,
+                direction_labels,
+                scan_trail,
+                scan_line,
+                origin_marker,
+                colorbar_group,
+                tick_labels,
+                colorbar_units,
+                title,
+            )
+
+        reflectivity_panel = make_ppi_panel(
+            reflectivity_metadata,
+            reflectivity_rgba,
+            "Reflectivity",
+            "dBZ",
+            (-20, 0, 20, 40, 60),
+            "NWSRef",
+        )
+
+        velocity_limit = max(
+            abs(velocity_metadata["vmin"]), abs(velocity_metadata["vmax"])
+        )
+        velocity_panel = make_ppi_panel(
+            velocity_metadata,
+            velocity_rgba,
+            "Velocity",
+            "m/s",
+            (
+                -velocity_limit,
+                -velocity_limit / 2,
+                0.0,
+                velocity_limit / 2,
+                velocity_limit,
+            ),
+            "NWSVel",
+        )
+
+        panels = Group(reflectivity_panel, velocity_panel).arrange(
+            RIGHT, buff=LARGE_BUFF * 1.1, aligned_edge=UP
+        )
+        panels.move_to(ORIGIN).shift(DOWN * 0.25)
+
+        header = Text("Single-Pol Products", font=FONT).scale(0.72)
+        subtitle = Text(
+            (
+                f"{reflectivity_metadata['station']} | DBZ sw {reflectivity_metadata['sweep']}"
+                f" | Vel sw {velocity_metadata['sweep']}"
+                f" | elev {reflectivity_metadata['elevation_deg']} deg"
+            ),
+            font=FONT,
+            color=label_color,
+        ).scale(0.22)
+        header_group = Group(header, subtitle).arrange(DOWN, SMALL_BUFF)
+        header_group.next_to(panels, UP, LARGE_BUFF * 0.8)
+
+        self.play(
+            LaggedStart(
+                FadeIn(header_group, shift=DOWN * 0.2),
+                FadeIn(reflectivity_panel, scale=0.97),
+                FadeIn(velocity_panel, scale=0.97),
+                lag_ratio=0.18,
+            ),
+            run_time=2.4,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            scan_visibility @ 1,
+            scan_progress @ 360,
+            run_time=6,
+            rate_func=linear,
+        )
+
+        self.play(scan_visibility @ 0, run_time=0.35)
+
+        self.wait(1.5)
+
+
+class Test(MovingCameraScene):
+    def construct(self):
+        resolution = (
+            VideoMobject("./static/Resolution.mov", loop=False, speed=1)
+            .scale_to_fit_width(fw(self, 1))
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self))
+        )
+        self.add(resolution)
+
+        self.play(self.camera.frame.animate.shift(RIGHT * fw(self)))
+
+        self.wait(15)
+
+        resolution.pause()
+
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(self.camera.frame.animate.scale(0.7).shift(RIGHT * 0.3 + UP * 1.5))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        resolution.play()
+
+        self.wait(8)
+
+        resolution.pause()
+
+        self.wait(2)
