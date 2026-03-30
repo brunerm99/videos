@@ -4596,14 +4596,18 @@ class Test(MovingCameraScene):
 
         self.play(self.camera.frame.animate.shift(RIGHT * fw(self)))
 
-        self.wait(15)
+        self.wait(14)
 
         resolution.pause()
 
         self.wait(0.5)
 
+        resolution.play()
+
         self.camera.frame.save_state()
         self.play(self.camera.frame.animate.scale(0.7).shift(RIGHT * 0.3 + UP * 1.5))
+
+        resolution.pause()
 
         self.wait(0.5)
 
