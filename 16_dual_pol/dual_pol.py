@@ -1,4 +1,5 @@
 # dual_pol.py
+import math
 import os
 import sys
 from copy import deepcopy
@@ -2897,11 +2898,57 @@ class Idea2D(MovingCameraScene):
         self.wait(2)
 
 
+def _thurai_drop_c1(deq):
+    return (1 / np.pi) * (0.02914 * deq**2 + 0.9263 * deq + 0.07791)
+
+
+def _thurai_drop_c2(deq):
+    return -0.01938 * deq**2 + 0.4698 * deq + 0.09538
+
+
+def _thurai_drop_c3(deq):
+    return -0.06123 * deq**3 + 1.3880 * deq**2 - 10.41 * deq + 28.34
+
+
+def _thurai_drop_c4(deq):
+    if deq > 4:
+        return -0.01352 * deq**3 + 0.2014 * deq**2 - 0.8964 * deq + 1.226
+    if 1.5 <= deq <= 4:
+        return 0.0
+    return np.nan
+
+
+def _thurai_drop_half_width(deq, y):
+    c1_val = _thurai_drop_c1(deq)
+    c2_val = _thurai_drop_c2(deq)
+    c3_val = _thurai_drop_c3(deq)
+    c4_val = _thurai_drop_c4(deq)
+
+    y = np.asarray(y, dtype=float)
+    y_over_c2 = np.clip(y / c2_val, -1.0, 1.0)
+    term1 = np.sqrt(np.maximum(0.0, 1.0 - y_over_c2**2))
+    term2 = np.arccos(np.clip(y / (c3_val * c2_val), -1.0, 1.0))
+    term3 = c4_val * y_over_c2**2 + 1.0
+    return c1_val * term1 * term2 * term3
+
+
+def _thurai_drop_outline_points(deq, n_samples=721):
+    c2_val = _thurai_drop_c2(deq)
+    y_values = np.linspace(-c2_val, c2_val, n_samples)
+    x_values = _thurai_drop_half_width(deq, y_values)
+
+    right_side = [np.array([x, y, 0.0]) for x, y in zip(x_values, y_values)]
+    left_side = [
+        np.array([-x, y, 0.0]) for x, y in zip(x_values[-2:0:-1], y_values[-2:0:-1])
+    ]
+    return right_side + left_side
+
+
 class DropShape(Scene):
     def construct(self):
         Deq_min = 1.5
         Deq_max = 6
-        Deq_target = 5.25
+        Deq_target = 6
         Deq = VT(Deq_min)
 
         def c1(Deq):
@@ -3002,170 +3049,38 @@ class DropShape(Scene):
         lplot.add_updater(get_plot_updater(scalar=-1))
         rplot.add_updater(get_plot_updater(scalar=1))
 
-        # Deq_nl = NumberLine(
-        #     x_range=[Deq_min, Deq_max, 0.5],
-        #     include_numbers=True,
-        #     include_tip=False,
-        #     length=config["frame_width"] * 0.6,
-        # ).to_edge(DOWN)
+        self.add(lplot, rplot)
 
-        # def clamp_drop_y(y):
-        #     drop_half_height = c2(~Deq)
-        #     return np.clip(y, -0.92 * drop_half_height, 0.92 * drop_half_height)
-
-        # def drop_half_width(y):
-        #     return x_function(~Deq, clamp_drop_y(y))
-
-        # def build_updraft_streamline(
-        #     side,
-        #     start_x_factor,
-        #     lower_gap,
-        #     upper_gap,
-        #     top_gap,
-        #     start_pad,
-        #     end_pad,
-        #     lower_y_factor,
-        #     upper_y_factor,
-        #     stroke_width,
-        #     stroke_opacity,
-        #     tip_scale,
-        # ):
-        #     drop_half_height = c2(~Deq)
-        #     max_half_width = drop_half_width(0)
-        #     lower_y = clamp_drop_y(lower_y_factor * drop_half_height)
-        #     mid_lower_y = clamp_drop_y(0.55 * lower_y_factor * drop_half_height)
-        #     shoulder_y = clamp_drop_y(-0.08 * drop_half_height)
-        #     upper_y = clamp_drop_y(upper_y_factor * drop_half_height)
-        #     mid_upper_y = clamp_drop_y(0.5 * (upper_y + 0.82 * drop_half_height))
-        #     top_y = clamp_drop_y(0.82 * drop_half_height)
-        #     start_x = 0.3 * start_x_factor * max_half_width + 0.7 * (
-        #         drop_half_width(lower_y) + 0.35 * lower_gap
-        #     )
-        #     end_x = drop_half_width(top_y) + 0.75 * top_gap
-
-        #     y_knots = np.array(
-        #         [
-        #             -drop_half_height - start_pad,
-        #             lower_y,
-        #             mid_lower_y,
-        #             shoulder_y,
-        #             upper_y,
-        #             mid_upper_y,
-        #             top_y,
-        #             drop_half_height + end_pad,
-        #         ]
-        #     )
-        #     x_knots = np.array(
-        #         [
-        #             start_x,
-        #             drop_half_width(lower_y) + lower_gap,
-        #             drop_half_width(mid_lower_y) + 0.7 * lower_gap + 0.3 * upper_gap,
-        #             drop_half_width(shoulder_y) + upper_gap,
-        #             drop_half_width(upper_y) + upper_gap,
-        #             drop_half_width(mid_upper_y) + 0.45 * top_gap + 0.55 * upper_gap,
-        #             drop_half_width(top_y) + top_gap,
-        #             end_x,
-        #         ]
-        #     )
-        #     x_interp = PchipInterpolator(y_knots, x_knots)
-
-        #     curve = ParametricFunction(
-        #         lambda y: rain_ax.c2p(side * float(x_interp(y)), y),
-        #         t_range=[y_knots[0], y_knots[-1], (y_knots[-1] - y_knots[0]) / 120],
-        #     ).set_stroke(
-        #         WHITE,
-        #         width=stroke_width,
-        #         opacity=stroke_opacity,
-        #     )
-        #     if tip_scale <= 0:
-        #         return curve
-
-        #     tip_anchor = rain_ax.c2p(side * x_knots[-1], y_knots[-1])
-        #     tail_anchor = rain_ax.c2p(side * x_knots[-2], y_knots[-2])
-        #     tangent = normalize(tip_anchor - tail_anchor)
-        #     tip = Triangle(
-        #         fill_color=WHITE,
-        #         fill_opacity=stroke_opacity,
-        #         stroke_width=0,
-        #     ).scale(tip_scale)
-        #     tip.rotate(angle_of_vector(tangent) - PI / 2)
-        #     tip.shift(tip_anchor - tip.get_boundary_point(tangent))
-        #     return VGroup(curve, tip)
-
-        # streamline_specs = [
-        #     dict(
-        #         start_x_factor=0.24,
-        #         lower_gap=0.34,
-        #         upper_gap=0.34,
-        #         top_gap=0.44,
-        #         start_pad=3,
-        #         end_pad=3,
-        #         lower_y_factor=-0.5,
-        #         upper_y_factor=0.1,
-        #         stroke_width=2.5,
-        #         stroke_opacity=0.58,
-        #         tip_scale=0,
-        #     ),
-        #     dict(
-        #         start_x_factor=0.48,
-        #         lower_gap=0.56,
-        #         upper_gap=0.56,
-        #         top_gap=0.72,
-        #         start_pad=3,
-        #         end_pad=3,
-        #         lower_y_factor=-0.5,
-        #         upper_y_factor=0.1,
-        #         stroke_width=2.2,
-        #         stroke_opacity=0.42,
-        #         tip_scale=0,
-        #     ),
-        #     dict(
-        #         start_x_factor=0.72,
-        #         lower_gap=0.78,
-        #         upper_gap=0.78,
-        #         top_gap=1,
-        #         start_pad=3,
-        #         end_pad=3,
-        #         lower_y_factor=-0.5,
-        #         upper_y_factor=0.1,
-        #         stroke_width=1.8,
-        #         stroke_opacity=0.24,
-        #         tip_scale=0,
-        #     ),
-        # ]
-        # wind_lines = always_redraw(
-        #     lambda: VGroup(
-        #         *(
-        #             build_updraft_streamline(side=side, **spec)
-        #             for spec in streamline_specs
-        #             for side in (-1, 1)
-        #         ),
-        #     ).set_z_index(-1)
-        # )
-
-        self.add(
-            # wind_lines,
-            lplot,
-            rplot,
-        )
-
-        # # self.play(
-        # #     Create(rain_ax),
-        # #     Create(lplot),
-        # #     Create(rplot),
-        # # )
-
-        # b1 = always_redraw(
-        #     lambda: CubicBezier(
-        #         rain_ax.i2gp(0.1, rplot),
-        #         rain_ax.i2gp(0.1, rplot),
-        #     )
-        # )
-        self.add(Dot(rain_ax.c2p(0.1, f_vp(0.1))))
-
-        self.play(Deq @ Deq_target, run_time=6)
+        # self.play(Deq @ Deq_target, run_time=6)
 
         self.wait(2)
+
+
+class DropShapeV2(Scene):
+    def construct(self):
+        deq_min = 1.5
+        deq_target = 6.0
+        deq = VT(deq_min)
+
+        def make_drop_shape():
+            points = _thurai_drop_outline_points(~deq)
+            drop = Polygon(
+                *points,
+                color=PRECIP_COLOR,
+                fill_color=PRECIP_COLOR,
+                fill_opacity=0.12,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+            )
+            drop.scale(0.95)
+            return drop
+
+        drop_shape = always_redraw(make_drop_shape)
+
+        self.add(drop_shape)
+
+        # self.play(deq @ deq_target, run_time=4)
+
+        self.wait(1)
 
 
 def _get_nexrad_archive_volume(
@@ -4584,8 +4499,9 @@ class ZDR(MovingCameraScene):
         self.wait(1.5)
 
 
-class Test(MovingCameraScene):
+class ZdrP2(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         resolution = (
             VideoMobject("./static/Resolution.mov", loop=False, speed=1)
             .scale_to_fit_width(fw(self, 1))
@@ -4611,7 +4527,45 @@ class Test(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.restore())
+        line_l = (
+            Line(ORIGIN, UP / 4)
+            .rotate(PI / 6)
+            .move_to(self.camera.frame)
+            .shift(UP * 0.15 + LEFT * 0.7)
+        )
+        line_r = line_l.copy().shift([2 * np.cos(PI / 6), 2 * np.sin(PI / 6), 0])
+        line_m = Line(line_l.get_midpoint(), line_r.get_midpoint())
+
+        rres_label = (
+            MathTex(r"\Delta R")
+            .rotate(PI / 6)
+            .move_to(line_m.get_midpoint())
+            .shift([0.25 * -np.cos(PI / 6), 0.25 * np.sin(PI / 6), 0])
+        )
+
+        self.play(
+            LaggedStart(
+                Create(line_l),
+                Create(line_m),
+                Create(line_r),
+                LaggedStart(*[FadeIn(m) for m in rres_label[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.restore(),
+            LaggedStart(
+                LaggedStart(*[FadeOut(m) for m in rres_label[0]], lag_ratio=0.1),
+                Uncreate(line_r),
+                Uncreate(line_m),
+                Uncreate(line_l),
+                lag_ratio=0.3,
+                run_time=1,
+            ),
+        )
 
         self.wait(0.5)
 
@@ -4620,5 +4574,493 @@ class Test(MovingCameraScene):
         self.wait(8)
 
         resolution.pause()
+
+        self.wait(0.5)
+
+        vol = (
+            Circle(color=RED).move_to(self.camera.frame).shift(LEFT * 1.9 + DOWN * 0.25)
+        )
+
+        self.play(Create(vol))
+
+        self.wait(0.5)
+
+        scan_progress = VT(135)
+        beam_width_deg = 1
+
+        s3_key = "2024/05/07/KTLX/KTLX20240507_023811_V06"
+        sweep = 6
+        max_range_km = 150.0
+        zdr_res = 1200
+        zdr = _get_nexrad_ppi_data_cached(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=zdr_res,
+            field_name="differential_reflectivity",
+        )
+
+        xmin = 70
+        xmax = 92
+        x_des = 75.3
+
+        newcam = self.camera.frame.get_center() + UP * fh(self, 1.5)
+
+        x_ticks = np.arange(xmin, xmax, 1)
+
+        def get_nexrad_ax():
+            ax = Axes(
+                x_range=[xmin, xmax, 1],
+                y_range=[-5, 5, 2.5],
+                x_length=fw(self, 0.7) * ((xmax - xmin) / 4),
+                y_length=fh(self, 0.7),
+                x_axis_config=dict(
+                    numbers_with_elongated_ticks=x_ticks,
+                    include_numbers=True,
+                    numbers_to_include=x_ticks,
+                    font_size=DEFAULT_FONT_SIZE * 0.5,
+                    label_constructor=lambda x: Text(x, font=FONT),
+                    line_to_number_buff=MED_SMALL_BUFF,
+                    decimal_number_config=dict(num_decimal_places=0),
+                    longer_tick_multiple=2,
+                ),
+                tips=False,
+            )
+            ax.shift(newcam - ax.c2p(x_des, 0))
+            return ax
+
+        plot_opacity = VT(1)
+
+        def get_scan_z_over_r():
+            max_range = zdr["max_range_km"]
+            r = np.linspace(0, max_range, 1200)
+            x = r * np.sin(np.deg2rad(~scan_progress - beam_width_deg / 2))
+            y = r * np.cos(np.deg2rad(~scan_progress - beam_width_deg / 2))
+            x_idx = np.abs(zdr["x_coords_km"][None, :] - x[:, None]).argmin(axis=1)
+            y_idx = np.abs(zdr["y_coords_km"][None, :] - y[:, None]).argmin(axis=1)
+            z = zdr["field_data"][y_idx, x_idx]
+            z = np.nan_to_num(z, nan=0)
+            order = np.argsort(r)
+            r = r[order]
+            z = z[order]
+
+            z_func_scan = interp1d(r, z, fill_value="extrapolate")
+
+            nexrad_scan_plot = nexrad_ax.plot(
+                z_func_scan,
+                x_range=[xmin, xmax, 1 / 200],
+                color=HPOL_RX_COLOR,
+                stroke_opacity=~plot_opacity,
+            )
+            return nexrad_scan_plot
+
+        dx = 0.15
+
+        def get_samples():
+            zdr_plot = get_scan_z_over_r()
+            rects = nexrad_ax.get_riemann_rectangles(
+                zdr_plot,
+                x_range=[xmin, xmax],
+                dx=dx,
+                input_sample_type="center",
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+                fill_opacity=0.3,
+                color=HPOL_RX_COLOR,
+                show_signed_area=True,
+                # bounded_graph=nexrad_ax.plot(lambda _: 0, x_range=[0, 150, 1 / 200]),
+            )
+            return rects
+
+        nexrad_ax = get_nexrad_ax().set_z_index(0)
+        zdr_plot = always_redraw(get_scan_z_over_r)
+        samples = get_samples().set_z_index(1)
+        lblock = (
+            Rectangle(
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+                stroke_opacity=0,
+                color=YELLOW,
+                width=fw(self, 0.5),
+                height=fh(self),
+            )
+            .next_to(nexrad_ax.c2p(x_des - 2, 0), LEFT, MED_SMALL_BUFF)
+            .set_z_index(2)
+        )
+        rblock = (
+            Rectangle(
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+                stroke_opacity=0,
+                color=YELLOW,
+                width=fw(self, 0.5),
+                height=fh(self),
+            )
+            .next_to(nexrad_ax.c2p(x_des + 2, 0), RIGHT, MED_SMALL_BUFF)
+            .set_z_index(2)
+        )
+        xlabel = (
+            Text("Range (km)\n->", font=FONT)
+            .next_to(nexrad_ax.c2p(x_des, 0), DOWN, LARGE_BUFF)
+            .shift(RIGHT * 2.6)
+        )
+        ylabel = (
+            Text("ZDR", font=FONT)
+            .rotate(PI / 2)
+            .next_to(nexrad_ax.c2p(x_des - 2, 0), LEFT, MED_LARGE_BUFF)
+        )
+        self.add(nexrad_ax, samples, zdr_plot, lblock, rblock, xlabel, ylabel)
+
+        vol_bez = CubicBezier(
+            vol.get_top() + [0, 0.1, 0],
+            vol.get_top() + [0, 3, 0],
+            nexrad_ax.c2p(x_des, 0) + [0, -3, 0],
+            nexrad_ax.c2p(x_des, 0) + [0, -0.2, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(vol_bez),
+                    self.camera.frame.animate.move_to(nexrad_ax.c2p(x_des, 0)),
+                ),
+                samples[math.floor((x_des - xmin) / dx)].animate.set_fill(
+                    color=YELLOW, opacity=0.6
+                ),
+                lag_ratio=0.5,
+            )
+        )
+        # self.remove(resolution)
+
+        self.wait(0.5)
+
+        print("shift by", nexrad_ax.c2p(88.198, 0) - nexrad_ax.c2p(x_des, 0))
+
+        self.play(
+            Group(nexrad_ax, samples).animate.shift(
+                LEFT * (nexrad_ax.c2p(88.198, 0) - nexrad_ax.c2p(x_des, 0))
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        cloud_l = (
+            SVGMobject("../props/static/cloud.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale_to_fit_width(fw(self, 0.3))
+        )
+        cloud_r = (
+            SVGMobject("../props/static/cloud.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale_to_fit_width(fw(self, 0.3))
+        )
+        cloud_arrow = Arrow(LEFT, RIGHT)
+        clouds = (
+            Group(cloud_l, cloud_arrow, cloud_r)
+            .arrange(RIGHT, SMALL_BUFF)
+            .move_to(self.camera.frame.get_top())
+            .shift(UP * 0.5)
+        )
+
+        zero_bez_l = CubicBezier(
+            vol_bez.get_end() + [0, 0.6, 0],
+            vol_bez.get_end() + [0, 2.5, 0],
+            clouds.get_corner(DL) + [0, -1, 0],
+            clouds.get_corner(DL) + [0, -0.1, 0],
+        )
+        zero_bez_r_1 = CubicBezier(
+            vol_bez.get_end() + [0, 0.6, 0],
+            vol_bez.get_end() + [0, 2.5, 0],
+            clouds[0].get_corner(DR) + [0, -1, 0],
+            clouds[0].get_corner(DR) + [0, -0.1, 0],
+        )
+        zero_bez_r = CubicBezier(
+            vol_bez.get_end() + [0, 0.6, 0],
+            vol_bez.get_end() + [0, 2.5, 0],
+            clouds.get_corner(DR) + [0, -1, 0],
+            clouds.get_corner(DR) + [0, -0.1, 0],
+        )
+
+        # self.add(clouds)
+        self.play(
+            LaggedStart(
+                FadeOut(xlabel, ylabel),
+                AnimationGroup(
+                    self.camera.frame.animate.scale(1.2).shift(UP * 2),
+                    plot_opacity @ 0.2,
+                    nexrad_ax.animate.set_stroke(opacity=0.2),
+                    Uncreate(vol_bez),
+                    *[m.animate.set_opacity(0.2) for m in nexrad_ax.x_axis.numbers],
+                    *[
+                        m.animate.set_stroke(opacity=0.2).set_fill(opacity=0.2)
+                        for m in samples
+                    ],
+                ),
+                AnimationGroup(Create(zero_bez_l), Create(zero_bez_r_1)),
+                FadeIn(cloud_l),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        np.random.seed(0)
+        cloud_center = cloud_l.get_center() + DOWN * cloud_l.height * 0.03
+        drop_radius = cloud_l.width * 0.01
+        drop_rows = [
+            (-0.20, 4, 0.10),
+            (-0.12, 7, 0.20),
+            (-0.05, 10, 0.29),
+            (0.03, 12, 0.35),
+            (0.11, 11, 0.31),
+            (0.19, 8, 0.22),
+            (0.26, 5, 0.12),
+        ]
+
+        sphere_drops = []
+        for y_frac, count, half_width_frac in drop_rows:
+            row_offset = np.random.normal(0, cloud_l.width * 0.008)
+            x_positions = np.linspace(-half_width_frac, half_width_frac, count)
+            for x_frac in x_positions:
+                x_frac = np.clip(
+                    x_frac + np.random.normal(0, 0.012),
+                    -half_width_frac,
+                    half_width_frac,
+                )
+                sphere_drops.append(
+                    Circle(
+                        radius=drop_radius * np.random.uniform(0.88, 1.18),
+                        color=BLUE,
+                        fill_color=BLUE,
+                        fill_opacity=1,
+                        stroke_width=0,
+                    ).move_to(
+                        cloud_center
+                        + RIGHT * (x_frac * cloud_l.width + row_offset)
+                        + UP
+                        * (
+                            y_frac * cloud_l.height
+                            + np.random.normal(0, cloud_l.height * 0.008)
+                        )
+                    )
+                )
+
+        shuffle(sphere_drops)
+
+        sphere_drops = Group(*sphere_drops)
+        sphere_drops.shift(DOWN * cloud_l.height * 0.1)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in sphere_drops],
+                lag_ratio=0.05,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(cloud_arrow),
+                ReplacementTransform(zero_bez_r_1, zero_bez_r),
+                FadeIn(cloud_r),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        np.random.seed(1)
+        cloud_center = cloud_r.get_center() + DOWN * cloud_r.height * 0.03
+        drop_radius = cloud_r.width * 0.01
+        # drop_rows = [
+        #     (-0.20, 4, 0.10),
+        #     (-0.12, 7, 0.20),
+        #     (-0.05, 10, 0.29),
+        #     (0.03, 12, 0.35),
+        #     (0.11, 11, 0.31),
+        #     (0.19, 8, 0.22),
+        #     (0.26, 5, 0.12),
+        # ]
+
+        sphere_drops_r = []
+        for y_frac, count, half_width_frac in drop_rows:
+            row_offset = np.random.normal(0, cloud_r.width * 0.008)
+            x_positions = np.linspace(-half_width_frac, half_width_frac, count)
+            for x_frac in x_positions:
+                x_frac = np.clip(
+                    x_frac + np.random.normal(0, 0.012),
+                    -half_width_frac,
+                    half_width_frac,
+                )
+                sphere_drops_r.append(
+                    Circle(
+                        radius=drop_radius * np.random.uniform(0.88, 1.18),
+                        color=BLUE,
+                        fill_color=BLUE,
+                        fill_opacity=1,
+                        stroke_width=0,
+                    ).move_to(
+                        cloud_center
+                        + RIGHT * (x_frac * cloud_r.width + row_offset)
+                        + UP
+                        * (
+                            y_frac * cloud_r.height
+                            + np.random.normal(0, cloud_r.height * 0.008)
+                        )
+                    )
+                )
+
+        shuffle(sphere_drops_r)
+
+        for sd in sphere_drops_r[: len(sphere_drops_r) // 3]:
+            sd.stretch(1.5, 0)
+
+        for sd in sphere_drops_r[-len(sphere_drops_r) // 3 :]:
+            sd.stretch(1.5, 1)
+
+        sphere_drops_r = Group(*sphere_drops_r)
+        sphere_drops_r.shift(DOWN * cloud_l.height * 0.1)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in sphere_drops_r],
+                lag_ratio=0.05,
+            )
+        )
+
+        self.wait(0.5)
+
+        sphere_l = Circle(
+            color=BLUE,
+            fill_color=BLUE,
+            fill_opacity=1,
+            radius=sphere_drops[0].radius * 5,
+        ).move_to(cloud_l.get_center())
+        sphere_r = Circle(
+            color=BLUE,
+            fill_color=BLUE,
+            fill_opacity=1,
+            radius=sphere_drops[0].radius * 5,
+        ).move_to(cloud_r.get_center())
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[m.animate.move_to(sphere_l).set_opacity(0) for m in sphere_drops],
+                    lag_ratio=0.05,
+                ),
+                sphere_l.scale(1 / 100).animate(run_time=3).scale(100),
+                LaggedStart(
+                    *[
+                        m.animate.move_to(sphere_r).set_opacity(0)
+                        for m in sphere_drops_r
+                    ],
+                    lag_ratio=0.05,
+                ),
+                sphere_r.scale(1 / 100).animate(run_time=3).scale(100),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        new_sample = (
+            samples[int((88.198 - xmin) / dx) - 1]
+            .copy()
+            .set_stroke(opacity=1)
+            .set_fill(opacity=1)
+            .stretch(1.3, 1)
+            .move_to(samples[int((88.198 - xmin) / dx)], DOWN)
+        )
+
+        zero_bez_l_new = CubicBezier(
+            new_sample.get_top() + [0, 0.1, 0],
+            new_sample.get_top() + [0, 1, 0],
+            clouds.get_corner(DL) + [0, -1, 0],
+            clouds.get_corner(DL) + [0, -0.1, 0],
+        )
+        zero_bez_r_new = CubicBezier(
+            new_sample.get_top() + [0, 0.1, 0],
+            new_sample.get_top() + [0, 1, 0],
+            clouds.get_corner(DR) + [0, -1, 0],
+            clouds.get_corner(DR) + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Transform(zero_bez_l, zero_bez_l_new),
+                    Transform(zero_bez_r, zero_bez_r_new),
+                ),
+                AnimationGroup(
+                    Transform(samples[int((88.198 - xmin) / dx)], new_sample),
+                    sphere_l.animate.stretch(2, 0),
+                    sphere_r.animate.stretch(2, 0),
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        new_neg_sample = (
+            samples[int((88.198 - xmin) / dx) - 1]
+            .copy()
+            .set_stroke(opacity=1)
+            .set_fill(opacity=1, color=RED)
+            .stretch(1, 1)
+            .next_to(samples[int((88.198 - xmin) / dx)], DOWN, 0)
+        )
+
+        zero_bez_l_neg_new = CubicBezier(
+            new_neg_sample.get_top() + [0, 0.1, 0],
+            new_neg_sample.get_top() + [0, 1, 0],
+            clouds.get_corner(DL) + [0, -1, 0],
+            clouds.get_corner(DL) + [0, -0.1, 0],
+        )
+        zero_bez_r_neg_new = CubicBezier(
+            new_neg_sample.get_top() + [0, 0.1, 0],
+            new_neg_sample.get_top() + [0, 1, 0],
+            clouds.get_corner(DR) + [0, -1, 0],
+            clouds.get_corner(DR) + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Transform(samples[int((88.198 - xmin) / dx)], new_neg_sample),
+                    sphere_l.animate.stretch(1 / 2, 0).stretch(2, 1),
+                    sphere_r.animate.stretch(1 / 2, 0).stretch(2, 1),
+                ),
+                AnimationGroup(
+                    Transform(zero_bez_l, zero_bez_l_neg_new),
+                    Transform(zero_bez_r, zero_bez_r_neg_new),
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        who_cares = Text("who cares?", font=FONT).next_to(clouds, UP)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(clouds, who_cares).width * 1.3
+                ).move_to(Group(clouds, who_cares)),
+                Write(who_cares),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
