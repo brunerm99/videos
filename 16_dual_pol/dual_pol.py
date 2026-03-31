@@ -42,7 +42,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -2952,6 +2952,7 @@ def _thurai_drop_flow_lines(deq):
     line_specs = [
         dict(offset=0.18 * max_half_width, top_y=1.22, bot_y=-1.18, opacity=0.65),
         dict(offset=0.34 * max_half_width, top_y=1.34, bot_y=-1.32, opacity=0.42),
+        dict(offset=0.4 * max_half_width, top_y=1.44, bot_y=-1.42, opacity=0.42),
     ]
     side_y_levels = np.array([0.86, 0.46, -0.08, -0.52, -0.84]) * c2_val
 
@@ -3011,13 +3012,14 @@ def _thurai_drop_flow_lines(deq):
                 width=DEFAULT_STROKE_WIDTH * (2.1 - 0.2 * idx),
                 opacity=spec["opacity"],
             )
-            lines.add(flow_line)
+            lines.add(flow_line.reverse_direction())
 
     return lines
 
 
 class DropShape(MovingCameraScene):
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         deq_min = 1.5
         deq_target = 6.0
         deq = VT(deq_min)
@@ -3036,18 +3038,119 @@ class DropShape(MovingCameraScene):
             drop.set_z_index(2)
             return drop
 
-        def make_flow_lines():
-            flow_lines = _thurai_drop_flow_lines(~deq)
-            flow_lines.scale(drop_scale)
+        def make_flow_lines(deq):
+            flow_lines = _thurai_drop_flow_lines(deq)
+            flow_lines.scale(drop_scale * 1.5)
             flow_lines.set_z_index(1)
             return flow_lines
 
-        flow_lines = always_redraw(make_flow_lines)
+        flow_lines = make_flow_lines(~deq)
         drop_shape = always_redraw(make_drop_shape)
 
-        self.add(flow_lines, drop_shape)
+        self.add(
+            # flow_lines,
+            drop_shape,
+        )
 
-        self.play(deq @ deq_target, run_time=4)
+        self.wait(0.5)
+
+        self.play(self.camera.frame.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
+
+        self.wait(0.5)
+
+        flow_lines = [*flow_lines, *deepcopy(flow_lines), *deepcopy(flow_lines)]
+
+        dots = [
+            Dot(fill_opacity=0, stroke_opacity=0).move_to(x.get_start())
+            for x in flow_lines
+        ]
+        print(
+            list(
+                zip(
+                    [dots[::2], dots[1:][::2]],
+                    [flow_lines[::2], flow_lines[1:][::2]],
+                )
+            )
+        )
+
+        traced_paths = [
+            TracedPath(
+                d.get_center,
+                dissipating_time=0.5,
+                stroke_opacity=[0, 1],
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            for d in dots
+        ]
+
+        self.add(*traced_paths)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        MoveAlongPath(d1.move_to(fl1.get_start()), fl1, run_time=1.5),
+                        MoveAlongPath(d2.move_to(fl2.get_start()), fl2, run_time=1.5),
+                    )
+                    for (d1, d2), (fl1, fl2) in zip(
+                        zip(dots[: len(dots) // 2], dots[len(dots) // 2 :]),
+                        zip(
+                            flow_lines[: len(flow_lines) // 2],
+                            flow_lines[len(flow_lines) // 2 :],
+                        ),
+                    )
+                ],
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        flow_lines = [
+            *make_flow_lines(~deq),
+            *make_flow_lines((deq_target - ~deq) / 3 + ~deq),
+            *make_flow_lines(2 * (deq_target - ~deq) / 3 + ~deq),
+            *make_flow_lines(deq_target),
+        ]
+
+        dots = [
+            Dot(fill_opacity=0, stroke_opacity=0).move_to(x.get_start())
+            for x in flow_lines
+        ]
+
+        traced_paths = [
+            TracedPath(
+                d.get_center,
+                dissipating_time=0.5,
+                stroke_opacity=[0, 1],
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            for d in dots
+        ]
+
+        self.add(*traced_paths)
+
+        self.play(
+            deq @ deq_target,
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        MoveAlongPath(d1.move_to(fl1.get_start()), fl1, run_time=1.5),
+                        MoveAlongPath(d2.move_to(fl2.get_start()), fl2, run_time=1.5),
+                    )
+                    for (d1, d2), (fl1, fl2) in zip(
+                        zip(dots[: len(dots) // 2], dots[len(dots) // 2 :]),
+                        zip(
+                            flow_lines[: len(flow_lines) // 2],
+                            flow_lines[len(flow_lines) // 2 :],
+                        ),
+                    )
+                ],
+                lag_ratio=0.4,
+            ),
+            run_time=4,
+        )
 
         self.wait(0.5)
 
