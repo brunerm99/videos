@@ -1,6 +1,7 @@
 # dual_pol.py
 import math
 import os
+import pprint
 import sys
 from copy import deepcopy
 from functools import lru_cache
@@ -1314,7 +1315,11 @@ class Background(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.shift(UP * fh(self, 2)))
+        # self.play(self.camera.frame.animate.shift(UP * fh(self, 2)))
+
+        # self.wait(0.5)
+
+        self.play(FadeOut(scan_line))
 
         # ANIMATIONS HERE
 
@@ -2661,6 +2666,11 @@ class Idea2D(MovingCameraScene):
         #     *[si for idx, si in enumerate(sorted_indices) if idx not in tx_indices]
         # )
 
+        # self.camera.frame.scale_to_fit_height(
+        #     Group(*diagram_sorted).height * 1.1
+        # ).move_to(Group(*diagram_sorted))
+        # self.play(*[set_component_opacity(m, 1) for m in diagram_sorted])
+
         self.wait(0.5)
 
         vpol_tx_bd = Group(*[diagram_sorted[idx].copy() for idx in tx_indices[1:]])
@@ -2835,7 +2845,7 @@ class Idea2D(MovingCameraScene):
         self.wait(0.5)
 
         self.play(
-            ps @ (PI / 2),
+            ps @ (5 * PI / 2),
             rate_func=rate_functions.ease_in_out_elastic,
             run_time=3,
         )
@@ -2862,7 +2872,7 @@ class Idea2D(MovingCameraScene):
             LaggedStart(
                 *[set_component_opacity(m, 0) for m in vpol_tx_bd[::-1]],
                 *[
-                    set_component_opacity(diagram_sorted[idx], 0.05, color=WHITE)
+                    set_component_opacity(diagram_sorted[idx], 0.1, color=WHITE)
                     for idx in [
                         112,
                         108,
@@ -2893,7 +2903,152 @@ class Idea2D(MovingCameraScene):
             )
         )
 
-        # self.add(vpol_tx_bd)
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.8).move_to(
+                    Group(diagram_sorted[23], diagram_sorted[54])
+                ),
+                diagram_sorted[54]
+                .animate.set_stroke(width=DEFAULT_STROKE_WIDTH * 0.75)
+                .set_color(YELLOW),
+                diagram_sorted[23]
+                .animate.set_stroke(width=DEFAULT_STROKE_WIDTH * 0.75)
+                .set_color(YELLOW),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.move_to(
+                Group(
+                    diagram_sorted[23],
+                    diagram_sorted[54],
+                    diagram_sorted[11],
+                    diagram_sorted[14],
+                    diagram_sorted[16],
+                    diagram_sorted[2],
+                    diagram_sorted[1],
+                    diagram_sorted[5],
+                )
+            ),
+            AnimationGroup(
+                diagram_sorted[11].animate.set_stroke(opacity=1).set_fill(opacity=1),
+                diagram_sorted[14].animate.set_stroke(opacity=1),
+                diagram_sorted[16].animate.set_stroke(opacity=1),
+            ),
+            AnimationGroup(
+                diagram_sorted[5].animate.set_stroke(opacity=1).set_fill(opacity=1),
+            ),
+            diagram_sorted[2].animate.set_stroke(opacity=1).set_fill(opacity=1),
+            diagram_sorted[1].animate.set_stroke(opacity=1).set_fill(opacity=1),
+        )
+
+        self.wait(0.5)
+
+        rx_indices = [
+            17,
+            24,
+            25,
+            37,
+            50,
+            52,
+            61,
+            74,
+            84,
+            89,
+            85,
+            0,
+            63,
+            55,
+            59,
+            42,
+            43,
+            36,
+            44,
+            45,
+            # down-conversion
+            # 32,
+            # 31,
+            # 21,
+            # 8,
+            # 9,
+            # 4,
+            # 7,
+            # 18,
+            # 19,
+            # 20,
+            # 46,
+            # 41,
+            # 34,
+            # 22,
+            # 28,
+            # 29,
+            # 35,
+            # 40,
+            # 51,
+            # 64,
+            # 65,
+            # 66,
+            # 58,
+            # 68,
+            # 73,
+            # 69,
+            # 81,
+            # 82,
+            # 91,
+            # 110,
+            # 77,
+            # 92,
+            # 88,
+            # 108,
+        ]
+        rx_path_h = Group(*[diagram_sorted[idx] for idx in rx_indices])
+
+        self.play(
+            self.camera.frame.animate.move_to(rx_path_h),
+            LaggedStart(
+                *[
+                    set_component_opacity(m, 0.05)
+                    for idx, m in enumerate(diagram_sorted)
+                    if idx in [*tx_indices, 149]
+                ],
+                *[
+                    set_component_opacity(m, 1)
+                    for idx, m in enumerate(diagram_sorted)
+                    if idx in rx_indices
+                ],
+                lag_ratio=0.005,
+            ),
+        )
+
+        self.wait(0.5)
+
+        rx_path_v = [m.copy() for m in rx_path_h]
+
+        new_rx_cable = (
+            diagram_sorted[85].copy().stretch(2, 1).move_to(diagram_sorted[85], UP)
+        )
+        new_rx_path_last = deepcopy(rx_path_h[-9:]).shift(
+            new_rx_cable.get_end() - rx_path_h[-9].get_start()
+        )
+
+        # rx_path_h[-9].rotate(PI / 6).set_color(YELLOW)
+
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                Group(rx_path_h, new_rx_path_last).height * 1.2
+            ).move_to(Group(rx_path_h, new_rx_path_last)),
+            LaggedStart(
+                Transform(diagram_sorted[85], new_rx_cable),
+                *[Transform(a, b) for a, b in zip(rx_path_h[-9:], new_rx_path_last)],
+                lag_ratio=0.05,
+            ),
+        )
 
         self.wait(2)
 
@@ -3047,14 +3202,24 @@ class DropShape(MovingCameraScene):
         flow_lines = make_flow_lines(~deq)
         drop_shape = always_redraw(make_drop_shape)
 
-        self.add(
-            # flow_lines,
-            drop_shape,
-        )
+        self.add(drop_shape)
 
         self.wait(0.5)
 
         self.play(self.camera.frame.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
+
+        self.wait(0.5)
+
+        drop_arrow = Arrow(
+            drop_shape.get_bottom() + [0, -0.1, 0],
+            self.camera.frame.get_bottom() + [0, 0.3, 0],
+        )
+
+        self.play(GrowArrow(drop_arrow))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(drop_arrow))
 
         self.wait(0.5)
 
@@ -3064,14 +3229,6 @@ class DropShape(MovingCameraScene):
             Dot(fill_opacity=0, stroke_opacity=0).move_to(x.get_start())
             for x in flow_lines
         ]
-        print(
-            list(
-                zip(
-                    [dots[::2], dots[1:][::2]],
-                    [flow_lines[::2], flow_lines[1:][::2]],
-                )
-            )
-        )
 
         traced_paths = [
             TracedPath(
@@ -3107,12 +3264,15 @@ class DropShape(MovingCameraScene):
 
         self.wait(0.5)
 
-        flow_lines = [
-            *make_flow_lines(~deq),
-            *make_flow_lines((deq_target - ~deq) / 3 + ~deq),
-            *make_flow_lines(2 * (deq_target - ~deq) / 3 + ~deq),
-            *make_flow_lines(deq_target),
-        ]
+        flow_lines = sorted(
+            [
+                *make_flow_lines(~deq),
+                *make_flow_lines((deq_target - ~deq) / 3 + ~deq),
+                *make_flow_lines(2 * (deq_target - ~deq) / 3 + ~deq),
+                *make_flow_lines(deq_target),
+            ],
+            key=lambda x: x.get_start()[0],
+        )
 
         dots = [
             Dot(fill_opacity=0, stroke_opacity=0).move_to(x.get_start())
@@ -3131,6 +3291,8 @@ class DropShape(MovingCameraScene):
 
         self.add(*traced_paths)
 
+        pprint.pprint([m.get_start() for m in flow_lines])
+
         self.play(
             deq @ deq_target,
             LaggedStart(
@@ -3140,9 +3302,9 @@ class DropShape(MovingCameraScene):
                         MoveAlongPath(d2.move_to(fl2.get_start()), fl2, run_time=1.5),
                     )
                     for (d1, d2), (fl1, fl2) in zip(
-                        zip(dots[: len(dots) // 2], dots[len(dots) // 2 :]),
+                        zip(dots[: len(dots) // 2][::-1], dots[len(dots) // 2 :]),
                         zip(
-                            flow_lines[: len(flow_lines) // 2],
+                            flow_lines[: len(flow_lines) // 2][::-1],
                             flow_lines[len(flow_lines) // 2 :],
                         ),
                     )
@@ -3150,6 +3312,29 @@ class DropShape(MovingCameraScene):
                 lag_ratio=0.4,
             ),
             run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        zdr_gt = MathTex(r"Z_{dr} > 0")
+        rr = Text("-> Rain rate++", font=FONT)
+        rr[-1:].set_color(GREEN)
+        zdr_label = (
+            Group(zdr_gt.scale_to_fit_height(rr.height), rr)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(drop_shape, DOWN, LARGE_BUFF),
+        )
+        zdr_gt.set_y(rr[0].get_y())
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in [*zdr_gt[0], *rr]],
+                lag_ratio=0.1,
+            )
         )
 
         self.wait(0.5)
@@ -5136,3 +5321,7 @@ class ZdrP2(MovingCameraScene):
         self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
+
+
+class RhoHV(MovingCameraScene):
+    def construct(self): ...
