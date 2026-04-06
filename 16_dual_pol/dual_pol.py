@@ -83,6 +83,135 @@ def lin2db(x):
     return 10 * np.log10(x)
 
 
+class Intro(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        dual_pol_full = Text("Dual Polarization", font=FONT).scale(1.5)
+        radar = Text("Radar", font=FONT).scale(1.5)
+        weather = Text("Weather", font="CADILLAC PERSONAL USE").scale(1.5)
+
+        all_group = Group(dual_pol_full, radar).arrange(DOWN, LARGE_BUFF)
+        weather_radar_group = (
+            Group(weather, radar.copy())
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .next_to(dual_pol_full, DOWN, LARGE_BUFF)
+        )
+        dual_pol = Text("Dual-Pol", font=FONT).scale(1.5).move_to(dual_pol_full)
+
+        self.wait(0.5)
+
+        self.add(dual_pol_full[:4])
+
+        self.wait(0.5)
+
+        self.add(dual_pol_full[4:])
+
+        self.wait(0.5)
+
+        self.add(radar)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(dual_pol_full[7:]),
+                ReplacementTransform(dual_pol_full[4:7], dual_pol[5:8]),
+                ReplacementTransform(dual_pol_full[:4], dual_pol[:4]),
+                GrowFromCenter(dual_pol[4]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                radar.animate.move_to(weather_radar_group[-1]),
+                Write(weather),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        values = [7, 4, 6, 8, 9, 3, 4, 7, 7, 6, 7, 8, 3, 5, 10]
+        bar_names = [
+            "FMCW Radar",
+            "FMCW pt2",
+            "CFAR",
+            "Doppler/ Range-Velocity",
+            "Phased Array",
+            "Radar Equation",
+            "SNR",
+            "Beamforming",
+            "Resolution",
+            "Aliasing",
+            "IQ Sampling",
+            "Pulse Compression",
+            "RF Gain",
+            "RF Compression",
+            "Dual-Pol",
+        ]
+
+        chart = BarChart(
+            values=values,
+            # bar_names=bar_names,
+            y_range=[0, 10, 1],
+            y_length=fh(self, 1.5),
+            x_length=fw(self, 2.5),
+            x_axis_config={"font_size": 48},
+            y_axis_config={"font_size": 80},
+        )
+
+        all_group = Group(*all_group, weather, radar)
+        chart.shift(all_group.get_center() - chart.c2p(len(values) - 0.25, 11.5))
+        cbar_labels = chart.get_bar_labels(font_size=48)
+        coolness = (
+            Text("Coolness", font=FONT)
+            .rotate(PI / 2)
+            .next_to(chart, LEFT, MED_LARGE_BUFF)
+        )
+
+        labels = Group(
+            *[
+                Paragraph(*name.split(" "), font=FONT, alignment="center")
+                .scale(0.75)
+                .move_to(chart.c2p(idx + 0.5, v + 1))
+                for idx, (v, name) in enumerate(zip(values[:-1], bar_names[:-1]))
+            ]
+        )
+        labels[7].shift(DOWN * 0.4)
+        labels[8].shift(UP * 0.4)
+
+        # self.add(chart, labels)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(chart, coolness, all_group).width * 1.1
+                ).move_to(Group(chart, coolness, all_group)),
+                Create(chart, run_time=3),
+                FadeIn(coolness),
+                LaggedStart(*[FadeIn(m) for m in labels], lag_ratio=0.1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(chart, coolness, *labels),
+            self.camera.frame.animate.restore(),
+        )
+
+        self.wait(0.5)
+
+        self.wait(2)
+
+
 class Background(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -3028,7 +3157,7 @@ class Idea2D(MovingCameraScene):
 
         self.wait(0.5)
 
-        rx_path_v = [m.copy() for m in rx_path_h]
+        rx_path_v = [m.copy() for m in rx_path_h[:-6]]
 
         new_rx_cable = (
             diagram_sorted[85].copy().stretch(2, 1).move_to(diagram_sorted[85], UP)
@@ -3044,9 +3173,42 @@ class Idea2D(MovingCameraScene):
                 Group(rx_path_h, new_rx_path_last).height * 1.2
             ).move_to(Group(rx_path_h, new_rx_path_last)),
             LaggedStart(
-                Transform(diagram_sorted[85], new_rx_cable),
-                *[Transform(a, b) for a, b in zip(rx_path_h[-9:], new_rx_path_last)],
+                Transform(diagram_sorted[85], new_rx_cable.set_color(HPOL_RX_COLOR)),
+                *[
+                    Transform(a, b.set_color(HPOL_RX_COLOR))
+                    for a, b in zip(rx_path_h[-9:], new_rx_path_last)
+                ],
                 lag_ratio=0.05,
+            ),
+        )
+
+        self.wait(0.5)
+
+        rx_path_v.pop()
+        rx_path_v.append(
+            Arrow(
+                [rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0],
+                new_rx_path_last[-6].get_end(),
+                color=VPOL_RX_COLOR,
+            )
+        )
+        # rx_path_v[-1].set_color(VPOL_RX_COLOR).shift(
+        #     new_rx_path_last[-6].get_end() - rx_path_v[-1].get_end()
+        # )
+        rx_path_v = Group(*rx_path_v).shift(DOWN + LEFT * 0.5)
+
+        self.add(
+            rx_path_v[-2:],
+            Dot([rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0]),
+            Dot(new_rx_path_last[-6].get_end()),
+            Arrow(
+                [rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0],
+                new_rx_path_last[-6].get_end(),
+                color=VPOL_RX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+                # max_stroke_width_to_length_ratio=0.25,
+                max_tip_length_to_length_ratio=0.1,
+                buff=0,
             ),
         )
 
