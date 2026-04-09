@@ -43,7 +43,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -3478,9 +3478,7 @@ class DropShape(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
-
-        self.wait(0.5)
+        # self.wait(0.5)
 
         zdr_gt = MathTex(r"Z_{dr} > 0")
         rr = Text("-> Rain rate++", font=FONT)
@@ -3500,6 +3498,10 @@ class DropShape(MovingCameraScene):
         )
 
         self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(2)
 
 
 def _get_nexrad_archive_volume(
