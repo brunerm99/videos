@@ -43,7 +43,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -2995,7 +2995,7 @@ class Idea2D(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -3167,6 +3167,7 @@ class Idea2D(MovingCameraScene):
         )
 
         # rx_path_h[-9].rotate(PI / 6).set_color(YELLOW)
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             self.camera.frame.animate.scale_to_fit_height(
@@ -3195,22 +3196,41 @@ class Idea2D(MovingCameraScene):
         # rx_path_v[-1].set_color(VPOL_RX_COLOR).shift(
         #     new_rx_path_last[-6].get_end() - rx_path_v[-1].get_end()
         # )
-        rx_path_v = Group(*rx_path_v).shift(DOWN + LEFT * 0.5)
+        for m in rx_path_v:
+            m.shift(DOWN + LEFT * 0.5)
 
-        self.add(
-            rx_path_v[-2:],
-            Dot([rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0]),
-            Dot(new_rx_path_last[-6].get_end()),
-            Arrow(
-                [rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0],
-                new_rx_path_last[-6].get_end(),
-                color=VPOL_RX_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
-                # max_stroke_width_to_length_ratio=0.25,
-                max_tip_length_to_length_ratio=0.1,
-                buff=0,
-            ),
+        rx_path_v[-2] = Line(
+            rx_path_v[-2].get_start(),
+            [rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
         )
+        rx_path_v[-1] = Arrow(
+            [rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0],
+            new_rx_path_last[-6].get_end(),
+            color=VPOL_RX_COLOR,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            # max_stroke_width_to_length_ratio=0.25,
+            max_tip_length_to_length_ratio=0.1,
+            buff=0,
+        )
+
+        rx_path_v = Group(*rx_path_v)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                *[TransformFromCopy(h, v) for h, v in zip(rx_path_h, rx_path_v)],
+                lag_ratio=0.1,
+            )
+        )
+
+        # self.add(
+        #     rx_path_v,
+        #     rx_path_v[-2:],
+        #     Dot([rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0]),
+        #     Dot(new_rx_path_last[-6].get_end()),
+        # )
 
         self.wait(2)
 
