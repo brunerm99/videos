@@ -4935,9 +4935,196 @@ class ZDR(MovingCameraScene):
             rate_func=linear,
         )
 
-        self.play(scan_visibility @ 0, run_time=0.35)
+        self.wait(2)
 
-        self.wait(1.5)
+
+class Zdr3D(ThreeDScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        axes = ThreeDAxes(
+            x_range=[-2, 2, 0.5],
+            y_range=[-1, 1, 0.5],
+            z_range=[-2, 2, 0.5],
+            x_length=20,
+            y_length=10,
+            z_length=20,
+            tips=False,
+            x_axis_config=dict(
+                # stroke_color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_opacity=0.5,
+            ),
+            y_axis_config=dict(
+                # stroke_color=RED,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_opacity=0.5,
+            ),
+            z_axis_config=dict(
+                # stroke_color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_opacity=0.5,
+            ),
+        )
+        self.add(axes)
+
+        target_dist = 40
+        u0 = VT(-2)
+        u1 = VT(2)
+        u0_rx = VT(target_dist)
+        u1_rx = VT(target_dist + 4)
+        hpol_tx_opacity = VT(1)
+        hpol_rx_opacity = VT(0)
+        vpol_tx_opacity = VT(0)
+        vpol_rx_opacity = VT(0)
+        hpol_tx_amp = VT(1)
+        vpol_tx_amp = VT(0.6)
+        hpol_rx_amp = VT(1)
+        vpol_rx_amp = VT(0.6)
+        hpol_rotation = VT(0)
+        hpol_tx_highlight_opacity = VT(0)
+        hpol_tx_highlight_x0 = VT(0)
+        hpol_tx_highlight_x1 = VT(0)
+        vpol_tx_highlight_x0 = VT(0)
+        vpol_tx_highlight_x1 = VT(0)
+        vpol_tx_width = VT(2)
+        vpol_tx_rotation = VT(0)
+        hpol_tx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
+                color=HPOL_TX_COLOR,
+                t_range=(~u0, ~u1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~hpol_rotation, RIGHT)
+        ).set_shade_in_3d(True)
+        hpol_tx_highlight = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
+                color=YELLOW,
+                t_range=(~hpol_tx_highlight_x0, ~hpol_tx_highlight_x1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                stroke_opacity=~hpol_tx_highlight_opacity,
+            )
+        ).set_shade_in_3d(True)
+        vpol_tx_highlight = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=YELLOW,
+                t_range=(~vpol_tx_highlight_x0, ~vpol_tx_highlight_x1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                stroke_opacity=~hpol_tx_highlight_opacity,
+            )
+        ).set_shade_in_3d(True)
+        vpol_tx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=VPOL_TX_COLOR,
+                t_range=(~u0, ~u1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * ~vpol_tx_width,
+                stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~vpol_tx_rotation, RIGHT)
+        ).set_shade_in_3d(True)
+
+        # self.add(
+        #     hpol_tx,
+        #     vpol_tx,
+        #     hpol_tx_highlight,
+        #     vpol_tx_highlight,
+        # )
+
+        self.set_camera_orientation(
+            zoom=0.4,
+            theta=-90 * DEGREES,
+            phi=0 * DEGREES,
+            gamma=0,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(axes),
+                Create(hpol_tx),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        vpol_amp_arrow_left = Arrow3D(
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, 0]),
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, ~vpol_tx_amp]),
+            thickness=0.1,
+            height=0.75,
+            base_radius=0.3,
+        )
+        vpol_amp_arrow_right = Arrow3D(
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, 0]),
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, -~hpol_tx_amp]),
+            thickness=0.1,
+            height=0.75,
+            base_radius=0.3,
+        )
+
+        hpol_amp_arrow_left = Arrow3D(
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, 0]),
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, ~hpol_tx_amp, 0]),
+            thickness=0.1,
+            height=0.75,
+            base_radius=0.3,
+        )
+        hpol_amp_arrow_right = Arrow3D(
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, 0]),
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, -~hpol_tx_amp, 0]),
+            thickness=0.1,
+            height=0.75,
+            base_radius=0.3,
+        )
+
+        self.move_camera(
+            zoom=0.6,
+            theta=-160 * DEGREES,
+            phi=80 * DEGREES,
+            gamma=0,
+            run_time=3,
+            added_anims=[
+                LaggedStart(
+                    AnimationGroup(
+                        u0 + 2,
+                        u1 + 2,
+                        axes.animate.shift(IN * 5 + UP * 5),
+                    ),
+                    AnimationGroup(
+                        Create(hpol_amp_arrow_left),
+                        Create(hpol_amp_arrow_right),
+                    ),
+                    lag_ratio=0.3,
+                )
+            ],
+        )
+
+        self.wait(0.5)
+
+        # self.add(vpol_tx)
+        self.move_camera(
+            zoom=0.5,
+            # theta=-170 * DEGREES,
+            phi=75 * DEGREES,
+            # gamma=0,
+            run_time=3,
+            added_anims=[
+                LaggedStart(
+                    Create(vpol_tx),
+                    AnimationGroup(
+                        Create(vpol_amp_arrow_left),
+                        Create(vpol_amp_arrow_right),
+                    ),
+                    lag_ratio=0.3,
+                )
+            ],
+        )
+
+        self.wait(2)
 
 
 class ZdrP2(MovingCameraScene):
