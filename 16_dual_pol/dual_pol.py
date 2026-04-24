@@ -4965,7 +4965,6 @@ class Zdr3D(ThreeDScene):
                 stroke_opacity=0.5,
             ),
         )
-        self.add(axes)
 
         target_dist = 40
         u0 = VT(-2)
@@ -5015,15 +5014,6 @@ class Zdr3D(ThreeDScene):
                 stroke_opacity=~hpol_tx_highlight_opacity,
             )
         ).set_shade_in_3d(True)
-        vpol_tx = always_redraw(
-            lambda: axes.plot_parametric_curve(
-                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
-                color=VPOL_TX_COLOR,
-                t_range=(~u0, ~u1, 1 / 100),
-                stroke_width=DEFAULT_STROKE_WIDTH * ~vpol_tx_width,
-                stroke_opacity=~hpol_tx_opacity,
-            ).rotate(~vpol_tx_rotation, RIGHT)
-        ).set_shade_in_3d(True)
 
         # self.add(
         #     hpol_tx,
@@ -5050,6 +5040,7 @@ class Zdr3D(ThreeDScene):
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         vpol_amp_arrow_left = Arrow3D(
             axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, 0]),
@@ -5060,7 +5051,7 @@ class Zdr3D(ThreeDScene):
         )
         vpol_amp_arrow_right = Arrow3D(
             axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, 0]),
-            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, -~hpol_tx_amp]),
+            axes.copy().shift(IN * 5 + UP * 5).c2p([0, 0, -~vpol_tx_amp]),
             thickness=0.1,
             height=0.75,
             base_radius=0.3,
@@ -5081,6 +5072,29 @@ class Zdr3D(ThreeDScene):
             base_radius=0.3,
         )
 
+        zh = (
+            MathTex(r"\lvert Z_h \rvert")
+            .rotate(3 * PI / 2)
+            .rotate(PI / 2, DOWN)
+            .scale(2)
+            .move_to(axes.copy().shift(IN * 5 + UP * 5).c2p(-0.3, -0.8, 0))
+        )
+        zv = (
+            MathTex(r"\lvert Z_v \rvert")
+            .rotate(3 * PI / 2)
+            .rotate(PI / 2, DOWN)
+            .scale(2)
+            .move_to(axes.copy().shift(IN * 5 + UP * 5).c2p(0, 0.3, 0.5))
+        )
+
+        hpol_amp_arrow_left.save_state()
+        hpol_amp_arrow_right.save_state()
+        hpol_amp_arrow_left.stretch(0.001, 0).stretch(0.001, 1).move_to(
+            axes.copy().shift(IN * 5 + UP * 5).c2p(0, 0, 0)
+        )
+        hpol_amp_arrow_right.stretch(0.001, 0).stretch(0.001, 1).move_to(
+            axes.copy().shift(IN * 5 + UP * 5).c2p(0, 0, 0)
+        )
         self.move_camera(
             zoom=0.6,
             theta=-160 * DEGREES,
@@ -5095,17 +5109,36 @@ class Zdr3D(ThreeDScene):
                         axes.animate.shift(IN * 5 + UP * 5),
                     ),
                     AnimationGroup(
-                        Create(hpol_amp_arrow_left),
-                        Create(hpol_amp_arrow_right),
+                        Restore(hpol_amp_arrow_left),
+                        Restore(hpol_amp_arrow_right),
+                        FadeIn(zh),
                     ),
-                    lag_ratio=0.3,
+                    lag_ratio=2,
                 )
             ],
         )
 
         self.wait(0.5)
 
-        # self.add(vpol_tx)
+        vpol_amp_arrow_left.save_state()
+        vpol_amp_arrow_right.save_state()
+        vpol_amp_arrow_left.stretch(0.001, 0).stretch(0.001, 1).move_to(
+            axes.c2p(0, 0, 0)
+        )
+        vpol_amp_arrow_right.stretch(0.001, 0).stretch(0.001, 1).move_to(
+            axes.c2p(0, 0, 0)
+        )
+
+        vpol_tx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=VPOL_TX_COLOR,
+                t_range=(~u0, ~u1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * ~vpol_tx_width,
+                stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~vpol_tx_rotation, RIGHT)
+        ).set_shade_in_3d(True)
+
         self.move_camera(
             zoom=0.5,
             # theta=-170 * DEGREES,
@@ -5116,13 +5149,128 @@ class Zdr3D(ThreeDScene):
                 LaggedStart(
                     Create(vpol_tx),
                     AnimationGroup(
-                        Create(vpol_amp_arrow_left),
-                        Create(vpol_amp_arrow_right),
+                        Restore(vpol_amp_arrow_left),
+                        Restore(vpol_amp_arrow_right),
+                        FadeIn(zv),
                     ),
-                    lag_ratio=0.3,
+                    lag_ratio=2,
                 )
             ],
         )
+
+        self.wait(0.5)
+        zh_static = MathTex(r"\lvert Z_h \rvert").set_opacity(0)
+        zv_static = MathTex(r"\lvert Z_v \rvert").set_opacity(0)
+        self.add_fixed_in_frame_mobjects(zh_static, zv_static)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            Group(
+                axes,
+                hpol_amp_arrow_left,
+                hpol_amp_arrow_right,
+                vpol_amp_arrow_left,
+                vpol_amp_arrow_right,
+            ).animate.shift(UP * 80 + IN * 26),
+            zh.animate.shift(DOWN * 20 + OUT * 13),
+            zv.animate.shift(DOWN * 18 + OUT * 13),
+            rate_func=rate_functions.ease_in_sine,
+        )
+
+        self.wait(2)
+
+
+class Zdr3dP2(MovingCameraScene):
+    def construct(self):
+        zdr = MathTex(
+            r"\frac{\lvert Z_h \rvert}{\lvert Z_v \rvert}"
+        ).scale_to_fit_height(fh(self, 0.4))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.shift(DL * fw(self)).animate.shift(UR * fw(self)),
+                ReplacementTransform(
+                    zdr[0][:4].copy().shift(DOWN + LEFT * fw(self, 0.5)),
+                    zdr[0][:4],
+                    rate_func=rate_functions.ease_out_sine,
+                ),
+                ReplacementTransform(
+                    zdr[0][5:9].copy().shift(DOWN * 3 + LEFT * fw(self, 0.5)),
+                    zdr[0][5:9],
+                    rate_func=rate_functions.ease_out_sine,
+                ),
+                Create(zdr[0][4]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        zdr_log = MathTex(
+            r"10 \log{\left(\frac{\lvert Z_h \rvert}{\lvert Z_v \rvert}\right)}"
+        ).scale_to_fit_height(fh(self, 0.4))
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(zdr[0], zdr_log[0][6:-1]),
+                LaggedStart(
+                    *[FadeIn(m) for m in [*zdr_log[0][:6], zdr_log[0][-1]]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        zdr_log_zero = (
+            MathTex(
+                r"10 \log{\left(\frac{\lvert Z_h \rvert}{\lvert Z_v \rvert}\right)} \approx 0"
+            )
+            .scale_to_fit_height(fh(self, 0.4))
+            .move_to(zdr_log, LEFT)
+        )
+
+        circle = Circle(
+            radius=fh(self, 0.25), color=BLUE, stroke_width=DEFAULT_STROKE_WIDTH * 2
+        ).next_to(zdr_log_zero, RIGHT, LARGE_BUFF * 1.5)
+        circle_bez_d = CubicBezier(
+            zdr_log_zero.get_right() + [0.1, 0, 0],
+            zdr_log_zero.get_right() + [1, 0, 0],
+            circle.get_corner(DL) + [-1, 0, 0],
+            circle.get_corner(DL),
+        )
+        circle_bez_u = CubicBezier(
+            zdr_log_zero.get_right() + [0.1, 0, 0],
+            zdr_log_zero.get_right() + [1, 0, 0],
+            circle.get_corner(UL) + [-1, 0, 0],
+            circle.get_corner(UL),
+        )
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(zdr_log[0], zdr_log_zero[0][:-2]),
+                self.camera.frame.animate.scale(1.4).move_to(
+                    Group(zdr_log_zero, circle)
+                ),
+                FadeIn(zdr_log_zero[0][-2]),
+                FadeIn(zdr_log_zero[0][-1]),
+                AnimationGroup(Create(circle_bez_u), Create(circle_bez_d)),
+                Create(circle),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(Indicate(zdr_log_zero[0][-1]))
+
+        self.wait(0.5)
+
+        self.play(Circumscribe(circle))
 
         self.wait(2)
 
