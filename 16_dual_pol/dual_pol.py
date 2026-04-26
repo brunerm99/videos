@@ -43,7 +43,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -3386,8 +3386,6 @@ class DropShape(MovingCameraScene):
 
         self.add(drop_shape)
 
-        self.wait(0.5)
-
         self.play(self.camera.frame.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
 
         self.wait(0.5)
@@ -3519,7 +3517,37 @@ class DropShape(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+        qpe = (
+            Paragraph(
+                "Quantitative Precipitation",
+                "Estimation (QPE)",
+                alignment="center",
+                font=FONT,
+            )
+            .move_to(self.camera.frame.get_center())
+            .shift(DOWN * fh(self, 0.7))
+        )
+
+        qpe_bez = CubicBezier(
+            rr.get_corner(DR) + [0.1, 0, 0],
+            rr.get_corner(DR) + [5, -2, 0],
+            qpe.get_corner(UL) + [-5, 2, 0],
+            qpe.get_corner(UL) + [-0.1, 0, 0],
+        )
+
+        self.add(qpe)
+
+        self.play(
+            LaggedStart(
+                Create(qpe_bez, run_time=2),
+                self.camera.frame.animate.move_to(Group(zdr_gt, qpe)),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
 
@@ -4902,22 +4930,15 @@ class ZDR(MovingCameraScene):
         )
         panels.move_to(ORIGIN).shift(DOWN * 0.25)
 
-        header = Text("Single-Pol Products", font=FONT).scale(0.72)
-        subtitle = Text(
-            (
-                f"{reflectivity_metadata['station']} | DBZ sw {reflectivity_metadata['sweep']}"
-                f" | Vel sw {velocity_metadata['sweep']}"
-                f" | elev {reflectivity_metadata['elevation_deg']} deg"
-            ),
-            font=FONT,
-            color=label_color,
-        ).scale(0.22)
-        header_group = Group(header, subtitle).arrange(DOWN, SMALL_BUFF)
-        header_group.next_to(panels, UP, LARGE_BUFF * 0.8)
+        single_pol_header = (
+            Text("Single-Pol Products", font=FONT)
+            .scale(0.72)
+            .next_to(panels, UP, LARGE_BUFF * 0.8)
+        )
 
         self.play(
             LaggedStart(
-                FadeIn(header_group, shift=DOWN * 0.2),
+                Write(single_pol_header),
                 FadeIn(reflectivity_panel, scale=0.97),
                 FadeIn(velocity_panel, scale=0.97),
                 lag_ratio=0.18,
@@ -4934,6 +4955,78 @@ class ZDR(MovingCameraScene):
             run_time=6,
             rate_func=linear,
         )
+
+        self.wait(0.5)
+
+        dual_pol_header = (
+            Text("Dual-Pol Products", font=FONT)
+            .scale(0.72)
+            .next_to(panels, DOWN, LARGE_BUFF * 0.8)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(fh(self, 1.8))
+                .move_to(single_pol_header, UP)
+                .shift(UP * LARGE_BUFF),
+                Write(dual_pol_header),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        dp1_rgba = deepcopy(reflectivity_rgba)
+        dp1_rgba[..., 3] = 0
+        dp1_panel = make_ppi_panel(
+            reflectivity_metadata,
+            dp1_rgba,
+            "Dual-Pol Product #1",
+            "X",
+            (-20, 0, 20, 40, 60),
+            "NWSRef",
+        )
+        dp2_panel = make_ppi_panel(
+            reflectivity_metadata,
+            dp1_rgba,
+            "Dual-Pol Product #2",
+            "X",
+            (-20, 0, 20, 40, 60),
+            "NWSRef",
+        )
+        dp3_panel = make_ppi_panel(
+            reflectivity_metadata,
+            dp1_rgba,
+            "Dual-Pol Product #3",
+            "X",
+            (-20, 0, 20, 40, 60),
+            "NWSRef",
+        )
+        dp4_panel = make_ppi_panel(
+            reflectivity_metadata,
+            dp1_rgba,
+            "Dual-Pol Product #4",
+            "X",
+            (-20, 0, 20, 40, 60),
+            "NWSRef",
+        )
+
+        dual_pol_panels = (
+            Group(dp1_panel, dp2_panel, dp3_panel, dp4_panel)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .next_to(dual_pol_header, DOWN, LARGE_BUFF * 0.8)
+        )
+
+        self.play(
+            LaggedStart(
+                *[FadeIn(m) for m in dual_pol_panels],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.5)))
 
         self.wait(2)
 
@@ -5270,7 +5363,11 @@ class Zdr3dP2(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(Circumscribe(circle))
+        self.play(Indicate(circle))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.5)))
 
         self.wait(2)
 

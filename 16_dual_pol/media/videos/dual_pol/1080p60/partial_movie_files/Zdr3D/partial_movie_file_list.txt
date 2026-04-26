@@ -6,3 +6,5 @@ file 'file:/Users/marshall/Documents/videos/16_dual_pol/media/videos/dual_pol/10
 file 'file:/Users/marshall/Documents/videos/16_dual_pol/media/videos/dual_pol/1080p60/partial_movie_files/Zdr3D/uncached_00004.mp4'
 file 'file:/Users/marshall/Documents/videos/16_dual_pol/media/videos/dual_pol/1080p60/partial_movie_files/Zdr3D/uncached_00005.mp4'
 file 'file:/Users/marshall/Documents/videos/16_dual_pol/media/videos/dual_pol/1080p60/partial_movie_files/Zdr3D/uncached_00006.mp4'
+file 'file:/Users/marshall/Documents/videos/16_dual_pol/media/videos/dual_pol/1080p60/partial_movie_files/Zdr3D/uncached_00007.mp4'
+file 'file:/Users/marshall/Documents/videos/16_dual_pol/media/videos/dual_pol/1080p60/partial_movie_files/Zdr3D/uncached_00008.mp4'
