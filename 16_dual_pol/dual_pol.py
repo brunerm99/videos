@@ -6,6 +6,7 @@ import sys
 from copy import deepcopy
 from functools import lru_cache
 from math import sqrt
+from pathlib import Path
 from random import shuffle
 from turtle import width
 
@@ -65,6 +66,9 @@ HPOL_TX_COLOR = BLUE
 VPOL_TX_COLOR = RED
 HPOL_RX_COLOR = PURPLE
 VPOL_RX_COLOR = ORANGE
+NEXRAD_CASE_S3_KEY = "2024/05/07/KTLX/KTLX20240507_023811_V06"
+NEXRAD_VOLUME_DIR = Path(__file__).resolve().parent / "static" / "nexrad"
+NEXRAD_VOLUME_PATH = NEXRAD_VOLUME_DIR / Path(NEXRAD_CASE_S3_KEY).name
 
 
 def skip_animations(b):
@@ -3552,21 +3556,310 @@ class DropShape(MovingCameraScene):
         self.wait(2)
 
 
-def _get_nexrad_archive_volume(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
-):
+def _get_nexrad_archive_volume(s3_key=NEXRAD_CASE_S3_KEY):
     import urllib.request
-    from pathlib import Path
 
-    cache_dir = Path(__file__).resolve().parent / "static" / "nexrad"
+    cache_dir = NEXRAD_VOLUME_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_path = cache_dir / Path(s3_key).name
+    raw_path = (
+        NEXRAD_VOLUME_PATH
+        if s3_key == NEXRAD_CASE_S3_KEY
+        else cache_dir / Path(s3_key).name
+    )
     if not raw_path.exists():
         urllib.request.urlretrieve(
             f"https://unidata-nexrad-level2.s3.amazonaws.com/{s3_key}", raw_path
         )
     return raw_path
+
+
+def _nexrad_azimuth_delta_deg(azimuth_deg, target_deg):
+    return ((azimuth_deg - target_deg + 180.0) % 360.0) - 180.0
+
+
+def _nexrad_native_gate_value(
+    radar, field_name, azimuth_deg, range_km, requested_sweep
+):
+    if field_name not in radar.fields:
+        return np.nan, None
+
+    ranges_km = radar.range["data"].astype(np.float32) / 1000.0
+    range_gate = int(np.abs(ranges_km - range_km).argmin())
+    requested_sweep_valid = 0 <= requested_sweep < radar.nsweeps
+    requested_angle = (
+        float(radar.fixed_angle["data"][requested_sweep])
+        if requested_sweep_valid
+        else None
+    )
+
+    candidates = []
+    for sweep in range(radar.nsweeps):
+        sweep_start = int(radar.sweep_start_ray_index["data"][sweep])
+        sweep_end = int(radar.sweep_end_ray_index["data"][sweep]) + 1
+        azimuths = radar.azimuth["data"][sweep_start:sweep_end].astype(np.float32)
+        if azimuths.size == 0:
+            continue
+
+        azimuth_error = np.abs(_nexrad_azimuth_delta_deg(azimuths, azimuth_deg))
+        ray_offset = int(np.argmin(azimuth_error))
+        ray_index = sweep_start + ray_offset
+        value = float(
+            np.ma.filled(
+                radar.fields[field_name]["data"][ray_index, range_gate], np.nan
+            )
+        )
+        if not np.isfinite(value):
+            continue
+
+        elevation_delta = (
+            abs(float(radar.fixed_angle["data"][sweep]) - requested_angle)
+            if requested_angle is not None
+            else float(sweep)
+        )
+        candidates.append(
+            (
+                float(azimuth_error[ray_offset]),
+                elevation_delta,
+                abs(sweep - requested_sweep) if requested_sweep_valid else sweep,
+                value,
+                {
+                    "sweep": int(sweep),
+                    "ray_index": int(ray_index),
+                    "gate_index": int(range_gate),
+                    "azimuth_deg": float(azimuths[ray_offset]),
+                    "range_km": float(radar.range["data"][range_gate] / 1000.0),
+                    "elevation_deg": float(radar.fixed_angle["data"][sweep]),
+                },
+            )
+        )
+
+    if not candidates:
+        return np.nan, None
+
+    _, _, _, value, location = min(candidates, key=lambda item: item[:3])
+    return value, location
+
+
+@lru_cache(maxsize=16)
+def _get_nexrad_dual_pol_gate_moments_cached(
+    s3_key=NEXRAD_CASE_S3_KEY,
+    requested_sweep=0,
+    azimuth_deg=135.0,
+    range_km=88.198,
+):
+    from datetime import datetime
+
+    import pyart
+
+    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
+    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    required_fields = (
+        "reflectivity",
+        "differential_reflectivity",
+        "cross_correlation_ratio",
+        "differential_phase",
+    )
+    ranges_km = radar.range["data"].astype(np.float32) / 1000.0
+    range_gate = int(np.abs(ranges_km - range_km).argmin())
+    requested_sweep_valid = 0 <= requested_sweep < radar.nsweeps
+    requested_angle = (
+        float(radar.fixed_angle["data"][requested_sweep])
+        if requested_sweep_valid
+        else None
+    )
+
+    candidates = []
+    for sweep in range(radar.nsweeps):
+        sweep_start = int(radar.sweep_start_ray_index["data"][sweep])
+        sweep_end = int(radar.sweep_end_ray_index["data"][sweep]) + 1
+        azimuths = radar.azimuth["data"][sweep_start:sweep_end].astype(np.float32)
+        if azimuths.size == 0:
+            continue
+
+        azimuth_error = np.abs(_nexrad_azimuth_delta_deg(azimuths, azimuth_deg))
+        ray_offset = int(np.argmin(azimuth_error))
+        ray_index = sweep_start + ray_offset
+        values = {
+            field_name: float(
+                np.ma.filled(
+                    radar.fields[field_name]["data"][ray_index, range_gate], np.nan
+                )
+            )
+            for field_name in required_fields
+            if field_name in radar.fields
+        }
+        missing_count = sum(
+            not np.isfinite(values.get(field_name, np.nan))
+            for field_name in required_fields
+        )
+        elevation_delta = (
+            abs(float(radar.fixed_angle["data"][sweep]) - requested_angle)
+            if requested_angle is not None
+            else float(sweep)
+        )
+        candidates.append(
+            (
+                missing_count,
+                float(azimuth_error[ray_offset]),
+                elevation_delta,
+                abs(sweep - requested_sweep) if requested_sweep_valid else sweep,
+                sweep,
+                ray_index,
+                values,
+                {
+                    "sweep": int(sweep),
+                    "ray_index": int(ray_index),
+                    "gate_index": int(range_gate),
+                    "azimuth_deg": float(azimuths[ray_offset]),
+                    "range_km": float(radar.range["data"][range_gate] / 1000.0),
+                    "elevation_deg": float(radar.fixed_angle["data"][sweep]),
+                },
+            )
+        )
+
+    if not candidates:
+        raise RuntimeError("No native NEXRAD rays were found for the requested gate")
+
+    *_, values, location = min(candidates, key=lambda item: item[:4])
+    if any(
+        not np.isfinite(values.get(field_name, np.nan))
+        for field_name in required_fields
+    ):
+        raise RuntimeError(
+            "No native NEXRAD gate had all required dual-pol moments near "
+            f"{azimuth_deg:.1f} deg, {range_km:.1f} km"
+        )
+
+    velocity_ms, velocity_location = _nexrad_native_gate_value(
+        radar, "velocity", azimuth_deg, range_km, requested_sweep
+    )
+    spectrum_width_ms, _ = _nexrad_native_gate_value(
+        radar, "spectrum_width", azimuth_deg, range_km, requested_sweep
+    )
+    nyquist_velocity_ms = np.nan
+    if velocity_location is not None:
+        instrument_parameters = radar.instrument_parameters or {}
+        nyquist_parameter = instrument_parameters.get("nyquist_velocity")
+        if nyquist_parameter is not None:
+            nyquist_data = np.ma.filled(nyquist_parameter["data"], np.nan).astype(
+                np.float32
+            )
+            velocity_sweep = velocity_location["sweep"]
+            sweep_start = int(radar.sweep_start_ray_index["data"][velocity_sweep])
+            sweep_end = int(radar.sweep_end_ray_index["data"][velocity_sweep]) + 1
+            if len(nyquist_data) >= sweep_end:
+                nyquist_velocity_ms = float(
+                    np.nanmedian(nyquist_data[sweep_start:sweep_end])
+                )
+            elif len(nyquist_data) > velocity_sweep:
+                nyquist_velocity_ms = float(nyquist_data[velocity_sweep])
+
+    scan_time = datetime.strptime(
+        radar.time["units"].split("since ", 1)[1], "%Y-%m-%dT%H:%M:%SZ"
+    )
+    return {
+        "station": str(
+            radar.metadata.get("instrument_name", s3_key.split("/")[-1][:4])
+        ),
+        "scan_time": scan_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "source": str(raw_path),
+        "reflectivity_dbz": values["reflectivity"],
+        "zdr_db": values["differential_reflectivity"],
+        "rhohv": values["cross_correlation_ratio"],
+        "phidp_deg": values["differential_phase"],
+        "velocity_ms": velocity_ms,
+        "spectrum_width_ms": spectrum_width_ms,
+        "nyquist_velocity_ms": nyquist_velocity_ms,
+        **location,
+    }
+
+
+def _colored_complex_noise(rng, count, alpha):
+    white = (
+        rng.normal(size=count).astype(np.float32)
+        + 1j * rng.normal(size=count).astype(np.float32)
+    ) / np.sqrt(2.0)
+    out = np.empty(count, dtype=np.complex64)
+    out[0] = white[0]
+    innovation = np.sqrt(max(0.0, 1.0 - alpha * alpha))
+    for idx in range(1, count):
+        out[idx] = alpha * out[idx - 1] + innovation * white[idx]
+    power = np.sqrt(np.mean(np.abs(out) ** 2))
+    return out / power if power > 0 else out
+
+
+@lru_cache(maxsize=16)
+def _build_nexrad_rhohv_timeseries_cached(
+    s3_key=NEXRAD_CASE_S3_KEY,
+    requested_sweep=0,
+    azimuth_deg=135.0,
+    range_km=88.198,
+    sample_count=128,
+    seed=7,
+):
+    moments = _get_nexrad_dual_pol_gate_moments_cached(
+        s3_key=s3_key,
+        requested_sweep=requested_sweep,
+        azimuth_deg=azimuth_deg,
+        range_km=range_km,
+    )
+    rng = np.random.default_rng(seed)
+
+    rhohv = float(np.clip(moments["rhohv"], 0.0, 0.995))
+    zdr_linear = 10 ** (float(np.clip(moments["zdr_db"], -6.0, 6.0)) / 10.0)
+    h_power = 1.0
+    v_power = 1.0 / max(zdr_linear, 1e-3)
+
+    spectrum_width_ms = moments["spectrum_width_ms"]
+    if np.isfinite(spectrum_width_ms):
+        alpha = float(np.clip(0.94 - 0.055 * spectrum_width_ms, 0.35, 0.92))
+    else:
+        alpha = 0.82
+
+    common = _colored_complex_noise(rng, sample_count, alpha)
+    independent = _colored_complex_noise(rng, sample_count, alpha)
+    pulse_index = np.arange(sample_count, dtype=np.float32)
+
+    velocity_ms = moments["velocity_ms"]
+    nyquist_velocity_ms = moments["nyquist_velocity_ms"]
+    if (
+        np.isfinite(velocity_ms)
+        and np.isfinite(nyquist_velocity_ms)
+        and nyquist_velocity_ms > 0
+    ):
+        phase_step = np.pi * float(
+            np.clip(velocity_ms / nyquist_velocity_ms, -1.0, 1.0)
+        )
+    else:
+        phase_step = 0.0
+    doppler_phase = np.exp(1j * phase_step * pulse_index)
+    differential_phase = np.exp(1j * np.deg2rad(moments["phidp_deg"]))
+
+    h_iq = np.sqrt(h_power) * common * doppler_phase
+    v_iq = (
+        np.sqrt(v_power)
+        * (rhohv * common + np.sqrt(max(0.0, 1.0 - rhohv * rhohv)) * independent)
+        * doppler_phase
+        * differential_phase
+    )
+
+    h_signal = np.real(h_iq).astype(np.float32)
+    v_signal = np.real(v_iq).astype(np.float32)
+    scale = max(
+        float(np.max(np.abs(h_signal))),
+        float(np.max(np.abs(v_signal))),
+        1e-6,
+    )
+    h_signal = 0.88 * h_signal / scale
+    v_signal = 0.88 * v_signal / scale
+
+    return {
+        "pulse_index": pulse_index,
+        "h": h_signal,
+        "v": v_signal,
+        "moments": moments,
+    }
 
 
 def _get_nexrad_field_display_limits(radar, sweep, field_name, field_data):
@@ -3612,7 +3905,7 @@ def _get_nexrad_field_display_limits(radar, sweep, field_name, field_data):
 
 @lru_cache(maxsize=16)
 def _get_nexrad_ppi_data_cached(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    s3_key=NEXRAD_CASE_S3_KEY,
     sweep=6,
     max_range_km=150.0,
     resolution=1200,
@@ -3624,6 +3917,12 @@ def _get_nexrad_ppi_data_cached(
 
     raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
     radar = pyart.io.read_nexrad_archive(str(raw_path))
+    if sweep < 0 or sweep >= radar.nsweeps:
+        sweep = _get_nexrad_best_sweep_for_field(
+            s3_key=s3_key,
+            requested_sweep=sweep,
+            field_name=field_name,
+        )
     field_data = np.ma.filled(
         radar.get_field(sweep, field_name).astype(np.float32), np.nan
     )
@@ -3709,7 +4008,7 @@ def _get_nexrad_ppi_data_cached(
 
 @lru_cache(maxsize=16)
 def _get_nexrad_fixed_angles_cached(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    s3_key=NEXRAD_CASE_S3_KEY,
 ):
     import pyart
 
@@ -3720,7 +4019,7 @@ def _get_nexrad_fixed_angles_cached(
 
 @lru_cache(maxsize=32)
 def _get_nexrad_valid_sweeps_cached(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    s3_key=NEXRAD_CASE_S3_KEY,
     field_name="reflectivity",
 ):
     import pyart
@@ -3754,7 +4053,7 @@ def _get_nexrad_valid_sweeps_cached(
 
 
 def _get_nexrad_best_sweep_for_field(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    s3_key=NEXRAD_CASE_S3_KEY,
     requested_sweep=6,
     field_name="reflectivity",
 ):
@@ -3770,19 +4069,25 @@ def _get_nexrad_best_sweep_for_field(
     if 0 <= requested_sweep < len(fixed_angles):
         requested_angle = fixed_angles[requested_sweep]
 
-    best_sweep, _, _ = min(
-        valid_sweeps,
-        key=lambda item: (
-            abs(item[1] - requested_angle) if requested_angle is not None else 0.0,
-            abs(item[0] - requested_sweep),
-            -item[2],
-        ),
-    )
+    if requested_angle is None:
+        best_sweep, _, _ = min(
+            valid_sweeps,
+            key=lambda item: (item[1], item[0], -item[2]),
+        )
+    else:
+        best_sweep, _, _ = min(
+            valid_sweeps,
+            key=lambda item: (
+                abs(item[1] - requested_angle),
+                abs(item[0] - requested_sweep),
+                -item[2],
+            ),
+        )
     return best_sweep
 
 
 def _get_nexrad_reflectivity_ppi_data(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    s3_key=NEXRAD_CASE_S3_KEY,
     sweep=6,
     max_range_km=150.0,
     resolution=1200,
@@ -3803,7 +4108,7 @@ def _get_nexrad_reflectivity_ppi_data(
 
 
 def _get_nexrad_velocity_ppi_data(
-    s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+    s3_key=NEXRAD_CASE_S3_KEY,
     sweep=6,
     max_range_km=150.0,
     resolution=1200,
@@ -4303,7 +4608,7 @@ class NEXRADPolarPPIThetaSlice(MovingCameraScene):
 class NEXRADPolarPPIScan(MovingCameraScene):
     def construct(self):
         volume_keys = (
-            "2024/05/07/KTLX/KTLX20240507_023811_V06",
+            NEXRAD_CASE_S3_KEY,
             "2024/05/07/KTLX/KTLX20240507_024501_V06",
             "2024/05/07/KTLX/KTLX20240507_025126_V06",
         )
@@ -4635,7 +4940,7 @@ class ZDR(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
 
-        s3_key = "2024/05/07/KTLX/KTLX20240507_023811_V06"
+        s3_key = NEXRAD_CASE_S3_KEY
         sweep = 0
         max_range_km = 150.0
         resolution = 640
@@ -5461,7 +5766,7 @@ class ZdrP2(MovingCameraScene):
         scan_progress = VT(135)
         beam_width_deg = 1
 
-        s3_key = "2024/05/07/KTLX/KTLX20240507_023811_V06"
+        s3_key = NEXRAD_CASE_S3_KEY
         sweep = 6
         max_range_km = 150.0
         zdr_res = 1200
@@ -5941,7 +6246,7 @@ class ZdrP2(MovingCameraScene):
 
 class RhoHV(MovingCameraScene):
     def construct(self):
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         copol = Paragraph(
             "Co-polar Correlation",
@@ -6006,15 +6311,21 @@ class RhoHV(MovingCameraScene):
 
         self.play(
             rhohv.animate.scale_to_fit_width(fw(self, 0.13))
-            .next_to(self.camera.frame.get_left(), RIGHT, MED_LARGE_BUFF)
+            .next_to(self.camera.frame.get_right(), LEFT, MED_LARGE_BUFF)
             .shift(DOWN * fh(self)),
             self.camera.frame.animate.shift(DOWN * fh(self)),
         )
 
         self.wait(0.5)
 
+        rhohv_timeseries = _build_nexrad_rhohv_timeseries_cached(azimuth_deg=0)
+        pulse_index = rhohv_timeseries["pulse_index"]
+        h_samples = rhohv_timeseries["h"]
+        v_samples = rhohv_timeseries["v"]
+        pulse_xmax = float(pulse_index[-1])
+
         hax = Axes(
-            x_range=[0, 1, 0.25],
+            x_range=[0, pulse_xmax, pulse_xmax / 4],
             y_range=[-1, 1, 0.5],
             tips=False,
             x_length=fw(self, 0.5),
@@ -6022,7 +6333,7 @@ class RhoHV(MovingCameraScene):
         )
 
         vax = Axes(
-            x_range=[0, 1, 0.25],
+            x_range=[0, pulse_xmax, pulse_xmax / 4],
             y_range=[-1, 1, 0.5],
             tips=False,
             x_length=fw(self, 0.5),
@@ -6031,38 +6342,26 @@ class RhoHV(MovingCameraScene):
         axes = (
             Group(hax, vax)
             .arrange(DOWN, MED_LARGE_BUFF)
-            .next_to(self.camera.frame.get_right(), LEFT, MED_LARGE_BUFF)
+            .next_to(self.camera.frame.get_left(), RIGHT, LARGE_BUFF * 1.5)
         )
 
-        amp_h = VT(1)
-        phase_h = VT(0)
-        noise_amp_h = VT(0.1)
         x0_h = VT(0)
         x1_h = VT(0)
 
-        amp_v = VT(0.6)
-        phase_v = VT(PI / 3)
-        noise_amp_v = VT(0.2)
         x0_v = VT(0)
         x1_v = VT(0)
-        np.random.seed(0)
+
         hpol = always_redraw(
             lambda: hax.plot(
-                lambda t: (
-                    ~amp_h * np.sin(2 * PI * 4 * t + ~phase_h)
-                    + np.random.normal(0, ~noise_amp_h)
-                ),
-                x_range=[~x0_h, ~x1_h, 1 / 200],
+                lambda t: float(np.interp(t, pulse_index, h_samples)),
+                x_range=[~x0_h, ~x1_h, 0.5],
                 color=HPOL_RX_COLOR,
             )
         )
         vpol = always_redraw(
             lambda: vax.plot(
-                lambda t: (
-                    ~amp_v * np.sin(2 * PI * 4 * t + ~phase_v)
-                    + np.random.normal(0, ~noise_amp_v)
-                ),
-                x_range=[~x0_v, ~x1_v, 1 / 200],
+                lambda t: float(np.interp(t, pulse_index, v_samples)),
+                x_range=[~x0_v, ~x1_v, 0.5],
                 color=VPOL_RX_COLOR,
             )
         )
@@ -6089,10 +6388,115 @@ class RhoHV(MovingCameraScene):
                 Create(vax),
                 Write(h_return),
                 Write(v_return),
-                x1_h @ 1,
-                x1_v @ 1,
+                x1_h @ pulse_xmax,
+                x1_v @ pulse_xmax,
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        corr_sym = (
+            MathTex(r"\star")
+            .scale_to_fit_height(rhohv.height * 0.7)
+            .next_to(rhohv, LEFT, LARGE_BUFF * 1.5)
+        )
+        corr_bez_u = CubicBezier(
+            hax.get_right() + [0.1, 0, 0],
+            hax.get_right() + [1, 0, 0],
+            corr_sym.get_left() + [-1, 0, 0],
+            corr_sym.get_left() + [-0.1, 0, 0],
+        )
+        corr_bez_d = CubicBezier(
+            vax.get_right() + [0.1, 0, 0],
+            vax.get_right() + [1, 0, 0],
+            corr_sym.get_left() + [-1, 0, 0],
+            corr_sym.get_left() + [-0.1, 0, 0],
+        )
+        corr_arrow = Arrow(corr_sym.get_right(), rhohv.get_left(), buff=SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(corr_bez_u), Create(corr_bez_d)),
+                GrowFromCenter(corr_sym),
+                GrowArrow(corr_arrow),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(corr_sym.animate.shift(UP / 2).set_color(YELLOW))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(corr_sym.animate.shift(DOWN / 2).set_color(WHITE))
+
+        self.wait(0.5)
+
+        consistency = (
+            Text("consistent", font=FONT)
+            .next_to(self.camera.frame.get_bottom(), DOWN, MED_LARGE_BUFF)
+            .shift(RIGHT * 2)
+        )
+        to_consistency = CubicBezier(
+            rhohv.get_bottom() + [0, -0.1, 0],
+            rhohv.get_bottom() + [0, -3, 0],
+            consistency.get_right() + [3, 0, 0],
+            consistency.get_right() + [0.1, 0, 0],
+        )
+        cons_t_start = CubicBezier(
+            consistency.get_corner(UL) + [-0.1, 0, 0],
+            consistency.get_corner(UL) + [-1, 0.5, 0],
+            vax.c2p(0, -1.05) + [0, -1, 0],
+            vax.c2p(0, -1.05),
+        )
+        cons_t_end = CubicBezier(
+            consistency.get_corner(UL) + [-0.1, 0, 0],
+            consistency.get_corner(UL) + [-0.3, 0.3, 0],
+            vax.c2p(pulse_xmax, -1.05) + [0, -1, 0],
+            vax.c2p(pulse_xmax, -1.05),
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * 3),
+                Create(to_consistency),
+                Write(consistency),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Create(cons_t_start),
+                Create(cons_t_end),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(cons_t_start),
+                    Uncreate(cons_t_end),
+                    Uncreate(to_consistency),
+                    Unwrite(consistency),
+                ),
+                self.camera.frame.animate.shift(DOWN * fh(self)),
                 lag_ratio=0.2,
             )
         )
 
         self.wait(2)
+
+
+class RhoHVP2(MovingCameraScene):
+    def construct(self): ...
