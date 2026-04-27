@@ -5940,4 +5940,159 @@ class ZdrP2(MovingCameraScene):
 
 
 class RhoHV(MovingCameraScene):
-    def construct(self): ...
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(False))
+
+        copol = Paragraph(
+            "Co-polar Correlation",
+            "Coefficient",
+            font=FONT,
+            alignment="center",
+            line_spacing=LARGE_BUFF,
+        )
+
+        self.wait(0.5)
+
+        self.add(copol[0][:3])
+
+        self.wait(0.5)
+
+        self.add(copol[0][3:8])
+
+        self.wait(0.5)
+
+        self.add(copol[0][8:])
+
+        self.wait(0.5)
+
+        self.add(copol[1])
+
+        self.wait(0.5)
+
+        rhohv = MathTex(r"\rho_{hv}").scale(2).next_to(copol, DR, LARGE_BUFF)
+        rhohv[0][1].set_color(HPOL_RX_COLOR)
+        rhohv[0][2].set_color(VPOL_RX_COLOR)
+        rhohv_bez = CubicBezier(
+            copol.get_right() + [0.1, 0, 0],
+            copol.get_right() + [1, 0, 0],
+            rhohv.get_left() + [-1, 0, 0],
+            rhohv.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(Group(rhohv, copol)),
+                Create(rhohv_bez),
+                LaggedStart(*[FadeIn(m) for m in rhohv[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rhohv_text = Text(", RhoHV", font=FONT).next_to(rhohv, RIGHT, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.1).move_to(
+                    Group(copol, rhohv, rhohv_text)
+                ),
+                *[FadeIn(m) for m in rhohv_text],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            rhohv.animate.scale_to_fit_width(fw(self, 0.13))
+            .next_to(self.camera.frame.get_left(), RIGHT, MED_LARGE_BUFF)
+            .shift(DOWN * fh(self)),
+            self.camera.frame.animate.shift(DOWN * fh(self)),
+        )
+
+        self.wait(0.5)
+
+        hax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.4),
+        )
+
+        vax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.5),
+            y_length=fh(self, 0.4),
+        )
+        axes = (
+            Group(hax, vax)
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .next_to(self.camera.frame.get_right(), LEFT, MED_LARGE_BUFF)
+        )
+
+        amp_h = VT(1)
+        phase_h = VT(0)
+        noise_amp_h = VT(0.1)
+        x0_h = VT(0)
+        x1_h = VT(0)
+
+        amp_v = VT(0.6)
+        phase_v = VT(PI / 3)
+        noise_amp_v = VT(0.2)
+        x0_v = VT(0)
+        x1_v = VT(0)
+        np.random.seed(0)
+        hpol = always_redraw(
+            lambda: hax.plot(
+                lambda t: (
+                    ~amp_h * np.sin(2 * PI * 4 * t + ~phase_h)
+                    + np.random.normal(0, ~noise_amp_h)
+                ),
+                x_range=[~x0_h, ~x1_h, 1 / 200],
+                color=HPOL_RX_COLOR,
+            )
+        )
+        vpol = always_redraw(
+            lambda: vax.plot(
+                lambda t: (
+                    ~amp_v * np.sin(2 * PI * 4 * t + ~phase_v)
+                    + np.random.normal(0, ~noise_amp_v)
+                ),
+                x_range=[~x0_v, ~x1_v, 1 / 200],
+                color=VPOL_RX_COLOR,
+            )
+        )
+        self.add(hpol, vpol)
+
+        h_return = (
+            Text("H return", font=FONT)
+            .rotate(PI / 2)
+            .scale_to_fit_height(hax.height * 0.7)
+            .next_to(hax, LEFT, MED_SMALL_BUFF)
+        )
+        v_return = (
+            Text("V return", font=FONT)
+            .rotate(PI / 2)
+            .scale_to_fit_height(hax.height * 0.7)
+            .next_to(vax, LEFT, MED_SMALL_BUFF)
+        )
+        h_return[0].set_color(HPOL_RX_COLOR)
+        v_return[0].set_color(VPOL_RX_COLOR)
+
+        self.play(
+            LaggedStart(
+                Create(hax),
+                Create(vax),
+                Write(h_return),
+                Write(v_return),
+                x1_h @ 1,
+                x1_v @ 1,
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(2)
