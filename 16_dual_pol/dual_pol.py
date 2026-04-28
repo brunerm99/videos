@@ -6499,4 +6499,127 @@ class RhoHV(MovingCameraScene):
 
 
 class RhoHVP2(MovingCameraScene):
-    def construct(self): ...
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        deq_min = 1.5
+        deq_target = 6.0
+        deq = VT(deq_min)
+        drop_scale = 0.95
+
+        ax_opacity = VT(0)
+        ax_rotation = VT(0)
+        drop_ax = always_redraw(
+            lambda: (
+                Axes(
+                    x_range=[-1.5, 1.5, 0.5],
+                    y_range=[-1.5, 1.5, 0.5],
+                    tips=False,
+                    x_length=fh(self, 0.75),
+                    y_length=fh(self, 0.75),
+                )
+                .set_opacity(~ax_opacity)
+                .rotate(~ax_rotation)
+                .shift(LEFT * fw(self, 0.25))
+            )
+        )
+
+        def make_drop_shape():
+            points = _thurai_drop_outline_points(~deq)
+            drop = (
+                Polygon(
+                    *points,
+                    color=PRECIP_COLOR,
+                    fill_color=PRECIP_COLOR,
+                    fill_opacity=0.12,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                )
+                .scale(drop_scale)
+                .set_z_index(2)
+                .move_to(drop_ax.c2p(0, 0))
+                .rotate(Line(drop_ax.c2p(0, 0), drop_ax.c2p(1, 0)).get_angle())
+            )
+            return drop
+
+        drop_shape = always_redraw(make_drop_shape)
+
+        snowflake = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(self.camera.frame)
+        )
+
+        crystal = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self, 0.25))
+        )
+
+        self.add(drop_shape)
+
+        self.play(drop_ax.shift(UP * fh(self)).animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(snowflake.shift(UP * fh(self)).animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(crystal.shift(UP * fh(self)).animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                crystal.animate.set_opacity(0.1),
+                snowflake.animate.set_opacity(0.1),
+                self.camera.frame.animate.scale_to_fit_height(
+                    drop_ax.height * 1.3
+                ).move_to(drop_ax),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(deq @ 4, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(ax_opacity @ 1)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            ax_rotation.animate(
+                rate_func=lambda t: (
+                    rate_functions.there_and_back(t) * np.sin(4 * PI * t)
+                ),
+                run_time=2,
+            ).set_value(PI / 12)
+            # drop_ax.animate.shift(UP)
+        )
+
+        self.wait(0.5)
+
+        hpol_arrow = Arrow(
+            drop_ax.c2p(0, 0),
+            drop_ax.c2p(1.5, 0),
+            color=HPOL_RX_COLOR,
+            buff=0,
+        )
+        vpol_arrow = Arrow(
+            drop_ax.c2p(0, 0),
+            drop_ax.c2p(0, 1.5),
+            color=VPOL_RX_COLOR,
+            buff=0,
+        )
+
+        self.play(GrowArrow(hpol_arrow))
+
+        self.wait(0.5)
+
+        self.play(GrowArrow(vpol_arrow))
+
+        self.wait(2)
