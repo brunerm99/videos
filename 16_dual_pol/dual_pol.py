@@ -4086,6 +4086,27 @@ def _get_nexrad_best_sweep_for_field(
     return best_sweep
 
 
+def _get_nexrad_rhohv_ppi_data(
+    s3_key=NEXRAD_CASE_S3_KEY,
+    sweep=6,
+    max_range_km=150.0,
+    resolution=1200,
+):
+    data = _get_nexrad_ppi_data_cached(
+        s3_key=s3_key,
+        sweep=sweep,
+        max_range_km=max_range_km,
+        resolution=resolution,
+        field_name="cross_correlation_ratio",
+    )
+    data_copy = {
+        key: value.copy() if isinstance(value, np.ndarray) else value
+        for key, value in data.items()
+    }
+    data_copy["rhohv"] = data_copy.pop("field_data")
+    return data_copy
+
+
 def _get_nexrad_reflectivity_ppi_data(
     s3_key=NEXRAD_CASE_S3_KEY,
     sweep=6,
@@ -6523,24 +6544,29 @@ class RhoHVP2(MovingCameraScene):
             )
         )
 
-        def make_drop_shape():
-            points = _thurai_drop_outline_points(~deq)
-            drop = (
-                Polygon(
-                    *points,
-                    color=PRECIP_COLOR,
-                    fill_color=PRECIP_COLOR,
-                    fill_opacity=0.12,
-                    stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+        def get_drop_shape_updater(shift=ORIGIN, opacity_mult=1):
+            def make_drop_shape():
+                points = _thurai_drop_outline_points(~deq)
+                drop = (
+                    Polygon(
+                        *points,
+                        color=PRECIP_COLOR,
+                        fill_color=PRECIP_COLOR,
+                        fill_opacity=0.12 * opacity_mult,
+                        stroke_opacity=opacity_mult,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                    )
+                    .scale(drop_scale)
+                    .set_z_index(2)
+                    .move_to(drop_ax.c2p(0, 0))
+                    .rotate(Line(drop_ax.c2p(0, 0), drop_ax.c2p(1, 0)).get_angle())
+                    .shift(shift)
                 )
-                .scale(drop_scale)
-                .set_z_index(2)
-                .move_to(drop_ax.c2p(0, 0))
-                .rotate(Line(drop_ax.c2p(0, 0), drop_ax.c2p(1, 0)).get_angle())
-            )
-            return drop
+                return drop
 
-        drop_shape = always_redraw(make_drop_shape)
+            return make_drop_shape
+
+        drop_shape = always_redraw(get_drop_shape_updater())
 
         snowflake = (
             ImageMobject("../props/static/snowflake.png")
@@ -6571,12 +6597,12 @@ class RhoHVP2(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                crystal.animate.set_opacity(0.1),
-                snowflake.animate.set_opacity(0.1),
+                crystal.animate.set_opacity(0),
+                snowflake.animate.set_opacity(0),
                 self.camera.frame.animate.scale_to_fit_height(
                     drop_ax.height * 1.3
                 ).move_to(drop_ax),
-                lag_ratio=0.2,
+                lag_ratio=0.3,
             )
         )
 
@@ -6589,7 +6615,7 @@ class RhoHVP2(MovingCameraScene):
         self.play(ax_opacity @ 1)
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             ax_rotation.animate(
@@ -6599,6 +6625,113 @@ class RhoHVP2(MovingCameraScene):
                 run_time=2,
             ).set_value(PI / 12)
             # drop_ax.animate.shift(UP)
+        )
+        self.wait(0.5)
+
+        shift = 1.8
+        angle = 60
+        opacity_fade = 0.2
+        drop_shape_2 = always_redraw(
+            get_drop_shape_updater(
+                shift=(
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 1,
+                opacity_mult=1 - (opacity_fade * 1),
+            )
+        )
+        drop_shape_3 = always_redraw(
+            get_drop_shape_updater(
+                shift=(
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 2,
+                opacity_mult=1 - (opacity_fade * 2),
+            )
+        )
+        drop_shape_4 = always_redraw(
+            get_drop_shape_updater(
+                shift=(
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 3,
+                opacity_mult=1 - (opacity_fade * 3),
+            )
+        )
+        drop_shape_5 = always_redraw(
+            get_drop_shape_updater(
+                shift=(
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 4,
+                opacity_mult=1 - (opacity_fade * 4),
+            )
+        )
+
+        self.add(
+            drop_shape_2,
+            drop_shape_3,
+            drop_shape_4,
+            drop_shape_5,
+        )
+
+        drop_ax_static = Axes(
+            x_range=[-1.5, 1.5, 0.5],
+            y_range=[-1.5, 1.5, 0.5],
+            tips=False,
+            x_length=fh(self, 0.75),
+            y_length=fh(self, 0.75),
+        ).set_z_index(-1)
+        drop_ax_static.shift(drop_ax.c2p(0, 0) - drop_ax_static.c2p(0, 0))
+        self.remove(drop_ax)
+        self.add(drop_ax_static)
+
+        drop_shapes = Group(
+            drop_shape,
+            drop_shape_2,
+            drop_shape_3,
+            drop_shape_4,
+            drop_shape_5,
+        )
+
+        time_arrow = Arrow(
+            drop_ax_static.c2p(0, 0),
+            drop_ax_static.c2p(0, 0)
+            + (
+                UP * shift * np.cos(angle * PI / 180)
+                + RIGHT * shift * np.sin(angle * PI / 180)
+            )
+            * 4.5,
+            buff=0,
+        )
+
+        time_label = (
+            Text("time -->", font=FONT)
+            .rotate((90 - angle) * PI / 180)
+            .next_to(time_arrow, DR, SMALL_BUFF)
+            .shift(UL * 1.7 + DL)
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        # self.play(self.camera.frame.animate.shift(UP))
+        self.play(
+            self.camera.frame.animate(run_time=2)
+            .scale_to_fit_height(drop_shapes.height * 1.2)
+            .move_to(drop_shapes),
+            GrowArrow(time_arrow, run_time=2),
+            FadeIn(time_label),
+            LaggedStart(
+                FadeIn(drop_shape_2),
+                FadeIn(drop_shape_3),
+                FadeIn(drop_shape_4),
+                FadeIn(drop_shape_5),
+                lag_ratio=0.3,
+            ),
         )
 
         self.wait(0.5)
@@ -6616,10 +6749,1383 @@ class RhoHVP2(MovingCameraScene):
             buff=0,
         )
 
-        self.play(GrowArrow(hpol_arrow))
+        hpol_arrow_2 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(1.5, 0),
+                color=HPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 1
+            )
+            .set_opacity(1 - (opacity_fade * 1))
+        )
+        vpol_arrow_2 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(0, 1.5),
+                color=VPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 1
+            )
+            .set_opacity(1 - (opacity_fade * 1))
+        )
+
+        hpol_arrow_3 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(1.5, 0),
+                color=HPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 2
+            )
+            .set_opacity(1 - (opacity_fade * 2))
+        )
+        vpol_arrow_3 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(0, 1.5),
+                color=VPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 2
+            )
+            .set_opacity(1 - (opacity_fade * 2))
+        )
+
+        hpol_arrow_4 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(1.5, 0),
+                color=HPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 3
+            )
+            .set_opacity(1 - (opacity_fade * 3))
+        )
+        vpol_arrow_4 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(0, 1.5),
+                color=VPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 3
+            )
+            .set_opacity(1 - (opacity_fade * 3))
+        )
+
+        hpol_arrow_5 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(1.5, 0),
+                color=HPOL_RX_COLOR,
+                buff=0,
+            )
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 4
+            )
+            .set_opacity(1 - (opacity_fade * 4))
+        )
+        vpol_arrow_5 = (
+            Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(0, 1.5),
+                color=VPOL_RX_COLOR,
+                buff=0,
+            )
+            .set_opacity(1 - (opacity_fade * 4))
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 4
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    GrowArrow(hpol_arrow),
+                    GrowArrow(vpol_arrow),
+                    lag_ratio=0.1,
+                ),
+                LaggedStart(
+                    GrowArrow(hpol_arrow_2),
+                    GrowArrow(vpol_arrow_2),
+                    lag_ratio=0.1,
+                ),
+                LaggedStart(
+                    GrowArrow(hpol_arrow_3),
+                    GrowArrow(vpol_arrow_3),
+                    lag_ratio=0.1,
+                ),
+                LaggedStart(
+                    GrowArrow(hpol_arrow_4),
+                    GrowArrow(vpol_arrow_4),
+                    lag_ratio=0.1,
+                ),
+                LaggedStart(
+                    GrowArrow(hpol_arrow_5),
+                    GrowArrow(vpol_arrow_5),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
-        self.play(GrowArrow(vpol_arrow))
+        rhohv_1 = (
+            MathTex(r"\rho_{hv} \approx 1")
+            .scale_to_fit_width(fw(self, 0.15))
+            .next_to(drop_shapes, RIGHT, MED_SMALL_BUFF)
+        )
+        rhohv_1[0][1].set_color(HPOL_RX_COLOR)
+        rhohv_1[0][2].set_color(VPOL_RX_COLOR)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(Group(drop_shapes, rhohv_1)),
+                LaggedStart(*[FadeIn(m) for m in rhohv_1[0]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        bird_1 = (
+            VideoMobject("./static/Flapping Bird transparent.gif", loop=True)
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(drop_shape)
+        )
+
+        hpol_mult_1 = VT(1)
+        vpol_mult_1 = VT(1)
+        hpol_mult_2 = VT(1)
+        vpol_mult_2 = VT(1)
+        hpol_mult_3 = VT(1)
+        vpol_mult_3 = VT(1)
+        hpol_mult_4 = VT(1)
+        vpol_mult_4 = VT(1)
+        hpol_mult_5 = VT(1)
+        vpol_mult_5 = VT(1)
+
+        hpol_arrow_dynamic = always_redraw(
+            lambda: Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(1.5 * ~hpol_mult_1, 0),
+                color=HPOL_RX_COLOR,
+                buff=0,
+            )
+        )
+        vpol_arrow_dynamic = always_redraw(
+            lambda: Arrow(
+                drop_ax.c2p(0, 0),
+                drop_ax.c2p(0, 1.5 * ~vpol_mult_1),
+                color=VPOL_RX_COLOR,
+                buff=0,
+            )
+        )
+
+        hpol_arrow_2_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(1.5 * ~hpol_mult_2, 0),
+                    color=HPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 1
+                )
+                .set_opacity(1 - (opacity_fade * 1))
+            )
+        )
+        vpol_arrow_2_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(0, 1.5 * ~vpol_mult_2),
+                    color=VPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 1
+                )
+                .set_opacity(1 - (opacity_fade * 1))
+            )
+        )
+
+        hpol_arrow_3_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(1.5 * ~hpol_mult_3, 0),
+                    color=HPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 2
+                )
+                .set_opacity(1 - (opacity_fade * 2))
+            )
+        )
+        vpol_arrow_3_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(0, 1.5 * ~vpol_mult_3),
+                    color=VPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 2
+                )
+                .set_opacity(1 - (opacity_fade * 2))
+            )
+        )
+
+        hpol_arrow_4_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(1.5 * ~hpol_mult_4, 0),
+                    color=HPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 3
+                )
+                .set_opacity(1 - (opacity_fade * 3))
+            )
+        )
+        vpol_arrow_4_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(0, 1.5 * ~vpol_mult_4),
+                    color=VPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 3
+                )
+                .set_opacity(1 - (opacity_fade * 3))
+            )
+        )
+
+        hpol_arrow_5_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(1.5 * ~hpol_mult_5, 0),
+                    color=HPOL_RX_COLOR,
+                    buff=0,
+                )
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 4
+                )
+                .set_opacity(1 - (opacity_fade * 4))
+            )
+        )
+        vpol_arrow_5_dynamic = always_redraw(
+            lambda: (
+                Arrow(
+                    drop_ax.c2p(0, 0),
+                    drop_ax.c2p(0, 1.5 * ~vpol_mult_5),
+                    color=VPOL_RX_COLOR,
+                    buff=0,
+                )
+                .set_opacity(1 - (opacity_fade * 4))
+                .shift(
+                    (
+                        UP * shift * np.cos(angle * PI / 180)
+                        + RIGHT * shift * np.sin(angle * PI / 180)
+                    )
+                    * 4
+                )
+            )
+        )
+
+        self.remove(
+            hpol_arrow,
+            vpol_arrow,
+            hpol_arrow_2,
+            vpol_arrow_2,
+            hpol_arrow_3,
+            vpol_arrow_3,
+            hpol_arrow_4,
+            vpol_arrow_4,
+            hpol_arrow_5,
+            vpol_arrow_5,
+        )
+
+        self.add(
+            hpol_arrow_dynamic,
+            vpol_arrow_dynamic,
+            hpol_arrow_2_dynamic,
+            vpol_arrow_2_dynamic,
+            hpol_arrow_3_dynamic,
+            vpol_arrow_3_dynamic,
+            hpol_arrow_4_dynamic,
+            vpol_arrow_4_dynamic,
+            hpol_arrow_5_dynamic,
+            vpol_arrow_5_dynamic,
+        )
+
+        self.play(
+            self.camera.frame.animate(run_time=2).restore(),
+            LaggedStart(
+                rhohv_1.animate.set_opacity(0),
+                AnimationGroup(
+                    FadeOut(drop_shape_5),
+                    hpol_mult_5 @ 0,
+                    vpol_mult_5 @ 0,
+                ),
+                AnimationGroup(
+                    FadeOut(drop_shape_4),
+                    hpol_mult_4 @ 0,
+                    vpol_mult_4 @ 0,
+                ),
+                AnimationGroup(
+                    FadeOut(drop_shape_3),
+                    hpol_mult_3 @ 0,
+                    vpol_mult_3 @ 0,
+                ),
+                AnimationGroup(
+                    FadeOut(drop_shape_2),
+                    hpol_mult_2 @ 0,
+                    vpol_mult_2 @ 0,
+                ),
+                AnimationGroup(
+                    FadeOut(drop_shape),
+                    hpol_mult_1 @ 0,
+                    vpol_mult_1 @ 0,
+                ),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            bird_1.shift(LEFT * fw(self))
+            .animate(rate_func=rate_functions.linear)
+            .shift(RIGHT * fw(self))
+        )
+
+        self.wait(0.5)
+
+        bird_2 = (
+            VideoMobject("./static/Flapping Bird transparent.gif", loop=True)
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(drop_shape)
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 1
+            )
+        )
+
+        self.play(
+            bird_2.shift(LEFT * fw(self))
+            .animate(rate_func=rate_functions.linear)
+            .shift(RIGHT * fw(self))
+        )
+
+        self.wait(0.5)
+
+        bird_3 = (
+            VideoMobject("./static/Flapping Bird transparent.gif", loop=True)
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(drop_shape)
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 2
+            )
+        )
+
+        self.play(
+            bird_3.shift(LEFT * fw(self))
+            .animate(rate_func=rate_functions.linear)
+            .shift(RIGHT * fw(self))
+        )
+
+        self.wait(0.5, frozen_frame=False)
+
+        bird_4 = (
+            VideoMobject("./static/Flapping Bird transparent.gif", loop=True)
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(drop_shape)
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 3
+            )
+        )
+
+        self.play(
+            bird_4.shift(LEFT * fw(self))
+            .animate(rate_func=rate_functions.linear)
+            .shift(RIGHT * fw(self))
+        )
+
+        self.wait(0.5, frozen_frame=False)
+
+        bird_5 = (
+            VideoMobject("./static/Flapping Bird transparent.gif", loop=True)
+            .scale_to_fit_width(drop_shape.width)
+            .move_to(drop_shape)
+            .shift(
+                (
+                    UP * shift * np.cos(angle * PI / 180)
+                    + RIGHT * shift * np.sin(angle * PI / 180)
+                )
+                * 4
+            )
+        )
+
+        self.play(
+            bird_5.shift(LEFT * fw(self))
+            .animate(rate_func=rate_functions.linear)
+            .shift(RIGHT * fw(self))
+        )
+
+        self.wait(0.5, frozen_frame=False)
+
+        time_mult = 3
+        f = 2 * time_mult
+
+        def hpol_bird_rate_func(t):
+            return (
+                rate_functions.there_and_back(t)
+                * (
+                    np.sin(2 * f * PI * t)
+                    + 0.5 * np.sin(4 * f * PI * t)
+                    + 0.3 * np.sin(8 * f * PI * t)
+                )
+                / 1.8
+            )
+
+        def vpol_bird_rate_func(t):
+            return (
+                rate_functions.there_and_back(t)
+                * (
+                    np.sin(2 * f * PI * t)
+                    - 0.5 * np.sin(4 * f * PI * t)
+                    + 0.3 * np.sin(8 * f * PI * t)
+                )
+                / 1.8
+            )
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        rhohv_bird = (
+            MathTex(r"\rho_{hv} < 0.8")
+            .scale_to_fit_width(fw(self, 0.15))
+            .move_to(rhohv_1, LEFT)
+        )
+        rhohv_bird[0][1].set_color(HPOL_RX_COLOR)
+        rhohv_bird[0][2].set_color(VPOL_RX_COLOR)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Succession(
+                        AnimationGroup(hpol_mult_1 @ 1, vpol_mult_1 @ 1, run_time=0.5),
+                        AnimationGroup(
+                            hpol_mult_1.animate(
+                                rate_func=hpol_bird_rate_func
+                            ).set_value(1.5),
+                            vpol_mult_1.animate(
+                                rate_func=vpol_bird_rate_func
+                            ).set_value(1.5),
+                            run_time=6 * time_mult,
+                        ),
+                    ),
+                    Succession(
+                        AnimationGroup(hpol_mult_2 @ 1, vpol_mult_2 @ 1, run_time=0.5),
+                        AnimationGroup(
+                            hpol_mult_2.animate(
+                                rate_func=hpol_bird_rate_func
+                            ).set_value(1.5),
+                            vpol_mult_2.animate(
+                                rate_func=vpol_bird_rate_func
+                            ).set_value(1.5),
+                            run_time=6 * time_mult,
+                        ),
+                    ),
+                    Succession(
+                        AnimationGroup(hpol_mult_3 @ 1, vpol_mult_3 @ 1, run_time=0.5),
+                        AnimationGroup(
+                            hpol_mult_3.animate(
+                                rate_func=hpol_bird_rate_func
+                            ).set_value(1.5),
+                            vpol_mult_3.animate(
+                                rate_func=vpol_bird_rate_func
+                            ).set_value(1.5),
+                            run_time=6 * time_mult,
+                        ),
+                    ),
+                    Succession(
+                        AnimationGroup(hpol_mult_4 @ 1, vpol_mult_4 @ 1, run_time=0.5),
+                        AnimationGroup(
+                            hpol_mult_4.animate(
+                                rate_func=hpol_bird_rate_func
+                            ).set_value(1.5),
+                            vpol_mult_4.animate(
+                                rate_func=vpol_bird_rate_func
+                            ).set_value(1.5),
+                            run_time=6 * time_mult,
+                        ),
+                    ),
+                    Succession(
+                        AnimationGroup(hpol_mult_5 @ 1, vpol_mult_5 @ 1, run_time=0.5),
+                        AnimationGroup(
+                            hpol_mult_5.animate(
+                                rate_func=hpol_bird_rate_func
+                            ).set_value(1.5),
+                            vpol_mult_5.animate(
+                                rate_func=vpol_bird_rate_func
+                            ).set_value(1.5),
+                            run_time=6 * time_mult,
+                        ),
+                    ),
+                    lag_ratio=0.05,
+                ),
+                LaggedStart(
+                    self.camera.frame.animate.move_to(Group(drop_shapes, rhohv_1)),
+                    LaggedStart(*[FadeIn(m) for m in rhohv_bird[0]], lag_ratio=0.1),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        bio_filter = (
+            Paragraph(
+                "Biological",
+                "Clutter",
+                "Filtering",
+                font=FONT,
+                line_spacing=LARGE_BUFF * 1.2,
+                alignment="center",
+            )
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self))
+        )
+
+        to_next_section = Arrow(rhohv_bird.get_right(), bio_filter.get_left())
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    GrowArrow(to_next_section),
+                    self.camera.frame.animate.shift(RIGHT * fw(self)),
+                ),
+                LaggedStart(
+                    Write(bio_filter[0]),
+                    Write(bio_filter[1]),
+                    Write(bio_filter[2]),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2, frozen_frame=False)
+
+
+class RhoHVP3(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        s3_key = NEXRAD_CASE_S3_KEY
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 640
+
+        reflectivity_metadata = _get_nexrad_reflectivity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        reflectivity_rgba = _reflectivity_dbz_to_rgba(
+            reflectivity_metadata["reflectivity_dbz"],
+            valid_mask=reflectivity_metadata["valid_mask"],
+            vmin=reflectivity_metadata["vmin"],
+            vmax=reflectivity_metadata["vmax"],
+        )
+
+        rhohv_metadata = _get_nexrad_rhohv_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        rho_final_threshold = 0.75
+        rho = rhohv_metadata["rhohv"].copy()
+        rho = np.nan_to_num(rho, nan=0)
+        reflectivity_rhohv_mask = np.where(rho > rho_final_threshold)
+
+        reflectivity_rhohv_filt_rgba = _reflectivity_dbz_to_rgba(
+            reflectivity_metadata["reflectivity_dbz"],
+            valid_mask=reflectivity_rhohv_mask,
+            vmin=reflectivity_metadata["vmin"],
+            vmax=reflectivity_metadata["vmax"],
+        )
+
+        plot_fill = ManimColor.from_hex("#09151D")
+        axis_color = ManimColor.from_hex("#D6EEF7")
+        label_color = ManimColor.from_hex("#B7D4E2")
+        scan_color = ManimColor.from_hex("#9EF6FF")
+
+        plot_radius = min(fh(self, 0.23), fw(self, 0.15))
+        beam_width_deg = 4.0
+        scan_progress = VT(0)
+        scan_visibility = VT(1)
+
+        def format_tick_label(value):
+            if np.isclose(value, 0.0):
+                value = 0.0
+            if np.isclose(value, round(value)):
+                return f"{int(round(value))}"
+            return f"{value:.1f}"
+
+        reflectivity_opacity = VT(1)
+        reflectivity_rhohv_filt_opacity = VT(0)
+        rhohv_opacity = VT(0)
+        rhohv_2_opacity = VT(0)
+
+        def make_ppi_panel(
+            metadata,
+            rgba,
+            title_text,
+            units,
+            tick_values,
+            cmap_name,
+            opacity_tracker,
+            plot_colorbar=True,
+        ):
+            plot_background = Circle(
+                radius=plot_radius,
+                fill_color=plot_fill,
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            plot_border = Circle(radius=plot_radius).set_stroke(
+                axis_color, width=2.2, opacity=0.76
+            )
+            origin_marker = Dot(ORIGIN, radius=0.03, color=axis_color)
+
+            grid = VGroup()
+            for azimuth in range(0, 360, 15):
+                is_primary = azimuth % 90 == 0
+                is_secondary = azimuth % 45 == 0
+                grid.add(
+                    Line(
+                        ORIGIN,
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            azimuth,
+                            metadata["max_range_km"],
+                        ),
+                        stroke_color=axis_color,
+                        stroke_width=1.6
+                        if is_primary
+                        else 1.15
+                        if is_secondary
+                        else 0.9,
+                        stroke_opacity=0.22
+                        if is_primary
+                        else 0.13
+                        if is_secondary
+                        else 0.06,
+                    )
+                )
+
+            range_rings = VGroup()
+            range_labels = VGroup()
+            for ring_km in (50, 100, 150):
+                ring_radius = plot_radius * ring_km / metadata["max_range_km"]
+                range_rings.add(
+                    Circle(radius=ring_radius).set_stroke(
+                        axis_color,
+                        width=1.7 if ring_km == 150 else 1.2,
+                        opacity=0.18 if ring_km == 150 else 0.1,
+                    )
+                )
+                range_labels.add(
+                    Text(f"{ring_km} km", font=FONT, color=label_color)
+                    .scale(0.2)
+                    .move_to(
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            230,
+                            ring_km,
+                        )
+                        + LEFT * 0.1
+                        + DOWN * 0.02
+                    )
+                )
+
+            direction_labels = VGroup()
+            for label, azimuth in (("N", 0), ("E", 90), ("S", 180), ("W", 270)):
+                direction_labels.add(
+                    Text(label, font=FONT, color=axis_color)
+                    .scale(0.22)
+                    .move_to(
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            azimuth,
+                            metadata["max_range_km"] * 1.08,
+                        )
+                    )
+                )
+
+            title = Text(title_text, font=FONT).scale(0.42)
+            title.next_to(plot_border, UP, MED_SMALL_BUFF)
+
+            colorbar = ImageMobject(
+                _build_nexrad_colorbar_image(
+                    height_px=720,
+                    vmin=metadata["vmin"],
+                    vmax=metadata["vmax"],
+                    cmap_name=cmap_name,
+                    fallback_cmap_name="coolwarm" if cmap_name == "NWSVel" else "turbo",
+                ),
+                image_mode="RGBA",
+            ).scale_to_fit_height(plot_radius * 1.68)
+            colorbar.set_resampling_algorithm(RESAMPLING_ALGORITHMS["nearest"])
+            colorbar_frame = Rectangle(
+                width=colorbar.width + 0.16,
+                height=colorbar.height + 0.16,
+                fill_opacity=0,
+                stroke_color=axis_color,
+                stroke_opacity=0.42,
+                stroke_width=1.2,
+            ).move_to(colorbar)
+            colorbar_group = Group(colorbar_frame, colorbar)
+            colorbar_group.next_to(plot_background, RIGHT, buff=0.7)
+            colorbar_group.align_to(plot_background, UP).shift(DOWN * 0.02)
+
+            colorbar_units = Text(units, font=FONT, color=label_color).scale(0.2)
+            colorbar_units.next_to(colorbar_group, UP, buff=0.12)
+
+            tick_labels = VGroup()
+            for tick in tick_values:
+                tick_y = colorbar.get_bottom()[1] + colorbar.height * (
+                    (tick - metadata["vmin"]) / (metadata["vmax"] - metadata["vmin"])
+                )
+                tick_anchor = np.array([colorbar.get_right()[0], tick_y, 0])
+                tick_line = Line(
+                    tick_anchor + RIGHT * 0.02,
+                    tick_anchor + RIGHT * 0.12,
+                    stroke_color=axis_color,
+                    stroke_width=1,
+                    stroke_opacity=0.6,
+                )
+                tick_text = Text(
+                    format_tick_label(tick), font=FONT, color=label_color
+                ).scale(0.18)
+                tick_text.next_to(tick_line, RIGHT, buff=0.06)
+                tick_labels.add(VGroup(tick_line, tick_text))
+
+            blank_rgba = np.zeros_like(rgba)
+
+            def current_scan_rgba():
+                progress_mask = _nexrad_relative_sweep_progress_mask(
+                    metadata["azimuth_grid_deg"],
+                    start_theta_deg=0.0,
+                    sweep_progress_deg=~scan_progress,
+                )
+                return _blend_radar_rgba(blank_rgba, rgba, progress_mask)
+
+            def make_data_image():
+                image = ImageMobject(current_scan_rgba(), image_mode="RGBA")
+                image.scale_to_fit_height(plot_radius * 2)
+                image.move_to(origin_marker.get_center())
+                image.set_resampling_algorithm(RESAMPLING_ALGORITHMS["nearest"])
+                image.set_opacity(~opacity_tracker)
+                return image
+
+            def make_scan_trail():
+                head_theta_deg = ~scan_progress % 360.0
+                trail = AnnularSector(
+                    inner_radius=0,
+                    outer_radius=plot_radius * 1.002,
+                    start_angle=PI / 2 - head_theta_deg * DEGREES,
+                    angle=beam_width_deg * DEGREES,
+                    fill_color=scan_color,
+                    fill_opacity=0.075 * ~scan_visibility,
+                    stroke_width=0,
+                )
+                trail.move_arc_center_to(origin_marker.get_center())
+                return trail
+
+            def make_scan_line():
+                head_theta_deg = ~scan_progress % 360.0
+                plot_center = origin_marker.get_center()
+                endpoint = _polar_ppi_point(
+                    plot_center,
+                    plot_radius,
+                    metadata["max_range_km"],
+                    head_theta_deg,
+                    metadata["max_range_km"],
+                )
+                glow = Line(plot_center, endpoint).set_stroke(
+                    scan_color, width=9, opacity=0.08 * ~scan_visibility
+                )
+                line = Line(plot_center, endpoint).set_stroke(
+                    scan_color, width=2.2, opacity=0.95 * ~scan_visibility
+                )
+                tip_halo = Dot(
+                    endpoint,
+                    radius=0.08,
+                    color=scan_color,
+                    fill_opacity=0.22 * ~scan_visibility,
+                    stroke_width=0,
+                )
+                tip = Dot(
+                    endpoint,
+                    radius=0.03,
+                    color=scan_color,
+                    fill_opacity=0.95 * ~scan_visibility,
+                    stroke_width=0,
+                )
+                return VGroup(glow, line, tip_halo, tip).set_z_index(5)
+
+            data_image = always_redraw(make_data_image)
+            scan_trail = always_redraw(make_scan_trail).set_z_index(4)
+            scan_line = always_redraw(make_scan_line)
+
+            group = Group(
+                plot_background,
+                grid,
+                data_image,
+                range_rings,
+                plot_border,
+                range_labels,
+                direction_labels,
+                scan_trail,
+                scan_line,
+                origin_marker,
+                title,
+            )
+            if plot_colorbar:
+                group.add(colorbar_group, colorbar_units, tick_labels)
+            return group
+
+        rho_threshold = VT(0.8)
+
+        def get_rho_data_image():
+            rho = rhohv_metadata["rhohv"].copy()
+            rho = np.nan_to_num(rho, nan=1)
+            reflectivity_rhohv_mask = np.where(rho < ~rho_threshold)
+
+            reflectivity_rhohv_filt_rgba = _reflectivity_dbz_to_rgba(
+                reflectivity_metadata["reflectivity_dbz"],
+                valid_mask=reflectivity_rhohv_mask,
+                vmin=reflectivity_metadata["vmin"],
+                vmax=reflectivity_metadata["vmax"],
+                cmap_name="coolwarm",
+            )
+
+            _, _, low_rho, *_ = make_ppi_panel(
+                reflectivity_metadata,
+                reflectivity_rhohv_filt_rgba,
+                "",
+                "dBZ",
+                (0, 1),
+                "coolwarm",
+                opacity_tracker=rhohv_opacity,
+                plot_colorbar=False,
+            )
+            return low_rho
+
+        filt_image_opacity = VT(0)
+
+        def get_z_rhohv_filt_data_image():
+            rho = deepcopy(rhohv_metadata["rhohv"])
+            # rho = np.nan_to_num(rho, nan=1)
+            reflectivity_rhohv_mask = rho < ~rho_threshold
+            metadata = deepcopy(reflectivity_metadata)
+
+            reflectivity_rhohv_filt_rgba = _reflectivity_dbz_to_rgba(
+                metadata["reflectivity_dbz"],
+                valid_mask=rho > ~rho_threshold,
+                vmin=metadata["vmin"],
+                vmax=metadata["vmax"],
+                cmap_name="NWSRef",
+            )
+
+            _, _, low_rho, *_ = make_ppi_panel(
+                metadata,
+                reflectivity_rhohv_filt_rgba,
+                "",
+                "dBZ",
+                (0, 1),
+                "NWSRef",
+                opacity_tracker=filt_image_opacity,
+                plot_colorbar=False,
+            )
+            return low_rho
+
+        rho_image = always_redraw(get_rho_data_image)
+        reflectivity_rhohv_filt_image = always_redraw(get_z_rhohv_filt_data_image)
+
+        reflectivity_panel = make_ppi_panel(
+            reflectivity_metadata,
+            reflectivity_rgba,
+            "",
+            "dBZ",
+            (-20, 0, 20, 40, 60),
+            "NWSRef",
+            opacity_tracker=reflectivity_opacity,
+            plot_colorbar=False,
+        )
+
+        # self.add(reflectivity_rhohv_filt_image)
+
+        self.add(
+            reflectivity_panel,
+            rho_image,
+            reflectivity_rhohv_filt_image,
+        )
+        # self.remove(reflectivity_panel[2])
+
+        self.camera.frame.scale(100)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    reflectivity_panel.height * 1.2
+                ),
+                scan_progress.animate(run_time=3).set_value(360),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                rhohv_opacity @ 1,
+                reflectivity_opacity @ 0,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rho_slider = NumberLine(
+            x_range=[0, 1, 0.1],
+            length=reflectivity_panel.height,
+            rotation=PI / 2,
+        ).next_to(reflectivity_panel, RIGHT, LARGE_BUFF)
+        label_0 = (
+            Text("0", font=FONT)
+            .scale(0.7)
+            .next_to(rho_slider.n2p(0), RIGHT, MED_SMALL_BUFF)
+        )
+        label_1 = (
+            Text("1", font=FONT)
+            .scale(0.7)
+            .next_to(rho_slider.n2p(1), RIGHT, MED_SMALL_BUFF)
+        )
+        rho_dot = always_redraw(
+            lambda: Dot().scale(1.5).move_to(rho_slider.n2p(~rho_threshold))
+        )
+        rho_below = always_redraw(
+            lambda: Line(
+                rho_slider.n2p(0),
+                rho_slider.n2p(~rho_threshold),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                color=GREEN,
+            )
+        )
+
+        rhohv_line_label = MathTex(r"\rho_{hv}")
+        rhohv_line_label[0][1].set_color(HPOL_RX_COLOR)
+        rhohv_line_label[0][2].set_color(VPOL_RX_COLOR)
+        threshold_label = (
+            Text("threshold", font=FONT)
+            .scale_to_fit_height(rhohv_line_label.height)
+            .next_to(rhohv_line_label, DOWN, MED_SMALL_BUFF, aligned_edge=LEFT)
+        )
+        rhohv_label_group = Group(rhohv_line_label, threshold_label).next_to(
+            rho_slider, RIGHT, MED_SMALL_BUFF
+        )
+
+        self.play(
+            self.camera.frame.animate.move_to(
+                Group(rho_slider, reflectivity_panel, threshold_label)
+            ),
+            Create(rho_slider),
+            FadeIn(label_1, label_0, rho_below, rho_dot),
+            LaggedStart(
+                *[FadeIn(m) for m in [*rhohv_line_label[0], *threshold_label]],
+                lag_ratio=0.1,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(rho_threshold @ 0.95, run_time=4)
+
+        self.wait(0.5)
+
+        cloud_edge = (
+            Circle(radius=reflectivity_panel.width * 0.05)
+            .stretch(3, 1)
+            .rotate(-PI * 0.3)
+            .move_to(reflectivity_panel)
+            .shift(
+                RIGHT * reflectivity_panel.width * 0.1
+                + UP * reflectivity_panel.width * 0.18
+            )
+            .set_z_index(10)
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    reflectivity_panel.height
+                ).move_to(reflectivity_panel),
+                Create(cloud_edge),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore(), Uncreate(cloud_edge))
+
+        self.wait(0.5)
+
+        self.play(rho_threshold @ 0.5, run_time=4)
+
+        self.wait(0.5)
+
+        self.play(rho_threshold @ 0.8, run_time=4)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                filt_image_opacity @ 1,
+                rhohv_opacity @ 0,
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(2)
+
+
+class RhoHVP4(MovingCameraScene):
+    def construct(self):
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(LEFT * 2 + UP * 2)
+        )
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(fh(self, 0.4)).set_stroke(
+            width=DEFAULT_STROKE_WIDTH * 3
+        ).to_corner(DL, MED_LARGE_BUFF).shift(RIGHT).set_z_index(10)
+
+        self.play(
+            radar.get_animation(),
+            cloud.shift(RIGHT * fw(self, 0.8)).animate.shift(LEFT * fw(self, 0.8)),
+            run_time=1,
+        )
+
+        self.wait(0.5)
+
+        raindrop1 = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.3)
+            .set_opacity(0.7)
+        )
+        raindrop2 = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.4)
+            .set_opacity(0.7)
+        )
+        raindrop3 = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.1 + DOWN * 0.4)
+            .set_opacity(0.7)
+        )
+        raindrop4 = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.3 + DOWN * 0.7)
+            .set_opacity(0.7)
+        )
+        snowflake1 = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.1 + DOWN * 0.3)
+        )
+        snowflake2 = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.2 + DOWN * 1)
+        )
+        snowflake3 = (
+            ImageMobject("../props/static/snowflake.png")
+            .scale_to_fit_width(cloud.width * 0.2)
+            .next_to(raindrop4, DOWN, SMALL_BUFF)
+            .shift(LEFT * 0.5)
+        )
+        raindrop5 = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(snowflake3, LEFT)
+            .shift(DOWN * 0.1)
+            .set_opacity(0.7)
+        )
+
+        beam_u = Line(radar.radome.get_right(), raindrop1.get_corner(UL), color=BLUE)
+        beam_d = Line(
+            radar.radome.get_right(),
+            [raindrop1.get_corner(UL)[0], raindrop5.get_corner(DR)[1], 0],
+            color=BLUE,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(raindrop1, shift=DOWN),
+                FadeIn(raindrop2, shift=DOWN),
+                FadeIn(snowflake1, shift=DOWN),
+                FadeIn(raindrop3, shift=DOWN),
+                FadeIn(raindrop4, shift=DOWN),
+                FadeIn(raindrop5, shift=DOWN),
+                FadeIn(snowflake2, shift=DOWN),
+                FadeIn(snowflake3, shift=DOWN),
+                AnimationGroup(
+                    Create(beam_u),
+                    Create(beam_d),
+                ),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        rho_down = (
+            MathTex(r"\rho_{hv} \downarrow")
+            .scale(2)
+            .next_to(self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF)
+        )
+        rho_down[0][1].set_color(HPOL_RX_COLOR)
+        rho_down[0][2].set_color(VPOL_RX_COLOR)
+
+        precip = Group(
+            raindrop1,
+            raindrop2,
+            snowflake1,
+            raindrop3,
+            raindrop4,
+            raindrop5,
+            snowflake2,
+            snowflake3,
+        )
+        rho_bez = CubicBezier(
+            precip.get_bottom() + [0, -0.1, 0],
+            precip.get_bottom() + [0, -1, 0],
+            rho_down.get_right() + [1, 0, 0],
+            rho_down.get_right() + [0.1, 0, 0],
+        )
+
+        self.play(LaggedStart(Create(rho_bez), FadeIn(rho_down), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        flip_chart_1 = (
+            ImageMobject("./static/dual-pol-flip-1.png")
+            .scale_to_fit_width(fw(self, 0.5))
+            .next_to(cloud, RIGHT, LARGE_BUFF * 2)
+            .set_y(self.camera.frame.get_y())
+        )
+        flip_chart_2 = (
+            ImageMobject("./static/dual-pol-flip-2.png")
+            .scale_to_fit_width(fw(self, 0.5))
+            .move_to(flip_chart_1)
+        )
+        flip_chart_3 = (
+            ImageMobject("./static/dual-pol-flip-3.png")
+            .scale_to_fit_width(fw(self, 0.5))
+            .move_to(flip_chart_1)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Uncreate(rho_bez),
+                    FadeOut(rho_down),
+                    Uncreate(beam_u),
+                    Uncreate(beam_d),
+                    self.camera.frame.animate.shift(
+                        RIGHT * (cloud.get_left()[0] - self.camera.frame.get_left()[0])
+                        + LEFT * LARGE_BUFF
+                    ),
+                ),
+                flip_chart_1.shift(UP * fh(self)).animate.shift(DOWN * fh(self)),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            flip_chart_2.shift(UP * fh(self)).animate.shift(DOWN * fh(self)),
+            flip_chart_1.animate.shift(DOWN * fh(self)),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            flip_chart_3.shift(UP * fh(self)).animate.shift(DOWN * fh(self)),
+            flip_chart_2.animate.shift(DOWN * fh(self)),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(raindrop1),
+            FadeOut(cloud),
+            ShrinkToCenter(flip_chart_3),
+            FadeOut(raindrop2),
+            FadeOut(snowflake1),
+            FadeOut(raindrop3),
+            FadeOut(raindrop4),
+            FadeOut(raindrop5),
+            FadeOut(snowflake2),
+            FadeOut(snowflake3),
+        )
 
         self.wait(2)
