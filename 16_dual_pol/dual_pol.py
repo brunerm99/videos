@@ -8,7 +8,7 @@ from functools import lru_cache
 from math import sqrt
 from pathlib import Path
 from random import shuffle
-from turtle import width
+from turtle import speed, width
 
 import numpy as np
 import pandas as pd
@@ -44,7 +44,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -8127,5 +8127,289 @@ class RhoHVP4(MovingCameraScene):
             FadeOut(snowflake2),
             FadeOut(snowflake3),
         )
+
+        self.wait(2)
+
+
+class Kdp(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        kdp_label = Text("Specific Differential Phase", font=FONT)
+
+        self.play(Write(kdp_label))
+
+        self.wait(0.5)
+
+        kdp_tex = MathTex(r"K_{dp}").scale(2)
+
+        kdp_group_copy = Group(kdp_label.copy(), kdp_tex).arrange(DOWN, LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                kdp_label.animate.move_to(kdp_group_copy[0]),
+                LaggedStart(*[FadeIn(m) for m in kdp_tex[0]]),
+                lag_ratio=0.1,
+            ),
+        )
+
+        self.wait(0.5)
+
+        deq_min = 1.5
+        deq_target = 6.0
+        deq = VT(deq_min)
+        drop_scale = 0.6
+
+        drop_ax = (
+            Axes(
+                x_range=[-1.5, 1.5, 0.5],
+                y_range=[-1.5, 1.5, 0.5],
+                tips=False,
+                x_length=fh(self, 0.75),
+                y_length=fh(self, 0.75),
+            )
+            .set_opacity(0)
+            .shift(UP)
+        )
+
+        def get_drop_shape_updater(shift=ORIGIN, opacity_mult=1):
+            def make_drop_shape():
+                points = _thurai_drop_outline_points(~deq)
+                drop = (
+                    Polygon(
+                        *points,
+                        color=PRECIP_COLOR,
+                        fill_color=PRECIP_COLOR,
+                        fill_opacity=0.12 * opacity_mult,
+                        stroke_opacity=opacity_mult,
+                        stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                    )
+                    .scale(drop_scale)
+                    .set_z_index(2)
+                    .move_to(drop_ax.c2p(0, 0))
+                    .rotate(Line(drop_ax.c2p(0, 0), drop_ax.c2p(1, 0)).get_angle())
+                    .shift(shift)
+                )
+                return drop
+
+            return make_drop_shape
+
+        drop_shape = always_redraw(get_drop_shape_updater())
+        self.add(drop_shape)
+
+        self.play(
+            LaggedStart(
+                FadeOut(kdp_label, run_time=0.5),
+                FadeOut(kdp_tex, run_time=0.5),
+                drop_ax.shift(UP * fh(self)).animate.shift(DOWN * fh(self)),
+                deq @ 5,
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        ax = (
+            Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[-1, 1, 0.5],
+                tips=False,
+                x_length=drop_shape.width,
+                y_length=drop_shape.height,
+            )
+            .move_to(drop_shape)
+            .shift(LEFT * drop_shape.width * 3)
+        )
+        f = 6
+        pw = 0.5
+        x1 = VT(pw)
+        sig = always_redraw(
+            lambda: ax.plot(
+                lambda t: np.sin(2 * PI * f * t),
+                x_range=[~x1 - pw, ~x1, 1 / 200],
+                color=HPOL_TX_COLOR,
+            )
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        base_rate = 1.5
+        slow_rate = 0.5
+        inc1 = 2.75
+        inc2 = 1
+        inc3 = 2.75
+        self.add(ax, sig)
+        self.play(
+            x1.animate(run_time=inc1 / base_rate).increment_value(inc1),
+            rate_func=rate_functions.linear,
+        )
+        self.play(
+            x1.animate(run_time=inc2 / slow_rate).increment_value(inc2),
+            rate_func=rate_functions.linear,
+        )
+        self.play(
+            x1.animate(run_time=inc3 / base_rate).increment_value(inc3),
+            rate_func=rate_functions.linear,
+        )
+
+        self.wait(0.5)
+
+        air1 = Rectangle(
+            height=drop_shape.height * 1.2,
+            width=-(self.camera.frame.get_left() - drop_shape.get_left())[0],
+            color=WHITE,
+            stroke_opacity=0,
+            fill_color=WHITE,
+            fill_opacity=0.2,
+        ).next_to(drop_shape, LEFT, 0)
+        air2 = Rectangle(
+            height=drop_shape.height * 1.2,
+            width=-(self.camera.frame.get_left() - drop_shape.get_left())[0],
+            color=WHITE,
+            stroke_opacity=0,
+            fill_color=WHITE,
+            fill_opacity=0.2,
+        ).next_to(drop_shape, RIGHT, 0)
+        water = Rectangle(
+            height=drop_shape.height * 1.2,
+            width=drop_shape.width,
+            color=PRECIP_COLOR,
+            stroke_opacity=0,
+            fill_color=PRECIP_COLOR,
+            fill_opacity=0.2,
+        ).next_to(air1, RIGHT, 0)
+
+        air1_label = Text("Air", font=FONT).next_to(air1, UP)
+        air2_label = Text("Air", font=FONT).next_to(air2, UP)
+        water_label = Text("Water", font=FONT).next_to(water, UP)
+        refac_air1 = MathTex(r"n_{\text{air}} \approx 1").next_to(air1, DOWN)
+        refac_air2 = MathTex(r"n_{ \text{air}}\approx 1").next_to(air2, DOWN)
+        refac_water = MathTex(r"n_{ \text{water}} \approx 1.33").next_to(water, DOWN)
+
+        self.play(
+            LaggedStart(
+                FadeIn(air1),
+                Write(air1_label),
+                FadeIn(water),
+                Write(water_label),
+                FadeIn(air2),
+                Write(air2_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeIn(refac_air1),
+                FadeIn(refac_air2),
+                FadeIn(refac_water),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        speed_eqn = MathTex(r"v_p = \frac{c}{n}").next_to(
+            self.camera.frame.get_bottom(), UP, LARGE_BUFF
+        )
+
+        self.play(speed_eqn.shift(DOWN * 5).animate.shift(UP * 5))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                speed_eqn[0][-1].animate.set_color(YELLOW),
+                refac_air1[0][0].animate.set_color(YELLOW),
+                refac_water[0][0].animate.set_color(YELLOW),
+                refac_air2[0][0].animate.set_color(YELLOW),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        speed_eqn_air = MathTex(
+            r"v_p = \frac{c}{n_{\text{air}}} = 299792458 \text{ m/s}"
+        ).move_to(speed_eqn, LEFT)
+        self.play(
+            LaggedStart(
+                ReplacementTransform(speed_eqn[0][:4], speed_eqn_air[0][:4]),
+                ReplacementTransform(speed_eqn[0][4], speed_eqn_air[0][4]),
+                ReplacementTransform(speed_eqn[0][5], speed_eqn_air[0][5]),
+                FadeIn(speed_eqn_air[0][6]),
+                FadeIn(speed_eqn_air[0][7]),
+                FadeIn(speed_eqn_air[0][8]),
+                *[FadeIn(m) for m in speed_eqn_air[0][9:]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        speed_eqn_water = MathTex(
+            r"v_p = \frac{c}{n_{\text{water}}} = 225407863 \text{ m/s}"
+        ).move_to(speed_eqn, LEFT)
+        self.play(
+            LaggedStart(
+                *[FadeOut(m) for m in speed_eqn_air[0][9:]],
+                ReplacementTransform(speed_eqn_air[0][:4], speed_eqn_water[0][:4]),
+                ReplacementTransform(speed_eqn_air[0][4], speed_eqn_water[0][4]),
+                ReplacementTransform(speed_eqn_air[0][5], speed_eqn_water[0][5]),
+                FadeOut(speed_eqn_air[0][6]),
+                FadeIn(speed_eqn_water[0][6]),
+                FadeOut(speed_eqn_air[0][7]),
+                FadeIn(speed_eqn_water[0][7]),
+                FadeOut(speed_eqn_air[0][8]),
+                FadeIn(speed_eqn_water[0][8]),
+                FadeIn(speed_eqn_water[0][9]),
+                FadeIn(speed_eqn_water[0][10]),
+                *[FadeIn(m) for m in speed_eqn_water[0][11:]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(
+                    *refac_air1[0],
+                    *refac_air2[0],
+                    *refac_water[0],
+                    air1,
+                    air2,
+                    water,
+                    air1_label,
+                    air2_label,
+                    water_label,
+                    *speed_eqn_water[0],
+                ),
+                self.camera.frame.animate.scale(0.8).move_to(drop_shape),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        harrow = DoubleArrow(
+            drop_shape.get_left(), drop_shape.get_right(), buff=0, color=HPOL_RX_COLOR
+        ).set_z_index(3)
+        varrow = DoubleArrow(
+            drop_shape.get_bottom(), drop_shape.get_top(), buff=0, color=VPOL_RX_COLOR
+        ).set_z_index(3)
+
+        self.play(GrowArrow(harrow))
+
+        self.wait(0.5)
+
+        self.play(GrowArrow(varrow))
+
+        self.wait(0.5)
 
         self.wait(2)
