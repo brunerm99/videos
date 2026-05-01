@@ -44,7 +44,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -8350,7 +8350,7 @@ class Kdp(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         speed_eqn_water = MathTex(
             r"v_p = \frac{c}{n_{\text{water}}} = 225407863 \text{ m/s}"
@@ -8376,6 +8376,20 @@ class Kdp(MovingCameraScene):
 
         self.wait(0.5)
 
+        arrow = Arrow(LEFT, RIGHT).next_to(speed_eqn_water, RIGHT, LARGE_BUFF * 10)
+        phi = (
+            MathTex(r"\phi")
+            .scale_to_fit_height(speed_eqn_water.height)
+            .next_to(speed_eqn_water, RIGHT, LARGE_BUFF * 10)
+        )
+
+        self.play(
+            Group(speed_eqn_water, arrow, phi)
+            .animate.arrange(RIGHT, MED_SMALL_BUFF)
+            .move_to(speed_eqn_water)
+            .set_x(self.camera.frame.get_x())
+        )
+
         self.play(
             LaggedStart(
                 FadeOut(
@@ -8389,6 +8403,8 @@ class Kdp(MovingCameraScene):
                     air2_label,
                     water_label,
                     *speed_eqn_water[0],
+                    arrow,
+                    phi,
                 ),
                 self.camera.frame.animate.scale(0.8).move_to(drop_shape),
                 lag_ratio=0.2,
@@ -8468,32 +8484,267 @@ class Kdp(MovingCameraScene):
             .set_opacity(0.7)
         )
 
-        storm = (
+        self.next_section(skip_animations=skip_animations(True))
+
+        delay_ax = (
+            Axes(
+                x_range=[0, 10, 1],
+                y_range=[-10, 0, 1],
+                tips=False,
+                x_length=fw(self, 0.7),
+                y_length=fh(self, 0.4),
+            )
+            .next_to(self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF)
+            .shift(LEFT * 0.2)
+        )
+
+        locs = [2, 7]
+        slope_h = -2
+        slope_v = -1
+        weather_width = 2
+        delay_x1 = VT(0)
+        vpol_delay = always_redraw(
+            lambda: delay_ax.plot(
+                lambda t: (
+                    0
+                    if t < locs[0]
+                    else slope_v * (t - locs[0])
+                    if t < locs[0] + weather_width
+                    else slope_v * locs[0]
+                    if t < locs[1]
+                    else slope_v * (t - locs[1] + weather_width)
+                    if t < locs[1] + weather_width
+                    else slope_v * (len(locs) * weather_width)
+                ),
+                x_range=[0, ~delay_x1, 1 / 200],
+                color=VPOL_RX_COLOR,
+                use_smoothing=False,
+            )
+        )
+        hpol_delay = always_redraw(
+            lambda: delay_ax.plot(
+                lambda t: (
+                    0
+                    if t < locs[0]
+                    else slope_h * (t - locs[0])
+                    if t < locs[0] + weather_width
+                    else slope_h * locs[0]
+                    if t < locs[1]
+                    else slope_h * (t - locs[1] + weather_width)
+                    if t < locs[1] + weather_width
+                    else slope_h * (len(locs) * weather_width)
+                ),
+                x_range=[0, ~delay_x1, 1 / 200],
+                color=HPOL_RX_COLOR,
+                use_smoothing=False,
+            )
+        )
+
+        storm1 = (
             Group(
                 cloud, raindrop1, raindrop2, raindrop3, raindrop4, raindrop5, raindrop6
             )
-            .scale_to_fit_height(fh(self, 0.35))
-            .move_to(self.camera.frame.get_center())
+            .scale_to_fit_width(
+                (delay_ax.c2p(locs[0] + 2, 0) - delay_ax.c2p(locs[0], 0))[0]
+            )
+            .next_to(delay_ax.c2p(locs[0] + weather_width / 2, 0), UP, MED_SMALL_BUFF)
+        )
+        storm2 = deepcopy(storm1).next_to(
+            delay_ax.c2p(locs[1] + weather_width / 2, 0), UP, MED_SMALL_BUFF
         )
 
-        delay_ax = Axes(
-            x_range=[0, 10, 1],
-            y_range=[-10, 0, 2.5],
-            tips=False,
-            x_length=fw(self, 0.8),
-            y_length=fh(self, 0.6),
-        ).next_to(self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF)
-
         delay_label = (
-            Text("Delay vs. Air").rotate(PI / 2).next_to(delay_ax, LEFT, MED_SMALL_BUFF)
+            Text("Delay vs. Air", font=FONT)
+            .rotate(PI / 2)
+            .scale_to_fit_height(delay_ax.height * 0.8)
+            .next_to(delay_ax, LEFT, MED_SMALL_BUFF)
+        )
+        vpol_label = always_redraw(
+            lambda: (
+                MathTex(r"\phi_{v}", color=VPOL_RX_COLOR)
+                .scale_to_fit_width(fw(self, 0.05))
+                .next_to(delay_ax.i2gp(~delay_x1, vpol_delay), RIGHT, SMALL_BUFF)
+                .shift(DOWN / 4)
+            )
+        )
+        hpol_label = always_redraw(
+            lambda: (
+                MathTex(r"\phi_{h}", color=HPOL_RX_COLOR)
+                .scale_to_fit_width(fw(self, 0.05))
+                .next_to(delay_ax.i2gp(~delay_x1, hpol_delay), RIGHT, SMALL_BUFF)
+                .shift(DOWN / 2)
+            )
+        )
+        vpol_dot = always_redraw(
+            lambda: Dot(color=VPOL_RX_COLOR).move_to(
+                delay_ax.i2gp(~delay_x1, vpol_delay)
+            )
+        )
+        hpol_dot = always_redraw(
+            lambda: Dot(color=HPOL_RX_COLOR).move_to(
+                delay_ax.i2gp(~delay_x1, hpol_delay)
+            )
+        )
+
+        storm1_line_x0 = DashedLine(
+            delay_ax.c2p(locs[0], 8),
+            delay_ax.c2p(locs[0], -8),
+            color=GRAY,
+            stroke_opacity=0.7,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        storm1_line_x1 = DashedLine(
+            delay_ax.c2p(locs[0] + weather_width, 8),
+            delay_ax.c2p(locs[0] + weather_width, -8),
+            color=GRAY,
+            stroke_opacity=0.7,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+
+        storm2_line_x0 = DashedLine(
+            delay_ax.c2p(locs[1], 8),
+            delay_ax.c2p(locs[1], -8),
+            color=GRAY,
+            stroke_opacity=0.7,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
+        )
+        storm2_line_x1 = DashedLine(
+            delay_ax.c2p(locs[1] + weather_width, 8),
+            delay_ax.c2p(locs[1] + weather_width, -8),
+            color=GRAY,
+            stroke_opacity=0.7,
+            dash_length=DEFAULT_DASH_LENGTH * 2,
         )
 
         self.play(
             LaggedStart(
                 Create(delay_ax),
                 FadeIn(delay_label),
+                FadeIn(storm1),
+                Create(storm1_line_x0),
+                Create(storm1_line_x1),
+                FadeIn(storm2),
+                Create(storm2_line_x0),
+                Create(storm2_line_x1),
                 lag_ratio=0.2,
             )
         )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeIn(hpol_delay, hpol_label, hpol_dot),
+            FadeIn(vpol_delay, vpol_label, vpol_dot),
+        )
+
+        self.wait(0.5)
+
+        self.play(delay_x1 @ 10, run_time=10)
+
+        self.wait(0.5)
+
+        phi_dp_eqn = MathTex(r"\Phi_{dp} = \phi_h-\phi_v").next_to(
+            self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF
+        )
+        phi_dp_eqn[0][4:6].set_color(HPOL_RX_COLOR)
+        phi_dp_eqn[0][7:9].set_color(VPOL_RX_COLOR)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeIn(m) for m in phi_dp_eqn[0][:4]], lag_ratio=0.1),
+                ReplacementTransform(
+                    hpol_label[0], phi_dp_eqn[0][4:6], path_arc=PI / 3
+                ),
+                FadeIn(phi_dp_eqn[0][6]),
+                ReplacementTransform(
+                    vpol_label[0], phi_dp_eqn[0][7:9], path_arc=PI / 3
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.camera.frame.animate.shift(DOWN * fh(self)),
+            phi_dp_eqn.animate.move_to(self.camera.frame.copy().shift(DOWN * fh(self))),
+        )
+
+        self.wait(0.5)
+
+        kdp_eqn = MathTex(r"K_{dp} = \frac{1}{2} \frac{d \Phi_{dp}}{dr}").next_to(
+            phi_dp_eqn, DOWN, MED_LARGE_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(phi_dp_eqn[0][:3], kdp_eqn[0][8:11], path_arc=PI / 3),
+                phi_dp_eqn.animate.shift(UP),
+                LaggedStart(*[FadeIn(m) for m in [*kdp_eqn[0][:8], kdp_eqn[0][11:]]]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        immune = Paragraph(
+            "Immune to:",
+            "- Miscalibration",
+            "- Partial beam blockage",
+            font=FONT,
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+        )
+        benefits = Paragraph(
+            "Benefits:",
+            "- Clean rainfall rate",
+            "  estimator",
+            "- ...",
+            font=FONT,
+            font_size=DEFAULT_FONT_SIZE * 0.6,
+        )
+        Group(immune, benefits).arrange(
+            DOWN, MED_LARGE_BUFF, aligned_edge=LEFT
+        ).next_to(self.camera.frame.get_right(), LEFT, MED_LARGE_BUFF)
+
+        self.play(
+            phi_dp_eqn.animate.shift(UP * fh(self)),
+            kdp_eqn.animate.next_to(
+                self.camera.frame.get_left(), RIGHT, MED_LARGE_BUFF
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(Write(immune[0]))
+
+        self.wait(0.5)
+
+        self.play(Write(immune[1]))
+
+        self.wait(0.5)
+
+        self.play(Write(immune[2]))
+
+        self.wait(0.5)
+
+        self.play(Write(benefits[0]))
+
+        self.wait(0.5)
+
+        self.play(Write(benefits[1]))
+
+        self.wait(0.5)
+
+        self.play(Write(benefits[2]))
+
+        self.wait(0.5)
+
+        self.play(Write(benefits[3]))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
