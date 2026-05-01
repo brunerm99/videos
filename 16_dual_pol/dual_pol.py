@@ -8412,4 +8412,88 @@ class Kdp(MovingCameraScene):
 
         self.wait(0.5)
 
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(LEFT * 2 + UP * 2)
+        )
+
+        raindrop1 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.3)
+            .set_opacity(0.7)
+        )
+        raindrop2 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.4)
+            .set_opacity(0.7)
+        )
+        raindrop3 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * cloud.width * 0.1 + DOWN * 0.4)
+            .set_opacity(0.7)
+        )
+        raindrop4 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(cloud, DOWN, MED_SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.3 + DOWN * 0.7)
+            .set_opacity(0.7)
+        )
+        raindrop5 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(raindrop4, LEFT, MED_SMALL_BUFF)
+            .shift(DOWN * cloud.height * 0.2)
+            .set_opacity(0.7)
+        )
+        raindrop6 = (
+            ImageMobject("../props/static/raindrop.png")
+            .scale_to_fit_width(cloud.width * 0.15)
+            .next_to(raindrop5, UP, MED_SMALL_BUFF)
+            .shift(RIGHT * cloud.width * 0.1 + UP * 0.4)
+            .set_opacity(0.7)
+        )
+
+        storm = (
+            Group(
+                cloud, raindrop1, raindrop2, raindrop3, raindrop4, raindrop5, raindrop6
+            )
+            .scale_to_fit_height(fh(self, 0.35))
+            .move_to(self.camera.frame.get_center())
+        )
+
+        delay_ax = Axes(
+            x_range=[0, 10, 1],
+            y_range=[-10, 0, 2.5],
+            tips=False,
+            x_length=fw(self, 0.8),
+            y_length=fh(self, 0.6),
+        ).next_to(self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF)
+
+        delay_label = (
+            Text("Delay vs. Air").rotate(PI / 2).next_to(delay_ax, LEFT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Create(delay_ax),
+                FadeIn(delay_label),
+                lag_ratio=0.2,
+            )
+        )
+
         self.wait(2)
