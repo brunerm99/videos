@@ -8,7 +8,6 @@ from functools import lru_cache
 from math import sqrt
 from pathlib import Path
 from random import shuffle
-from turtle import speed, width
 
 import numpy as np
 import pandas as pd
@@ -20,7 +19,7 @@ from MF_Tools import VT, SurroundingRectangleUnion
 from networkx import center
 from numpy.fft import fft, fftshift
 from scipy import signal
-from scipy.interpolate import PchipInterpolator, interp1d
+from scipy.interpolate import interp1d
 
 sys.path.insert(0, "..")
 from props import (
@@ -9752,5 +9751,276 @@ class WrapUp2(MovingCameraScene):
                 lag_ratio=0.2,
             )
         )
+
+        self.wait(0.5)
+
+        class_algo_label = (
+            Paragraph("Classification", "Algorithm", font=FONT, alignment="center")
+            .next_to(kdp_ppi, DOWN, LARGE_BUFF * 2)
+            .shift(RIGHT * 3)
+        )
+        class_algo_box = SurroundingRectangle(
+            class_algo_label, buff=MED_SMALL_BUFF, corner_radius=0.2
+        )
+
+        zdr_bez = CubicBezier(
+            zdr_ppi.get_bottom() + [0, -0.1, 0],
+            zdr_ppi.get_bottom() + [0, -1, 0],
+            class_algo_box.get_left() + [-1, 0, 0],
+            class_algo_box.get_left(),
+        )
+        phidp_bez = CubicBezier(
+            phidp_ppi.get_bottom() + [0, -0.1, 0],
+            phidp_ppi.get_bottom() + [0, -1, 0],
+            class_algo_box.get_left() + [-1, 0, 0],
+            class_algo_box.get_left(),
+        )
+        kdp_bez = CubicBezier(
+            kdp_ppi.get_bottom() + [0, -0.1, 0],
+            kdp_ppi.get_bottom() + [0, -1, 0],
+            class_algo_box.get_left() + [-1, 0, 0],
+            class_algo_box.get_left(),
+        )
+        rhohv_bez = CubicBezier(
+            rhohv_ppi.get_bottom() + [0, -0.1, 0],
+            rhohv_ppi.get_bottom() + [0, -1, 0],
+            class_algo_box.get_left() + [-1, 0, 0],
+            class_algo_box.get_left(),
+        )
+        self.next_section(skip_animations=skip_animations(False))
+
+        arrow = Arrow(LEFT, RIGHT).next_to(class_algo_box, RIGHT, SMALL_BUFF)
+        classes = (
+            Paragraph(
+                "- rain",
+                "- heavy rain",
+                "- large hail",
+                "- small hail",
+                "- wet snow",
+                "- dry snow",
+                "- ice crystals",
+                "- graupel",
+                "- biological targets",
+                "- etc.",
+                font=FONT,
+                alignment="left",
+                line_spacing=MED_LARGE_BUFF,
+            )
+            .scale(1)
+            .next_to(arrow, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Create(zdr_bez),
+                Create(rhohv_bez),
+                Create(kdp_bez),
+                Create(phidp_bez),
+                self.camera.frame.animate.scale(1.2)
+                .move_to(class_algo_box)
+                .shift(RIGHT * 3),
+                Create(class_algo_box),
+                Write(class_algo_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(arrow),
+                *[
+                    LaggedStart(*[FadeIn(m) for m in bullet], lag_ratio=0.1)
+                    for bullet in classes
+                ],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rain = SurroundingRectangle(classes[0], buff=SMALL_BUFF)
+        hail = SurroundingRectangle(classes[2:4], buff=SMALL_BUFF)
+        aviation = Paragraph(
+            "Aviation",
+            "Safety",
+            font=FONT,
+            line_spacing=MED_LARGE_BUFF,
+            alignment="center",
+        ).next_to(Group(rain, hail), RIGHT, LARGE_BUFF * 2)
+        rain_bez = CubicBezier(
+            rain.get_right() + [0.1, 0, 0],
+            rain.get_right() + [2, 0, 0],
+            aviation.get_left() + [-1, 0, 0],
+            aviation.get_left() + [-0.1, 0, 0],
+        )
+        hail_bez = CubicBezier(
+            hail.get_right() + [0.1, 0, 0],
+            hail.get_right() + [1, 0, 0],
+            aviation.get_left() + [-1, 0, 0],
+            aviation.get_left() + [-0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                Create(rain),
+                Create(hail),
+                Create(rain_bez),
+                Create(hail_bez),
+                self.camera.frame.animate.move_to(Group(aviation, rain, hail)),
+                Write(aviation[0]),
+                Write(aviation[1]),
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(RIGHT * fw(self, 1.5)))
+
+        self.wait(2)
+
+
+class WrapUp3D(ThreeDScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        axes = ThreeDAxes(
+            x_range=[-2, 2, 0.5],
+            y_range=[-1, 1, 0.5],
+            z_range=[-2, 2, 0.5],
+            x_length=20,
+            y_length=10,
+            z_length=20,
+            tips=False,
+            x_axis_config=dict(
+                # stroke_color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_opacity=0.5,
+            ),
+            y_axis_config=dict(
+                # stroke_color=RED,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_opacity=0.5,
+            ),
+            z_axis_config=dict(
+                # stroke_color=ORANGE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_opacity=0.5,
+            ),
+        ).shift(IN * 5 + UP * 5)
+        axes.shift(LEFT * 40)
+        # self.add(axes)
+
+        target_dist = 40
+        u0 = VT(0)
+        u1 = VT(4)
+        u0_rx = VT(target_dist)
+        u1_rx = VT(target_dist + 4)
+        hpol_tx_opacity = VT(1)
+        hpol_rx_opacity = VT(0)
+        vpol_tx_opacity = VT(0)
+        vpol_rx_opacity = VT(0)
+        hpol_tx_amp = VT(1)
+        vpol_tx_amp = VT(1)
+        hpol_rx_amp = VT(1)
+        vpol_rx_amp = VT(0.6)
+        hpol_rotation = VT(0)
+        hpol_tx_highlight_opacity = VT(0)
+        hpol_tx_highlight_x0 = VT(0)
+        hpol_tx_highlight_x1 = VT(0)
+        vpol_tx_highlight_x0 = VT(0)
+        vpol_tx_highlight_x1 = VT(0)
+        vpol_tx_width = VT(0)
+        vpol_tx_rotation = VT(-PI / 2)
+        hpol_tx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
+                color=HPOL_TX_COLOR,
+                t_range=(~u0, ~u1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~hpol_rotation, RIGHT)
+        ).set_shade_in_3d(True)
+        hpol_tx_highlight = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
+                color=YELLOW,
+                t_range=(~hpol_tx_highlight_x0, ~hpol_tx_highlight_x1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                stroke_opacity=~hpol_tx_highlight_opacity,
+            )
+        ).set_shade_in_3d(True)
+        vpol_tx_highlight = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=YELLOW,
+                t_range=(~vpol_tx_highlight_x0, ~vpol_tx_highlight_x1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2.5,
+                stroke_opacity=~hpol_tx_highlight_opacity,
+            )
+        ).set_shade_in_3d(True)
+        vpol_tx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_tx_amp * np.sin(2 * PI * u)),
+                color=VPOL_TX_COLOR,
+                t_range=(~u0, ~u1, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * ~vpol_tx_width,
+                stroke_opacity=~hpol_tx_opacity,
+            ).rotate(~vpol_tx_rotation, RIGHT)
+        ).set_shade_in_3d(True)
+        hpol_rx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, ~hpol_rx_amp * np.sin(2 * PI * u), 0),
+                color=HPOL_RX_COLOR,
+                t_range=(~u0_rx, ~u1_rx, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_opacity=~hpol_rx_opacity,
+            )
+        ).set_shade_in_3d(True)
+        vpol_rx = always_redraw(
+            lambda: axes.plot_parametric_curve(
+                lambda u: (u, 0, ~vpol_rx_amp * np.sin(2 * PI * u)),
+                color=VPOL_RX_COLOR,
+                t_range=(~u0_rx, ~u1_rx, 1 / 100),
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_opacity=~vpol_rx_opacity,
+            )
+        ).set_shade_in_3d(True)
+
+        self.add(
+            axes,
+            hpol_tx,
+            hpol_rx,
+            vpol_tx,
+            vpol_rx,
+            hpol_tx_highlight,
+            vpol_tx_highlight,
+        )
+
+        self.set_camera_orientation(
+            zoom=0.6,
+            theta=-160 * DEGREES,
+            phi=80 * DEGREES,
+            gamma=0,
+        )
+
+        self.wait(0.5)
+
+        self.play(axes.animate.shift(RIGHT * 40))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                vpol_tx_width @ 2,
+                vpol_tx_rotation @ 0,
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
