@@ -15,8 +15,6 @@ from .block_diagram import (
     get_phase_shifter,
     get_splitter,
 )
-from .radar import FMCWRadarCartoon, WeatherRadarTower
-from .video import VideoMobject
 from .easing import (
     bezier_out_in,
     cubic_bezier,
@@ -24,3 +22,6 @@ from .easing import (
     ease_in_out_elastic,
     ease_out_elastic,
 )
+from .ppi import PPIGrid
+from .radar import FMCWRadarCartoon, WeatherRadarTower
+from .video import VideoMobject

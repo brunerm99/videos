@@ -16,7 +16,7 @@ import skrf as rf
 from dotenv import load_dotenv
 from manim import *
 from manim.utils.color.X11 import BROWN1
-from MF_Tools import VT
+from MF_Tools import VT, SurroundingRectangleUnion
 from networkx import center
 from numpy.fft import fft, fftshift
 from scipy import signal
@@ -28,6 +28,7 @@ from props import (
     Capacitor,
     Fet,
     Inductor,
+    PPIGrid,
     Resistor,
     VideoMobject,
     WeatherRadarTower,
@@ -1516,6 +1517,161 @@ class Background(MovingCameraScene):
         # self.wait(0.5)
 
         # self.play(FadeOut(dual_pol))
+
+        self.wait(2)
+
+
+class BackgroundV2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        s3_key = NEXRAD_CASE_S3_KEY
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 520
+
+        reflectivity_metadata = _get_nexrad_reflectivity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        v_metadata = _get_nexrad_velocity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        z_vmin = 0
+        z_vmax = 75
+        z_step = 15
+        reflectivity_ticks = np.arange(z_vmin, z_vmax + z_step, z_step)
+        v_lim = max(abs(v_metadata["vmin"]), abs(v_metadata["vmax"]))
+        v_vmin = -v_lim
+        v_vmax = v_lim
+        v_step = 10
+        v_ticks = np.arange(v_vmin, v_vmax + v_step, v_step)
+
+        reflectivity_ppi = PPIGrid(
+            reflectivity_metadata,
+            "reflectivity_dbz",
+            valid_mask=reflectivity_metadata["valid_mask"],
+            vmin=z_vmin,
+            vmax=z_vmax,
+            font=FONT,
+            colorbar_ticks=reflectivity_ticks,
+            radius=fw(self, 0.1),
+            init_scan_progress=0,
+        )
+        v_ppi = PPIGrid(
+            v_metadata,
+            "velocity_ms",
+            valid_mask=v_metadata["valid_mask"],
+            vmin=v_vmin,
+            vmax=v_vmax,
+            font=FONT,
+            colorbar_ticks=v_ticks,
+            radius=fw(self, 0.1),
+            cmap_name="coolwarm",
+            init_scan_progress=0,
+        )
+        ppis = (
+            Group(reflectivity_ppi, v_ppi)
+            .arrange(RIGHT, MED_LARGE_BUFF)
+            .next_to(self.camera.frame.get_bottom(), UP, LARGE_BUFF)
+        )
+        reflectivity_label = (
+            Text("Reflectivity", font=FONT)
+            .scale(0.6)
+            .next_to(reflectivity_ppi.data_image, UP, MED_LARGE_BUFF)
+        )
+        v_label = (
+            Text("Velocity", font=FONT)
+            .scale(0.6)
+            .next_to(v_ppi.data_image, UP, MED_LARGE_BUFF)
+        )
+        reflectivity_sym = (
+            MathTex("Z").scale(1.3).next_to(reflectivity_label, UP, MED_SMALL_BUFF)
+        )
+        v_sym = MathTex("v").scale(1.3).next_to(v_label, UP, MED_SMALL_BUFF)
+        ppis_all = Group(
+            ppis,
+            reflectivity_label,
+            reflectivity_sym,
+            v_label,
+            v_sym,
+        ).move_to(self.camera.frame)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(FadeIn(reflectivity_ppi), FadeIn(v_ppi)),
+                FadeIn(reflectivity_label),
+                FadeIn(reflectivity_sym),
+                FadeIn(v_label),
+                FadeIn(v_sym),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                reflectivity_ppi.scan_progress @ 360,
+                v_ppi.scan_progress @ 360,
+                lag_ratio=0.3,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        what_z = (
+            Circle(radius=reflectivity_ppi.data_image.width * 0.3, color=GREEN)
+            .stretch(0.5, 1)
+            .rotate(PI / 6)
+            .move_to(reflectivity_ppi.data_image)
+            .shift(
+                LEFT * reflectivity_ppi.data_image.width * 0.1
+                + UP * reflectivity_ppi.data_image.width * 0.27
+            )
+        )
+
+        what_v = (
+            what_z.copy()
+            .move_to(v_ppi.data_image)
+            .shift(
+                LEFT * v_ppi.data_image.width * 0.1 + UP * v_ppi.data_image.width * 0.27
+            )
+        )
+
+        self.play(Create(what_z), Create(what_v))
+
+        self.wait(0.5)
+
+        notebook = (
+            VideoMobject("../../../media/obs/2026-05-03_09-50-06.mkv")
+            .scale_to_fit_width(fw(self))
+            .move_to(self.camera.frame)
+            .shift(UP * fh(self, 2))
+        )
+        self.add(notebook)
+
+        dual_pol = (
+            Text("Dual-Pol", font=FONT).move_to(self.camera.frame).shift(UP * fh(self))
+        )
+        self.add(dual_pol)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+        self.wait(4)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+        self.wait(30)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
 
         self.wait(2)
 
@@ -4155,6 +4311,187 @@ def _get_nexrad_velocity_ppi_data(
     return data_copy
 
 
+def _get_nexrad_zdr_ppi_data(
+    s3_key=NEXRAD_CASE_S3_KEY,
+    sweep=6,
+    max_range_km=150.0,
+    resolution=1200,
+):
+    data = _get_nexrad_ppi_data_cached(
+        s3_key=s3_key,
+        sweep=sweep,
+        max_range_km=max_range_km,
+        resolution=resolution,
+        field_name="differential_reflectivity",
+    )
+    data_copy = {
+        key: value.copy() if isinstance(value, np.ndarray) else value
+        for key, value in data.items()
+    }
+    data_copy["zdr_db"] = data_copy.pop("field_data")
+    return data_copy
+
+
+def _get_nexrad_phidp_ppi_data(
+    s3_key=NEXRAD_CASE_S3_KEY,
+    sweep=6,
+    max_range_km=150.0,
+    resolution=1200,
+):
+    data = _get_nexrad_ppi_data_cached(
+        s3_key=s3_key,
+        sweep=sweep,
+        max_range_km=max_range_km,
+        resolution=resolution,
+        field_name="differential_phase",
+    )
+    data_copy = {
+        key: value.copy() if isinstance(value, np.ndarray) else value
+        for key, value in data.items()
+    }
+    data_copy["phidp_deg"] = data_copy.pop("field_data")
+    return data_copy
+
+
+def _derive_kdp_from_phidp_sweep(phidp_deg, ranges_km):
+    kdp_deg_per_km = np.full(phidp_deg.shape, np.nan, dtype=np.float32)
+    for ray_idx, phidp_ray in enumerate(phidp_deg):
+        finite_gate_idx = np.flatnonzero(np.isfinite(phidp_ray))
+        if finite_gate_idx.size < 5:
+            continue
+
+        gate_runs = np.split(
+            finite_gate_idx,
+            np.flatnonzero(np.diff(finite_gate_idx) > 1) + 1,
+        )
+        for gate_idx in gate_runs:
+            if gate_idx.size < 5:
+                continue
+
+            phidp_unwrapped = np.rad2deg(np.unwrap(np.deg2rad(phidp_ray[gate_idx])))
+            window_len = min(
+                31,
+                gate_idx.size if gate_idx.size % 2 else gate_idx.size - 1,
+            )
+            if window_len >= 5:
+                phidp_unwrapped = signal.savgol_filter(
+                    phidp_unwrapped,
+                    window_length=window_len,
+                    polyorder=2,
+                    mode="interp",
+                )
+
+            dphidp_dr = np.gradient(phidp_unwrapped, ranges_km[gate_idx])
+            if dphidp_dr.size >= 9:
+                dphidp_dr = signal.medfilt(dphidp_dr, kernel_size=9)
+            elif dphidp_dr.size >= 5:
+                dphidp_dr = signal.medfilt(dphidp_dr, kernel_size=5)
+            kdp_deg_per_km[ray_idx, gate_idx] = 0.5 * dphidp_dr
+
+    return kdp_deg_per_km
+
+
+@lru_cache(maxsize=16)
+def _get_nexrad_kdp_ppi_data(
+    s3_key=NEXRAD_CASE_S3_KEY,
+    sweep=6,
+    max_range_km=150.0,
+    resolution=1200,
+):
+    from datetime import datetime
+
+    import pyart
+
+    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
+    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    field_name = "differential_phase"
+    if sweep < 0 or sweep >= radar.nsweeps:
+        sweep = _get_nexrad_best_sweep_for_field(
+            s3_key=s3_key,
+            requested_sweep=sweep,
+            field_name=field_name,
+        )
+
+    phidp_data = np.ma.filled(
+        radar.get_field(sweep, field_name).astype(np.float32), np.nan
+    )
+    sweep_start = int(radar.sweep_start_ray_index["data"][sweep])
+    sweep_end = int(radar.sweep_end_ray_index["data"][sweep]) + 1
+    azimuths = radar.azimuth["data"][sweep_start:sweep_end].astype(np.float32)
+    ranges_km = radar.range["data"].astype(np.float32) / 1000.0
+
+    order = np.argsort(azimuths)
+    azimuths = azimuths[order]
+    phidp_data = phidp_data[order]
+
+    gate_mask = ranges_km <= max_range_km
+    ranges_km = ranges_km[gate_mask]
+    phidp_data = phidp_data[:, gate_mask]
+    kdp_data = _derive_kdp_from_phidp_sweep(phidp_data, ranges_km)
+
+    radial_step_km = float(np.median(np.diff(ranges_km)))
+    x_coords = np.linspace(-max_range_km, max_range_km, resolution, dtype=np.float32)
+    y_coords = np.linspace(max_range_km, -max_range_km, resolution, dtype=np.float32)
+    grid_x, grid_y = np.meshgrid(x_coords, y_coords)
+    range_grid_km = np.sqrt(grid_x * grid_x + grid_y * grid_y)
+    azimuth_grid_deg = (np.degrees(np.arctan2(grid_x, grid_y)) + 360.0) % 360.0
+
+    azimuth_ext = np.concatenate([azimuths, [azimuths[0] + 360.0]])
+    azimuth_edges = (azimuth_ext[:-1] + azimuth_ext[1:]) / 2.0
+    first_edge = azimuth_edges[-1] - 360.0
+    wrapped_azimuth = azimuth_grid_deg.copy()
+    wrapped_azimuth[wrapped_azimuth < first_edge] += 360.0
+    ray_index = np.searchsorted(azimuth_edges, wrapped_azimuth, side="right") % len(
+        azimuths
+    )
+
+    range_edges = np.concatenate(
+        [
+            [max(0.0, ranges_km[0] - radial_step_km / 2.0)],
+            ranges_km[:-1] + radial_step_km / 2.0,
+            [ranges_km[-1] + radial_step_km / 2.0],
+        ]
+    )
+    gate_index = np.searchsorted(range_edges, range_grid_km, side="right") - 1
+    valid_mask = (
+        (range_grid_km >= range_edges[0])
+        & (range_grid_km <= max_range_km)
+        & (gate_index >= 0)
+        & (gate_index < len(ranges_km))
+    )
+
+    cartesian_field = np.full(range_grid_km.shape, np.nan, dtype=np.float32)
+    cartesian_field[valid_mask] = kdp_data[
+        ray_index[valid_mask], gate_index[valid_mask]
+    ]
+    valid_mask &= np.isfinite(cartesian_field)
+
+    scan_time = datetime.strptime(
+        radar.time["units"].split("since ", 1)[1], "%Y-%m-%dT%H:%M:%SZ"
+    )
+    return {
+        "station": str(
+            radar.metadata.get("instrument_name", s3_key.split("/")[-1][:4])
+        ),
+        "scan_time": scan_time.strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "elevation_deg": round(float(radar.fixed_angle["data"][sweep]), 2),
+        "vcp_pattern": int(radar.metadata.get("vcp_pattern", -1)),
+        "sweep": int(sweep),
+        "max_range_km": float(max_range_km),
+        "field_name": "specific_differential_phase",
+        "units": "deg/km",
+        "vmin": -2.0,
+        "vmax": 8.0,
+        "source": "Unidata NEXRAD Level II archive on AWS S3",
+        "kdp_deg_per_km": cartesian_field,
+        "valid_mask": valid_mask,
+        "azimuth_grid_deg": azimuth_grid_deg,
+        "range_grid_km": range_grid_km,
+        "x_coords_km": x_coords,
+        "y_coords_km": y_coords,
+    }
+
+
 def _get_nexrad_colormap(cmap_name, fallback_name):
     from matplotlib import colormaps
 
@@ -4211,6 +4548,28 @@ def _velocity_ms_to_rgba(
             np.abs(velocity_ms[valid_mask]) / max_velocity, 0.0, 1.0
         )
         alpha[valid_mask] = np.uint8(255 * alpha_strength)
+    rgba[..., 3] = alpha
+    return rgba
+
+
+def _nexrad_field_to_rgba(
+    field_data,
+    valid_mask=None,
+    vmin=0.0,
+    vmax=1.0,
+    cmap_name="viridis",
+    fallback_cmap_name="viridis",
+    min_alpha=0.72,
+):
+    if valid_mask is None:
+        valid_mask = np.isfinite(field_data)
+
+    normalized = np.clip((field_data - vmin) / (vmax - vmin), 0.0, 1.0)
+    cmap = _get_nexrad_colormap(cmap_name, fallback_cmap_name)
+    rgba = (cmap(normalized) * 255).astype(np.uint8)
+
+    alpha = np.zeros(field_data.shape, dtype=np.uint8)
+    alpha[valid_mask] = np.uint8(255 * min_alpha)
     rgba[..., 3] = alpha
     return rgba
 
@@ -8195,6 +8554,7 @@ class Kdp(MovingCameraScene):
 
         drop_shape = always_redraw(get_drop_shape_updater())
         self.add(drop_shape)
+        self.next_section(skip_animations=skip_animations(False))
 
         self.play(
             LaggedStart(
@@ -8202,11 +8562,13 @@ class Kdp(MovingCameraScene):
                 FadeOut(kdp_tex, run_time=0.5),
                 drop_ax.shift(UP * fh(self)).animate.shift(DOWN * fh(self)),
                 deq @ 5,
-                lag_ratio=0.1,
-            )
+                lag_ratio=0.3,
+            ),
+            run_time=3,
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
         ax = (
             Axes(
@@ -8649,7 +9011,7 @@ class Kdp(MovingCameraScene):
         phi_dp_eqn[0][4:6].set_color(HPOL_RX_COLOR)
         phi_dp_eqn[0][7:9].set_color(VPOL_RX_COLOR)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -8745,6 +9107,650 @@ class Kdp(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(*self.mobjects))
+        self.play(self.camera.frame.animate.scale(400), run_time=2)
+
+        self.wait(2)
+
+
+class WrapUp(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        s3_key = NEXRAD_CASE_S3_KEY
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 520
+
+        reflectivity_metadata = _get_nexrad_reflectivity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        velocity_metadata = _get_nexrad_velocity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        zdr_metadata = _get_nexrad_zdr_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        rhohv_metadata = _get_nexrad_rhohv_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        phidp_metadata = _get_nexrad_phidp_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        kdp_metadata = _get_nexrad_kdp_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        reflectivity_vmin = -20.0
+        reflectivity_vmax = 75.0
+        velocity_limit = max(
+            abs(velocity_metadata["vmin"]), abs(velocity_metadata["vmax"])
+        )
+        velocity_vmin = -velocity_limit
+        velocity_vmax = velocity_limit
+        zdr_vmin = -2.0
+        zdr_vmax = 6.0
+        rhohv_vmin = 0.5
+        rhohv_vmax = 1.05
+        phidp_vmin = 0.0
+        phidp_vmax = 180.0
+        kdp_vmin = -2.0
+        kdp_vmax = 8.0
+
+        reflectivity_rgba = _reflectivity_dbz_to_rgba(
+            reflectivity_metadata["reflectivity_dbz"],
+            valid_mask=reflectivity_metadata["valid_mask"],
+            vmin=reflectivity_vmin,
+            vmax=reflectivity_vmax,
+            min_alpha=0.78,
+        )
+        velocity_rgba = _velocity_ms_to_rgba(
+            velocity_metadata["velocity_ms"],
+            valid_mask=velocity_metadata["valid_mask"],
+            vmin=velocity_vmin,
+            vmax=velocity_vmax,
+            min_alpha=0.78,
+        )
+        zdr_rgba = _nexrad_field_to_rgba(
+            zdr_metadata["zdr_db"],
+            valid_mask=zdr_metadata["valid_mask"],
+            vmin=zdr_vmin,
+            vmax=zdr_vmax,
+            cmap_name="plasma",
+            fallback_cmap_name="plasma",
+            min_alpha=0.78,
+        )
+        rhohv_rgba = _nexrad_field_to_rgba(
+            rhohv_metadata["rhohv"],
+            valid_mask=rhohv_metadata["valid_mask"],
+            vmin=rhohv_vmin,
+            vmax=rhohv_vmax,
+            cmap_name="viridis",
+            fallback_cmap_name="viridis",
+            min_alpha=0.78,
+        )
+        phidp_rgba = _nexrad_field_to_rgba(
+            phidp_metadata["phidp_deg"],
+            valid_mask=phidp_metadata["valid_mask"],
+            vmin=phidp_vmin,
+            vmax=phidp_vmax,
+            cmap_name="twilight_shifted",
+            fallback_cmap_name="hsv",
+            min_alpha=0.78,
+        )
+        kdp_valid_mask = (
+            kdp_metadata["valid_mask"]
+            & reflectivity_metadata["valid_mask"]
+            & rhohv_metadata["valid_mask"]
+            & (reflectivity_metadata["reflectivity_dbz"] > 5.0)
+            & (rhohv_metadata["rhohv"] > 0.75)
+        )
+        kdp_rgba = _nexrad_field_to_rgba(
+            kdp_metadata["kdp_deg_per_km"],
+            valid_mask=kdp_valid_mask,
+            vmin=kdp_vmin,
+            vmax=kdp_vmax,
+            cmap_name="Spectral_r",
+            fallback_cmap_name="coolwarm",
+            min_alpha=0.78,
+        )
+
+        plot_fill = ManimColor.from_hex("#09151D")
+        axis_color = ManimColor.from_hex("#D6EEF7")
+        label_color = ManimColor.from_hex("#B7D4E2")
+        scan_color = ManimColor.from_hex("#9EF6FF")
+
+        plot_radius = min(fh(self, 0.12), fw(self, 0.085))
+        scan_progress = VT(0.0)
+        scan_visibility = VT(0.0)
+
+        def format_tick_label(value):
+            if np.isclose(value, 0.0):
+                value = 0.0
+            if abs(value) >= 10 or np.isclose(value, round(value)):
+                return f"{int(round(value))}"
+            return f"{value:.1f}"
+
+        def make_math_title(tex):
+            title = MathTex(tex).scale(0.5)
+            title.set_color(WHITE)
+            return title
+
+        def make_text_title(text):
+            return Text(text, font=FONT).scale(0.35)
+
+        def make_ppi_panel(
+            metadata,
+            rgba,
+            title,
+            units,
+            tick_values,
+            vmin,
+            vmax,
+            cmap_name,
+            fallback_cmap_name,
+        ):
+            plot_background = Circle(
+                radius=plot_radius,
+                fill_color=plot_fill,
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            plot_border = Circle(radius=plot_radius).set_stroke(
+                axis_color, width=1.5, opacity=0.76
+            )
+            origin_marker = Dot(ORIGIN, radius=0.018, color=axis_color)
+
+            grid = VGroup()
+            for azimuth in range(0, 360, 45):
+                grid.add(
+                    Line(
+                        ORIGIN,
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            azimuth,
+                            metadata["max_range_km"],
+                        ),
+                        stroke_color=axis_color,
+                        stroke_width=0.8 if azimuth % 90 else 1.2,
+                        stroke_opacity=0.08 if azimuth % 90 else 0.16,
+                    )
+                )
+
+            range_rings = VGroup()
+            for ring_km in (50, 100, 150):
+                range_rings.add(
+                    Circle(
+                        radius=plot_radius * ring_km / metadata["max_range_km"]
+                    ).set_stroke(
+                        axis_color,
+                        width=1.0 if ring_km < 150 else 1.3,
+                        opacity=0.09 if ring_km < 150 else 0.16,
+                    )
+                )
+
+            direction_labels = VGroup()
+            for label, azimuth in (("N", 0), ("E", 90), ("S", 180), ("W", 270)):
+                direction_labels.add(
+                    Text(label, font=FONT, color=axis_color)
+                    .scale(0.13)
+                    .move_to(
+                        _polar_ppi_point(
+                            ORIGIN,
+                            plot_radius,
+                            metadata["max_range_km"],
+                            azimuth,
+                            metadata["max_range_km"] * 1.09,
+                        )
+                    )
+                )
+
+            data_image = ImageMobject(rgba, image_mode="RGBA")
+            data_image.scale_to_fit_height(plot_radius * 2)
+            data_image.move_to(origin_marker)
+            data_image.set_resampling_algorithm(RESAMPLING_ALGORITHMS["nearest"])
+
+            title.next_to(plot_border, UP, buff=MED_SMALL_BUFF)
+
+            colorbar = ImageMobject(
+                _build_nexrad_colorbar_image(
+                    height_px=420,
+                    width_px=28,
+                    vmin=vmin,
+                    vmax=vmax,
+                    cmap_name=cmap_name,
+                    fallback_cmap_name=fallback_cmap_name,
+                ),
+                image_mode="RGBA",
+            ).scale_to_fit_height(plot_radius * 1.4)
+            colorbar.set_resampling_algorithm(RESAMPLING_ALGORITHMS["nearest"])
+            colorbar_frame = Rectangle(
+                width=colorbar.width + 0.08,
+                height=colorbar.height + 0.08,
+                fill_opacity=0,
+                stroke_color=axis_color,
+                stroke_opacity=0.42,
+                stroke_width=0.8,
+            ).move_to(colorbar)
+            colorbar_group = Group(colorbar_frame, colorbar)
+            colorbar_group.next_to(plot_background, RIGHT, buff=0.16)
+            colorbar_group.align_to(plot_background, UP).shift(DOWN * 0.02)
+
+            colorbar_units = Text(units, font=FONT, color=label_color).scale(0.12)
+            colorbar_units.next_to(colorbar_group, UP, buff=0.06)
+
+            tick_labels = VGroup()
+            for tick in tick_values:
+                tick_y = colorbar.get_bottom()[1] + colorbar.height * (
+                    (tick - vmin) / (vmax - vmin)
+                )
+                tick_anchor = np.array([colorbar.get_right()[0], tick_y, 0])
+                tick_line = Line(
+                    tick_anchor + RIGHT * 0.01,
+                    tick_anchor + RIGHT * 0.07,
+                    stroke_color=axis_color,
+                    stroke_width=0.7,
+                    stroke_opacity=0.6,
+                )
+                tick_text = Text(
+                    format_tick_label(tick), font=FONT, color=label_color
+                ).scale(0.105)
+                tick_text.next_to(tick_line, RIGHT, buff=0.03)
+                tick_labels.add(VGroup(tick_line, tick_text))
+
+            def make_scan_line():
+                head_theta_deg = ~scan_progress % 360.0
+                plot_center = origin_marker.get_center()
+                endpoint = _polar_ppi_point(
+                    plot_center,
+                    plot_radius,
+                    metadata["max_range_km"],
+                    head_theta_deg,
+                    metadata["max_range_km"],
+                )
+                glow = Line(plot_center, endpoint).set_stroke(
+                    scan_color, width=4.5, opacity=0.08 * ~scan_visibility
+                )
+                line = Line(plot_center, endpoint).set_stroke(
+                    scan_color, width=1.2, opacity=0.9 * ~scan_visibility
+                )
+                return VGroup(glow, line).set_z_index(5)
+
+            scan_line = always_redraw(make_scan_line)
+
+            return Group(
+                plot_background,
+                grid,
+                data_image,
+                range_rings,
+                plot_border,
+                direction_labels,
+                scan_line,
+                origin_marker,
+                colorbar_group,
+                colorbar_units,
+                tick_labels,
+                title,
+            )
+
+        panel_specs = (
+            (
+                reflectivity_metadata,
+                reflectivity_rgba,
+                make_math_title(r"Z"),
+                "dBZ",
+                (-20, 20, 60),
+                reflectivity_vmin,
+                reflectivity_vmax,
+                "NWSRef",
+                "turbo",
+            ),
+            (
+                velocity_metadata,
+                velocity_rgba,
+                make_math_title(r"v"),
+                "m/s",
+                (velocity_vmin, 0, velocity_vmax),
+                velocity_vmin,
+                velocity_vmax,
+                "NWSVel",
+                "coolwarm",
+            ),
+            (
+                zdr_metadata,
+                zdr_rgba,
+                make_math_title(r"Z_{DR}"),
+                "dB",
+                (-2, 2, 6),
+                zdr_vmin,
+                zdr_vmax,
+                "plasma",
+                "plasma",
+            ),
+            (
+                rhohv_metadata,
+                rhohv_rgba,
+                make_math_title(r"\rho_{hv}"),
+                "ratio",
+                (0.5, 0.75, 1.0),
+                rhohv_vmin,
+                rhohv_vmax,
+                "viridis",
+                "viridis",
+            ),
+            (
+                phidp_metadata,
+                phidp_rgba,
+                make_math_title(r"\Phi_{dp}"),
+                "deg",
+                (0, 90, 180),
+                phidp_vmin,
+                phidp_vmax,
+                "twilight_shifted",
+                "hsv",
+            ),
+            (
+                kdp_metadata,
+                kdp_rgba,
+                make_math_title(r"K_{dp}"),
+                "deg/km",
+                (-2, 0, 8),
+                kdp_vmin,
+                kdp_vmax,
+                "Spectral_r",
+                "coolwarm",
+            ),
+        )
+
+        panels = Group(
+            *[make_ppi_panel(*panel_spec) for panel_spec in panel_specs]
+        ).arrange_in_grid(rows=2, cols=3, buff=MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[FadeIn(panel, scale=0.98) for panel in panels],
+                    lag_ratio=0.08,
+                ),
+                lag_ratio=0.25,
+            ),
+            run_time=2.3,
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        # self.play(
+        #     scan_visibility @ 1,
+        #     scan_progress @ 360,
+        #     run_time=5,
+        #     rate_func=linear,
+        # )
+        # self.play(scan_visibility @ 0, run_time=0.8)
+
+        self.wait(2)
+
+
+class WrapUp2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+
+        s3_key = NEXRAD_CASE_S3_KEY
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 520
+
+        reflectivity_metadata = _get_nexrad_reflectivity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        v_metadata = _get_nexrad_velocity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        zdr_metadata = _get_nexrad_zdr_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        rhohv_metadata = _get_nexrad_rhohv_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        phidp_metadata = _get_nexrad_phidp_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+        kdp_metadata = _get_nexrad_kdp_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        z_vmin = 0
+        z_vmax = 75
+        z_step = 15
+        reflectivity_ticks = np.arange(z_vmin, z_vmax + z_step, z_step)
+        v_lim = max(abs(v_metadata["vmin"]), abs(v_metadata["vmax"]))
+        v_vmin = -v_lim
+        v_vmax = v_lim
+        v_step = 10
+        v_ticks = np.arange(v_vmin, v_vmax + v_step, v_step)
+        zdr_vmin = -2.0
+        zdr_vmax = 6.0
+        zdr_step = 2
+        zdr_ticks = np.arange(zdr_vmin, zdr_vmax + zdr_step, zdr_step)
+        rhohv_vmin = 0
+        rhohv_vmax = 1
+        rhohv_step = 0.25
+        rhohv_ticks = np.arange(rhohv_vmin, rhohv_vmax + rhohv_step, rhohv_step)
+        phidp_vmin = 0.0
+        phidp_vmax = 180.0
+        phidp_step = 90
+        phidp_ticks = np.arange(phidp_vmin, phidp_vmax + phidp_step, phidp_step)
+        kdp_vmin = -2.0
+        kdp_vmax = 8.0
+        kdp_step = 2.5
+        kdp_ticks = np.arange(kdp_vmin, kdp_vmax + kdp_step, kdp_step)
+
+        reflectivity_ppi = PPIGrid(
+            reflectivity_metadata,
+            "reflectivity_dbz",
+            valid_mask=reflectivity_metadata["valid_mask"],
+            vmin=z_vmin,
+            vmax=z_vmax,
+            font=FONT,
+            colorbar_ticks=reflectivity_ticks,
+            radius=fw(self, 0.08),
+            init_scan_progress=0,
+            cmap_name="NWSRef",
+        )
+        v_ppi = PPIGrid(
+            v_metadata,
+            "velocity_ms",
+            valid_mask=v_metadata["valid_mask"],
+            vmin=v_vmin,
+            vmax=v_vmax,
+            font=FONT,
+            colorbar_ticks=v_ticks,
+            radius=fw(self, 0.08),
+            init_scan_progress=0,
+            cmap_name="coolwarm",
+        )
+        zdr_ppi = PPIGrid(
+            zdr_metadata,
+            "zdr_db",
+            valid_mask=zdr_metadata["valid_mask"],
+            vmin=zdr_vmin,
+            vmax=zdr_vmax,
+            font=FONT,
+            colorbar_ticks=zdr_ticks,
+            radius=fw(self, 0.08),
+            init_scan_progress=0,
+            cmap_name="plasma",
+        )
+        rhohv_ppi = PPIGrid(
+            rhohv_metadata,
+            "rhohv",
+            valid_mask=rhohv_metadata["valid_mask"],
+            vmin=rhohv_vmin,
+            vmax=rhohv_vmax,
+            font=FONT,
+            colorbar_ticks=rhohv_ticks,
+            radius=fw(self, 0.08),
+            init_scan_progress=0,
+            cmap_name="viridis",
+        )
+        phidp_ppi = PPIGrid(
+            phidp_metadata,
+            "phidp_deg",
+            valid_mask=phidp_metadata["valid_mask"],
+            vmin=phidp_vmin,
+            vmax=phidp_vmax,
+            font=FONT,
+            colorbar_ticks=phidp_ticks,
+            radius=fw(self, 0.08),
+            init_scan_progress=0,
+            cmap_name="twilight_shifted",
+        )
+        kdp_ppi = PPIGrid(
+            kdp_metadata,
+            "kdp_deg_per_km",
+            valid_mask=kdp_metadata["valid_mask"],
+            vmin=kdp_vmin,
+            vmax=kdp_vmax,
+            font=FONT,
+            colorbar_ticks=kdp_ticks,
+            radius=fw(self, 0.08),
+            init_scan_progress=0,
+            cmap_name="Spectral_r",
+        )
+        ppis = (
+            Group(reflectivity_ppi, zdr_ppi, rhohv_ppi, v_ppi, phidp_ppi, kdp_ppi)
+            .arrange_in_grid(rows=2, cols=3, buff=(MED_LARGE_BUFF, LARGE_BUFF))
+            .next_to(self.camera.frame.get_bottom(), UP, MED_LARGE_BUFF)
+        )
+        z_label = MathTex(r"Z").next_to(reflectivity_ppi.data_image, UP, MED_SMALL_BUFF)
+        v_label = MathTex(r"v").next_to(v_ppi.data_image, UP, MED_SMALL_BUFF)
+        zdr_label = MathTex(r"Z_{dr}").next_to(zdr_ppi.data_image, UP, MED_SMALL_BUFF)
+        rhohv_label = MathTex(r"\rho_{hv}").next_to(
+            rhohv_ppi.data_image, UP, MED_SMALL_BUFF
+        )
+        rhohv_label[0][1].set_color(HPOL_RX_COLOR)
+        rhohv_label[0][2].set_color(VPOL_RX_COLOR)
+
+        phidp_label = MathTex(r"\Phi_{dp}").next_to(
+            phidp_ppi.data_image, UP, MED_SMALL_BUFF
+        )
+        kdp_label = MathTex(r"K_{dp}").next_to(kdp_ppi.data_image, UP, MED_SMALL_BUFF)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(reflectivity_ppi, z_label))
+        self.play(reflectivity_ppi.scan_progress @ 360)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(zdr_ppi, zdr_label))
+        self.play(zdr_ppi.scan_progress @ 360)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(rhohv_ppi, rhohv_label))
+        self.play(rhohv_ppi.scan_progress @ 360)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(v_ppi, v_label))
+        self.play(v_ppi.scan_progress @ 360)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(phidp_ppi, phidp_label))
+        self.play(phidp_ppi.scan_progress @ 360)
+
+        self.wait(0.5)
+
+        self.play(FadeIn(kdp_ppi, kdp_label))
+        self.play(kdp_ppi.scan_progress @ 360)
+
+        self.wait(0.5)
+
+        single_pol = SurroundingRectangle(
+            Group(reflectivity_ppi, z_label, v_ppi, v_label),
+            buff=0.2,
+            corner_radius=0.25,
+            color=GREEN,
+        )
+        dual_pol = SurroundingRectangle(
+            zdr_ppi,
+            zdr_label,
+            rhohv_ppi,
+            rhohv_label,
+            phidp_ppi,
+            phidp_label,
+            kdp_ppi,
+            kdp_label,
+            buff=0.2,
+            corner_radius=0.25,
+            color=BLUE,
+        )
+        # dual_pol_2 = SurroundingRectangle(
+        #     Group(
+        #         zdr_ppi,
+        #         zdr_label,
+        #     ),
+        #     buff=0.2,
+        #     corner_radius=0.25,
+        # )
+
+        single_pol_label = Text("Single-Pol", font=FONT, color=GREEN).next_to(
+            single_pol, UP, MED_SMALL_BUFF
+        )
+        dual_pol_label = (
+            Text("Dual-Pol", font=FONT, color=BLUE)
+            .next_to(dual_pol, UP, MED_SMALL_BUFF)
+            .set_y(single_pol_label.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2),
+                Create(single_pol),
+                Write(single_pol_label),
+                Create(dual_pol),
+                Write(dual_pol_label),
+                lag_ratio=0.2,
+            )
+        )
 
         self.wait(2)
