@@ -15,6 +15,7 @@ import skrf as rf
 from dotenv import load_dotenv
 from manim import *
 from manim.utils.color.X11 import BROWN1
+from matplotlib.pylab import diag
 from MF_Tools import VT, SurroundingRectangleUnion
 from networkx import center
 from numpy.fft import fft, fftshift
@@ -1645,7 +1646,11 @@ class BackgroundV2(MovingCameraScene):
             )
         )
 
-        self.play(Create(what_z), Create(what_v))
+        self.play(Create(what_z))
+
+        self.wait(0.5)
+
+        self.play(Create(what_v))
 
         self.wait(0.5)
 
@@ -1702,7 +1707,6 @@ class Idea3D(ThreeDScene):
                 stroke_opacity=0.5,
             ),
         )
-        self.add(axes)
 
         target_dist = 40
         u0 = VT(-2)
@@ -1717,7 +1721,7 @@ class Idea3D(ThreeDScene):
         vpol_tx_amp = VT(1)
         hpol_rx_amp = VT(1)
         vpol_rx_amp = VT(0.6)
-        hpol_rotation = VT(0)
+        hpol_rotation = VT(PI / 2)
         hpol_tx_highlight_opacity = VT(0)
         hpol_tx_highlight_x0 = VT(0)
         hpol_tx_highlight_x1 = VT(0)
@@ -1781,7 +1785,7 @@ class Idea3D(ThreeDScene):
         ).set_shade_in_3d(True)
 
         self.add(
-            hpol_tx,
+            # hpol_tx,
             hpol_rx,
             vpol_tx,
             vpol_rx,
@@ -1790,27 +1794,46 @@ class Idea3D(ThreeDScene):
         )
 
         self.set_camera_orientation(
-            zoom=0.4,
-            theta=-90 * DEGREES,
-            phi=0 * DEGREES,
+            zoom=0.6,
+            theta=-160 * DEGREES,
+            phi=80 * DEGREES,
             gamma=0,
         )
 
         self.wait(0.5)
 
-        axes.save_state()
-        self.move_camera(
-            zoom=0.6,
-            theta=-160 * DEGREES,
-            phi=80 * DEGREES,
-            gamma=0,
-            run_time=3,
-            added_anims=[
-                u0 + 2,
-                u1 + 2,
-                axes.animate.shift(IN * 5 + UP * 5),
-            ],
+        self.play(Create(axes), Create(hpol_tx))
+
+        self.next_section(skip_animations=skip_animations(False))
+        self.wait(0.5)
+
+        self.play(
+            hpol_rotation.animate(rate_func=ease_in_out_elastic, run_time=2).set_value(
+                0
+            )
         )
+
+        self.wait(0.5)
+
+        axes.save_state()
+        self.play(
+            u0 + 2,
+            u1 + 2,
+            axes.animate.shift(IN * 5 + UP * 5),
+        )
+
+        # self.move_camera(
+        #     zoom=0.6,
+        #     theta=-160 * DEGREES,
+        #     phi=80 * DEGREES,
+        #     gamma=0,
+        #     run_time=3,
+        #     added_anims=[
+        #         u0 + 2,
+        #         u1 + 2,
+        #         axes.animate.shift(IN * 5 + UP * 5),
+        #     ],
+        # )
 
         self.wait(0.5)
 
@@ -2513,36 +2536,31 @@ class ChillBlockDiagram(Group):
                 max_height_px=13,
             )
         )
-        diagram.add(
-            self.text(
-                "Low Chan.",
-                304,
-                548,
-                font_size=16,
-                max_width_px=68,
-                max_height_px=13,
-            )
+        low_chan = self.text(
+            "Low Chan.",
+            304,
+            548,
+            font_size=16,
+            max_width_px=68,
+            max_height_px=13,
         )
-        diagram.add(
-            self.text(
-                "High Chan.",
-                304,
-                568,
-                font_size=16,
-                max_width_px=70,
-                max_height_px=13,
-            )
-        )
-        diagram.add(
-            self.text(
-                "Txmit Chan.",
-                304,
-                588,
-                font_size=16,
-                max_width_px=72,
-                max_height_px=13,
-            )
-        )
+        high_chan = self.text(
+            "High Chan.",
+            304,
+            568,
+            font_size=16,
+            max_width_px=70,
+            max_height_px=13,
+        ).align_to(low_chan, LEFT)
+        xmit_chan = self.text(
+            "Txmit Chan.",
+            304,
+            588,
+            font_size=16,
+            max_width_px=72,
+            max_height_px=13,
+        ).align_to(low_chan, LEFT)
+        diagram.add(low_chan, high_chan, xmit_chan)
 
         diagram.add(self.text("25 dB", 194, 558, font_size=15))
         diagram.add(self.text("Coupler", 197, 574, font_size=15))
@@ -3229,9 +3247,7 @@ class Idea2D(MovingCameraScene):
                 diagram_sorted[14].animate.set_stroke(opacity=1),
                 diagram_sorted[16].animate.set_stroke(opacity=1),
             ),
-            AnimationGroup(
-                diagram_sorted[5].animate.set_stroke(opacity=1).set_fill(opacity=1),
-            ),
+            diagram_sorted[5].animate.set_stroke(opacity=1).set_fill(opacity=1),
             diagram_sorted[2].animate.set_stroke(opacity=1).set_fill(opacity=1),
             diagram_sorted[1].animate.set_stroke(opacity=1).set_fill(opacity=1),
         )
@@ -3328,16 +3344,17 @@ class Idea2D(MovingCameraScene):
         # rx_path_h[-9].rotate(PI / 6).set_color(YELLOW)
         self.next_section(skip_animations=skip_animations(True))
 
+        diagram_sorted[85].save_state()
+        for rph in rx_path_h[-9:]:
+            rph.save_state()
+
         self.play(
             self.camera.frame.animate.scale_to_fit_height(
                 Group(rx_path_h, new_rx_path_last).height * 1.2
             ).move_to(Group(rx_path_h, new_rx_path_last)),
             LaggedStart(
-                Transform(diagram_sorted[85], new_rx_cable.set_color(HPOL_RX_COLOR)),
-                *[
-                    Transform(a, b.set_color(HPOL_RX_COLOR))
-                    for a, b in zip(rx_path_h[-9:], new_rx_path_last)
-                ],
+                Transform(diagram_sorted[85], new_rx_cable),
+                *[Transform(a, b) for a, b in zip(rx_path_h[-9:], new_rx_path_last)],
                 lag_ratio=0.05,
             ),
         )
@@ -3356,7 +3373,7 @@ class Idea2D(MovingCameraScene):
         #     new_rx_path_last[-6].get_end() - rx_path_v[-1].get_end()
         # )
         for m in rx_path_v:
-            m.shift(DOWN + LEFT * 0.5)
+            m.shift(DOWN * 1.05 + LEFT * 0.5)
 
         rx_path_v[-2] = Line(
             rx_path_v[-2].get_start(),
@@ -3366,7 +3383,7 @@ class Idea2D(MovingCameraScene):
         rx_path_v[-1] = Arrow(
             [rx_path_v[-2].get_end()[0], new_rx_path_last[-6].get_end()[1], 0],
             new_rx_path_last[-6].get_end(),
-            color=VPOL_RX_COLOR,
+            color=WHITE,
             stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
             # max_stroke_width_to_length_ratio=0.25,
             max_tip_length_to_length_ratio=0.1,
@@ -3375,7 +3392,7 @@ class Idea2D(MovingCameraScene):
 
         rx_path_v = Group(*rx_path_v)
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -3383,6 +3400,222 @@ class Idea2D(MovingCameraScene):
                 lag_ratio=0.1,
             )
         )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                *[FadeOut(m) for m in rx_path_v[::-1]],
+                diagram_sorted[85].animate.restore(),
+                *[rph.animate.restore() for rph in rx_path_h[-9:]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        filt_1_indices = [21, 32, 8, 9]
+        mixer_1_indices = [4, 7, 18, 19, 20, 46, 41, 34]
+        filt_2_indices = [22, 27, 28, 29]
+        mixer_2_indices = [35, 40, 51, 64, 65, 66, 58, 68, 73]
+        filt_3_indices = [69, 81, 82]
+        to_dig_indices = [
+            91,
+            110,
+            77,
+            92,
+            88,
+            109,
+            119,
+            128,
+            116,
+            114,
+            121,
+            123,
+            129,
+            101,
+            120,
+            134,
+            142,
+        ]
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    diagram_sorted[11]
+                    .animate.set_stroke(opacity=0.2)
+                    .set_fill(opacity=0.2),
+                    diagram_sorted[14].animate.set_stroke(opacity=0.2),
+                    diagram_sorted[16].animate.set_stroke(opacity=0.2),
+                ),
+                diagram_sorted[5].animate.set_stroke(opacity=0.2).set_fill(opacity=0.2),
+                diagram_sorted[2].animate.set_stroke(opacity=0.2).set_fill(opacity=0.2),
+                diagram_sorted[1].animate.set_stroke(opacity=0.2).set_fill(opacity=0.2),
+                *[
+                    set_component_opacity(m, 0.2)
+                    for m in [diagram_sorted[85], *rx_path_h]
+                ],
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1)
+                    for idx in filt_1_indices
+                ],
+                self.camera.frame.animate.scale(0.9).move_to(diagram_sorted[58]),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1)
+                    for idx in mixer_1_indices
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1)
+                    for idx in filt_2_indices
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1)
+                    for idx in mixer_2_indices
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1)
+                    for idx in filt_3_indices
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    set_component_opacity(diagram_sorted[idx], 1)
+                    for idx in to_dig_indices
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        drx = Rectangle(
+            height=diagram_sorted[129].height,
+            width=diagram_sorted[129].width * 1.5,
+            color=WHITE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+        ).move_to(diagram_sorted[129], LEFT)
+
+        hpol_label = (
+            Text("HPOL", color=HPOL_RX_COLOR, font=FONT)
+            .scale_to_fit_height(diagram_sorted[120].height)
+            .next_to(
+                diagram_sorted[120]
+                .copy()
+                .shift(LEFT * diagram_sorted[129].width * 0.1),
+                UP,
+                SMALL_BUFF * 0.8,
+                aligned_edge=LEFT,
+            )
+        )
+        vpol_low_chan = (
+            Text("Low Chan.", color=VPOL_RX_COLOR, font=FONT)
+            .scale_to_fit_height(diagram_sorted[120].height)
+            .next_to(drx.get_right(), LEFT, SMALL_BUFF * 0.8)
+            .set_y(diagram_sorted[120].get_y())
+        )
+        vpol_high_chan = (
+            Text("High Chan.", color=VPOL_RX_COLOR, font=FONT)
+            .scale_to_fit_height(diagram_sorted[134].height)
+            .next_to(drx.get_right(), LEFT, SMALL_BUFF * 0.8)
+            .set_y(diagram_sorted[134].get_y())
+        )
+        vpol_xmit_chan = (
+            Text("Txmit Chan.", color=VPOL_RX_COLOR, font=FONT)
+            .scale_to_fit_height(diagram_sorted[142].height)
+            .next_to(drx.get_right(), LEFT, SMALL_BUFF * 0.8)
+            .set_y(diagram_sorted[142].get_y())
+        )
+
+        vpol_label = (
+            Text("VPOL", color=VPOL_RX_COLOR, font=FONT)
+            .scale_to_fit_height(diagram_sorted[120].height)
+            .next_to(
+                drx.get_right(),
+                LEFT,
+                SMALL_BUFF * 0.8,
+            )
+            .set_y(hpol_label.get_y())
+        )
+        vpol_arrow = (
+            diagram_sorted[109]
+            .copy()
+            .flip()
+            .set_color(VPOL_RX_COLOR)
+            .set_fill(color=VPOL_RX_COLOR)
+            .next_to(drx, RIGHT, 0)
+            .set_y(vpol_low_chan.get_y())
+        )
+        self.next_section(skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.9).move_to(diagram_sorted[129]),
+                Write(hpol_label),
+                diagram_sorted[120]
+                .animate.shift(LEFT * diagram_sorted[129].width * 0.1)
+                .set_color(HPOL_RX_COLOR),
+                diagram_sorted[134]
+                .animate.shift(LEFT * diagram_sorted[129].width * 0.1)
+                .set_color(HPOL_RX_COLOR),
+                diagram_sorted[142]
+                .animate.shift(LEFT * diagram_sorted[129].width * 0.1)
+                .set_color(HPOL_RX_COLOR),
+                Transform(diagram_sorted[129], drx),
+                Write(vpol_label),
+                Write(vpol_low_chan),
+                Write(vpol_high_chan),
+                # Write(vpol_xmit_chan),
+                GrowArrow(vpol_arrow),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[FadeOut(m) for m in self.mobjects], lag_ratio=0.04))
+
+        # self.add(Dot(color=YELLOW).scale(2).move_to(diagram_sorted[108]))
+        # self.camera.frame.move_to(diagram_sorted[108])
+        # for idx, c in enumerate(diagram_sorted):
+        #     self.add(Text(f"{idx}", font=FONT,color=YELLOW).scale(0.3).move_to(c))
 
         # self.add(
         #     rx_path_v,
@@ -9884,30 +10117,34 @@ class WrapUp2(MovingCameraScene):
 class WrapUp3D(ThreeDScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
-        axes = ThreeDAxes(
-            x_range=[-2, 2, 0.5],
-            y_range=[-1, 1, 0.5],
-            z_range=[-2, 2, 0.5],
-            x_length=20,
-            y_length=10,
-            z_length=20,
-            tips=False,
-            x_axis_config=dict(
-                # stroke_color=BLUE,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1,
-                stroke_opacity=0.5,
-            ),
-            y_axis_config=dict(
-                # stroke_color=RED,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1,
-                stroke_opacity=0.5,
-            ),
-            z_axis_config=dict(
-                # stroke_color=ORANGE,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1,
-                stroke_opacity=0.5,
-            ),
-        ).shift(IN * 5 + UP * 5)
+        axes = (
+            ThreeDAxes(
+                x_range=[-2, 2, 0.5],
+                y_range=[-1, 1, 0.5],
+                z_range=[-2, 2, 0.5],
+                x_length=20,
+                y_length=10,
+                z_length=20,
+                tips=False,
+                x_axis_config=dict(
+                    # stroke_color=BLUE,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                    stroke_opacity=0.5,
+                ),
+                y_axis_config=dict(
+                    # stroke_color=RED,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                    stroke_opacity=0.5,
+                ),
+                z_axis_config=dict(
+                    # stroke_color=ORANGE,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                    stroke_opacity=0.5,
+                ),
+            )
+            .shift(IN * 5 + UP * 5)
+            .set_opacity(0)
+        )
         axes.shift(LEFT * 40)
         # self.add(axes)
 
@@ -9937,7 +10174,7 @@ class WrapUp3D(ThreeDScene):
                 lambda u: (u, ~hpol_tx_amp * np.sin(2 * PI * u), 0),
                 color=HPOL_TX_COLOR,
                 t_range=(~u0, ~u1, 1 / 100),
-                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                stroke_width=DEFAULT_STROKE_WIDTH * 4,
                 stroke_opacity=~hpol_tx_opacity,
             ).rotate(~hpol_rotation, RIGHT)
         ).set_shade_in_3d(True)
@@ -10012,7 +10249,7 @@ class WrapUp3D(ThreeDScene):
 
         self.play(
             LaggedStart(
-                vpol_tx_width @ 2,
+                vpol_tx_width @ 4,
                 vpol_tx_rotation @ 0,
                 lag_ratio=0.2,
             ),
@@ -10021,6 +10258,6 @@ class WrapUp3D(ThreeDScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(*self.mobjects))
+        # self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
