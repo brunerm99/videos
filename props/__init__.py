@@ -21,6 +21,7 @@ from .easing import (
     ease_in_elastic,
     ease_in_out_elastic,
     ease_out_elastic,
+    get_phase_eased_sine,
 )
 from .ppi import PPIGrid
 from .radar import FMCWRadarCartoon, WeatherRadarTower

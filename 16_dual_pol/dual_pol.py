@@ -38,6 +38,7 @@ from props import (
     get_amp,
     get_blocks,
     get_filt_block,
+    get_phase_eased_sine,
     get_phase_shifter,
     get_splitter,
 )
@@ -45,7 +46,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -217,6 +218,334 @@ class Intro(MovingCameraScene):
         self.wait(2)
 
 
+class IntroV2(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(fh(self, 0.5)).next_to(
+            self.camera.frame.get_bottom(), UP, MED_SMALL_BUFF
+        )
+
+        cloud = (
+            SVGMobject("../props/static/clouds.svg")
+            .set_fill(WHITE)
+            .set_color(WHITE)
+            .scale(1.2)
+            .to_edge(RIGHT, LARGE_BUFF)
+            .shift(UP * 1)
+            .set_z_index(-2)
+        )
+
+        beam_len = VT(0)
+        beam_rotation = VT(0)
+        beam_u = always_redraw(
+            lambda: (
+                Line(
+                    radar.radome.get_right(),
+                    radar.radome.get_right()
+                    + [~beam_len * fw(self, 0.3), ~beam_len * fh(self, 0.1), 0],
+                    color=BLUE,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                )
+                .set_z_index(-1)
+                .rotate(~beam_rotation, about_point=radar.radome.get_right())
+            )
+        )
+        beam_d = always_redraw(
+            lambda: (
+                Line(
+                    radar.radome.get_right(),
+                    radar.radome.get_right()
+                    + [~beam_len * fw(self, 0.3), ~beam_len * -fh(self, 0.1), 0],
+                    color=BLUE,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                )
+                .set_z_index(-1)
+                .rotate(~beam_rotation, about_point=radar.radome.get_right())
+            )
+        )
+        self.add(beam_u, beam_d)
+
+        s3_key = NEXRAD_CASE_S3_KEY
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 520
+
+        reflectivity_metadata = _get_nexrad_reflectivity_ppi_data(
+            s3_key=s3_key,
+            sweep=sweep,
+            max_range_km=max_range_km,
+            resolution=resolution,
+        )
+
+        z_vmin = 0
+        z_vmax = 75
+        z_step = 15
+        reflectivity_ticks = np.arange(z_vmin, z_vmax + z_step, z_step)
+
+        reflectivity_ppi = (
+            PPIGrid(
+                reflectivity_metadata,
+                "reflectivity_dbz",
+                valid_mask=reflectivity_metadata["valid_mask"],
+                vmin=z_vmin,
+                vmax=z_vmax,
+                font=FONT,
+                colorbar_ticks=reflectivity_ticks,
+                radius=fw(self, 0.17),
+                init_scan_progress=0,
+                cmap_name="NWSRef",
+                show_colorbar=False,
+            )
+            .next_to(radar.radome, LEFT, MED_LARGE_BUFF)
+            .shift(UP * fh(self, 0.18))
+        )
+        self.add(reflectivity_ppi)
+
+        z_bez = CubicBezier(
+            radar.radome.get_left() + [0, 0, 0],
+            radar.radome.get_left() + [-1, -2, 0],
+            reflectivity_ppi.get_bottom() + [0, -1, 0],
+            reflectivity_ppi.get_bottom() + [0, -0.1, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                radar.get_animation(run_time=1),
+                cloud.shift(RIGHT * fw(self, 0.5)).animate.shift(LEFT * fw(self, 0.5)),
+                beam_len @ 1,
+                FadeIn(reflectivity_ppi),
+                Create(z_bez),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    beam_rotation.animate(
+                        rate_func=get_phase_eased_sine(periods=3)
+                    ).increment_value(PI / 6),
+                    reflectivity_ppi.scan_progress.animate.set_value(360),
+                    run_time=8,
+                    lag_ratio=0.1,
+                ),
+                self.camera.frame.animate.scale_to_fit_height(
+                    reflectivity_ppi.height * 1.2
+                ).move_to(reflectivity_ppi),
+                lag_ratio=0.75,
+            )
+        )
+
+        self.wait(0.5)
+
+        qmark1 = (
+            Text("?", font=FONT)
+            .move_to(reflectivity_ppi)
+            .shift(
+                reflectivity_ppi.width * 0.1 * LEFT + reflectivity_ppi.width * 0.2 * UP
+            )
+        )
+        qmark2 = (
+            Text("?", font=FONT)
+            .move_to(reflectivity_ppi)
+            .shift(
+                reflectivity_ppi.width * 0.15 * RIGHT
+                + reflectivity_ppi.width * 0.1 * UP
+            )
+        )
+        qmark3 = (
+            Text("?", font=FONT)
+            .move_to(reflectivity_ppi)
+            .shift(
+                reflectivity_ppi.width * 0.27 * LEFT
+                + reflectivity_ppi.width * 0.18 * DOWN
+            )
+        )
+        qmark4 = (
+            Text("?", font=FONT)
+            .move_to(reflectivity_ppi)
+            .shift(
+                reflectivity_ppi.width * 0.1 * RIGHT
+                + reflectivity_ppi.width * 0.26 * DOWN
+            )
+        )
+        qmark5 = (
+            Text("?", font=FONT)
+            .move_to(reflectivity_ppi)
+            .shift(
+                reflectivity_ppi.width * 0.2 * RIGHT
+                + reflectivity_ppi.width * 0.27 * UP
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(qmark1),
+                GrowFromCenter(qmark2),
+                GrowFromCenter(qmark3),
+                GrowFromCenter(qmark4),
+                GrowFromCenter(qmark5),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.restore())
+
+        self.wait(0.5)
+
+        up1 = (
+            Text("+", font=FONT, color=GREEN)
+            .scale(2)
+            .rotate(PI / 2)
+            .next_to(radar.radome, UP)
+            .shift(LEFT * 0.5 + DOWN * 0.1)
+        )
+        up3 = (
+            Text("+", font=FONT, color=GREEN)
+            .scale(2)
+            .rotate(PI / 2)
+            .next_to(radar.radome, UP, LARGE_BUFF)
+        )
+        up2 = (
+            Text("+", font=FONT, color=GREEN)
+            .scale(2)
+            .rotate(PI / 2)
+            .next_to(radar.radome, UP)
+            .shift(RIGHT * 0.6 + UP * 0.2)
+        )
+
+        self.play(
+            LaggedStart(
+                Succession(FadeIn(up1, shift=UP / 2), FadeOut(up1, shift=UP / 2)),
+                Succession(FadeIn(up2, shift=UP / 2), FadeOut(up2, shift=UP / 2)),
+                Succession(FadeIn(up3, shift=UP / 2), FadeOut(up3, shift=UP / 2)),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        xmit_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.3),
+            y_length=fh(self, 0.2),
+        ).next_to(radar.radome, RIGHT)
+        h_x1 = VT(0)
+        v_x1 = VT(0)
+        h_shift = VT(0)
+        v_shift = VT(0)
+        hpol = always_redraw(
+            lambda: xmit_ax.plot(
+                lambda t: np.sin(2 * PI * 4 * t),
+                color=HPOL_TX_COLOR,
+                x_range=[0, ~h_x1, 1 / 200],
+            ).shift(UP * ~h_shift)
+        )
+        vpol = always_redraw(
+            lambda: xmit_ax.plot(
+                lambda t: np.sin(2 * PI * 4 * t),
+                color=VPOL_TX_COLOR,
+                x_range=[0, ~v_x1, 1 / 200],
+            ).shift(UP * ~v_shift)
+        )
+
+        self.add(hpol, vpol)
+
+        h_label = (
+            Text("HPOL", font=FONT, color=HPOL_TX_COLOR)
+            .next_to(xmit_ax, RIGHT, MED_SMALL_BUFF)
+            .shift(UP)
+        )
+        v_label = (
+            Text("VPOL", font=FONT, color=VPOL_TX_COLOR)
+            .next_to(xmit_ax, RIGHT, MED_SMALL_BUFF)
+            .shift(DOWN)
+        )
+
+        self.play(
+            LaggedStart(
+                beam_len @ 0,
+                cloud.animate.shift(RIGHT * 10),
+                self.camera.frame.animate.scale(0.9)
+                .shift(RIGHT * fw(self, 0.2))
+                .set_y(xmit_ax.get_y()),
+                h_x1 @ 1,
+                v_x1 @ 1,
+                h_shift @ 1,
+                v_shift @ -1,
+                FadeIn(h_label),
+                FadeIn(v_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        dual_pol = (
+            Paragraph(
+                "Dual-Pol",
+                "Weather Radar",
+                font=FONT,
+                line_spacing=LARGE_BUFF,
+                alignment="center",
+            )
+            .scale(1.5)
+            .next_to(xmit_ax, RIGHT, LARGE_BUFF * 8)
+        )
+        hpol_bez = CubicBezier(
+            h_label.get_right() + [0.1, 0, 0],
+            h_label.get_right() + [1, 0, 0],
+            dual_pol[0].get_left() + [-1, 0, 0],
+            dual_pol[0].get_left() + [-0.1, 0, 0],
+            color=HPOL_TX_COLOR,
+        )
+        vpol_bez = CubicBezier(
+            v_label.get_right() + [0.1, 0, 0],
+            v_label.get_right() + [1, 0, 0],
+            dual_pol[0].get_left() + [-1, 0, 0],
+            dual_pol[0].get_left() + [-0.1, 0, 0],
+            color=VPOL_TX_COLOR,
+        )
+
+        self.remove(cloud)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Create(hpol_bez),
+                    Create(vpol_bez),
+                    self.camera.frame.animate.move_to(dual_pol),
+                    lag_ratio=0.2,
+                ),
+                LaggedStart(Write(dual_pol[0]), Write(dual_pol[1]), lag_ratio=0.2),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(hpol_bez),
+                Uncreate(vpol_bez),
+                FadeOut(dual_pol[0]),
+                FadeOut(dual_pol[1]),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(2)
+
+
 class Background(MovingCameraScene):
     def construct(self):
         self.next_section(skip_animations=skip_animations(True))
@@ -298,6 +627,38 @@ class Background(MovingCameraScene):
         )
 
         self.play(radar.vgroup.shift(DOWN * 8).animate.shift(UP * 8))
+
+        self.wait(0.5)
+
+        xmit_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.3),
+            y_length=fh(self, 0.3),
+        ).move_to(self.camera.frame)
+        xmit = xmit_ax.plot(
+            lambda t: np.sin(2 * PI * 4 * t), color=TX_COLOR, x_range=[0, 1, 1 / 200]
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.7).move_to(xmit_ax),
+                Create(xmit),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(xmit),
+                self.camera.frame.animate.restore(),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
@@ -1449,11 +1810,11 @@ class Background(MovingCameraScene):
 
         self.wait(0.5)
 
-        # self.play(self.camera.frame.animate.shift(UP * fh(self, 2)))
+        self.play(self.camera.frame.animate.shift(UP * fh(self, 2)))
 
         # self.wait(0.5)
 
-        self.play(FadeOut(scan_line))
+        # self.play(FadeOut(scan_line))
 
         # ANIMATIONS HERE
 

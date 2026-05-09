@@ -196,3 +196,15 @@ def ease_in_out_elastic(
     return _elastic_value_or_factory(
         _ease_in_out_elastic_value, t_or_amplitude, period, amplitude, 0.45
     )
+
+
+def smootherstep(t):
+    return t**3 * (t * (t * 6 - 15) + 10)
+
+
+def get_phase_eased_sine(periods=5, amplitude=1.0, phase=0.0):
+    def phase_eased_sine(t):
+        eased_t = smootherstep(t)
+        return amplitude * math.sin(2 * math.pi * periods * eased_t + phase)
+
+    return phase_eased_sine
