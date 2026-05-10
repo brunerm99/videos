@@ -7633,7 +7633,7 @@ class RhoHVP2(MovingCameraScene):
         )
 
         crystal = (
-            ImageMobject("../props/static/snowflake.png")
+            ImageMobject("./static/ice_crystal.png")
             .scale_to_fit_width(drop_shape.width)
             .move_to(self.camera.frame)
             .shift(RIGHT * fw(self, 0.25))
@@ -10930,7 +10930,7 @@ class Outro(MovingCameraScene):
             rate_func=rate_functions.linear,
         )
 
-        self.wait(3)
+        self.wait(5)
 
         mug2 = (
             VideoMobject("/home/marchall/media/rf-channel-assets/mug2.mp4")
@@ -10972,8 +10972,8 @@ class Outro(MovingCameraScene):
                 [
                     ["Lines of code", lines_str],
                     ["Script word count", "2,548"],
-                    ["Days to make", "22"],
-                    ["Git commits", "15"],
+                    ["Days to make", "54"],
+                    ["Git commits", "38"],
                 ],
                 element_to_mobject=Text,
                 element_to_mobject_config=dict(
