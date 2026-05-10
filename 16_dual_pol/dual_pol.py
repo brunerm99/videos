@@ -46,7 +46,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -637,15 +637,21 @@ class Background(MovingCameraScene):
             x_length=fw(self, 0.3),
             y_length=fh(self, 0.3),
         ).move_to(self.camera.frame)
-        xmit = xmit_ax.plot(
-            lambda t: np.sin(2 * PI * 4 * t), color=TX_COLOR, x_range=[0, 1, 1 / 200]
+        xmit_x1 = VT(0)
+        xmit = always_redraw(
+            lambda: xmit_ax.plot(
+                lambda t: np.sin(2 * PI * 4 * t),
+                color=TX_COLOR,
+                x_range=[max(0, ~xmit_x1 - 1), ~xmit_x1, 1 / 200],
+            )
         )
+        self.add(xmit)
 
         self.camera.frame.save_state()
         self.play(
             LaggedStart(
                 self.camera.frame.animate.scale(0.7).move_to(xmit_ax),
-                Create(xmit),
+                xmit_x1 @ 1,
                 lag_ratio=0.3,
             )
         )
@@ -654,11 +660,12 @@ class Background(MovingCameraScene):
 
         self.play(
             LaggedStart(
-                Uncreate(xmit),
+                xmit_x1.animate(run_time=2).set_value(20),
                 self.camera.frame.animate.restore(),
                 lag_ratio=0.3,
             )
         )
+        self.remove(xmit)
 
         self.wait(0.5)
 
@@ -2019,18 +2026,18 @@ class BackgroundV2(MovingCameraScene):
             VideoMobject("../../../media/obs/2026-05-03_09-50-06.mkv")
             .scale_to_fit_width(fw(self))
             .move_to(self.camera.frame)
-            .shift(UP * fh(self, 2))
+            .shift(UP * fh(self, 1))
         )
         self.add(notebook)
 
-        dual_pol = (
-            Text("Dual-Pol", font=FONT).move_to(self.camera.frame).shift(UP * fh(self))
-        )
-        self.add(dual_pol)
+        # dual_pol = (
+        #     Text("Dual-Pol", font=FONT).move_to(self.camera.frame).shift(UP * fh(self))
+        # )
+        # self.add(dual_pol)
 
-        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+        # self.play(self.camera.frame.animate.shift(UP * fh(self)))
 
-        self.wait(4)
+        self.wait(6)
 
         self.play(self.camera.frame.animate.shift(UP * fh(self)))
 
@@ -6200,7 +6207,7 @@ class ZDR(MovingCameraScene):
                 velocity_limit / 2,
                 velocity_limit,
             ),
-            "NWSVel",
+            "coolwarm",
         )
 
         panels = Group(reflectivity_panel, velocity_panel).arrange(
@@ -6225,7 +6232,7 @@ class ZDR(MovingCameraScene):
         )
 
         self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             scan_visibility @ 1,
@@ -6259,7 +6266,7 @@ class ZDR(MovingCameraScene):
         dp1_panel = make_ppi_panel(
             reflectivity_metadata,
             dp1_rgba,
-            "Dual-Pol Product #1",
+            "",
             "X",
             (-20, 0, 20, 40, 60),
             "NWSRef",
@@ -6267,7 +6274,7 @@ class ZDR(MovingCameraScene):
         dp2_panel = make_ppi_panel(
             reflectivity_metadata,
             dp1_rgba,
-            "Dual-Pol Product #2",
+            "",
             "X",
             (-20, 0, 20, 40, 60),
             "NWSRef",
@@ -6275,7 +6282,7 @@ class ZDR(MovingCameraScene):
         dp3_panel = make_ppi_panel(
             reflectivity_metadata,
             dp1_rgba,
-            "Dual-Pol Product #3",
+            "",
             "X",
             (-20, 0, 20, 40, 60),
             "NWSRef",
@@ -6283,7 +6290,7 @@ class ZDR(MovingCameraScene):
         dp4_panel = make_ppi_panel(
             reflectivity_metadata,
             dp1_rgba,
-            "Dual-Pol Product #4",
+            "",
             "X",
             (-20, 0, 20, 40, 60),
             "NWSRef",
@@ -6294,11 +6301,110 @@ class ZDR(MovingCameraScene):
             .arrange(RIGHT, MED_SMALL_BUFF)
             .next_to(dual_pol_header, DOWN, LARGE_BUFF * 0.8)
         )
+        zdr_label = MathTex("Z_{dr}").scale(1.1).next_to(dp1_panel[6], UP, SMALL_BUFF)
+        rhohv_label = (
+            MathTex(r"\rho_{hv}").scale(1.1).next_to(dp2_panel[6], UP, SMALL_BUFF)
+        )
+        kdp_label = MathTex(r"K_{dp}").scale(1.1).next_to(dp3_panel[6], UP, SMALL_BUFF)
+        phidp_label = (
+            MathTex(r"\Phi_{dp}").scale(1.1).next_to(dp4_panel[6], UP, SMALL_BUFF)
+        )
 
         self.play(
             LaggedStart(
-                *[FadeIn(m) for m in dual_pol_panels],
+                *[
+                    AnimationGroup(
+                        FadeIn(m),
+                        LaggedStart(*[FadeIn(m) for m in label[0]], lag_ratio=0.1),
+                    )
+                    for label, m in zip(
+                        [zdr_label, rhohv_label, kdp_label, phidp_label],
+                        dual_pol_panels,
+                    )
+                ],
                 lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(dp4_panel),
+                FadeOut(dp3_panel),
+                FadeOut(dp2_panel),
+                FadeOut(dp1_panel),
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(zdr_label, dp1_panel).copy().shift(DOWN).height * 1.1
+                ).move_to(Group(zdr_label, dp1_panel)),
+                zdr_label.animate.scale(1.5).shift(DOWN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        shape = Text("- Shape", font=FONT).next_to(zdr_label, DOWN, LARGE_BUFF)
+        consistency = Text("- Consistency", font=FONT).next_to(
+            rhohv_label.copy().scale(1.5).shift(DOWN), DOWN, LARGE_BUFF
+        )
+        lwc = Text("- LWC along path", font=FONT).next_to(
+            Group(phidp_label, kdp_label).copy().scale(1.5).shift(DOWN),
+            DOWN,
+            LARGE_BUFF,
+        )
+
+        self.play(Write(shape))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.set_x(rhohv_label.get_x()),
+                rhohv_label.animate.scale(1.5).shift(DOWN),
+                Write(consistency),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.set_x(Group(kdp_label, phidp_label).get_x()),
+                AnimationGroup(
+                    kdp_label.animate.scale(1.5).shift(DOWN),
+                    phidp_label.animate.scale(1.5).shift(DOWN),
+                ),
+                Write(lwc),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        zdr_full_label = (
+            Text("Differential Reflectivity", font=FONT)
+            .scale_to_fit_width(fw(self, 0.7))
+            .next_to(zdr_label, UP, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(phidp_label),
+                FadeOut(kdp_label),
+                FadeOut(velocity_panel),
+                FadeOut(reflectivity_panel),
+                FadeOut(lwc),
+                FadeOut(rhohv_label),
+                FadeOut(dual_pol_header),
+                self.camera.frame.animate.move_to(zdr_label),
+                FadeOut(consistency),
+                FadeOut(shape),
+                zdr_label.animate.scale(2).set_color(GREEN).shift(DOWN),
+                Write(zdr_full_label),
+                lag_ratio=0.1,
             )
         )
 
@@ -10620,5 +10726,325 @@ class WrapUp3D(ThreeDScene):
         self.wait(0.5)
 
         # self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
+
+class Outro(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        clutter = Paragraph(
+            "Clutter",
+            "Filtering",
+            font=FONT,
+            alignment="center",
+            line_spacing=MED_LARGE_BUFF,
+        )
+        qpe = Text("QPE", font=FONT)
+        Group(clutter, qpe).arrange(RIGHT, LARGE_BUFF * 2)
+
+        self.play(
+            LaggedStart(
+                FadeIn(clutter[0]),
+                FadeIn(clutter[1]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeIn(qpe))
+
+        self.wait(0.5)
+
+        def get_thumbnail(path):
+            thumbnail = ImageMobject(path).scale_to_fit_height(fh(self, 0.3))
+            box = SurroundingRectangle(thumbnail, buff=0, color=GREEN)
+            return Group(thumbnail, box)
+
+        thumbnails = (
+            Group(
+                *[
+                    get_thumbnail(path)
+                    for path in [
+                        "../01_fmcw/media/images/fmcw/thumbnails/comparison.png",
+                        "../02_fmcw_implementation/media/images/fmcw_implementation/Thumbnail_Option_1.png",
+                        "../03_cfar/media/images/cfar/thumbnails/Thumbnail_1.png",
+                        "../04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_2.png",
+                        "../05_phased_array/media/images/phased_array//thumbnails/Thumbnail1.png",
+                        "../06_radar_range_equation/media/images/radar_equation/thumbnails/Thumbnail_1.png",
+                        "../07_snr_equation/media/images/snr/Thumbnail2_ManimCE_v0.18.1.png",
+                        "../08_beamforming/media/images/beamforming/Thumbnail_ManimCE_v0.18.1.png",
+                        "../09_resolution/static/Resolution Thumbnail.png",
+                        "../11_aliasing/static/Aliasing Thumbnail.png",
+                        "../12_iq_sampling/static/IQ Sampling Thumbnail.png",
+                        "../13_pulse_compression/static/Pulse Compression Thumbnail.png",
+                        "../14_amp_gain/static/Gain Thumbnail.png",
+                        "../15_psat/static/Psat Thumbnail.png",
+                        "../16_dual_pol/static/Thumbnail - How Weather Radars See Shape.png",
+                        "./media/images/dual_pol/empty.png",
+                        "./media/images/dual_pol/empty.png",
+                        "./media/images/dual_pol/empty.png",
+                    ]
+                ]
+            )
+            .arrange_in_grid(rows=4, cols=5, buff=MED_SMALL_BUFF)
+            .scale_to_fit_width(fw(self, 0.9))
+        )
+
+        # self.add(thumbnails)
+        clutter_full = (
+            Paragraph(
+                "How do Radars",
+                "Filter Clutter?",
+                font=FONT,
+                alignment="center",
+                line_spacing=MED_LARGE_BUFF,
+            )
+            .move_to(clutter)
+            .shift(UP + LEFT * 2)
+        )
+        clutter_box = SurroundingRectangle(
+            clutter_full, color=GREEN, buff=MED_SMALL_BUFF
+        )
+        qpe_full = (
+            Paragraph(
+                "Quantitative",
+                "Precipitation",
+                "Estimation",
+                font=FONT,
+                alignment="left",
+                line_spacing=MED_LARGE_BUFF,
+            )
+            .move_to(qpe, LEFT)
+            .shift(LEFT)
+            .set_y(clutter_box.get_y())
+        )
+        qpe_box = SurroundingRectangle(qpe_full, color=GREEN, buff=MED_SMALL_BUFF)
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                Write(clutter_full[0]),
+                Unwrite(clutter[1][6:]),
+                ReplacementTransform(
+                    clutter[1][:6], clutter_full[1][:6], path_arc=-PI / 3
+                ),
+                ReplacementTransform(
+                    clutter[0], clutter_full[1][6:-1], path_arc=PI / 3
+                ),
+                GrowFromCenter(clutter_full[1][-1]),
+                Create(clutter_box),
+                ReplacementTransform(qpe[0], qpe_full[0][0]),
+                ReplacementTransform(qpe[1], qpe_full[1][0]),
+                Write(qpe_full[0][1:]),
+                ReplacementTransform(qpe[2], qpe_full[2][0]),
+                Write(qpe_full[1][1:]),
+                Write(qpe_full[2][1:]),
+                Create(qpe_box),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Transform(qpe_box, thumbnails[-2][1]),
+                    qpe_full.animate.scale_to_fit_width(
+                        thumbnails[-2][1].width * 0.8
+                    ).move_to(thumbnails[-2][1]),
+                ),
+                AnimationGroup(
+                    Transform(clutter_box, thumbnails[-3][1]),
+                    clutter_full.animate.scale_to_fit_width(
+                        thumbnails[-3][1].width * 0.8
+                    ).move_to(thumbnails[-3][1]),
+                ),
+                LaggedStart(
+                    *[FadeIn(m) for m in thumbnails[:-3][::-1]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        dsw = (
+            MathTex(r"\sigma_v")
+            .set_color(BLUE)
+            .scale_to_fit_height(thumbnails[-1][1].height * 0.4)
+            .move_to(thumbnails[-1][1])
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(dsw[0][0]),
+                FadeIn(dsw[0][1]),
+                Create(thumbnails[-1][1]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[
+                        FadeOut(m)
+                        for m in [
+                            *thumbnails[:-3],
+                            Group(
+                                clutter_box,
+                                clutter_full,
+                            ),
+                            Group(
+                                qpe_box,
+                                qpe_full,
+                            ),
+                            Group(
+                                thumbnails[-1][1],
+                                dsw,
+                            ),
+                        ]
+                    ],
+                    lag_ratio=0.04,
+                ),
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        mug1 = (
+            VideoMobject("/home/marchall/media/rf-channel-assets/mug1.mp4")
+            .scale_to_fit_width(fw(self, 0.7))
+            .move_to(self.camera.frame)
+        )
+        self.play(
+            mug1.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+            rate_func=rate_functions.linear,
+        )
+
+        self.wait(3)
+
+        mug2 = (
+            VideoMobject("/home/marchall/media/rf-channel-assets/mug2.mp4")
+            .scale_to_fit_width(fw(self, 0.7))
+            .move_to(self.camera.frame)
+        )
+
+        self.play(
+            LaggedStart(
+                mug1.animate.shift(UP * fh(self)),
+                mug2.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+                lag_ratio=0.1,
+            ),
+            rate_func=rate_functions.linear,
+        )
+
+        self.wait(3)
+
+        self.play(
+            mug2.animate.shift(UP * fh(self)),
+            rate_func=rate_functions.linear,
+        )
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        with open("dual_pol.py", "r") as f:
+            nlines = len(f.readlines())
+        with open("./Flapping Bird.html", "r") as f:
+            nlines += len(f.readlines())
+        lines_str = "".join(
+            [
+                f",{n}" if (idx + 1) % 3 == 0 and idx < len(str(nlines)) - 1 else f"{n}"
+                for idx, n in enumerate(str(nlines)[::-1])
+            ][::-1]
+        )
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_table = (
+            Table(
+                [
+                    ["Lines of code", lines_str],
+                    ["Script word count", "2,548"],
+                    ["Days to make", "22"],
+                    ["Git commits", "15"],
+                ],
+                element_to_mobject=Text,
+                element_to_mobject_config=dict(
+                    font=FONT, font_size=DEFAULT_FONT_SIZE * 0.7
+                ),
+            )
+            .scale(0.5)
+            .next_to(stats_title, direction=DOWN, buff=MED_LARGE_BUFF)
+        )
+        for row in stats_table.get_rows():
+            row[1].set_color(GREEN)
+
+        stats_group = (
+            VGroup(stats_title, stats_table)
+            .next_to(self.camera.frame.get_corner(UR), DL, LARGE_BUFF * 2)
+            .shift(DOWN * fh(self))
+        )
+
+        thank_you_sabrina = Text(
+            "Thank you, Sabrina, for\nediting the whole video :)",
+            font=FONT,
+            font_size=DEFAULT_FONT_SIZE * 0.5,
+        ).next_to(stats_group, DOWN)
+
+        marshall_bruner = (
+            Text("Marshall Bruner", font=FONT, font_size=DEFAULT_FONT_SIZE * 0.5)
+            .set_y(thank_you_sabrina.get_y())
+            .set_x(self.camera.frame.get_x() - fw(self, 0.25))
+        )
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(FadeIn(stats_title, shift=DOWN), FadeIn(stats_table)),
+                Write(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        wq = (
+            Text(":wq", font=FONT)
+            .scale_to_fit_height(fh(self, 0.3))
+            .move_to(self.camera.frame)
+        )
+        cursor = Rectangle(
+            color=GREY_A,
+            fill_color=GREY_A,
+            fill_opacity=1,
+            height=wq.height * 1.1,
+            width=wq[1].width * 1,
+        ).move_to(wq[0])
+        wq_box = SurroundingRectangle(
+            Group(cursor, wq, cursor.copy().next_to(wq, RIGHT)),
+            buff=MED_LARGE_BUFF,
+            corner_radius=0.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            color=BLUE,
+        )
+        Group(wq_box, wq, cursor).move_to(self.camera.frame)
+
+        self.play(FadeIn(wq_box))
+        self.play(TypeWithCursor(wq, cursor, time_per_char=0.3))
+        self.play(Blink(cursor, blinks=2))
+
+        black = BackgroundRectangle(self.camera.frame, fill_color=BLACK, fill_opacity=1)
+        self.add(black)
 
         self.wait(2)
