@@ -46,7 +46,11 @@ class WeatherRadarTower:
             self.radome,
         ).move_to(ORIGIN)
 
-    def get_animation(self):
+    def get_animation(self, run_time=None):
+        extra_args = {}
+        if run_time is not None:
+            extra_args |= {"run_time": run_time}
+
         return LaggedStart(
             AnimationGroup(
                 Create(self.left_leg),
@@ -61,6 +65,7 @@ class WeatherRadarTower:
             ),
             Create(self.radome),
             lag_ratio=0.75,
+            **extra_args,
         )
 
 

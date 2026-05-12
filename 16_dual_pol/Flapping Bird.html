@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Flapping Bird</title>
+<style>
+  :root {
+    --bg: #0f1a23;          /* background navy from palette */
+    --bird: #58c4dd;        /* sky blue */
+    --bird-dark: #3a9fb8;   /* darker shade of sky blue */
+    --bird-darker: #2b7d92;
+    --wing-accent: #fc6255; /* coral */
+    --beak: #f08a3a;        /* orange */
+    --beak-dark: #c66a22;
+    --belly: #c1c9da;       /* light gray */
+    --eye: #0f1a23;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .stage {
+    width: min(560px, 86vmin);
+    aspect-ratio: 1 / 1;
+    display: grid;
+    place-items: center;
+    position: relative;
+  }
+
+  /* Bird sits above wind */
+  .flight { position: relative; z-index: 1; }
+
+  /* --- Body bob: rises during downstroke (when wings push air down) --- */
+  .bird {
+    position: relative;
+    width: 320px;
+    height: 240px;
+    /* asymmetric: rapid lift, slower fall = more lifelike */
+    animation: bob 0.5s cubic-bezier(.3,.9,.4,1) infinite;
+    transform-origin: center;
+  }
+
+  @keyframes bob {
+    0%   { transform: translateY(2px)  rotate(-1deg); }   /* end of upstroke, dipping */
+    35%  { transform: translateY(-12px) rotate(1.5deg); } /* peak of downstroke - lifted */
+    70%  { transform: translateY(-2px) rotate(0deg); }
+    100% { transform: translateY(2px)  rotate(-1deg); }
+  }
+
+  /* ------- Body parts ------- */
+
+  .body {
+    position: absolute;
+    left: 60px; top: 70px;
+    width: 180px; height: 140px;
+    background: var(--bird);
+    border-radius: 50% 55% 50% 50% / 55% 50% 50% 50%;
+    box-shadow: inset -14px -10px 0 0 var(--bird-dark);
+  }
+
+  .belly {
+    position: absolute;
+    left: 96px; top: 130px;
+    width: 110px; height: 78px;
+    background: var(--belly);
+    border-radius: 50%;
+    opacity: 0.92;
+  }
+
+  .head {
+    position: absolute;
+    left: 168px; top: 30px;
+    width: 130px; height: 130px;
+    background: var(--bird);
+    border-radius: 50%;
+    box-shadow: inset -10px -8px 0 0 var(--bird-dark);
+    /* tiny head bob, syncs to flap */
+    animation: head-bob 0.5s cubic-bezier(.3,.9,.4,1) infinite;
+    transform-origin: 0% 80%;
+  }
+  @keyframes head-bob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    35%      { transform: translateY(-2px) rotate(-2deg); }
+    70%      { transform: translateY(1px) rotate(0.5deg); }
+  }
+
+  .eye {
+    position: absolute;
+    left: 246px; top: 72px;
+    width: 18px; height: 18px;
+    background: var(--eye);
+    border-radius: 50%;
+    animation: head-bob 0.5s cubic-bezier(.3,.9,.4,1) infinite;
+    transform-origin: -78px 8px;
+  }
+  .eye::after {
+    content: "";
+    position: absolute;
+    top: 3px; left: 4px;
+    width: 6px; height: 6px;
+    background: white;
+    border-radius: 50%;
+  }
+
+  .beak {
+    position: absolute;
+    left: 286px; top: 92px;
+    width: 0; height: 0;
+    border-top: 11px solid transparent;
+    border-bottom: 11px solid transparent;
+    border-left: 28px solid var(--beak);
+    filter: drop-shadow(0 2px 0 var(--beak-dark));
+    animation: head-bob 0.5s cubic-bezier(.3,.9,.4,1) infinite;
+    transform-origin: -118px 11px;
+  }
+
+  /* Tail counter-pitches a bit */
+  .tail {
+    position: absolute;
+    left: 30px; top: 110px;
+    width: 60px; height: 36px;
+    background: var(--bird-darker);
+    clip-path: polygon(100% 0, 0 30%, 0 70%, 100% 100%, 70% 50%);
+    transform-origin: 100% 50%;
+    animation: tail 0.5s cubic-bezier(.3,.9,.4,1) infinite;
+  }
+  @keyframes tail {
+    0%, 100% { transform: rotate(2deg); }
+    35%      { transform: rotate(-6deg); }
+    70%      { transform: rotate(1deg); }
+  }
+
+  .leg {
+    position: absolute;
+    width: 4px; height: 22px;
+    background: var(--beak-dark);
+    top: 200px;
+    transform-origin: top center;
+    animation: leg 0.5s cubic-bezier(.3,.9,.4,1) infinite;
+  }
+  .leg.l { left: 138px; }
+  .leg.r { left: 168px; animation-delay: 0.04s; }
+  .leg::after {
+    content: "";
+    position: absolute;
+    bottom: -2px; left: -5px;
+    width: 14px; height: 4px;
+    background: var(--beak-dark);
+    border-radius: 2px;
+  }
+  /* legs trail / dangle */
+  @keyframes leg {
+    0%, 100% { transform: rotate(0deg); }
+    35%      { transform: rotate(8deg); }
+    70%      { transform: rotate(-3deg); }
+  }
+
+  /* ------- Wings: asymmetric, with fold on upstroke ------- */
+
+  .wing {
+    position: absolute;
+    left: 40px; top: 96px;
+    width: 130px; height: 80px;
+    background: var(--bird-dark);
+    border-radius: 60% 50% 50% 55% / 70% 60% 50% 50%;
+    transform-origin: 82% 45%;
+    /* downstroke is fast & powerful; upstroke is slower & folded */
+    animation: flap 0.5s infinite;
+    box-shadow:
+      inset -6px 6px 0 0 var(--bird-darker),
+      inset 8px -4px 0 0 var(--wing-accent);
+  }
+
+  /* Far (back) wing — peeks out behind the body, half-step offset */
+  .wing.back {
+    left: 40px; top: 100px;
+    background: var(--bird-darker);
+    width: 120px; height: 72px;
+    z-index: 0;
+    animation: flap-back 0.5s infinite;
+    box-shadow: inset -4px 4px 0 0 #1f5e6f;
+    opacity: 0.95;
+  }
+
+  /*
+    Real bird flap profile:
+      0%   wing high, extended (top of upstroke)
+      30%  fast downstroke through horizontal
+      45%  bottom of downstroke — wing low, fully extended (max scaleY)
+      70%  recovery upstroke, wing folds (scaleY shrinks)
+      100% back to top
+  */
+  @keyframes flap {
+    0%   { transform: rotate(-65deg) scaleY(0.78) scaleX(0.95); }
+    25%  { transform: rotate(-25deg) scaleY(0.95) scaleX(1.0); }
+    45%  { transform: rotate( 45deg) scaleY(1.08) scaleX(1.05); }
+    60%  { transform: rotate( 25deg) scaleY(0.85) scaleX(0.9); }   /* fold */
+    80%  { transform: rotate(-40deg) scaleY(0.7)  scaleX(0.85); }  /* still folded, lifting */
+    100% { transform: rotate(-65deg) scaleY(0.78) scaleX(0.95); }
+  }
+
+  @keyframes flap-back {
+    0%   { transform: rotate(-50deg) scaleY(0.82); }
+    25%  { transform: rotate(-15deg) scaleY(0.95); }
+    45%  { transform: rotate( 50deg) scaleY(1.05); }
+    60%  { transform: rotate( 30deg) scaleY(0.82); }
+    80%  { transform: rotate(-30deg) scaleY(0.72); }
+    100% { transform: rotate(-50deg) scaleY(0.82); }
+  }
+
+  /* Stack order */
+  .tail      { z-index: 1; }
+  .wing.back { z-index: 1; }
+  .leg       { z-index: 1; }
+  .body      { z-index: 2; }
+  .belly     { z-index: 3; }
+  .head      { z-index: 4; }
+  .eye, .beak{ z-index: 5; }
+  .wing      { z-index: 6; }
+
+  .caption {
+    position: fixed;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #5a6b7a;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="flight" id="flight">
+      <div class="bird" aria-label="Cartoon bird flapping its wings">
+        <div class="tail"></div>
+        <div class="wing back"></div>
+        <div class="body"></div>
+        <div class="belly"></div>
+        <div class="leg l"></div>
+        <div class="leg r"></div>
+        <div class="head"></div>
+        <div class="eye"></div>
+        <div class="beak"></div>
+        <div class="wing"></div>
+      </div>
+    </div>
+  </div>
+  <div class="caption">flap · flap · flap</div>
+  <script>
+    // Smooth, slow, random vertical drift using layered sine waves with
+    // slowly-evolving random phases. Looks organic — never repeats exactly,
+    // never jerks, stays bounded.
+    (function () {
+      const el = document.getElementById('flight');
+      const AMP = 70;            // max px above/below center
+      // Three octaves of motion, each with its own period + drifting phase.
+      // Slower periods dominate -> gentle long arcs with small wobble on top.
+      const layers = [
+        { period: 7.0, weight: 0.60, phase: Math.random() * Math.PI * 2, drift: 0.04 },
+        { period: 4.3, weight: 0.28, phase: Math.random() * Math.PI * 2, drift: 0.07 },
+        { period: 2.1, weight: 0.12, phase: Math.random() * Math.PI * 2, drift: 0.11 },
+      ];
+      const t0 = performance.now();
+      let prevY = 0;
+      let prevT = 0;
+      let smoothedTilt = 0;
+      const MAX_TILT = 12;       // degrees at peak ascent/descent
+      const TILT_GAIN = 0.06;    // px/s -> degrees (tuned for our amp/periods)
+      function tick(now) {
+        const t = (now - t0) / 1000;
+        let y = 0;
+        for (const L of layers) {
+          // slowly perturb phase so the waveform isn't perfectly periodic
+          L.phase += L.drift * 0.016;
+          y += Math.sin((t / L.period) * Math.PI * 2 + L.phase) * L.weight;
+        }
+        const yPx = y * AMP;
+        // Tilt from vertical velocity.
+        const dt = Math.max(1 / 240, t - prevT);
+        const vy = (yPx - prevY) / dt;          // px per second
+        const targetTilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, vy * TILT_GAIN));
+        // low-pass so tilt doesn't twitch on the small high-frequency layer
+        smoothedTilt += (targetTilt - smoothedTilt) * 0.08;
+        prevY = yPx;
+        prevT = t;
+        el.style.transform = `translateY(${yPx.toFixed(2)}px) rotate(${smoothedTilt.toFixed(2)}deg)`;
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

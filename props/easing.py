@@ -1,10 +1,13 @@
-"""Configurable easing rate function factories for Manim animations."""
+# props/easing.py
 
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 from manim.utils import rate_functions
+
+_MISSING = object()
 
 
 def cubic_bezier(
@@ -17,10 +20,6 @@ def cubic_bezier(
     max_newton_iters: int = 10,
     max_bisection_iters: int = 24,
 ):
-    """Return a CSS/anime.js-style cubic-bezier rate function.
-
-    The solver inverts x(u)=t to preserve timing semantics, then evaluates y(u).
-    """
     x1 = float(x1)
     y1 = float(y1)
     x2 = float(x2)
@@ -85,58 +84,127 @@ _bezier_out_in = cubic_bezier(0.17, 0.581, 0.759, 0.275)
 
 
 def bezier_out_in(t: float) -> float:
-    """Preset: cubicBezier(0.17, 0.581, 0.759, 0.275)."""
     return _bezier_out_in(t)
 
 
-def ease_in_elastic(amplitude: float = 1.0, period: float = 0.3):
-    """Return a configurable ease-in elastic rate function.
-
-    Parameters follow the common elastic form used by JS animation libraries:
-    larger ``amplitude`` increases overshoot, and ``period`` controls oscillation.
-    """
+def _elastic_settings(amplitude: float, period: float) -> tuple[float, float, float]:
     a = max(1.0, float(amplitude))
     p = max(1e-6, float(period))
     s = p / (2 * math.pi) * math.asin(1 / a)
+    return a, p, s
 
-    @rate_functions.unit_interval
+
+def _elastic_rate_func(
+    value_func: Callable[[float, float, float], float],
+    amplitude: float,
+    period: float,
+) -> Callable[[float], float]:
     def _ease(t: float) -> float:
-        if t == 0 or t == 1:
-            return t
-        x = t - 1
-        return -(a * pow(2, 10 * x) * math.sin((x - s) * (2 * math.pi) / p))
+        return value_func(t, amplitude, period)
 
     return _ease
 
 
-def ease_out_elastic(amplitude: float = 1.0, period: float = 0.3):
-    """Return a configurable ease-out elastic rate function."""
-    a = max(1.0, float(amplitude))
-    p = max(1e-6, float(period))
-    s = p / (2 * math.pi) * math.asin(1 / a)
+def _elastic_value_or_factory(
+    value_func: Callable[[float, float, float], float],
+    t_or_amplitude: float | object,
+    period: float | object,
+    amplitude: float | object,
+    default_period: float,
+):
+    if amplitude is not _MISSING:
+        p = default_period if period is _MISSING else period
+        if t_or_amplitude is _MISSING:
+            return _elastic_rate_func(value_func, amplitude, p)
+        return value_func(t_or_amplitude, amplitude, p)
 
-    @rate_functions.unit_interval
-    def _ease(t: float) -> float:
-        if t == 0 or t == 1:
-            return t
-        return a * pow(2, -10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
+    if period is not _MISSING:
+        a = 1.0 if t_or_amplitude is _MISSING else t_or_amplitude
+        return _elastic_rate_func(value_func, a, period)
 
-    return _ease
+    if t_or_amplitude is _MISSING:
+        return _elastic_rate_func(value_func, 1.0, default_period)
+
+    if float(t_or_amplitude) > 1.0:
+        return _elastic_rate_func(value_func, t_or_amplitude, default_period)
+
+    return value_func(t_or_amplitude, 1.0, default_period)
 
 
-def ease_in_out_elastic(amplitude: float = 1.0, period: float = 0.45):
-    """Return a configurable ease-in-out elastic rate function."""
-    a = max(1.0, float(amplitude))
-    p = max(1e-6, float(period))
-    s = p / (2 * math.pi) * math.asin(1 / a)
+@rate_functions.unit_interval
+def _ease_in_elastic_value(
+    t: float, amplitude: float = 1.0, period: float = 0.3
+) -> float:
+    if t == 0 or t == 1:
+        return t
+    a, p, s = _elastic_settings(amplitude, period)
+    x = t - 1
+    return -(a * pow(2, 10 * x) * math.sin((x - s) * (2 * math.pi) / p))
 
-    @rate_functions.unit_interval
-    def _ease(t: float) -> float:
-        if t == 0 or t == 1:
-            return t
-        x = 2 * t - 1
-        if x < 0:
-            return -0.5 * (a * pow(2, 10 * x) * math.sin((x - s) * (2 * math.pi) / p))
-        return a * pow(2, -10 * x) * math.sin((x - s) * (2 * math.pi) / p) * 0.5 + 1
 
-    return _ease
+@rate_functions.unit_interval
+def _ease_out_elastic_value(
+    t: float, amplitude: float = 1.0, period: float = 0.3
+) -> float:
+    if t == 0 or t == 1:
+        return t
+    a, p, s = _elastic_settings(amplitude, period)
+    return a * pow(2, -10 * t) * math.sin((t - s) * (2 * math.pi) / p) + 1
+
+
+@rate_functions.unit_interval
+def _ease_in_out_elastic_value(
+    t: float, amplitude: float = 1.0, period: float = 0.45
+) -> float:
+    if t == 0 or t == 1:
+        return t
+    a, p, s = _elastic_settings(amplitude, period)
+    x = 2 * t - 1
+    if x < 0:
+        return -0.5 * (a * pow(2, 10 * x) * math.sin((x - s) * (2 * math.pi) / p))
+    return a * pow(2, -10 * x) * math.sin((x - s) * (2 * math.pi) / p) * 0.5 + 1
+
+
+def ease_in_elastic(
+    t_or_amplitude: float | object = _MISSING,
+    period: float | object = _MISSING,
+    *,
+    amplitude: float | object = _MISSING,
+):
+    return _elastic_value_or_factory(
+        _ease_in_elastic_value, t_or_amplitude, period, amplitude, 0.3
+    )
+
+
+def ease_out_elastic(
+    t_or_amplitude: float | object = _MISSING,
+    period: float | object = _MISSING,
+    *,
+    amplitude: float | object = _MISSING,
+):
+    return _elastic_value_or_factory(
+        _ease_out_elastic_value, t_or_amplitude, period, amplitude, 0.3
+    )
+
+
+def ease_in_out_elastic(
+    t_or_amplitude: float | object = _MISSING,
+    period: float | object = _MISSING,
+    *,
+    amplitude: float | object = _MISSING,
+):
+    return _elastic_value_or_factory(
+        _ease_in_out_elastic_value, t_or_amplitude, period, amplitude, 0.45
+    )
+
+
+def smootherstep(t):
+    return t**3 * (t * (t * 6 - 15) + 10)
+
+
+def get_phase_eased_sine(periods=5, amplitude=1.0, phase=0.0):
+    def phase_eased_sine(t):
+        eased_t = smootherstep(t)
+        return amplitude * math.sin(2 * math.pi * periods * eased_t + phase)
+
+    return phase_eased_sine
