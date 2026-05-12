@@ -134,3 +134,9 @@ An amplifier's job is to make signals bigger... but there's a limit. Push the in
 In this video, I'll break down what these specs actually mean, why they matter for your RF system, and how to interpret them on a real datasheet. This is part 2 of my RF datasheet series following the video on gain.
 
 ![thumbnail](./15_psat/static/Psat%20Thumbnail.png)
+
+## [16 - The biggest innovation in weather radar](https://youtu.be/BAYsncEeA6Y)
+
+In this video, I’ll explain how dual-polarization weather radar works, why sending both horizontal and vertical polarizations reveals target shape and consistency, and how products like ZDR, rhoHV, PhiDP, and KDP help distinguish rain, hail, snow, birds, insects, and more.
+
+![thumbnail](./16_dual_pol/static/Thumbnail%20-%20How%20Weather%20Radars%20See%20Shape.png)
