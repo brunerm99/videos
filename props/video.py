@@ -39,6 +39,13 @@ def parse_frame_rate(frame_rate_text):
         return 30.0
 
 
+def parse_optional_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def probe_video_stream(filename):
     command = [
         "ffprobe",
@@ -47,7 +54,7 @@ def probe_video_stream(filename):
         "-select_streams",
         "v:0",
         "-show_entries",
-        "stream=width,height,pix_fmt,r_frame_rate",
+        "stream=width,height,pix_fmt,r_frame_rate,duration:format=duration",
         "-of",
         "json",
         str(filename),
@@ -55,7 +62,8 @@ def probe_video_stream(filename):
 
     try:
         result = subprocess.run(command, capture_output=True, text=True, check=True)
-        streams = json.loads(result.stdout).get("streams", [])
+        probe_data = json.loads(result.stdout)
+        streams = probe_data.get("streams", [])
     except (OSError, subprocess.CalledProcessError, json.JSONDecodeError):
         return None
 
@@ -63,11 +71,16 @@ def probe_video_stream(filename):
         return None
 
     stream = streams[0]
+    file_format = probe_data.get("format", {})
+    duration = parse_optional_float(stream.get("duration"))
+    if duration == 0:
+        duration = parse_optional_float(file_format.get("duration"))
     return {
         "width": int(stream.get("width", 0)),
         "height": int(stream.get("height", 0)),
         "pix_fmt": stream.get("pix_fmt", ""),
         "frame_rate": parse_frame_rate(stream.get("r_frame_rate", "30/1")),
+        "duration": duration,
     }
 
 
@@ -83,6 +96,7 @@ class VideoStatus:
     use_ffmpeg_pipe: bool = False
     last_frame: Any = None
     paused: bool = False
+    duration_ms: float = 0
 
     def __deepcopy__(self, memo):
         return self
@@ -103,6 +117,8 @@ class VideoMobject(ImageMobject):
         (optional) speed-up/slow-down the playback
     loop
         (optional) replay the video from the start in an endless loop
+    start_time
+        (optional) time in seconds where playback should begin
     https://discord.com/channels/581738731934056449/1126245755607339250/1126245755607339250
     2023-07-06 Uwe Zimmermann & Abulafia
     2024-03-09 Uwe Zimmermann
@@ -188,6 +204,9 @@ class VideoMobject(ImageMobject):
         return True, frame
 
     def read_frame(self):
+        if self.loop and self.status.duration_ms > 0:
+            self.status.time %= self.status.duration_ms
+
         if self.status.use_ffmpeg_pipe:
             target_frame = max(int(self.status.time * self.status.frame_rate / 1000), 0)
 
@@ -227,7 +246,34 @@ class VideoMobject(ImageMobject):
         self.status.paused = not self.status.paused
         return self
 
-    def __init__(self, filename=None, imageops=None, speed=1.0, loop=False, **kwargs):
+    def copy(self):
+        copied = super().copy()
+
+        if isinstance(copied, VideoMobject):
+            # Transform animations copy mobjects internally. Those copies should
+            # remain static snapshots instead of advancing this video's decoder.
+            copied.clear_updaters()
+            copied.status = VideoStatus(
+                time=self.status.time,
+                frame_rate=self.status.frame_rate,
+                frame_width=self.status.frame_width,
+                frame_height=self.status.frame_height,
+                frame_index=self.status.frame_index,
+                duration_ms=self.status.duration_ms,
+                paused=True,
+            )
+
+        return copied
+
+    def __init__(
+        self,
+        filename=None,
+        imageops=None,
+        speed=1.0,
+        loop=False,
+        start_time=0.0,
+        **kwargs,
+    ):
         if filename is None:
             raise ValueError("VideoMobject requires a filename")
 
@@ -235,26 +281,32 @@ class VideoMobject(ImageMobject):
         self.imageops = imageops
         self.speed = speed
         self.loop = loop
+        self.start_time = max(float(start_time), 0.0)
+        self.start_time_ms = self.start_time * 1000
         self._id = id(self)
         self.status = VideoStatus()
+        self.status.time = self.start_time_ms
 
         metadata = probe_video_stream(self.filename)
         if metadata is not None:
             self.status.frame_rate = metadata["frame_rate"]
             self.status.frame_width = metadata["width"]
             self.status.frame_height = metadata["height"]
+            self.status.duration_ms = metadata["duration"] * 1000
             self.status.use_ffmpeg_pipe = pixel_format_has_alpha(metadata["pix_fmt"])
+            if self.loop and self.status.duration_ms > 0:
+                self.status.time %= self.status.duration_ms
 
         ret = False
         frame = None
         if self.status.use_ffmpeg_pipe and self.restart_ffmpeg_pipe():
-            ret, frame = self.read_ffmpeg_frame()
+            ret, frame = self.read_frame()
 
         if not ret:
             self.status.use_ffmpeg_pipe = False
             self.close_ffmpeg_pipe()
             self.status.videoObject = cv2.VideoCapture(str(self.filename))
-            self.status.videoObject.set(cv2.CAP_PROP_POS_FRAMES, 1)
+            self.status.videoObject.set(cv2.CAP_PROP_POS_MSEC, self.status.time)
             ret, frame = self.status.videoObject.read()
 
         if ret:
@@ -287,7 +339,7 @@ class VideoMobject(ImageMobject):
             status.time = 0
             if status.use_ffmpeg_pipe:
                 if self.restart_ffmpeg_pipe():
-                    ret, frame = self.read_ffmpeg_frame()
+                    ret, frame = self.read_frame()
             elif self.status.videoObject is not None:
                 self.status.videoObject.set(cv2.CAP_PROP_POS_MSEC, status.time)
                 ret, frame = self.status.videoObject.read()
