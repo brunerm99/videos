@@ -18,13 +18,13 @@ from manim import *
 from manim.utils.color.X11 import BROWN1
 from matplotlib.pylab import diag
 from MF_Tools import VT, SurroundingRectangleUnion
-from moderngl_window.geometry import sphere
-from networkx import center
 from numpy.fft import fft, fftshift
+from pyglet.window.key import W
 from scipy import signal
 from scipy.interpolate import interp1d
 
 sys.path.insert(0, "../../")
+
 from props import (
     Bjt,
     Capacitor,
@@ -44,6 +44,7 @@ from props import (
     get_phase_shifter,
     get_splitter,
 )
+from props.nexrad import get_available_nexrad_products, get_nexrad_product_ppi_data
 from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
@@ -52,7 +53,7 @@ config.pixel_width = 1080
 config.frame_height = 14
 config.frame_width = 9
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../../.env")
 FONT = os.getenv("FONT", "")
@@ -1318,5 +1319,256 @@ class Birds(MovingCameraScene):
         self.wait(0.5)
 
         self.play(FadeOut(thumbnail_group, scale=0.9))
+
+        self.wait(2)
+
+
+class BuildRadarImage(MovingCameraScene):
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        s3_key = NEXRAD_CASE_S3_KEY
+        sweep = 0
+        max_range_km = 150.0
+        resolution = 520
+        required_products = (
+            "reflectivity",
+            "velocity",
+            "zdr",
+            # "rhohv",
+            # "phidp",
+            # "kdp",
+        )
+
+        available_products = get_available_nexrad_products(s3_key=s3_key)
+        missing_products = [
+            product
+            for product in required_products
+            if product not in available_products
+        ]
+        if missing_products:
+            raise RuntimeError(
+                "Missing NEXRAD products: " + ", ".join(missing_products)
+            )
+
+        metadata_by_product = {
+            product: get_nexrad_product_ppi_data(
+                product,
+                s3_key=s3_key,
+                sweep=sweep,
+                max_range_km=max_range_km,
+                resolution=resolution,
+            )
+            for product in required_products
+        }
+        reflectivity_metadata = metadata_by_product["reflectivity"]
+        v_metadata = metadata_by_product["velocity"]
+        zdr_metadata = metadata_by_product["zdr"]
+        # rhohv_metadata = metadata_by_product["rhohv"]
+        # phidp_metadata = metadata_by_product["phidp"]
+        # kdp_metadata = metadata_by_product["kdp"]
+
+        z_vmin = 0
+        z_vmax = 75
+        z_step = 15
+        reflectivity_ticks = np.arange(z_vmin, z_vmax + z_step, z_step)
+        v_lim = max(abs(v_metadata["vmin"]), abs(v_metadata["vmax"]))
+        v_vmin = -v_lim
+        v_vmax = v_lim
+        v_step = 10
+        v_ticks = np.arange(v_vmin, v_vmax + v_step, v_step)
+        zdr_vmin = -2.0
+        zdr_vmax = 6.0
+        zdr_step = 2
+        zdr_ticks = np.arange(zdr_vmin, zdr_vmax + zdr_step, zdr_step)
+        rhohv_vmin = 0
+        rhohv_vmax = 1
+        rhohv_step = 0.25
+        rhohv_ticks = np.arange(rhohv_vmin, rhohv_vmax + rhohv_step, rhohv_step)
+        phidp_vmin = 0.0
+        phidp_vmax = 180.0
+        phidp_step = 90
+        phidp_ticks = np.arange(phidp_vmin, phidp_vmax + phidp_step, phidp_step)
+        kdp_vmin = -2.0
+        kdp_vmax = 8.0
+        kdp_step = 2.5
+        kdp_ticks = np.arange(kdp_vmin, kdp_vmax + kdp_step, kdp_step)
+
+        reflectivity_ppi = PPIGrid(
+            reflectivity_metadata,
+            reflectivity_metadata["field_key"],
+            valid_mask=reflectivity_metadata["valid_mask"],
+            vmin=z_vmin,
+            vmax=z_vmax,
+            font=FONT,
+            colorbar_ticks=reflectivity_ticks,
+            radius=fw(self, 0.3),
+            init_scan_progress=0,
+            cmap_name="NWSRef",
+        )
+        v_ppi = PPIGrid(
+            v_metadata,
+            v_metadata["field_key"],
+            valid_mask=v_metadata["valid_mask"],
+            vmin=v_vmin,
+            vmax=v_vmax,
+            font=FONT,
+            colorbar_ticks=v_ticks,
+            radius=fw(self, 0.3),
+            init_scan_progress=0,
+            cmap_name="coolwarm",
+        )
+        zdr_ppi = PPIGrid(
+            zdr_metadata,
+            zdr_metadata["field_key"],
+            valid_mask=zdr_metadata["valid_mask"],
+            vmin=zdr_vmin,
+            vmax=zdr_vmax,
+            font=FONT,
+            colorbar_ticks=zdr_ticks,
+            radius=fw(self, 0.3),
+            init_scan_progress=0,
+            cmap_name="plasma",
+        )
+        # rhohv_ppi = PPIGrid(
+        #     rhohv_metadata,
+        #     rhohv_metadata["field_key"],
+        #     valid_mask=rhohv_metadata["valid_mask"],
+        #     vmin=rhohv_vmin,
+        #     vmax=rhohv_vmax,
+        #     font=FONT,
+        #     colorbar_ticks=rhohv_ticks,
+        #     radius=fw(self, 0.3),
+        #     init_scan_progress=0,
+        #     cmap_name="viridis",
+        # )
+        # phidp_ppi = PPIGrid(
+        #     phidp_metadata,
+        #     phidp_metadata["field_key"],
+        #     valid_mask=phidp_metadata["valid_mask"],
+        #     vmin=phidp_vmin,
+        #     vmax=phidp_vmax,
+        #     font=FONT,
+        #     colorbar_ticks=phidp_ticks,
+        #     radius=fw(self, 0.3),
+        #     init_scan_progress=0,
+        #     cmap_name="twilight_shifted",
+        # )
+        # kdp_ppi = PPIGrid(
+        #     kdp_metadata,
+        #     kdp_metadata["field_key"],
+        #     valid_mask=kdp_metadata["valid_mask"],
+        #     vmin=kdp_vmin,
+        #     vmax=kdp_vmax,
+        #     font=FONT,
+        #     colorbar_ticks=kdp_ticks,
+        #     radius=fw(self, 0.3),
+        #     init_scan_progress=0,
+        #     cmap_name="Spectral_r",
+        # )
+
+        self.add(reflectivity_ppi)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+                reflectivity_ppi.scan_progress @ 360,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        ppis = (
+            Group(v_ppi, zdr_ppi)
+            .arrange(DOWN, MED_LARGE_BUFF)
+            .next_to(reflectivity_ppi, DOWN, MED_LARGE_BUFF)
+        )
+        ppis.shift(
+            RIGHT
+            * (
+                reflectivity_ppi.cardinal_labels[0].get_x()
+                - v_ppi.cardinal_labels[0].get_x()
+            )
+        )
+
+        new_cam = (
+            self.camera.frame.copy()
+            .scale_to_fit_height(Group(ppis, reflectivity_ppi).height * 1.1)
+            .move_to(Group(ppis, reflectivity_ppi))
+        )
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                Transform(self.camera.frame, new_cam),
+                v_ppi.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+                zdr_ppi.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+                v_ppi.scan_progress @ 360,
+                zdr_ppi.scan_progress @ 360,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        z_label = (
+            Text("Reflectivity", font=FONT)
+            .next_to(reflectivity_ppi, UP, MED_LARGE_BUFF)
+            .set_x(reflectivity_ppi.data_image.get_x())
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(zdr_ppi),
+                FadeOut(v_ppi),
+                self.camera.frame.animate.restore(),
+                LaggedStart(*[FadeIn(m) for m in z_label], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_width(fw(self, 0.3)).move_to(self.camera.frame).shift(
+            RIGHT * fw(self, 0.8)
+        )
+
+        self.add(radar.vgroup)
+
+        self.play(self.camera.frame.animate.shift(RIGHT * fw(self)))
+
+        self.wait(0.5)
+
+        beam_u = (
+            Line(
+                radar.radome.get_right(),
+                radar.radome.get_right() + RIGHT * fw(self, 0.5),
+                color=TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            )
+            .set_z_index(-2)
+            .rotate(PI / 10, about_point=radar.radome.get_right())
+        )
+        beam_d = (
+            Line(
+                radar.radome.get_right(),
+                radar.radome.get_right() + RIGHT * fw(self, 0.5),
+                color=TX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            )
+            .set_z_index(-2)
+            .rotate(-PI / 10, about_point=radar.radome.get_right())
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(Create(beam_u), Create(beam_d))
+        self.play(
+            Group(beam_u, beam_d)
+            .animate(rate_func=get_phase_eased_sine(periods=3), run_time=3)
+            .rotate(PI / 3, about_point=radar.radome.get_right())
+        )
 
         self.wait(2)
