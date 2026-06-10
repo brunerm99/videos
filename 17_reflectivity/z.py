@@ -43,11 +43,12 @@ from props import (
     get_phase_shifter,
     get_splitter,
 )
+from props.nexrad import get_nexrad_product_ppi_data
 from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = True
+SKIP_ANIMATIONS_OVERRIDE = False
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -261,6 +262,8 @@ class PowerVsZ(MovingCameraScene):
         cloud_range = VT(0.7)
         cloud_range2 = VT(0.3)
         pr_norm = VT(0)
+        norm_val1 = VT(0.3)
+        norm_val2 = VT(0.5)
         cloud2_show = VT(0)
 
         def get_rx():
@@ -269,10 +272,10 @@ class PowerVsZ(MovingCameraScene):
             rng = np.random.default_rng(7)
             received_power = (
                 0.08
-                + (1 - (~cloud_range * 0.9 * (1 - ~pr_norm)) - 0.3 * ~pr_norm)
+                + (1 - (~cloud_range * 0.9 * (1 - ~pr_norm)) - ~norm_val1 * ~pr_norm)
                 * np.exp(-0.5 * ((range_samples - ~cloud_range) / cloud_sigma) ** 2)
                 + rng.normal(0, 0.025, range_samples.size)
-                + 0.5
+                + ~norm_val2
                 * ~cloud2_show
                 * np.exp(-0.5 * ((range_samples - ~cloud_range2) / cloud_sigma) ** 2)
             )
@@ -593,7 +596,7 @@ class PowerVsZ(MovingCameraScene):
             .move_to(Group(lbrace, rbrace))
         )
 
-        self.next_section(skip_animations=skip_animations(False))
+        self.next_section(skip_animations=skip_animations(True))
 
         self.play(
             LaggedStart(
@@ -719,7 +722,58 @@ class PowerVsZ(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(*self.mobjects))
+        self.play(
+            LaggedStart(
+                FadeOut(pr_final, z_final, to),
+                self.camera.frame.animate.scale(0.8),
+                pr_ax.animate.move_to(self.camera.frame),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                norm_val1.animate(rate_func=get_phase_eased_sine(2)).increment_value(
+                    0.3
+                ),
+                cloud_range.animate(rate_func=get_phase_eased_sine(2)).increment_value(
+                    -0.15
+                ),
+                cloud_range2.animate(rate_func=get_phase_eased_sine(2)).increment_value(
+                    -0.15
+                ),
+                norm_val2.animate(rate_func=get_phase_eased_sine(2)).increment_value(
+                    -0.3
+                ),
+                lag_ratio=0.1,
+                run_time=8,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+        # self.play(FadeOut(*self.mobjects))
+
+        # self.wait(.5)
+
+        self.wait(2)
+
+
+class ResolutionVolume(MovingCameraScene):
+    def construct(self):
+        zdata = get_nexrad_product_ppi_data("reflectivity")
+        zppi = PPIGrid(zdata, init_scan_progress=0).next_to(
+            self.camera.frame.get_top(), UP
+        )
+        self.add(zppi)
+
+        self.play(self.camera.frame.animate.move_to(zppi))
 
         self.wait(2)
 
