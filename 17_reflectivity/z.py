@@ -765,15 +765,196 @@ class PowerVsZ(MovingCameraScene):
         self.wait(2)
 
 
-class ResolutionVolume(MovingCameraScene):
+class ResolutionVolume(ZoomedScene):
+    def __init__(self, **kwargs):
+        w = config.frame_height * 0.5
+        h = config.frame_height * 0.35
+        super().__init__(
+            zoomed_display_height=h,
+            zoomed_display_width=w,
+            zoom_factor=0.03,
+            zoomed_camera_config={
+                "default_frame_stroke_width": DEFAULT_STROKE_WIDTH * 0.25,
+            },
+            # image_frame_stroke_width=0.1,
+            # zoomed_camera_config={
+            #     "default_frame_stroke_width": 3,
+            # },
+            **kwargs,
+        )
+
     def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
         zdata = get_nexrad_product_ppi_data("reflectivity")
         zppi = PPIGrid(zdata, init_scan_progress=0).next_to(
             self.camera.frame.get_top(), UP
         )
         self.add(zppi)
 
-        self.play(self.camera.frame.animate.move_to(zppi))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(zppi),
+                zppi.scan_progress.animate(run_time=3).set_value(360),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        zoom_display = self.zoomed_display.next_to(
+            self.camera.frame.get_corner(UL), DR
+        ).shift(UP / 2)
+
+        zoom_frame = self.zoomed_camera.frame
+        dip = zppi.data_image.height
+        zoom_frame.move_to(
+            zppi.data_image.get_center() + UP * dip * 0.23 + LEFT * dip * 0.22
+        )
+
+        self.play(self.camera.frame.animate.shift(UP))
+
+        self.activate_zooming(animate=True)
+
+        zoom_line_dl = always_redraw(
+            lambda: Line(
+                zoom_frame.get_corner(DL),
+                zoom_display.get_corner(DL),
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+        zoom_line_ur = always_redraw(
+            lambda: Line(
+                zoom_frame.get_corner(UR),
+                zoom_display.get_corner(UR),
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Create(zoom_line_dl),
+            Create(zoom_line_ur),
+            self.camera.frame.animate.shift(LEFT),
+        )
+
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(fh(self, 0.4)).next_to(
+            zppi.data_image, RIGHT, LARGE_BUFF * 1
+        ).shift(DOWN).set_stroke(width=DEFAULT_STROKE_WIDTH * 2)
+
+        self.play(
+            LaggedStart(
+                FadeOut(zoom_display),
+                AnimationGroup(Uncreate(zoom_line_dl), Uncreate(zoom_line_ur)),
+                FadeOut(zoom_frame),
+                FadeOut(zppi.colorbar, zppi.colorbar_ticks),
+                self.camera.frame.animate.set_y(zppi.data_image.get_y())
+                .scale(0.7)
+                .move_to(Group(zppi.data_image, radar.vgroup))
+                .shift(RIGHT),
+                radar.vgroup.shift(RIGHT * fw(self)).animate.shift(LEFT * fw(self)),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        bw = PI / 6
+        beam_u = Line(
+            radar.radome.get_right(),
+            radar.radome.get_right() + RIGHT * fw(self, 0.2),
+            color=BLUE,
+        ).set_z_index(-1)
+        beam_d = Line(
+            radar.radome.get_right(),
+            radar.radome.get_right() + RIGHT * fw(self, 0.2),
+            color=BLUE,
+        ).set_z_index(-1)
+        ppi_bw = 8
+        ppi_range = 150
+        ppi_beam_u = always_redraw(
+            lambda: Line(
+                zppi.ra2gp(0, 0),
+                zppi.ra2gp(ppi_range, -ppi_bw / 2),
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+        ppi_beam_d = always_redraw(
+            lambda: Line(
+                zppi.ra2gp(0, 0),
+                zppi.ra2gp(ppi_range, ppi_bw / 2),
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                Succession(
+                    AnimationGroup(
+                        Create(beam_u),
+                        Create(beam_d),
+                    ),
+                    AnimationGroup(
+                        beam_u.animate.rotate(
+                            bw / 2,
+                            about_point=radar.radome.get_right(),
+                        ),
+                        beam_d.animate.rotate(
+                            -bw / 2,
+                            about_point=radar.radome.get_right(),
+                        ),
+                    ),
+                ),
+                AnimationGroup(
+                    Create(ppi_beam_u),
+                    Create(ppi_beam_d),
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        r_offset = VT(70)
+        rr = VT(30)
+
+        def get_ppi_rr():
+
+            l1 = ArcBetweenPoints(
+                zppi.ra2gp(~r_offset, -ppi_bw / 2),
+                zppi.ra2gp(~r_offset + ~rr, -ppi_bw / 2),
+                angle=0,
+            )
+            l2 = ArcBetweenPoints(
+                zppi.ra2gp(~r_offset + ~rr, ppi_bw / 2),
+                zppi.ra2gp(~r_offset, ppi_bw / 2),
+                angle=0,
+            )
+            a1 = ArcBetweenPoints(
+                zppi.ra2gp(~r_offset, ppi_bw / 2),
+                zppi.ra2gp(~r_offset, -ppi_bw / 2),
+                angle=PI / 3,
+            )
+            a2 = ArcBetweenPoints(
+                zppi.ra2gp(~r_offset + ~rr, ppi_bw / 2),
+                zppi.ra2gp(~r_offset + ~rr, -ppi_bw / 2),
+                angle=PI / 3,
+            )
+            return (
+                ArcPolygonFromArcs(l1, a2, l2, a1)
+                .set_fill(color=BLUE, opacity=0.9)
+                .set_stroke(opacity=0)
+            )
+
+        ppi_rr = always_redraw(get_ppi_rr)
+
+        self.play(FadeIn(ppi_rr))
 
         self.wait(2)
 

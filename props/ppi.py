@@ -193,6 +193,9 @@ class PPIGrid(Group):
         axis_color = ManimColor(axis_color)
         label_color = ManimColor(label_color)
 
+        self.max_range_km = float(max_range_km)
+        self.radius = float(radius)
+
         rgba = _field_to_rgba(
             field_data,
             valid_mask,
@@ -213,6 +216,15 @@ class PPIGrid(Group):
             axis_color, width=1.6, opacity=0.76
         )
         self.origin_marker = Dot(ORIGIN, radius=0.018 * radius, color=axis_color)
+        self._coordinate_points = VGroup(
+            VectorizedPoint(ORIGIN),
+            VectorizedPoint(
+                _polar_ppi_point(ORIGIN, radius, max_range_km, 90, max_range_km)
+            ),
+            VectorizedPoint(
+                _polar_ppi_point(ORIGIN, radius, max_range_km, 0, max_range_km)
+            ),
+        )
 
         self.grid_lines = VGroup()
         for azimuth in range(0, 360, azimuth_step_deg):
@@ -296,6 +308,7 @@ class PPIGrid(Group):
             self.border,
             self.cardinal_labels,
             self.origin_marker,
+            self._coordinate_points,
         )
         self.add(self.ppi)
 
@@ -355,3 +368,17 @@ class PPIGrid(Group):
                 ).scale(0.12 * radius)
                 self.colorbar_label.next_to(self.colorbar, UP, buff=0.06)
                 self.add(self.colorbar_label)
+
+    def range_azimuth_to_graph_point(self, range_km, azimuth_deg):
+        center_point, east_point, north_point = self._coordinate_points
+        center = center_point.get_center()
+        east_vector = east_point.get_center() - center
+        north_vector = north_point.get_center() - center
+
+        theta = azimuth_deg * DEGREES
+        scaled_range = range_km / self.max_range_km
+        return center + scaled_range * (
+            east_vector * np.sin(theta) + north_vector * np.cos(theta)
+        )
+
+    ra2gp = range_azimuth_to_graph_point
