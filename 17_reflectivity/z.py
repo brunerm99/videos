@@ -961,11 +961,509 @@ class ResolutionVolume(ZoomedScene):
 
 class WeatherRadarEqn(MovingCameraScene):
     def construct(self):
-        pr_eqn = MathTex(
-            r"P_r(R) = \frac{P_t G^2 \lambda^2 \theta_{\text{3dB}} \phi_{\text{3dB}} c\tau}{512 (2\ln 2) \pi^2 R^2 L} \eta"
-        )
+        self.next_section(skip_animations=skip_animations(True))
+        # pr_eqn = MathTex(
+        #     r"P_r(R) = \frac{P_t G^2 \lambda^2 \theta_{\text{3dB}} \phi_{\text{3dB}} c\tau}{512 (2\ln 2) \pi^2 R^2 L} \eta"
+        # )
+        pr_eqn1 = MathTex(
+            r"P_r = \frac{P_t G^2 c \tau \Omega \pi^5 |K|^2 Z}{2 (4 \pi)^3 L \lambda^2 R^2}"
+        ).scale(2)
+        pr_eqn1[0][:2].set_color(RX_COLOR)
+        pr_eqn1[0][16].set_color(BLUE)
+
         pr_eqn2 = MathTex(
             r"P_r = \frac{P_t G^2}{(4 \pi)^3 L} \frac{c \tau \Omega}{2} \frac{\pi^5 |K|^2 Z}{\lambda^2 R^2}"
+        ).scale(2)
+        pr_eqn2[0][:2].set_color(RX_COLOR)
+        pr_eqn2[0][25].set_color(BLUE)
+        # Group(pr_eqn, pr_eqn2).arrange(DOWN, MED_LARGE_BUFF)
+        # self.add(pr_eqn, pr_eqn2)
+
+        pr_to_z = MathTex(r"P_r \rightarrow Z").scale(3)
+        pr_to_z[0][:2].set_color(RX_COLOR)
+        pr_to_z[0][3].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                pr_to_z[0][:2]
+                .shift(DOWN)
+                .set_opacity(0)
+                .animate.shift(UP)
+                .set_opacity(1),
+                pr_to_z[0][2]
+                .shift(DOWN)
+                .set_opacity(0)
+                .animate.shift(UP)
+                .set_opacity(1),
+                pr_to_z[0][3]
+                .shift(DOWN)
+                .set_opacity(0)
+                .animate.shift(UP)
+                .set_opacity(1),
+                lag_ratio=0.3,
+            )
         )
-        Group(pr_eqn, pr_eqn2).arrange(DOWN, MED_LARGE_BUFF)
-        self.add(pr_eqn, pr_eqn2)
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_to_z[0][:2], pr_eqn1[0][:2]),
+                FadeOut(pr_to_z[0][2]),
+                ReplacementTransform(pr_to_z[0][3], pr_eqn1[0][16]),
+                LaggedStart(
+                    *[
+                        GrowFromPoint(m, pr_eqn1.get_center())
+                        for m in [*pr_eqn1[0][2:16], *pr_eqn1[0][17:]]
+                    ],
+                    lag_ratio=0.05,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        pr_eqn1p2 = MathTex(
+            r"P_r = \frac{P_t G^2}{(4 \pi)^3 L} \frac{c \tau \Omega \pi^5 |K|^2 Z}{2 \lambda^2 R^2}"
+        ).scale(2)
+        pr_eqn1p2[0][:2].set_color(RX_COLOR)
+        pr_eqn1p2[0][23].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_eqn1[0][:3], pr_eqn1p2[0][:3]),
+                ReplacementTransform(pr_eqn1[0][7:17], pr_eqn1p2[0][14:24]),
+                ReplacementTransform(pr_eqn1[0][3:7], pr_eqn1p2[0][3:7]),
+                ReplacementTransform(pr_eqn1[0][17], pr_eqn1p2[0][24]),
+                ReplacementTransform(
+                    pr_eqn1[0][19:25], pr_eqn1p2[0][8:14], path_arc=-PI
+                ),
+                ReplacementTransform(pr_eqn1[0][18], pr_eqn1p2[0][25]),
+                GrowFromCenter(pr_eqn1p2[0][7]),
+                ReplacementTransform(pr_eqn1[0][25:29], pr_eqn1p2[0][26:31]),
+                lag_ratio=0.3,
+            ),
+            run_time=3.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pr_eqn1p2[0][8:14].animate.set_color(ORANGE),
+            pr_eqn1p2[0][3:8].animate.set_color(ORANGE),
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p2[0][3:5]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(UP)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p2[0][13]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(DOWN)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p2[0][5:7]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(UP)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p2[0][8:13]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(DOWN)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        pr_eqn1p3 = MathTex(
+            r"P_r = \frac{P_t G^2}{(4 \pi)^3 L} \frac{c \tau \Omega}{2} \frac{\pi^5 |K|^2 Z}{\lambda^2 R^2}"
+        ).scale(2)
+        pr_eqn1p3[0][:2].set_color(RX_COLOR)
+        pr_eqn1p3[0][25].set_color(BLUE)
+        pr_eqn1p3[0][8:14].set_color(ORANGE)
+        pr_eqn1p3[0][3:8].set_color(ORANGE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_eqn1p2[0][:3], pr_eqn1p3[0][:3]),
+                ReplacementTransform(pr_eqn1p2[0][3:14], pr_eqn1p3[0][3:14]),
+                ReplacementTransform(pr_eqn1p2[0][17:24], pr_eqn1p3[0][19:26]),
+                ReplacementTransform(pr_eqn1p2[0][24], pr_eqn1p3[0][26]),
+                ReplacementTransform(pr_eqn1p2[0][26:30], pr_eqn1p3[0][27:31]),
+                ReplacementTransform(pr_eqn1p2[0][14:17], pr_eqn1p3[0][14:17]),
+                GrowFromCenter(pr_eqn1p3[0][17]),
+                ReplacementTransform(pr_eqn1p2[0][25], pr_eqn1p3[0][18]),
+                lag_ratio=0.3,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(pr_eqn1p3[0][14:19].animate.set_color(RED))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p3[0][15]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(UP)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(pr_eqn1p3[0][16].animate.shift(UP * 2).set_color(YELLOW))
+
+        self.wait(0.5)
+
+        omega = MathTex(
+            r"\Omega_{\text{eff}} \approx \frac{\pi \theta_{\text{3dB}} \phi_{\text{3dB}} }{8 \ln 2}"
+        ).scale(2)
+        omega.set_color(YELLOW)
+        omega.shift(pr_eqn1p3[0][16].get_center() - omega[0][0].get_center())
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.move_to(omega),
+                LaggedStart(*[FadeIn(m) for m in omega[0][1:]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(omega[0][1:]),
+                self.camera.frame.animate.restore(),
+                pr_eqn1p3[0][16].animate.shift(DOWN * 2).set_color(RED),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(pr_eqn1p3[0][19:].animate.set_color(BLUE))
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(pr_eqn1p3[0][22].animate.shift(UP).set_color(YELLOW))
+
+        self.wait(0.5)
+
+        kw = (
+            MathTex(r"K_w")
+            .scale(2)
+            .next_to(pr_eqn1p3[0][22], LEFT, LARGE_BUFF)
+            .shift(UP / 2)
+        )
+        kw_bez = CubicBezier(
+            pr_eqn1p3[0][22].get_top() + [0, 0.1, 0],
+            pr_eqn1p3[0][22].get_top() + [0, 0.5, 0],
+            kw.get_right() + [0.5, 0, 0],
+            kw.get_right() + [0.1, 0, 0],
+        )
+
+        self.play(
+            LaggedStart(
+                Create(kw_bez),
+                FadeIn(kw),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(kw),
+                Uncreate(kw_bez),
+                pr_eqn1p3[0][22].animate.shift(DOWN).set_color(BLUE),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p3[0][27]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(DOWN)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p3[0][29]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(DOWN)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            pr_eqn1p3[0][25]
+            .animate(rate_func=rate_functions.there_and_back_with_pause, run_time=2)
+            .shift(UP)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        z_eqn = MathTex(
+            r"Z = P_r \frac{(4 \pi)^3 L}{P_t G^2} \frac{2}{c \tau \Omega} \frac{\lambda^2 R^2}{\pi^5 |K|^2}"
+        ).scale(2)
+        z_eqn[0][0].set_color(BLUE)
+        z_eqn[0][2:4].set_color(RED)
+        z_eqn[0][4:15].set_color(ORANGE)
+        z_eqn[0][15:20].set_color(RED)
+        z_eqn[0][20:].set_color(BLUE)
+
+        # self.add(
+        #     index_labels(pr_eqn1p3[0]),
+        #     z_eqn.next_to(pr_eqn1p3, DOWN),
+        #     index_labels(z_eqn[0]),
+        # )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_eqn1p3[0][25], z_eqn[0][0], path_arc=PI / 2),
+                ReplacementTransform(pr_eqn1p3[0][:2], z_eqn[0][2:4], path_arc=PI / 2),
+                ReplacementTransform(pr_eqn1p3[0][2], z_eqn[0][1]),
+                ReplacementTransform(pr_eqn1p3[0][3:7], z_eqn[0][11:15], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[0][8:14], z_eqn[0][4:10], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[0][7], z_eqn[0][10]),
+                ReplacementTransform(pr_eqn1p3[0][14:17], z_eqn[0][17:20], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[0][18], z_eqn[0][15], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[0][17], z_eqn[0][16]),
+                ReplacementTransform(pr_eqn1p3[0][19:25], z_eqn[0][25:31], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[0][27:31], z_eqn[0][20:24], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[0][26], z_eqn[0][24]),
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        self.play(
+            LaggedStart(
+                z_eqn[0][22:24]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(UP),
+                z_eqn[0][15:20]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(UP),
+                z_eqn[0][11:13]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(DOWN),
+                z_eqn[0][27:31]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(DOWN),
+                z_eqn[0][13:15]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(DOWN),
+                z_eqn[0][4:9]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(UP),
+                z_eqn[0][25:27]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(DOWN),
+                z_eqn[0][9]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(UP),
+                z_eqn[0][20:22]
+                .animate(rate_func=rate_functions.there_and_back, run_time=2)
+                .shift(UP),
+                lag_ratio=0.2,
+            ),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        units = (
+            MathTex(r"\left[ \frac{\text{m}^6}{\text{m}^3} \right]")
+            .scale(2)
+            .next_to(z_eqn[0][24], RIGHT, MED_SMALL_BUFF)
+        )
+
+        all_group = Group(z_eqn, units)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    all_group.width * 1.2
+                ).move_to(all_group),
+                LaggedStart(*[GrowFromCenter(m) for m in units[0]], lag_ratio=0.1),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        z_eqn_mm = MathTex(
+            r"Z = P_r \frac{(4 \pi)^3 L}{P_t G^2} \frac{2}{c \tau \Omega} \frac{\lambda^2 R^2}{\pi^5 |K|^2} 10^{18}"
+        ).scale(2)
+        z_eqn_mm[0][0].set_color(BLUE)
+        z_eqn_mm[0][2:4].set_color(RED)
+        z_eqn_mm[0][4:15].set_color(ORANGE)
+        z_eqn_mm[0][15:20].set_color(RED)
+        z_eqn_mm[0][20:31].set_color(BLUE)
+
+        mm_units = (
+            MathTex(r"\left[ \frac{\text{mm}^6}{\text{m}^3} \right]")
+            .scale(2)
+            .next_to(z_eqn_mm, RIGHT, MED_SMALL_BUFF)
+        )
+        all_group = Group(z_eqn_mm, mm_units)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    all_group.width * 1.2
+                ).move_to(all_group),
+                ReplacementTransform(z_eqn[0], z_eqn_mm[0][:31]),
+                ReplacementTransform(units[0][0], mm_units[0][0]),
+                ReplacementTransform(units[0][1], mm_units[0][1]),
+                GrowFromCenter(mm_units[0][2]),
+                ReplacementTransform(units[0][2], mm_units[0][3]),
+                ReplacementTransform(units[0][3], mm_units[0][4]),
+                ReplacementTransform(units[0][4], mm_units[0][5]),
+                ReplacementTransform(units[0][5], mm_units[0][6]),
+                ReplacementTransform(units[0][6], mm_units[0][7]),
+                *[GrowFromCenter(m) for m in z_eqn_mm[0][-4:]],
+            ),
+        )
+
+        self.wait(0.5)
+
+        drop = (
+            Circle(
+                radius=mm_units.width * 0.25,
+                fill_color=BLUE,
+                fill_opacity=0.7,
+                stroke_color=BLUE,
+            )
+            .next_to(mm_units, RIGHT, LARGE_BUFF * 3)
+            .shift(UP * fh(self, 0.3))
+        )
+        mm6 = mm_units[0][1:4]
+        drop_bez = CubicBezier(
+            mm6.get_right() + [0.1, 0, 0],
+            mm6.get_right() + [2, 0, 0],
+            drop.get_left() + [-2, 0, 0],
+            drop.get_left() + [-0.1, 0, 0],
+            color=BLUE,
+        )
+
+        units_expl = Group(mm_units, drop)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.7)
+                .set_x(units_expl.get_x())
+                .shift(UP),
+                mm6.animate.set_color(BLUE),
+                mm_units[0][-1].animate.set_opacity(0.2),
+                Create(drop_bez),
+                GrowFromCenter(drop),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        diam = DoubleArrow(drop.get_left(), drop.get_right(), buff=0)
+
+        self.play(GrowArrow(diam))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(drop, diam),
+                Uncreate(drop_bez),
+                mm_units[0][-1].animate.set_opacity(1),
+                mm6.animate.set_color(WHITE),
+                self.camera.frame.animate.restore(),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        pr2z = CurvedArrow(
+            z_eqn_mm[0][2:4].get_top() + [0, 0.1, 0],
+            z_eqn_mm[0][0].get_top() + [0, 0.1, 0],
+            angle=PI,
+        )
+
+        self.play(FadeIn(pr2z))
+
+        self.wait(0.5)
+
+        self.next_section(skip_animations=skip_animations(False))
+
+        z_val = (
+            MathTex(r"Z = 20 \ \text{dBZ}")
+            .scale(3)
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self, 1.5))
+        )
+        z_val[0][0].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(z_eqn_mm[0][0], z_val[0][0], path_arc=PI / 3),
+                    self.camera.frame.animate.shift(DOWN * fh(self, 1.5)),
+                ),
+                LaggedStart(*[FadeIn(m) for m in z_val[0][1:]], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
