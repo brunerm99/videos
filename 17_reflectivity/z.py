@@ -1467,3 +1467,7 @@ class WeatherRadarEqn(MovingCameraScene):
         self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
+
+
+class Rayleigh(MovingCameraScene):
+    def construct(self): ...
