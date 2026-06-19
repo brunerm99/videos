@@ -1470,4 +1470,180 @@ class WeatherRadarEqn(MovingCameraScene):
 
 
 class Rayleigh(MovingCameraScene):
-    def construct(self): ...
+    def construct(self):
+        self.next_section(skip_animations=skip_animations(True))
+        sq = Square(
+            fh(self, 0.1), fill_color=BACKGROUND_COLOR, fill_opacity=1
+        ).set_z_index(0)
+        sq_back = (
+            Square(fh(self, 0.1))
+            .set_z_index(-1)
+            .shift(UR * sq.height / (2 * math.sqrt(2)))
+        )
+        lul = Line(sq.get_corner(UL), sq_back.get_corner(UL))
+        ldr = Line(sq.get_corner(DR), sq_back.get_corner(DR))
+        lur = Line(sq.get_corner(UR), sq_back.get_corner(UR))
+        cube = Group(sq, sq_back, lul, ldr, lur)  # .shift(LEFT * fw(self, 0.25))
+
+        self.play(cube.shift(LEFT * fw(self)).animate.shift(RIGHT * fw(self)))
+
+        self.wait(0.5)
+
+        raindrop = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_width(cube.width)
+            .set_opacity(0.7)
+        )
+        snowflake = ImageMobject("../props/static/snowflake.png").scale_to_fit_width(
+            cube.width
+        )
+        dots = Text("...", font=FONT).scale_to_fit_width(cube.width)
+        stuff = (
+            Group(raindrop, snowflake, dots)
+            .arrange(DOWN, LARGE_BUFF)
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self, 0.15))
+        )
+
+        bez_u = CubicBezier(
+            cube.copy().shift(LEFT * fw(self, 0.15)).get_center()
+            + cube.width * 0.3 * RIGHT,
+            cube.copy().shift(LEFT * fw(self, 0.15)).get_center()
+            + cube.width * 1.3 * RIGHT,
+            stuff.get_corner(UL) + [-1, 0, 0],
+            stuff.get_corner(UL),
+            color=GREEN,
+        )
+        bez_d = CubicBezier(
+            cube.copy().shift(LEFT * fw(self, 0.15)).get_center()
+            + cube.width * 0.3 * RIGHT,
+            cube.copy().shift(LEFT * fw(self, 0.15)).get_center()
+            + cube.width * 1.3 * RIGHT,
+            stuff.get_corner(DL) + [-1, -0.1, 0],
+            stuff.get_corner(DL) + [0, -0.1, 0],
+            color=GREEN,
+        )
+
+        self.play(
+            LaggedStart(
+                cube.animate.shift(LEFT * fw(self, 0.15)),
+                AnimationGroup(Create(bez_u), Create(bez_d)),
+                FadeIn(raindrop),
+                FadeIn(snowflake),
+                LaggedStart(*[FadeIn(m) for m in dots], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
+
+        bez_r_u = CubicBezier(
+            stuff.get_corner(UR),
+            stuff.get_corner(UR) + [1, 0, 0],
+            self.camera.frame.get_right() + [-2, 0, 0],
+            self.camera.frame.get_right(),
+            color=GREEN,
+        )
+        bez_r_d = CubicBezier(
+            stuff.get_corner(DR) + [0, -0.1, 0],
+            stuff.get_corner(DR) + [1, -0.1, 0],
+            self.camera.frame.get_right() + [-2, 0, 0],
+            self.camera.frame.get_right(),
+            color=GREEN,
+        )
+
+        fsw = (
+            MathTex(r"f/\lambda")
+            .scale(2)
+            .next_to(bez_r_d.get_end(), RIGHT, MED_SMALL_BUFF)
+        )
+        wl_f_relation = MathTex(r"f = \frac{c}{\lambda}").scale(2).move_to(fsw, LEFT)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(Create(bez_r_d), Create(bez_r_u)),
+                self.camera.frame.animate.scale(0.7).move_to(fsw),
+                FadeIn(fsw[0][0]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        bar = wl_f_relation[0][3].copy()
+        bar.rotate(70 * DEGREES).scale_to_fit_height(fsw[0][1].height).move_to(
+            fsw[0][1]
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(bar),
+                FadeIn(fsw[0][2]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(False))
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(fsw[0][0], wl_f_relation[0][0]),
+                ReplacementTransform(fsw[0][2], wl_f_relation[0][4]),
+                ReplacementTransform(bar, wl_f_relation[0][3]),
+                GrowFromCenter(wl_f_relation[0][1]),
+                GrowFromCenter(wl_f_relation[0][2]),
+                lag_ratio=0.25,
+            )
+        )
+
+        self.wait(0.5)
+
+        f_val = (
+            MathTex(r"f = 2 - 30 \text{ GHz}")
+            .scale(2)
+            .move_to(wl_f_relation[0][0], LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(wl_f_relation[0][3]),
+                FadeOut(wl_f_relation[0][2]),
+                FadeOut(wl_f_relation[0][1]),
+                wl_f_relation[0][4]
+                .animate.next_to(
+                    wl_f_relation[0][0], DOWN, LARGE_BUFF, aligned_edge=LEFT
+                )
+                .set_opacity(0.5),
+                self.camera.frame.animate.scale(1.2).move_to(f_val),
+                LaggedStart(*[FadeIn(m) for m in f_val[0][1:]], lag_ratio=0.1),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        wl_val = MathTex(r"\lambda \gg").scale(2).move_to(wl_f_relation[0][-1], LEFT)
+        raindrop = (
+            SVGMobject("../props/static/raindorp.svg")
+            .set_fill(BLUE)
+            .set_stroke(color=BLACK, width=DEFAULT_STROKE_WIDTH)
+            .scale_to_fit_height(wl_f_relation[0][-1].height * 1.2)
+            .set_opacity(0.7)
+            .next_to(wl_val, RIGHT, MED_SMALL_BUFF * 1.2)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.set_y(Group(raindrop, f_val).get_y()),
+                wl_f_relation[0][-1].animate.set_opacity(1),
+                FadeIn(wl_val[0][1]),
+                FadeIn(raindrop),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
