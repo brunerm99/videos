@@ -4,6 +4,8 @@ import numpy as np
 from manim import *
 from MF_Tools import VT
 
+from .colormaps import get_colormap
+
 FONT = os.getenv("FONT", "")
 
 
@@ -19,12 +21,7 @@ def _nexrad_relative_sweep_progress_mask(
 
 
 def _get_colormap(cmap_name, fallback_cmap_name):
-    from matplotlib import colormaps
-
-    try:
-        return colormaps[cmap_name]
-    except KeyError:
-        return colormaps[fallback_cmap_name]
+    return get_colormap(cmap_name, fallback_cmap_name)
 
 
 def _field_from_metadata(metadata, field_key):

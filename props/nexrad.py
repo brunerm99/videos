@@ -1,18 +1,22 @@
 # props/nexrad.py
 
+import json
 from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-from manim import DEGREES, RIGHT, UP
+from manim import DEGREES, RIGHT, UP, ManimColor, rgb_to_color
 from scipy import signal
+from scipy.interpolate import interp1d
 
+from .colormaps import get_colormap
 
 NEXRAD_CASE_S3_KEY = "2024/05/07/KTLX/KTLX20240507_023811_V06"
 NEXRAD_VOLUME_DIR = Path(__file__).resolve().parent / "static" / "nexrad"
 LEGACY_NEXRAD_VOLUME_DIR = (
     Path(__file__).resolve().parents[1] / "16_dual_pol" / "static" / "nexrad"
 )
+NEXRAD_PPI_CACHE_VERSION = 1
 NEXRAD_PRODUCT_SPECS = {
     "reflectivity": {
         "field_name": "reflectivity",
@@ -62,6 +66,7 @@ NEXRAD_PRODUCT_ALIASES = {
 }
 __all__ = [
     "NEXRAD_CASE_S3_KEY",
+    "val_to_manim_color",
     "get_available_nexrad_products",
     "get_nexrad_product_ppi_data",
 ]
@@ -84,6 +89,149 @@ def _get_nexrad_archive_volume(s3_key=NEXRAD_CASE_S3_KEY):
         f"https://unidata-nexrad-level2.s3.amazonaws.com/{s3_key}", raw_path
     )
     return raw_path
+
+
+@lru_cache(maxsize=4)
+def _get_nexrad_radar_cached(s3_key=NEXRAD_CASE_S3_KEY):
+    import pyart
+
+    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
+    return pyart.io.read_nexrad_archive(str(raw_path))
+
+
+def _safe_cache_token(value):
+    return "".join(
+        char if char.isalnum() or char in ("-", "_") else "_" for char in str(value)
+    )
+
+
+def _format_cache_number(value):
+    return f"{float(value):g}".replace(".", "p")
+
+
+def _get_nexrad_ppi_cache_paths(
+    s3_key,
+    field_name,
+    sweep,
+    max_range_km,
+    resolution,
+):
+    volume_name = _safe_cache_token(Path(s3_key).name)
+    field_token = _safe_cache_token(field_name)
+    range_token = _format_cache_number(max_range_km)
+    cache_stem = (
+        f"{volume_name}_{field_token}_sw{int(sweep)}_"
+        f"{range_token}km_{int(resolution)}px_v{NEXRAD_PPI_CACHE_VERSION}"
+    )
+    cache_base = NEXRAD_VOLUME_DIR / cache_stem
+    return cache_base.with_suffix(".json"), cache_base.with_suffix(".npz")
+
+
+def _get_nexrad_field_names_cache_path(s3_key):
+    volume_name = _safe_cache_token(Path(s3_key).name)
+    return (
+        NEXRAD_VOLUME_DIR
+        / f"{volume_name}_field_names_v{NEXRAD_PPI_CACHE_VERSION}.json"
+    )
+
+
+def _load_nexrad_field_names_cache(s3_key):
+    cache_path = _get_nexrad_field_names_cache_path(s3_key)
+    if not cache_path.exists():
+        return None
+
+    with cache_path.open() as cache_file:
+        cache_data = json.load(cache_file)
+    if cache_data.get("cache_version") != NEXRAD_PPI_CACHE_VERSION:
+        return None
+    return tuple(cache_data["field_names"])
+
+
+def _write_nexrad_field_names_cache(s3_key, field_names):
+    cache_path = _get_nexrad_field_names_cache_path(s3_key)
+    tmp_path = cache_path.with_name(cache_path.name + ".tmp")
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with tmp_path.open("w") as cache_file:
+        json.dump(
+            {
+                "cache_version": NEXRAD_PPI_CACHE_VERSION,
+                "field_names": list(field_names),
+            },
+            cache_file,
+            indent=2,
+            sort_keys=True,
+        )
+        cache_file.write("\n")
+    tmp_path.replace(cache_path)
+
+
+def _get_nexrad_product_cache_key(product_key):
+    return f"product_{_safe_cache_token(product_key)}"
+
+
+def _load_nexrad_ppi_cache(s3_key, field_name, sweep, max_range_km, resolution):
+    metadata_path, arrays_path = _get_nexrad_ppi_cache_paths(
+        s3_key,
+        field_name,
+        sweep,
+        max_range_km,
+        resolution,
+    )
+    if not metadata_path.exists() or not arrays_path.exists():
+        return None
+
+    with metadata_path.open() as metadata_file:
+        metadata = json.load(metadata_file)
+    if metadata.get("cache_version") != NEXRAD_PPI_CACHE_VERSION:
+        return None
+
+    with np.load(arrays_path) as arrays:
+        data = {
+            "field_data": arrays["field_data"].copy(),
+            "valid_mask": arrays["valid_mask"].astype(bool, copy=True),
+            "azimuth_grid_deg": arrays["azimuth_grid_deg"].copy(),
+            "range_grid_km": arrays["range_grid_km"].copy(),
+            "x_coords_km": arrays["x_coords_km"].copy(),
+            "y_coords_km": arrays["y_coords_km"].copy(),
+        }
+
+    metadata.pop("cache_version", None)
+    data.update(metadata)
+    return data
+
+
+def _write_nexrad_ppi_cache(s3_key, field_name, sweep, max_range_km, resolution, data):
+    metadata_path, arrays_path = _get_nexrad_ppi_cache_paths(
+        s3_key,
+        field_name,
+        sweep,
+        max_range_km,
+        resolution,
+    )
+    tmp_metadata_path = metadata_path.with_name(metadata_path.name + ".tmp")
+    tmp_arrays_path = arrays_path.with_name(arrays_path.name + ".tmp")
+
+    metadata = {
+        key: value for key, value in data.items() if not isinstance(value, np.ndarray)
+    }
+    metadata["cache_version"] = NEXRAD_PPI_CACHE_VERSION
+
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    with tmp_arrays_path.open("wb") as arrays_file:
+        np.savez(
+            arrays_file,
+            field_data=data["field_data"],
+            valid_mask=data["valid_mask"],
+            azimuth_grid_deg=data["azimuth_grid_deg"],
+            range_grid_km=data["range_grid_km"],
+            x_coords_km=data["x_coords_km"],
+            y_coords_km=data["y_coords_km"],
+        )
+    with tmp_metadata_path.open("w") as metadata_file:
+        json.dump(metadata, metadata_file, indent=2, sort_keys=True)
+        metadata_file.write("\n")
+    tmp_arrays_path.replace(arrays_path)
+    tmp_metadata_path.replace(metadata_path)
 
 
 def _nexrad_azimuth_delta_deg(azimuth_deg, target_deg):
@@ -162,10 +310,7 @@ def _get_nexrad_dual_pol_gate_moments_cached(
 ):
     from datetime import datetime
 
-    import pyart
-
-    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
-    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    radar = _get_nexrad_radar_cached(s3_key=s3_key)
     required_fields = (
         "reflectivity",
         "differential_reflectivity",
@@ -425,16 +570,38 @@ def _get_nexrad_ppi_data_cached(
 ):
     from datetime import datetime
 
-    import pyart
+    if sweep < 0:
+        sweep = _get_nexrad_best_sweep_for_field(
+            s3_key=s3_key,
+            requested_sweep=sweep,
+            field_name=field_name,
+        )
+    cached_data = _load_nexrad_ppi_cache(
+        s3_key,
+        field_name,
+        sweep,
+        max_range_km,
+        resolution,
+    )
+    if cached_data is not None:
+        return cached_data
 
-    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
-    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    radar = _get_nexrad_radar_cached(s3_key=s3_key)
     if sweep < 0 or sweep >= radar.nsweeps:
         sweep = _get_nexrad_best_sweep_for_field(
             s3_key=s3_key,
             requested_sweep=sweep,
             field_name=field_name,
         )
+        cached_data = _load_nexrad_ppi_cache(
+            s3_key,
+            field_name,
+            sweep,
+            max_range_km,
+            resolution,
+        )
+        if cached_data is not None:
+            return cached_data
     field_data = np.ma.filled(
         radar.get_field(sweep, field_name).astype(np.float32), np.nan
     )
@@ -495,7 +662,7 @@ def _get_nexrad_ppi_data_cached(
     scan_time = datetime.strptime(
         radar.time["units"].split("since ", 1)[1], "%Y-%m-%dT%H:%M:%SZ"
     )
-    return {
+    data = {
         "station": str(
             radar.metadata.get("instrument_name", s3_key.split("/")[-1][:4])
         ),
@@ -516,16 +683,15 @@ def _get_nexrad_ppi_data_cached(
         "x_coords_km": x_coords,
         "y_coords_km": y_coords,
     }
+    _write_nexrad_ppi_cache(s3_key, field_name, sweep, max_range_km, resolution, data)
+    return data
 
 
 @lru_cache(maxsize=16)
 def _get_nexrad_fixed_angles_cached(
     s3_key=NEXRAD_CASE_S3_KEY,
 ):
-    import pyart
-
-    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
-    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    radar = _get_nexrad_radar_cached(s3_key=s3_key)
     return tuple(float(angle) for angle in radar.fixed_angle["data"])
 
 
@@ -534,10 +700,7 @@ def _get_nexrad_valid_sweeps_cached(
     s3_key=NEXRAD_CASE_S3_KEY,
     field_name="reflectivity",
 ):
-    import pyart
-
-    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
-    radar = pyart.io.read_nexrad_archive(str(raw_path))
+    radar = _get_nexrad_radar_cached(s3_key=s3_key)
 
     if field_name not in radar.fields:
         return tuple()
@@ -566,11 +729,14 @@ def _get_nexrad_valid_sweeps_cached(
 
 @lru_cache(maxsize=16)
 def _get_nexrad_field_names_cached(s3_key=NEXRAD_CASE_S3_KEY):
-    import pyart
+    cached_field_names = _load_nexrad_field_names_cache(s3_key)
+    if cached_field_names is not None:
+        return cached_field_names
 
-    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
-    radar = pyart.io.read_nexrad_archive(str(raw_path))
-    return tuple(sorted(radar.fields.keys()))
+    radar = _get_nexrad_radar_cached(s3_key=s3_key)
+    field_names = tuple(sorted(radar.fields.keys()))
+    _write_nexrad_field_names_cache(s3_key, field_names)
+    return field_names
 
 
 def _normalize_nexrad_product(product):
@@ -651,6 +817,22 @@ def get_nexrad_product_ppi_data(
     resolution=1200,
 ):
     product_key = _normalize_nexrad_product(product)
+    spec = NEXRAD_PRODUCT_SPECS[product_key]
+    field_key = spec["field_key"]
+    product_cache_key = _get_nexrad_product_cache_key(product_key)
+    cached_data = _load_nexrad_ppi_cache(
+        s3_key,
+        product_cache_key,
+        sweep,
+        max_range_km,
+        resolution,
+    )
+    if cached_data is not None:
+        cached_data[field_key] = cached_data.pop("field_data")
+        cached_data["product"] = product_key
+        cached_data["field_key"] = field_key
+        return cached_data
+
     available_products = get_available_nexrad_products(s3_key=s3_key)
     if product_key not in available_products:
         available = ", ".join(sorted(available_products)) or "none"
@@ -659,16 +841,26 @@ def get_nexrad_product_ppi_data(
             f"Available products: {available}"
         )
 
-    spec = NEXRAD_PRODUCT_SPECS[product_key]
     if spec.get("derived") == "kdp_from_phidp":
-        return _get_nexrad_kdp_ppi_data_cached(
+        data_copy = _get_nexrad_kdp_ppi_data_cached(
             s3_key=s3_key,
             sweep=sweep,
             max_range_km=max_range_km,
             resolution=resolution,
             product_key=product_key,
-            field_key=spec["field_key"],
+            field_key=field_key,
         )
+        cache_data = data_copy.copy()
+        cache_data["field_data"] = cache_data[field_key]
+        _write_nexrad_ppi_cache(
+            s3_key,
+            product_cache_key,
+            sweep,
+            max_range_km,
+            resolution,
+            cache_data,
+        )
+        return data_copy
 
     source_field_name = spec["source_field_name"]
     selected_sweep = _get_nexrad_best_sweep_for_field(
@@ -685,10 +877,19 @@ def get_nexrad_product_ppi_data(
             field_name=source_field_name,
         )
     )
-    field_key = spec["field_key"]
     data_copy[field_key] = data_copy.pop("field_data")
     data_copy["product"] = product_key
     data_copy["field_key"] = field_key
+    cache_data = data_copy.copy()
+    cache_data["field_data"] = cache_data[field_key]
+    _write_nexrad_ppi_cache(
+        s3_key,
+        product_cache_key,
+        sweep,
+        max_range_km,
+        resolution,
+        cache_data,
+    )
     return data_copy
 
 
@@ -741,17 +942,26 @@ def _get_nexrad_kdp_ppi_data_cached(
 ):
     from datetime import datetime
 
-    import pyart
-
-    raw_path = _get_nexrad_archive_volume(s3_key=s3_key)
-    radar = pyart.io.read_nexrad_archive(str(raw_path))
     field_name = "differential_phase"
     sweep = _get_nexrad_best_sweep_for_field(
         s3_key=s3_key,
         requested_sweep=sweep,
         field_name=field_name,
     )
+    cached_data = _load_nexrad_ppi_cache(
+        s3_key,
+        product_key,
+        sweep,
+        max_range_km,
+        resolution,
+    )
+    if cached_data is not None:
+        cached_data[field_key] = cached_data.pop("field_data")
+        cached_data["product"] = product_key
+        cached_data["field_key"] = field_key
+        return cached_data
 
+    radar = _get_nexrad_radar_cached(s3_key=s3_key)
     phidp_data = np.ma.filled(
         radar.get_field(sweep, field_name).astype(np.float32), np.nan
     )
@@ -809,7 +1019,7 @@ def _get_nexrad_kdp_ppi_data_cached(
     scan_time = datetime.strptime(
         radar.time["units"].split("since ", 1)[1], "%Y-%m-%dT%H:%M:%SZ"
     )
-    return {
+    data = {
         "station": str(
             radar.metadata.get("instrument_name", s3_key.split("/")[-1][:4])
         ),
@@ -825,22 +1035,41 @@ def _get_nexrad_kdp_ppi_data_cached(
         "source": "Unidata NEXRAD Level II archive on AWS S3",
         "product": product_key,
         "field_key": field_key,
-        field_key: cartesian_field,
+        "field_data": cartesian_field,
         "valid_mask": valid_mask,
         "azimuth_grid_deg": azimuth_grid_deg,
         "range_grid_km": range_grid_km,
         "x_coords_km": x_coords,
         "y_coords_km": y_coords,
     }
+    _write_nexrad_ppi_cache(s3_key, product_key, sweep, max_range_km, resolution, data)
+    data[field_key] = data.pop("field_data")
+    return data
 
 
 def _get_nexrad_colormap(cmap_name, fallback_name):
-    from matplotlib import colormaps
+    return get_colormap(cmap_name, fallback_name)
 
-    try:
-        return colormaps[cmap_name]
-    except KeyError:
-        return colormaps[fallback_name]
+
+def val_to_manim_color(
+    val,
+    vmin=0.0,
+    vmax=75.0,
+    cmap_name="NWSRef",
+    fallback_cmap_name="viridis",
+    nan_color: ManimColor | None = None,
+    nan_val=np.nan,
+):
+    val = float(np.asarray(val).squeeze())
+    if np.isnan(val) or val == nan_val:
+        if nan_color is not None:
+            return nan_color
+        return None
+    if not np.isfinite(val):
+        val = vmin
+    normalized = np.clip((float(val) - vmin) / (vmax - vmin), 0.0, 1.0)
+    rgba = _get_nexrad_colormap(cmap_name, fallback_cmap_name)(normalized)
+    return rgb_to_color((np.asarray(rgba[:3]) * 255).astype(np.uint8))
 
 
 def _reflectivity_dbz_to_rgba(
@@ -953,3 +1182,34 @@ def _polar_ppi_point(center, plot_radius, max_range_km, azimuth_deg, range_km):
         + RIGHT * (scaled_radius * np.sin(theta))
         + UP * (scaled_radius * np.cos(theta))
     )
+
+
+def slice_updater(metadata, scan_progress, beam_width_deg):
+    max_range = metadata["max_range_km"]
+    r = np.linspace(0, max_range, 1200)
+    x = r * np.sin(np.deg2rad(~scan_progress - beam_width_deg / 2))
+    y = r * np.cos(np.deg2rad(~scan_progress - beam_width_deg / 2))
+    x_idx = np.abs(metadata["x_coords_km"][None, :] - x[:, None]).argmin(axis=1)
+    y_idx = np.abs(metadata["y_coords_km"][None, :] - y[:, None]).argmin(axis=1)
+    z = metadata["reflectivity_dbz"][y_idx, x_idx]
+    z = np.nan_to_num(z, nan=0)
+    order = np.argsort(r)
+    r = r[order]
+    z = z[order]
+
+    return interp1d(r, z, fill_value="extrapolate")
+
+
+def get_ppi_slice(metadata, ax, scan_progress, beam_width_deg, color, opacity):
+    def updater():
+        z_func_scan = slice_updater(metadata, scan_progress, beam_width_deg)
+
+        nexrad_scan_plot = ax.plot(
+            z_func_scan,
+            x_range=[2.5, 150, 1 / 200],
+            color=color,
+            stroke_opacity=~opacity,
+        )
+        return nexrad_scan_plot
+
+    return updater
