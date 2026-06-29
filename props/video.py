@@ -10,6 +10,10 @@ from manim import *
 from PIL import Image, ImageOps
 
 
+def value_is_truthy(value):
+    return str(value).strip().lower() in ("1", "true", "yes")
+
+
 def pixel_format_has_alpha(pixel_format):
     if not pixel_format:
         return False
@@ -26,6 +30,21 @@ def pixel_format_has_alpha(pixel_format):
         "ayuv",
     )
     return normalized.startswith(alpha_prefixes)
+
+
+def stream_metadata_has_alpha(metadata):
+    return pixel_format_has_alpha(metadata.get("pix_fmt", "")) or value_is_truthy(
+        metadata.get("alpha_mode", "")
+    )
+
+
+def ffmpeg_decoder_for_stream(metadata):
+    if (
+        metadata.get("codec_name", "").lower() == "vp9"
+        and value_is_truthy(metadata.get("alpha_mode", ""))
+    ):
+        return "libvpx-vp9"
+    return ""
 
 
 def parse_frame_rate(frame_rate_text):
@@ -54,7 +73,8 @@ def probe_video_stream(filename):
         "-select_streams",
         "v:0",
         "-show_entries",
-        "stream=width,height,pix_fmt,r_frame_rate,duration:format=duration",
+        "stream=codec_name,width,height,pix_fmt,r_frame_rate,duration:"
+        "stream_tags=alpha_mode:format=duration",
         "-of",
         "json",
         str(filename),
@@ -71,6 +91,7 @@ def probe_video_stream(filename):
         return None
 
     stream = streams[0]
+    tags = stream.get("tags", {})
     file_format = probe_data.get("format", {})
     duration = parse_optional_float(stream.get("duration"))
     if duration == 0:
@@ -78,7 +99,9 @@ def probe_video_stream(filename):
     return {
         "width": int(stream.get("width", 0)),
         "height": int(stream.get("height", 0)),
+        "codec_name": stream.get("codec_name", ""),
         "pix_fmt": stream.get("pix_fmt", ""),
+        "alpha_mode": tags.get("alpha_mode", ""),
         "frame_rate": parse_frame_rate(stream.get("r_frame_rate", "30/1")),
         "duration": duration,
     }
@@ -93,6 +116,7 @@ class VideoStatus:
     frame_height: int = 0
     frame_index: int = -1
     ffmpeg_process: Any = None
+    ffmpeg_decoder: str = ""
     use_ffmpeg_pipe: bool = False
     last_frame: Any = None
     paused: bool = False
@@ -143,19 +167,25 @@ class VideoMobject(ImageMobject):
         return Image.fromarray(frame)
 
     @staticmethod
-    def open_ffmpeg_pipe(filename):
+    def open_ffmpeg_pipe(filename, decoder=""):
         command = [
             "ffmpeg",
             "-v",
             "error",
-            "-i",
-            str(filename),
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "bgra",
-            "-",
         ]
+        if decoder:
+            command.extend(["-c:v", decoder])
+        command.extend(
+            [
+                "-i",
+                str(filename),
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "bgra",
+                "-",
+            ]
+        )
         try:
             return subprocess.Popen(
                 command,
@@ -180,7 +210,9 @@ class VideoMobject(ImageMobject):
 
     def restart_ffmpeg_pipe(self):
         self.close_ffmpeg_pipe()
-        self.status.ffmpeg_process = self.open_ffmpeg_pipe(self.filename)
+        self.status.ffmpeg_process = self.open_ffmpeg_pipe(
+            self.filename, self.status.ffmpeg_decoder
+        )
         self.status.frame_index = -1
         self.status.last_frame = None
         return self.status.ffmpeg_process is not None
@@ -293,7 +325,8 @@ class VideoMobject(ImageMobject):
             self.status.frame_width = metadata["width"]
             self.status.frame_height = metadata["height"]
             self.status.duration_ms = metadata["duration"] * 1000
-            self.status.use_ffmpeg_pipe = pixel_format_has_alpha(metadata["pix_fmt"])
+            self.status.use_ffmpeg_pipe = stream_metadata_has_alpha(metadata)
+            self.status.ffmpeg_decoder = ffmpeg_decoder_for_stream(metadata)
             if self.loop and self.status.duration_ms > 0:
                 self.status.time %= self.status.duration_ms
 
