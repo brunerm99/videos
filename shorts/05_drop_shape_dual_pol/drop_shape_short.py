@@ -44,7 +44,13 @@ from props import (
     get_phase_shifter,
     get_splitter,
 )
-from props.nexrad import get_available_nexrad_products, get_nexrad_product_ppi_data
+from props.nexrad import (
+    get_available_nexrad_products,
+    get_nexrad_product_ppi_data,
+    get_ppi_slice,
+    slice_updater,
+    val_to_manim_color,
+)
 from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
@@ -53,7 +59,7 @@ config.pixel_width = 1080
 config.frame_height = 14
 config.frame_width = 9
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../../.env")
 FONT = os.getenv("FONT", "")
@@ -1496,13 +1502,14 @@ class BuildRadarImage(MovingCameraScene):
             .scale_to_fit_height(Group(ppis, reflectivity_ppi).height * 1.1)
             .move_to(Group(ppis, reflectivity_ppi))
         )
+        self.add(v_ppi.shift(DOWN * fh(self)), zdr_ppi.shift(DOWN * fh(self)))
 
         self.camera.frame.save_state()
         self.play(
             LaggedStart(
                 Transform(self.camera.frame, new_cam),
-                v_ppi.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
-                zdr_ppi.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+                v_ppi.animate.shift(UP * fh(self)),
+                zdr_ppi.animate.shift(UP * fh(self)),
                 v_ppi.scan_progress @ 360,
                 zdr_ppi.scan_progress @ 360,
                 lag_ratio=0.3,
@@ -1528,47 +1535,171 @@ class BuildRadarImage(MovingCameraScene):
         )
 
         self.wait(0.5)
+        self.next_section(skip_animations=skip_animations(True))
 
-        radar = WeatherRadarTower()
-        radar.vgroup.scale_to_fit_width(fw(self, 0.3)).move_to(self.camera.frame).shift(
-            RIGHT * fw(self, 0.8)
+        radar = (
+            VideoMobject(
+                "../../../../media/rf-channel-assets/3d/ppi_scan.webm", loop=True
+            )
+            .scale_to_fit_width(fw(self, 2.2))
+            .move_to(self.camera.frame)
+            .shift(RIGHT * fw(self))
         )
-
-        self.add(radar.vgroup)
+        self.add(radar)
 
         self.play(self.camera.frame.animate.shift(RIGHT * fw(self)))
 
+        self.wait(3)
+        radar.pause()
+
+        self.next_section(skip_animations=skip_animations(True))
+
+        scan_progress = VT(0)
+        slice_ax = (
+            Axes(
+                x_range=[2.5, 150, 25],
+                y_range=[-30, 70, 10],
+                x_length=fw(self, 0.9),
+                y_length=fh(self, 0.3),
+                tips=False,
+            )
+            .set_z_index(-1)
+            .next_to(radar, UP, -LARGE_BUFF * 2.7)
+            .shift(UP * fh(self))
+        )
+        slice_opacity = VT(1)
+        slice_plot = always_redraw(
+            get_ppi_slice(
+                reflectivity_metadata,
+                slice_ax,
+                scan_progress,
+                1,
+                HPOL_RX_COLOR,
+                slice_opacity,
+            )
+        )
+
+        theta_label = always_redraw(
+            lambda: (
+                MathTex(f"\\theta = {~scan_progress:.1f}^\\circ")
+                .next_to(slice_ax, UP, SMALL_BUFF)
+                .scale(2)
+            )
+        )
+        self.add(theta_label)
+
+        self.add(slice_plot)
+        self.play(
+            self.camera.frame.animate.set_y(
+                Group(slice_ax.copy().shift(DOWN * fh(self)), radar).get_y()
+            ).shift(UP),
+            slice_ax.animate.shift(DOWN * fh(self)),
+        )
+
         self.wait(0.5)
 
-        beam_u = (
-            Line(
-                radar.radome.get_right(),
-                radar.radome.get_right() + RIGHT * fw(self, 0.5),
-                color=TX_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 3,
-            )
-            .set_z_index(-2)
-            .rotate(PI / 10, about_point=radar.radome.get_right())
+        radar.play(speed=0.5)
+        self.play(scan_progress @ 360, run_time=8)
+
+        radar.pause()
+
+        self.wait(0.5)
+
+        self.play(
+            slice_ax.animate.shift(UP * fh(self)),
+            self.camera.frame.animate.move_to(slice_ax.copy().shift(UP * fh(self))),
         )
-        beam_d = (
-            Line(
-                radar.radome.get_right(),
-                radar.radome.get_right() + RIGHT * fw(self, 0.5),
-                color=TX_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 3,
-            )
-            .set_z_index(-2)
-            .rotate(-PI / 10, about_point=radar.radome.get_right())
+
+        self.wait(0.5)
+
+        z_func = slice_updater(reflectivity_metadata, scan_progress, 1)
+
+        rect_res = 0.5
+        rects = VGroup(
+            *[
+                Rectangle(
+                    width=(slice_ax.c2p(rect_res, 0) - slice_ax.c2p(0, 0))[0],
+                    height=(slice_ax.c2p(rect_res, 0) - slice_ax.c2p(0, 0))[0] * 4,
+                    color=val_to_manim_color(z_func(mid), vmin=z_vmin, vmax=z_vmax),
+                    fill_color=val_to_manim_color(
+                        z_func(mid), vmin=z_vmin, vmax=z_vmax
+                    ),
+                    stroke_opacity=0
+                    if val_to_manim_color(z_func(mid), nan_val=0) is None
+                    else 1,
+                    fill_opacity=0
+                    if val_to_manim_color(z_func(mid), nan_val=0) is None
+                    else 1,
+                ).move_to(slice_ax.i2gp(mid, slice_plot))
+                for mid in np.arange(2.5, 150, rect_res)
+            ]
+        )
+
+        # self.add(rects)
+        self.play(
+            LaggedStart(*[FadeIn(rect) for rect in rects], lag_ratio=0.05, run_time=3),
+            slice_opacity @ 0.2,
         )
 
         self.wait(0.5)
         self.next_section(skip_animations=skip_animations(False))
 
-        self.play(Create(beam_u), Create(beam_d))
+        reflectivity_ppi.scan_progress @= 0
+
+        height = (reflectivity_ppi.ra2gp(rect_res, 0) - reflectivity_ppi.ra2gp(0, 0))[1]
+        self.remove(z_label)
         self.play(
-            Group(beam_u, beam_d)
-            .animate(rate_func=get_phase_eased_sine(periods=3), run_time=3)
-            .rotate(PI / 3, about_point=radar.radome.get_right())
+            LaggedStart(
+                LaggedStart(
+                    *[
+                        rect.animate.stretch_to_fit_height(height)
+                        .stretch_to_fit_width(2 * idx * height * np.tan(0.5 * DEGREES))
+                        .move_to(reflectivity_ppi.ra2gp(mid, 0))
+                        for idx, (rect, mid) in enumerate(
+                            zip(rects, np.arange(2.5, 150, rect_res))
+                        )
+                    ],
+                    lag_ratio=0.1,
+                    run_time=4,
+                ),
+                self.camera.frame.animate.move_to(reflectivity_ppi),
+                lag_ratio=0.1,
+            ),
         )
+
+        self.next_section(skip_animations=skip_animations(True))
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(*rects),
+            reflectivity_ppi.scan_progress.animate(run_time=8).set_value(360),
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(LEFT * fw(self, 3)))
+
+        self.wait(2)
+
+
+class BuildRadarImageP2(MovingCameraScene):
+    def construct(self):
+        thumbnail = (
+            ImageMobject(
+                "../../16_dual_pol/static/Thumbnail - How Weather Radars See Shape.png"
+            )
+            .scale_to_fit_width(fw(self, 0.8))
+            .move_to(self.camera.frame)
+        )
+        thumbnail_box = SurroundingRectangle(thumbnail, buff=0, color=GREEN)
+        thumbnail_group = Group(thumbnail, thumbnail_box).set_z_index(1)
+
+        self.play(
+            thumbnail_group.shift(LEFT * fw(self)).animate.shift(RIGHT * fw(self))
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
         self.wait(2)
