@@ -271,7 +271,9 @@ class VideoMobject(ImageMobject):
         self.status.paused = False
         return self
 
-    def play(self):
+    def play(self, speed=None):
+        if speed is not None:
+            self.speed = float(speed)
         return self.resume()
 
     def toggle_pause(self):
