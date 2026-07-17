@@ -1646,4 +1646,95 @@ class Rayleigh(MovingCameraScene):
             )
         )
 
+        self.wait(0.5)
+
+        radar = WeatherRadarTower()
+        radar.vgroup.scale_to_fit_height(fh(self, 0.4)).set_stroke(
+            width=DEFAULT_STROKE_WIDTH * 2
+        ).next_to(self.camera.frame.get_corner(DL), UR, LARGE_BUFF).shift(UP * fh(self))
+
+        self.add(radar.vgroup)
+
+        self.play(
+            self.camera.frame.animate.shift(UP * fh(self)),
+            raindrop.animate.move_to(self.camera.frame)
+            .shift(UP * fh(self))
+            .shift(UP + RIGHT * 2),
+        )
+
+        self.wait(0.5)
+
+        bw = PI / 9
+        z_vec = Line(radar.radome.get_center(), raindrop.get_left())
+        zhat = z_vec.get_angle()
+        radius = VT(radar.radome.width / 2)
+        arc = always_redraw(
+            lambda: Arc(
+                radius=~radius,
+                start_angle=zhat - bw / 2,
+                angle=bw,
+                arc_center=radar.radome.get_center(),
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            ).set_z_index(-1)
+        )
+        self.add(arc)
+
+        rx_radius = VT(raindrop.width)
+        rx_scatter = always_redraw(
+            lambda: Arc(
+                radius=max(0, ~radius - z_vec.get_length()),
+                start_angle=PI - zhat + bw / 2,
+                angle=bw - TAU,
+                arc_center=raindrop.get_center(),
+                color=BLUE,
+                stroke_opacity=0.2,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            ).set_z_index(-2)
+        )
+        rx_backscatter = always_redraw(
+            lambda: Arc(
+                radius=max(0, ~radius - z_vec.get_length()),
+                start_angle=PI - zhat + bw / 2,
+                angle=bw,
+                arc_center=raindrop.get_center(),
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            ).set_z_index(-2)
+        )
+
+        radar_mask1 = SurroundingRectangle(
+            Group(radar.left_leg, radar.right_leg, radar.middle_leg),
+            buff=0,
+            stroke_opacity=0,
+            fill_opacity=1,
+            fill_color=BACKGROUND_COLOR,
+        ).set_z_index(-1)
+        radar_mask2 = (
+            Circle(
+                radius=radar.radome.width / 2,
+                stroke_opacity=0,
+                fill_opacity=1,
+                fill_color=BACKGROUND_COLOR,
+            )
+            .set_z_index(-1)
+            .move_to(radar.radome)
+        )
+
+        self.add(rx_backscatter, rx_scatter)
+        self.add(radar_mask1, radar_mask2)
+
+        self.play(
+            LaggedStart(
+                radius @ (z_vec.get_length() * 3),
+            ),
+            run_time=10,
+        )
+
+        self.remove(rx_backscatter, rx_scatter)
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
         self.wait(2)
