@@ -48,7 +48,7 @@ from props.style import BACKGROUND_COLOR, IF_COLOR, RX_COLOR, TX_COLOR
 
 config.background_color = BACKGROUND_COLOR
 
-SKIP_ANIMATIONS_OVERRIDE = False
+SKIP_ANIMATIONS_OVERRIDE = True
 
 load_dotenv("../.env")
 FONT = os.getenv("FONT", "")
@@ -787,9 +787,11 @@ class ResolutionVolume(ZoomedScene):
         self.next_section(skip_animations=skip_animations(True))
         zdata = get_nexrad_product_ppi_data("reflectivity")
         zppi = PPIGrid(zdata, init_scan_progress=0).next_to(
-            self.camera.frame.get_top(), UP
+            self.camera.frame.get_top(), UP, LARGE_BUFF * 5
         )
-        self.add(zppi)
+        self.play(FadeIn(zppi))
+
+        self.wait(0.5)
 
         self.play(
             LaggedStart(
@@ -841,120 +843,11 @@ class ResolutionVolume(ZoomedScene):
 
         self.wait(0.5)
 
-        radar = WeatherRadarTower()
-        radar.vgroup.scale_to_fit_height(fh(self, 0.4)).next_to(
-            zppi.data_image, RIGHT, LARGE_BUFF * 1
-        ).shift(DOWN).set_stroke(width=DEFAULT_STROKE_WIDTH * 2)
-
         self.play(
-            LaggedStart(
-                FadeOut(zoom_display),
-                AnimationGroup(Uncreate(zoom_line_dl), Uncreate(zoom_line_ur)),
-                FadeOut(zoom_frame),
-                FadeOut(zppi.colorbar, zppi.colorbar_ticks),
-                self.camera.frame.animate.set_y(zppi.data_image.get_y())
-                .scale(0.7)
-                .move_to(Group(zppi.data_image, radar.vgroup))
-                .shift(RIGHT),
-                radar.vgroup.shift(RIGHT * fw(self)).animate.shift(LEFT * fw(self)),
-                lag_ratio=0.2,
-            )
+            FadeOut(*self.mobjects),
+            FadeOut(zoom_frame),
+            self.camera.frame.animate.shift(UP * fh(self)),
         )
-
-        self.wait(0.5)
-
-        bw = PI / 6
-        beam_u = Line(
-            radar.radome.get_right(),
-            radar.radome.get_right() + RIGHT * fw(self, 0.2),
-            color=BLUE,
-        ).set_z_index(-1)
-        beam_d = Line(
-            radar.radome.get_right(),
-            radar.radome.get_right() + RIGHT * fw(self, 0.2),
-            color=BLUE,
-        ).set_z_index(-1)
-        ppi_bw = 8
-        ppi_range = 150
-        ppi_beam_u = always_redraw(
-            lambda: Line(
-                zppi.ra2gp(0, 0),
-                zppi.ra2gp(ppi_range, -ppi_bw / 2),
-                color=BLUE,
-                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
-            )
-        )
-        ppi_beam_d = always_redraw(
-            lambda: Line(
-                zppi.ra2gp(0, 0),
-                zppi.ra2gp(ppi_range, ppi_bw / 2),
-                color=BLUE,
-                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
-            )
-        )
-
-        self.play(
-            LaggedStart(
-                Succession(
-                    AnimationGroup(
-                        Create(beam_u),
-                        Create(beam_d),
-                    ),
-                    AnimationGroup(
-                        beam_u.animate.rotate(
-                            bw / 2,
-                            about_point=radar.radome.get_right(),
-                        ),
-                        beam_d.animate.rotate(
-                            -bw / 2,
-                            about_point=radar.radome.get_right(),
-                        ),
-                    ),
-                ),
-                AnimationGroup(
-                    Create(ppi_beam_u),
-                    Create(ppi_beam_d),
-                ),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        r_offset = VT(70)
-        rr = VT(30)
-
-        def get_ppi_rr():
-
-            l1 = ArcBetweenPoints(
-                zppi.ra2gp(~r_offset, -ppi_bw / 2),
-                zppi.ra2gp(~r_offset + ~rr, -ppi_bw / 2),
-                angle=0,
-            )
-            l2 = ArcBetweenPoints(
-                zppi.ra2gp(~r_offset + ~rr, ppi_bw / 2),
-                zppi.ra2gp(~r_offset, ppi_bw / 2),
-                angle=0,
-            )
-            a1 = ArcBetweenPoints(
-                zppi.ra2gp(~r_offset, ppi_bw / 2),
-                zppi.ra2gp(~r_offset, -ppi_bw / 2),
-                angle=PI / 3,
-            )
-            a2 = ArcBetweenPoints(
-                zppi.ra2gp(~r_offset + ~rr, ppi_bw / 2),
-                zppi.ra2gp(~r_offset + ~rr, -ppi_bw / 2),
-                angle=PI / 3,
-            )
-            return (
-                ArcPolygonFromArcs(l1, a2, l2, a1)
-                .set_fill(color=BLUE, opacity=0.9)
-                .set_stroke(opacity=0)
-            )
-
-        ppi_rr = always_redraw(get_ppi_rr)
-
-        self.play(FadeIn(ppi_rr))
 
         self.wait(2)
 
