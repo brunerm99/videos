@@ -22,6 +22,7 @@ from networkx import center
 from numpy.fft import fft, fftshift
 from scipy import signal
 from scipy.interpolate import interp1d
+from scipy.special import spherical_jn, spherical_yn
 
 sys.path.insert(0, "..")
 from props import (
@@ -1628,6 +1629,235 @@ class Rayleigh(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+        def pec_sphere_backscatter(ka):
+            values = np.atleast_1d(np.asarray(ka, dtype=float))
+            if np.any(values <= 0):
+                raise ValueError("size_parameter must be positive")
+
+            result = np.empty_like(values)
+            for index, x in enumerate(values.flat):
+                orders = np.arange(1, int(np.ceil(x + 4 * x ** (1 / 3) + 2)) + 1)
+                jn = spherical_jn(orders, x)
+                yn = spherical_yn(orders, x)
+                jn_prime = spherical_jn(orders, x, derivative=True)
+                yn_prime = spherical_yn(orders, x, derivative=True)
+
+                psi = x * jn
+                xi = x * (jn + 1j * yn)
+                psi_prime = jn + x * jn_prime
+                xi_prime = psi_prime + 1j * (yn + x * yn_prime)
+                a_n = -psi_prime / xi_prime
+                b_n = -psi / xi
+
+                amplitude = np.sum((2 * orders + 1) * (-1) ** orders * (a_n - b_n))
+                result.flat[index] = abs(amplitude) ** 2 / x**2
+
+            return result.item() if np.ndim(ka) == 0 else result
+
+        ka_arr = np.logspace(-1, 2, 1000)
+        backscatter_func = interp1d(
+            ka_arr, pec_sphere_backscatter(ka_arr), fill_value="extrapolate"
+        )
+
+        scat_ax = Axes(
+            x_range=[-1, 2, 1],
+            y_range=[-3, 1, 1],
+            tips=False,
+            axis_config={"include_numbers": True},
+            x_length=fw(self, 0.7),
+            y_length=fh(self, 0.7),
+            x_axis_config={"scaling": LogBase(custom_labels=True)},
+            y_axis_config={"scaling": LogBase(custom_labels=True)},
+        )
+
+        norm_rcs = MathTex(r"\frac{\sigma}{2 \pi}").next_to(
+            scat_ax, LEFT, MED_SMALL_BUFF
+        )
+        ratio = MathTex(r"r / \lambda").next_to(scat_ax, DOWN, SMALL_BUFF)
+
+        scat_group = (
+            Group(scat_ax, norm_rcs, ratio)
+            .scale_to_fit_width(fw(self, 0.9))
+            .move_to(self.camera.frame)
+            .shift(UP * fh(self))
+        )
+
+        scat_x0 = VT(-1)
+        scat_x1 = VT(-2)
+
+        scat_plot = always_redraw(
+            lambda: scat_ax.plot(
+                backscatter_func, x_range=[~scat_x0, ~scat_x1, 1 / 200], color=BLUE
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * fh(self)),
+                Create(scat_ax),
+                LaggedStart(*[GrowFromCenter(m) for m in norm_rcs[0]]),
+                LaggedStart(*[GrowFromCenter(m) for m in ratio[0]]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Create(scat_plot))
+
+        self.wait(0.5)
+
+        rayleigh_regime = Polygon(
+            scat_ax.c2p(10**-1, 10**-3),
+            scat_ax.c2p(10**-1, 10**1),
+            scat_ax.c2p(10**0, 10**1),
+            scat_ax.c2p(10**0, 10**-3),
+            stroke_opacity=0,
+            fill_color=GREEN,
+            fill_opacity=0.3,
+        )
+
+        mie_regime = Polygon(
+            scat_ax.c2p(10**0, 10**-3),
+            scat_ax.c2p(10**0, 10**1),
+            scat_ax.c2p(10**1, 10**1),
+            scat_ax.c2p(10**1, 10**-3),
+            stroke_opacity=0,
+            fill_color=PURPLE,
+            fill_opacity=0.3,
+        )
+
+        optical_regime = Polygon(
+            scat_ax.c2p(10**1, 10**-3),
+            scat_ax.c2p(10**1, 10**1),
+            scat_ax.c2p(10**2, 10**1),
+            scat_ax.c2p(10**2, 10**-3),
+            stroke_opacity=0,
+            fill_color=YELLOW,
+            fill_opacity=0.3,
+        )
+
+        rayleigh_label = (
+            Text("Rayleigh", font=FONT)
+            .scale(0.6)
+            .next_to(rayleigh_regime, UP, SMALL_BUFF)
+        )
+        mie_label = (
+            Text("Mie", font=FONT).scale(0.6).next_to(mie_regime, UP, SMALL_BUFF)
+        )
+        optical_label = (
+            Text("Optical", font=FONT)
+            .scale(0.6)
+            .next_to(optical_regime, UP, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.2).shift(UP / 2),
+                FadeIn(rayleigh_regime),
+                Write(rayleigh_label),
+                FadeIn(mie_regime),
+                Write(mie_label),
+                FadeIn(optical_regime),
+                Write(optical_label),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(0.95).shift(LEFT),
+                FadeOut(optical_regime, optical_label),
+                scat_x1 @ 1,
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        fade = BackgroundRectangle(
+            self.camera.frame, color=BACKGROUND_COLOR, fill_opacity=0.7
+        )
+
+        z = (
+            MathTex(r"Z")
+            .scale(2)
+            .next_to(self.camera.frame.get_corner(UL), DR, LARGE_BUFF * 1.5)
+            .set_z_index(2)
+        )
+        z_circle = (
+            Circle(radius=z.width * 1.5, fill_color=BACKGROUND_COLOR, fill_opacity=1)
+            .move_to(z)
+            .set_z_index(1)
+        )
+        z_focus = Group(z_circle, z)
+
+        self.play(
+            FadeIn(fade), z_focus.shift(UL * fw(self)).animate.shift(DR * fw(self))
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(fade),
+                mie_regime.animate.set_fill(opacity=0.1),
+                mie_label.animate.set_opacity(0.1),
+                self.camera.frame.animate.set_x(rayleigh_regime.get_x()),
+                ratio.animate.set_x(rayleigh_regime.get_x()),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        ratio[0][0].save_state()
+        self.play(ratio[0][0].animate.scale(1.5).set_color(YELLOW))
+
+        self.wait(0.5)
+
+        self.play(ratio[0][0].animate.restore())
+
+        self.wait(0.5)
+
+        ratio[0][2].save_state()
+        self.play(ratio[0][2].animate.scale(1.5).set_color(YELLOW))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ratio[0][2].animate.restore(),
+                self.camera.frame.animate.scale(0.4).move_to(Group(raindrop)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        width_mid = Line(raindrop.get_left(), raindrop.get_right()).next_to(
+            raindrop, DOWN, MED_SMALL_BUFF
+        )
+        width_l = Line(
+            width_mid.get_left() + UP / 8,
+            width_mid.get_left() + DOWN / 8,
+        )
+        width_r = Line(
+            width_mid.get_right() + UP / 8,
+            width_mid.get_right() + DOWN / 8,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(width_l),
+                Create(width_mid),
+                Create(width_r),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
 
         self.wait(2)
