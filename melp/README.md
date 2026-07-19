@@ -1,0 +1,220 @@
+# melp
+
+Reusable ManimGL helpers and radar mobjects for this repository.
+
+## WSR-88 beams
+
+`WSR88Model.get_beam(...)` returns an extensible `Beam` object whose apex and
+axis match the model's current feed-horn pose:
+
+```python
+from manimlib import BLUE, DEG
+
+from melp.props import get_wsr88_model
+
+radar = get_wsr88_model(height=3.3)
+beam = radar.get_beam(
+    beamwidth=0.95 * DEG,
+    range=8,
+    color=BLUE,
+    opacity=0.12,
+)
+self.add(radar, beam)
+```
+
+`beamwidth` is the full angular width in radians and `range` is measured in
+Manim scene units. The returned beam captures the current radar pose. Use
+`always_redraw(lambda: radar.get_beam(...))` when it should follow animated
+azimuth or elevation changes.
+
+### Highlighting a cloud inside a beam
+
+The visible overlap is the intersection of the cloud with the beam's finite
+cone. Bind the beam to a `Cloud`, then animate `beam_highlight` from 0 to 1:
+
+```python
+self.play(ShowCreation(beam), run_time=3)
+
+cloud.bind_beam_highlight(
+    beam,
+    outside_opacity=0.12,
+    feather=0.04,
+)
+self.play(cloud.beam_highlight @ 1, run_time=1.25)
+```
+
+The cloud keeps its existing colors and opacity inside the beam while the
+outside opacity drops. `inside_opacity` and `outside_opacity` are multipliers
+of the cloud's existing alpha. The shader mask follows transformed beams and
+clouds automatically. Use `cloud.highlight_in_beam(beam, ...)` for an
+immediate highlight and `cloud.clear_beam_highlight()` to remove it.
+
+## PPIGrid
+
+`PPIGrid` renders a north-up Cartesian radar raster in its existing array order
+with the meteorological azimuth convention used throughout the videos:
+
+- `0 deg` is north/up.
+- `90 deg` is east/right.
+- `x = r * sin(theta)` and `y = r * cos(theta)`.
+
+Pass any 2D array directly. Rectangular arrays are fitted to the square radar
+extent; NaNs and masked values are transparent, and the azimuth grid is
+inferred automatically.
+
+```python
+import numpy as np
+from manimlib import InteractiveScene
+
+from melp import PPIGrid
+
+
+class SyntheticPPI(InteractiveScene):
+    def construct(self):
+        y, x = np.mgrid[-1:1:600j, -1:1:600j]
+        values = 45 * np.exp(-((x - 0.25) ** 2 + (y - 0.35) ** 2) / 0.08)
+        values[x * x + y * y > 1] = np.nan
+
+        ppi = PPIGrid(
+            values,
+            max_range_km=150,
+            vmin=0,
+            vmax=50,
+            cmap_name="turbo",
+            colorbar_label="value",
+            font="Maple Mono CN",
+            init_scan_progress=0,
+        )
+        self.add(ppi)
+        self.play(ppi.scan_progress @ 360, run_time=4)
+```
+
+`scan_progress` and `scan_start` are `VT` instances measured in degrees.
+`data_opacity_tracker` controls the raster opacity. A complete PPI is shown by
+default; pass `init_scan_progress=0` when you want a sweep reveal.
+
+Pass `font=...` to set one font for every PPI text element, including cardinal
+labels, colorbar tick labels, and the colorbar title. It defaults to the
+repository's `FONT` environment variable when that is set.
+
+For native `(ray, gate)` data from Py-ART, xradar, a file, or a proprietary
+radar, use `from_polar`:
+
+```python
+ppi = PPIGrid.from_polar(
+    field_data,       # shape: (number of rays, number of gates)
+    azimuths_deg,     # one azimuth per ray
+    ranges_km,        # one range per gate
+    max_range_km=120,
+    resolution=600,
+    vmin=-20,
+    vmax=75,
+    cmap_name="turbo",
+)
+```
+
+This uses nearest-ray and nearest-gate sampling so the displayed raster does
+not invent interpolated measurements. You can convert a radar coordinate back
+to the transformed Manim point with:
+
+```python
+point = ppi.range_azimuth_to_point(range_km=60, azimuth_deg=135)
+```
+
+Mappings are also accepted. Set `field_key` in the mapping, pass it to the
+constructor, or provide a `field_data` entry. If your source already has
+per-pixel azimuth and range grids, include them so scan reveals follow the
+source geometry:
+
+```python
+ppi = PPIGrid(
+    {
+        "field_key": "snr_db",
+        "snr_db": snr_image,
+        "valid_mask": valid_mask,
+        "azimuth_grid_deg": azimuth_grid_deg,
+        "range_grid_km": range_grid_km,
+        "max_range_km": 80,
+        "vmin": -10,
+        "vmax": 30,
+    },
+    cmap_name="viridis",
+)
+```
+
+## NEXRAD Level-II data
+
+NEXRAD decoding is optional and lazy. Install Py-ART in the ManimGL
+environment before using it:
+
+```bash
+uv pip install arm-pyart
+```
+
+Py-ART currently supports Python 3.11 through 3.13. Use a ManimGL environment
+on one of those versions for the NEXRAD decoder; the rest of `melp`, including
+`PPIGrid` and raw-volume downloading, does not require Py-ART.
+
+`cmweather` is optional. If it is installed, NEXRAD products use palettes such
+as `NWSRef` and `NWSVel`; otherwise `PPIGrid` automatically uses a built-in
+Matplotlib fallback.
+
+The returned mapping feeds directly into `PPIGrid`:
+
+```python
+from manimlib import InteractiveScene
+
+from melp import PPIGrid, get_nexrad_product_ppi_data
+
+
+class NexradPPI(InteractiveScene):
+    def construct(self):
+        data = get_nexrad_product_ppi_data(
+            "reflectivity",
+            s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+            sweep="lowest",
+            max_range_km=150,
+            resolution=600,
+        )
+        ppi = PPIGrid(
+            data,
+            colorbar_label=data["units"],
+            font="Maple Mono CN",
+            init_scan_progress=0,
+        )
+        self.add(ppi)
+        self.play(ppi.scan_progress @ 360, run_time=4)
+```
+
+The first call downloads the public archive object from the Unidata NEXRAD
+Level-II S3 bucket, decodes it with Py-ART, and caches both the raw volume and
+the Cartesian PPI. Later calls reuse the cache. The default cache is
+`~/.cache/melp/nexrad`; pass `cache_dir=...` or set `MELP_NEXRAD_CACHE` to put
+it elsewhere.
+
+Pass `sweep="lowest"` (the default) to select the lowest elevation containing
+the requested product. An integer requests that exact sweep and raises a clear
+error if the product is not available there.
+
+To download without decoding, or to use an existing file:
+
+```python
+from melp import fetch_nexrad_volume, get_nexrad_product_ppi_data
+
+s3_key = "2024/05/07/KTLX/KTLX20240507_023811_V06"
+path = fetch_nexrad_volume(s3_key, cache_dir="./radar-cache")
+data = get_nexrad_product_ppi_data(
+    "velocity",
+    volume_path=path,
+    cache_dir="./radar-cache",
+)
+```
+
+Supported product names are `reflectivity`, `velocity`, `zdr`, `rhohv`,
+`phidp`, and `kdp` when the corresponding source moment exists in the decoded
+volume. KDP uses the native field when available and is otherwise derived from
+PhiDP. Use
+`get_available_nexrad_products(...)` to inspect a particular file.
+
+The NEXRAD helper returns a Cartesian visualization raster. Use the loaded
+Py-ART object itself when an animation needs the true native measured rays.

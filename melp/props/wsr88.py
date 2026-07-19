@@ -6,6 +6,7 @@ import numpy as np
 from manimlib import Group, Mobject, ORIGIN, OUT, RIGHT, VectorizedPoint
 
 from ..animation_helpers import VT
+from .beam import Beam
 from .mesh import TriangleMeshMobject
 
 
@@ -77,6 +78,15 @@ class WSR88Model(Group):
 
     def get_beam_direction(self):
         return self.get_feed_horn_direction()
+
+    def get_beam(self, beamwidth, range, **kwargs) -> Beam:
+        return Beam(
+            beamwidth,
+            range,
+            origin=self.get_feed_horn_origin(),
+            direction=self.get_feed_horn_direction(),
+            **kwargs,
+        )
 
     def get_dome_lift_vector(self):
         return (
