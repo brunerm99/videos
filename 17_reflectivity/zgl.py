@@ -4,6 +4,7 @@ import os
 import sys
 from random import seed, shuffle
 
+import numpy as np
 from dotenv import load_dotenv
 from manimlib import *
 
@@ -33,7 +34,10 @@ FONT = os.getenv("FONT", "Maple Mono CN")
 
 
 class Intro(InteractiveScene):
-    default_camera_config = {"background_color": BACKGROUND_COLOR}
+    default_camera_config = {
+        "background_color": BACKGROUND_COLOR,
+        "fps": 60,
+    }
 
     def refresh_terrain(self):
         self.terrain.set_profile(self.terrain_profile)
@@ -538,8 +542,75 @@ class BeamVolumeParticles(InteractiveScene):
         self.wait(1.5)
 
 
-class ResolutionVolumeP2(InteractiveScene):
+class BeamSectionParticlesTest(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR}
+
+    def construct(self):
+        beam = Beam(
+            beamwidth=12 * DEG,
+            range=10.2,
+            origin=5.1 * LEFT,
+            direction=RIGHT,
+            color=BEAM_COLOR,
+            opacity=0.09,
+        )
+        section_start = 0.52 * beam.get_range()
+        section_stop = 0.70 * beam.get_range()
+        section = beam.get_section(
+            section_start,
+            section_stop,
+            color=GATE_COLOR,
+            opacity=0.18,
+            shading=(0.08, 0.18, 0.12),
+            depth_test=False,
+            resolution=(36, 8),
+        )
+        particle_count = 180
+        particles = beam.get_section_particles(
+            section_start,
+            section_stop,
+            count=particle_count,
+            max_radius_fraction=0.84,
+            seed=8,
+            radius=0.04,
+            color=BLUE_B,
+            glow_factor=0.3,
+        )
+        particles.set_color_by_gradient(BLUE_B, BLUE_A, WHITE)
+
+        rng = np.random.default_rng(9)
+        particles_per_size = particle_count // 3
+        particle_radii = np.concatenate(
+            [
+                rng.uniform(0.022, 0.038, particles_per_size),
+                rng.uniform(0.042, 0.068, particles_per_size),
+                rng.uniform(
+                    0.075,
+                    0.115,
+                    particle_count - 2 * particles_per_size,
+                ),
+            ]
+        )
+        rng.shuffle(particle_radii)
+        particles.set_radii(np.zeros(len(particle_radii)))
+
+        section_center = (
+            beam.get_origin()
+            + 0.5 * (section_start + section_stop) * beam.get_direction()
+        )
+        self.frame.reorient(-32, 68, 0, center=section_center, height=4.6)
+        self.add(beam)
+        self.play(FadeIn(section), run_time=1.2)
+        self.add(particles)
+        self.play(particles.animate.set_radii(particle_radii), run_time=2)
+        self.wait(0.5)
+
+
+class ResolutionVolumeP2(InteractiveScene):
+    default_camera_config = {
+        "background_color": BACKGROUND_COLOR,
+        "fps": 60,
+    }
 
     def refresh_terrain(self):
         self.terrain.set_profile(self.terrain_profile)
@@ -625,56 +696,225 @@ class ResolutionVolumeP2(InteractiveScene):
                 beam_opacity.animate(run_time=0.3).set_value(1),
             ),
             self.frame.animate.reorient(
-                0,
-                0,
+                25,
+                80,
                 0,
                 center=Group(self.west_radar.antenna).get_center(),
-                height=3.4,
-            ).rotate(west_radar_rotation),
+                height=2.4,
+            ).shift(RIGHT),
         )
 
         self.wait(0.5)
 
-        arc = Arc(
-            start_angle=west_radar_rotation - (~bw_deg * DEG / 2),
-            arc_center=beam.get_start(),
-            angle=~bw_deg * DEG,
-            radius=~beam_range / 4,
-        ).rotate(-~self.west_radar.el, about_point=beam.get_start(), axis=UP)
+        arc = beam.get_beamwidth_arc(
+            ~beam_range / 4,
+            self.frame,
+            color=WHITE,
+            stroke_width=10,
+        )
 
-        self.play(ShowCreation(arc))
+        def position_beamwidth_arc_label(label):
+            return label.next_to(
+                self.frame.to_fixed_frame_point(arc.point_from_proportion(0.5)),
+                RIGHT * np.cos(~self.west_radar.el) + OUT * np.sin(~self.west_radar.el),
+                buff=SMALL_BUFF,
+            )
 
-        # self.play()
+        arc_label = Tex(r"\theta").scale(1).fix_in_frame()
+        position_beamwidth_arc_label(arc_label)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(arc),
+                FadeIn(arc_label),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
-        # self.wait(0.5)
-        #
-        # rres = beam.get_section(
-        #     2,
-        #     3,
-        #     color=GATE_COLOR,
-        #     opacity=0.5,
-        #     shading=(0.08, 0.18, 0.12),
-        #     depth_test=False,
-        #     resolution=(36, 8),
-        # )
-        #
-        # self.play(
-        #     self.frame.animate(run_time=3).reorient(
-        #         60,
-        #         80,
-        #         0,
-        #         center=Group(self.west_radar.antenna, rres).get_center(),
-        #         height=3.4,
-        #     ),
-        #     LaggedStart(
-        #         beam.animate.set_opacity(0.1),
-        #         FadeIn(rres),
-        #         lag_ratio=0.3,
-        #         run_time=3,
-        #     ),
-        # )
-        # self.play()
+        self.play(FadeOut(arc), FadeOut(arc_label))
+
+        self.wait(0.5)
+
+        gate_opacity = VT(0)
+        rres = 0.7
+        gate_start = VT(2)
+        gate_out_shift = VT(0)
+        gate = always_redraw(
+            lambda: beam.get_section(
+                ~gate_start,
+                ~gate_start + rres,
+                color=GATE_COLOR,
+                opacity=~gate_opacity,
+                shading=(0.08, 0.18, 0.12),
+                depth_test=False,
+                resolution=(36, 8),
+            ).shift(OUT * ~gate_out_shift)
+        )
+
+        self.add(gate)
+        self.play(
+            self.frame.animate(run_time=3).reorient(
+                60,
+                80,
+                0,
+                center=Group(self.west_radar.antenna, gate).get_center(),
+                height=3.4,
+            ),
+            LaggedStart(
+                beam_opacity @ 0.1,
+                gate_opacity @ 0.5,
+                lag_ratio=0.4,
+                run_time=3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(gate_start @ 0.3, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            gate_start @ 6,
+            self.frame.animate.reorient(
+                70,
+                80,
+                0,
+                center=Group(self.west_radar.antenna, beam).get_center(),
+                height=4,
+            ).shift(RIGHT),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        particle_count = 30
+        particles = beam.get_section_particles(
+            ~gate_start,
+            ~gate_start + rres,
+            count=particle_count,
+            max_radius_fraction=0.84,
+            seed=8,
+            radius=0.04,
+            color=BLUE_B,
+            glow_factor=0.3,
+        )
+
+        particles.set_color_by_gradient(BLUE_B, BLUE_A, WHITE)
+
+        rng = np.random.default_rng(10)
+        particles_per_size = particle_count // 3
+        particle_radii = np.concatenate(
+            [
+                rng.uniform(0.022, 0.038, particles_per_size),
+                rng.uniform(0.042, 0.068, particles_per_size),
+                rng.uniform(
+                    0.075,
+                    0.115,
+                    particle_count - 2 * particles_per_size,
+                ),
+            ]
+        )
+        rng.shuffle(particle_radii)
+        particles.set_radii(np.zeros(len(particle_radii)))
+
+        self.add(beam)
+        self.add(particles)
+        self.play(
+            beam_range @ 12,
+            self.frame.animate.reorient(45, 85, center=gate.get_center(), height=2),
+            particles.animate.set_radii(particle_radii),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            AnimationGroup(
+                gate_out_shift @ 10,
+                particles.animate.shift(OUT * 10),
+            ),
+            self.frame.animate.reorient(
+                0, 90, center=gate.copy().shift(OUT * 10).get_center(), height=5
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        dbz_value = (
+            Tex(r"\rightarrow 31.2 \text{ dBZ}")
+            .scale(1.2)
+            .fix_in_frame()
+            .next_to(
+                self.frame.to_fixed_frame_point(gate.get_center()),
+                RIGHT,
+                LARGE_BUFF,
+            )
+        )
+        gate_screen = self.frame.to_fixed_frame_point(gate.get_center())
+        composition_center = 0.5 * (gate_screen + dbz_value.get_center())
+        composition_center[2] = 0
+
+        camera_shift = self.frame.from_fixed_frame_point(
+            composition_center,
+            relative=True,
+        )
+
+        self.play(self.frame.animate.shift(camera_shift))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    FadeIn(m)
+                    for m in dbz_value.next_to(
+                        self.frame.to_fixed_frame_point(gate.get_center()),
+                        RIGHT,
+                        LARGE_BUFF,
+                    )
+                ]
+            )
+        )
+
+        self.wait(0.5)
+
+        res_thumbnail = ImageMobject(
+            "../09_resolution/static/Resolution Thumbnail.png"
+        ).fix_in_frame()
+        thumbnail_box = SurroundingRectangle(res_thumbnail, buff=0, color=YELLOW)
+        thumbnail_label = (
+            Group(
+                Text(
+                    "How Radars Tell Targets Apart",
+                    font=FONT,
+                ).fix_in_frame(),
+                Text(
+                    "(and When They Can’t)",
+                    font=FONT,
+                ).fix_in_frame(),
+            )
+            .arrange(DOWN, MED_SMALL_BUFF)
+            .next_to(thumbnail_box, DOWN)
+        )
+
+        thumbnail = (
+            Group(res_thumbnail, thumbnail_box, thumbnail_label)
+            .fix_in_frame()
+            .shift(UP / 4)
+        )
+
+        self.play(GrowFromCenter(thumbnail))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(thumbnail))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(dbz_value), self.frame.animate.shift(OUT * 20))
 
         self.embed()

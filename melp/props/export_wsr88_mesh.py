@@ -153,14 +153,14 @@ def get_radome_panel_group_indices(mesh):
     if len(surface_components) < 2:
         raise RuntimeError("Unable to find logical panels in the radome mesh")
 
-    # The authored panel caps are isolated by narrow side walls. The one large
-    # surface component is the seam/backing geometry shared between them.
-    backing = max(
+    shared_seam_and_backing_component = max(
         surface_components,
         key=lambda component: (len(component), -min(component)),
     )
     panel_components = [
-        component for component in surface_components if component is not backing
+        component
+        for component in surface_components
+        if component is not shared_seam_and_backing_component
     ]
     if any(len(component) != 1 for component in panel_components):
         component_sizes = sorted(len(component) for component in panel_components)

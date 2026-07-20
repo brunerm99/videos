@@ -124,7 +124,6 @@ def fetch_nexrad_volume(
     cache_dir=None,
     force=False,
 ):
-    """Download one public Level-II archive object and return its local path."""
     s3_key = _validate_s3_key(s3_key)
     raw_dir = _cache_dir(cache_dir) / "raw"
     raw_path = raw_dir.joinpath(*Path(s3_key).parts)
@@ -172,7 +171,6 @@ def read_nexrad_volume(
     cache_dir=None,
     force_download=False,
 ):
-    """Read a local or public-archive Level-II volume with Py-ART."""
     if volume_path is None:
         volume_path = fetch_nexrad_volume(
             s3_key,
@@ -369,7 +367,6 @@ def nexrad_ppi_from_radar(
     resolution=600,
     source="NEXRAD Level II",
 ):
-    """Convert a loaded Py-ART Radar object to the generic PPI mapping."""
     product = _normalize_product(product)
     spec = NEXRAD_PRODUCT_SPECS[product]
     field_name = spec["field_name"]
@@ -460,7 +457,6 @@ def get_available_nexrad_products(
     volume_path=None,
     radar=None,
 ):
-    """Return product metadata for fields present in a NEXRAD volume."""
     if radar is None:
         radar = read_nexrad_volume(
             volume_path,
@@ -610,7 +606,6 @@ def get_nexrad_product_ppi_data(
     refresh_cache=False,
     force_download=False,
 ):
-    """Fetch, decode, rasterize, and cache one NEXRAD PPI product."""
     product = _normalize_product(product)
     if int(resolution) != resolution or resolution < 2:
         raise ValueError("resolution must be an integer of at least 2.")

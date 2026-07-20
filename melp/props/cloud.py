@@ -119,11 +119,6 @@ class Cloud(TriangleMeshMobject):
         outside_opacity=0.12,
         feather=0.03,
     ):
-        """Bind an opacity mask for the part of this cloud inside ``beam``.
-
-        The opacity arguments multiply the cloud's existing per-vertex alpha.
-        Animate ``beam_highlight`` from 0 to 1 to reveal the mask.
-        """
         if not isinstance(beam, Beam):
             raise TypeError("beam must be a Beam")
         values = {

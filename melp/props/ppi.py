@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import os
 from collections.abc import Mapping
 from itertools import count
@@ -153,7 +154,7 @@ def _get_colormap(cmap_name, fallback_cmap_name="viridis"):
         return colormaps[cmap_name]
     except KeyError:
         try:
-            import cmweather  # noqa: F401
+            importlib.import_module("cmweather")
         except ImportError:
             pass
         else:
@@ -181,7 +182,6 @@ def field_to_rgba(
     fallback_cmap_name="viridis",
     min_alpha=1.0,
 ):
-    """Map arbitrary scalar radar data to an RGBA uint8 image."""
     values, intrinsic_valid = _as_float_array(field_data)
     if values.ndim != 2:
         raise ValueError(f"Radar field must be 2D; got shape {values.shape}.")
@@ -235,12 +235,6 @@ def polar_to_cartesian(
     resolution=600,
     azimuth_tolerance_deg=None,
 ):
-    """Rasterize native ``(ray, gate)`` data onto a north-up PPI grid.
-
-    Azimuth follows the meteorological convention: 0 degrees is north/up and
-    90 degrees is east/right. Sampling is nearest-ray and nearest-gate so the
-    displayed pixels retain the source gates without interpolation.
-    """
     values, intrinsic_valid = _as_float_array(field_data)
     azimuths_deg = np.asarray(azimuths_deg, dtype=np.float32).reshape(-1)
     ranges_km = np.asarray(ranges_km, dtype=np.float32).reshape(-1)
@@ -488,12 +482,6 @@ def _text(label, font, color):
 
 
 class PPIGrid(Group):
-    """A ManimGL PPI display for 2D rasters or native polar radar data.
-
-    Cartesian rasters are displayed in their existing array order. Use
-    :meth:`from_polar` to nearest-neighbor rasterize native ray/gate data.
-    """
-
     def __init__(
         self,
         data,

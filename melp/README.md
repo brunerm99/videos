@@ -46,6 +46,53 @@ captures the beam's current pose, so wrap the call in `always_redraw(...)` if
 it should follow a moving beam. Disabling depth testing avoids z-fighting when
 the highlighted section is drawn over the full beam.
 
+Use `get_beamwidth_arc(...)` to place an angular marker at a chosen range. Pass
+the current camera frame so the arc uses the cross-beam plane with the largest
+visible screen width:
+
+```python
+beamwidth_arc = beam.get_beamwidth_arc(
+    range=4,
+    camera_frame=self.frame,
+    color=WHITE,
+    stroke_width=5,
+)
+self.play(ShowCreation(beamwidth_arc))
+```
+
+The arc faces the camera position at the time it is built. If the beam or
+camera moves afterward, add an updater after its reveal:
+
+```python
+beamwidth_arc.add_updater(
+    lambda arc: arc.become(
+        beam.get_beamwidth_arc(4, self.frame, color=WHITE, stroke_width=5)
+    )
+)
+```
+
+Use `get_section_particles(...)` to create a `DotCloud` sampled uniformly by
+volume inside the same range bounds as `get_section(...)`. Set
+`max_radius_fraction` below 1 to leave visual space between the particles and
+the gate surface:
+
+```python
+particles = beam.get_section_particles(
+    start_range=4,
+    stop_range=5.2,
+    count=180,
+    max_radius_fraction=0.84,
+    seed=8,
+    radius=0.04,
+    color=BLUE_B,
+    glow_factor=0.3,
+)
+particles.set_color_by_gradient(BLUE_B, BLUE_A, WHITE)
+```
+
+The returned cloud captures the beam's current pose. Use a fixed `seed` if the
+cloud is rebuilt in an updater so its particles do not jump between frames.
+
 ### Highlighting a cloud inside a beam
 
 The visible overlap is the intersection of the cloud with the beam's finite
