@@ -3,14 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from manimlib import Group, Mobject, ORIGIN, OUT, RIGHT, VectorizedPoint
+from manimlib import ORIGIN, OUT, RIGHT, Group, Mobject, VectorizedPoint
 
 from ..animation_helpers import VT
 from .beam import Beam
 from .mesh import TriangleMeshMobject
 
-
 MODEL_PATH = Path(__file__).resolve().parent / "static" / "wsr88_mesh.npz"
+
+
+def _update_scan_control(tracker):
+    for ancestor in reversed(tracker.get_ancestors()):
+        if isinstance(ancestor, WSR88Model):
+            ancestor._update_scan_angles()
+            return
 
 
 class WSR88Model(Group):
@@ -21,6 +27,7 @@ class WSR88Model(Group):
     upper_dome: Mobject
     lower_dome: Mobject
     radome_panels: tuple[Mobject, ...]
+    radome_face_polygon_ids: tuple[int, ...]
     radome_panels_indexed: bool
     antenna: Group
     feed_horn: Group
@@ -176,7 +183,9 @@ class WSR88Model(Group):
         self.el = VT(0)
         self._last_scan_az = 0.0
         self._last_scan_el = 0.0
-        self.add_updater(WSR88Model._update_scan_angles)
+        self.references.add(self.az, self.el)
+        self.az.add_updater(_update_scan_control, call=False)
+        self.el.add_updater(_update_scan_control, call=False)
         return self
 
     def _update_scan_angles(self):
@@ -265,6 +274,7 @@ def get_wsr88_model(
             panel_keys = (
                 "radome_panel_object_names",
                 "radome_panel_polygon_indices",
+                "radome_panel_group_indices",
                 "radome_panel_point_starts",
                 "radome_panel_point_counts",
                 "upper_dome_part_name",
@@ -283,11 +293,13 @@ def get_wsr88_model(
                 str(name) for name in mesh["radome_panel_object_names"]
             ]
             panel_polygon_indices = mesh["radome_panel_polygon_indices"]
+            panel_group_indices = mesh["radome_panel_group_indices"]
             panel_point_starts = mesh["radome_panel_point_starts"]
             panel_point_counts = mesh["radome_panel_point_counts"]
             panel_metadata_lengths = {
                 len(panel_object_names),
                 len(panel_polygon_indices),
+                len(panel_group_indices),
                 len(panel_point_starts),
                 len(panel_point_counts),
             }
@@ -295,53 +307,90 @@ def get_wsr88_model(
                 raise ValueError("Radome panel metadata arrays have different lengths")
 
             for shell_name in indexed_shell_names:
-                shell_panels = []
-                shell_polygon_ids = []
-                for object_name, polygon_id, start, count in zip(
+                shell_face_polygon_ids = []
+                shell_panel_entries = {}
+                for object_name, polygon_id, panel_index, start, count in zip(
                     panel_object_names,
                     panel_polygon_indices,
+                    panel_group_indices,
                     panel_point_starts,
                     panel_point_counts,
                 ):
                     if object_name != shell_name:
                         continue
+                    panel_index = int(panel_index)
                     start = int(start)
                     count = int(count)
                     end = start + count
                     if count <= 0 or count % 3 != 0:
                         raise ValueError(
-                            f"Radome panel {polygon_id} on {shell_name!r} has "
+                            f"Radome face {polygon_id} on {shell_name!r} has "
                             f"an invalid point count: {count}"
+                        )
+                    if panel_index < 0:
+                        raise ValueError(
+                            f"Radome face {polygon_id} on {shell_name!r} has "
+                            f"an invalid panel index: {panel_index}"
                         )
                     if start < 0 or end > len(points):
                         raise ValueError(
-                            f"Radome panel {polygon_id} on {shell_name!r} "
+                            f"Radome face {polygon_id} on {shell_name!r} "
                             "points outside the exported mesh: "
                             f"[{start}, {end})"
                         )
-                    shell_panels.append(
-                        TriangleMeshMobject(
-                            points[start:end],
-                            normals[start:end],
-                            rgba[start:end],
-                        )
+                    entry = shell_panel_entries.setdefault(
+                        panel_index,
+                        {
+                            "points": [],
+                            "normals": [],
+                            "rgba": [],
+                            "polygon_ids": [],
+                        },
                     )
-                    shell_polygon_ids.append(int(polygon_id))
+                    entry["points"].append(points[start:end])
+                    entry["normals"].append(normals[start:end])
+                    entry["rgba"].append(rgba[start:end])
+                    entry["polygon_ids"].append(int(polygon_id))
+                    shell_face_polygon_ids.append(int(polygon_id))
 
-                if not shell_panels:
+                if not shell_panel_entries:
                     raise ValueError(
                         f"No indexed radome panels were exported for {shell_name!r}"
                     )
+                panel_indices = sorted(shell_panel_entries)
+                if panel_indices != list(range(len(panel_indices))):
+                    raise ValueError(
+                        f"Radome panel indices on {shell_name!r} are not contiguous: "
+                        f"{panel_indices}"
+                    )
+
+                shell_panels = []
+                shell_panel_polygon_ids = []
+                for panel_index in panel_indices:
+                    entry = shell_panel_entries[panel_index]
+                    panel = TriangleMeshMobject(
+                        np.concatenate(entry["points"]),
+                        np.concatenate(entry["normals"]),
+                        np.concatenate(entry["rgba"]),
+                    )
+                    polygon_ids = tuple(entry["polygon_ids"])
+                    panel.polygon_ids = polygon_ids
+                    shell_panels.append(panel)
+                    shell_panel_polygon_ids.append(polygon_ids)
+
                 shell = Group(*shell_panels)
+                shell.face_polygon_ids = tuple(shell_face_polygon_ids)
                 shell.panels = tuple(shell_panels)
-                shell.polygon_ids = tuple(shell_polygon_ids)
+                shell.polygon_ids = tuple(shell_panel_polygon_ids)
                 parts[shell_name] = shell
 
         upper_dome = parts[upper_dome_part_name]
         lower_dome = parts[lower_dome_part_name]
         if not indexed_radome_panels:
+            upper_dome.face_polygon_ids = ()
             upper_dome.panels = ()
             upper_dome.polygon_ids = ()
+            lower_dome.face_polygon_ids = ()
             lower_dome.panels = ()
             lower_dome.polygon_ids = ()
 
@@ -405,7 +454,11 @@ def get_wsr88_model(
         model.lower_dome = lower_dome
         model.dome.panels = upper_dome.panels
         model.dome.polygon_ids = upper_dome.polygon_ids
+        model.dome.face_polygon_ids = upper_dome.face_polygon_ids
         model.radome_panels = upper_dome.panels + lower_dome.panels
+        model.radome_face_polygon_ids = (
+            upper_dome.face_polygon_ids + lower_dome.face_polygon_ids
+        )
         model.radome_panels_indexed = indexed_radome_panels
         model.antenna = antenna
         model.antenna.parts = {
@@ -455,7 +508,7 @@ def place_wsr88_model(height, shift, dome_raised=False):
 
 def place_wsr88_on_terrain(site, terrain, height=2.25, rotation: float = 0.0):
     site_x, site_y = site
-    radar = get_wsr88_model(height=height)
+    radar = get_wsr88_model(height=height, indexed_radome_panels=True)
     radar.rotate(rotation, axis=OUT, about_point=ORIGIN)
     base_z = radar.get_bounding_box()[0, 2]
     radar.shift(

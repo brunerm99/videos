@@ -1,19 +1,12 @@
 from __future__ import annotations
 
 import numpy as np
-from manimlib import BLUE, Cone, ORIGIN, RIGHT
-
+from manimlib import BLUE, ORIGIN, RIGHT, TAU, Cone, ParametricSurface
 
 __all__ = ["Beam"]
 
 
 class Beam(Cone):
-    """A conical radar beam with its apex at ``origin``.
-
-    ``beamwidth`` is the full angular width in radians and ``range`` is in
-    Manim scene units.
-    """
-
     def __init__(
         self,
         beamwidth,
@@ -97,6 +90,53 @@ class Beam(Cone):
     def get_base_radius(self):
         base_ring = self._get_reference_ring(-1)
         return np.linalg.norm(base_ring - self.get_end(), axis=1).max()
+
+    def get_section(self, start_range, stop_range, **kwargs):
+        start_range = float(start_range)
+        stop_range = float(stop_range)
+        beam_range = self.get_range()
+
+        if not np.isfinite(start_range) or not np.isfinite(stop_range):
+            raise ValueError("section ranges must be finite")
+        if start_range < 0:
+            raise ValueError("start_range must be nonnegative")
+        if stop_range <= start_range:
+            raise ValueError("stop_range must be greater than start_range")
+        if stop_range > beam_range:
+            raise ValueError(
+                f"stop_range must not exceed the beam range ({beam_range:g})"
+            )
+
+        point_grid = self.get_points().reshape((*self.resolution, 3))
+        base_ring = point_grid[:, -1]
+        if len(base_ring) > 1 and np.allclose(base_ring[0], base_ring[-1]):
+            base_ring = base_ring[:-1]
+        origin = self.get_origin()
+
+        def point_at_range(angle, distance):
+            ring_index = (angle % TAU) * len(base_ring) / TAU
+            lower_index = int(np.floor(ring_index)) % len(base_ring)
+            upper_index = (lower_index + 1) % len(base_ring)
+            alpha = ring_index - np.floor(ring_index)
+            base_point = (1 - alpha) * base_ring[lower_index] + alpha * base_ring[
+                upper_index
+            ]
+            return origin + (distance / beam_range) * (base_point - origin)
+
+        section_config = {
+            "color": self.get_color(),
+            "opacity": self.get_opacity(),
+            "shading": tuple(self.get_shading()),
+            "depth_test": self.depth_test,
+            "resolution": self.resolution,
+        }
+        section_config.update(kwargs)
+        return ParametricSurface(
+            point_at_range,
+            u_range=(0, TAU),
+            v_range=(start_range, stop_range),
+            **section_config,
+        )
 
     def contains_points(self, points, *, atol=1e-9):
         """Return whether points lie inside this beam's finite cone."""

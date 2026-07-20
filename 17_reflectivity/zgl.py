@@ -2,6 +2,7 @@
 
 import os
 import sys
+from random import seed, shuffle
 
 from dotenv import load_dotenv
 from manimlib import *
@@ -9,8 +10,9 @@ from manimlib import *
 sys.path.insert(0, "..")
 load_dotenv()
 
-from melp import get_nexrad_product_ppi_data
+from melp import VT, get_nexrad_product_ppi_data
 from melp.props import (
+    Beam,
     Cloud,
     PPIGrid,
     Terrain,
@@ -352,5 +354,327 @@ class NexradPPI(InteractiveScene):
         )
         self.add(ppi)
         self.play(ppi.scan_progress @ 360, run_time=4)
+
+        self.embed()
+
+
+class BeamVolumeParticles(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR}
+
+    def construct(self):
+        self.frame.reorient(-28, 72, 0, center=ORIGIN, height=7.4)
+
+        beam_range = 10.2
+        beam = Beam(
+            beamwidth=12 * DEG,
+            range=beam_range,
+            origin=5.1 * LEFT,
+            direction=RIGHT,
+            color=BEAM_COLOR,
+            opacity=0.09,
+        )
+
+        title = Text("radar beam", font=FONT, font_size=34)
+        title.fix_in_frame().to_edge(UP, buff=0.32).set_z_index(100)
+
+        self.play(ShowCreation(beam), FadeIn(title), run_time=2.0)
+        self.wait(0.5)
+
+        origin = beam.get_origin()
+        direction = beam.get_direction()
+        slope = beam.get_base_radius() / beam.get_range()
+
+        radial_1 = np.cross(OUT, direction)
+        radial_1 /= np.linalg.norm(radial_1)
+        radial_2 = np.cross(direction, radial_1)
+        radial_2 /= np.linalg.norm(radial_2)
+
+        bin_start = 0.52 * beam.get_range()
+        bin_end = 0.70 * beam.get_range()
+
+        def bin_point(distance, angle, radial_fraction=1.0):
+            radius = radial_fraction * distance * slope
+            return (
+                origin
+                + distance * direction
+                + radius * np.cos(angle) * radial_1
+                + radius * np.sin(angle) * radial_2
+            )
+
+        bin_shell = beam.get_section(
+            bin_start,
+            bin_end,
+            color=GATE_COLOR,
+            opacity=0.18,
+            shading=(0.08, 0.18, 0.12),
+            depth_test=False,
+            resolution=(36, 8),
+        )
+        bin_rings = VGroup(
+            *[
+                ParametricCurve(
+                    lambda angle, distance=distance: bin_point(distance, angle),
+                    t_range=(0, TAU, TAU / 48),
+                    stroke_color=GATE_COLOR,
+                    stroke_width=2.5,
+                    stroke_opacity=0.95,
+                ).apply_depth_test()
+                for distance in (bin_start, bin_end)
+            ]
+        )
+        bin_connectors = VGroup(
+            *[
+                Line(
+                    bin_point(bin_start, angle),
+                    bin_point(bin_end, angle),
+                    stroke_color=GATE_COLOR,
+                    stroke_width=1.5,
+                    stroke_opacity=0.8,
+                ).apply_depth_test()
+                for angle in np.arange(0, TAU, TAU / 4)
+            ]
+        )
+        volume_bin = Group(bin_shell, bin_rings, bin_connectors)
+
+        bin_title = VGroup(
+            Text("one volume bin", font=FONT, font_size=34),
+            Tex(r"\Delta R", font_size=46, color=GATE_COLOR),
+        ).arrange(DOWN, buff=0.08)
+        bin_title.fix_in_frame().to_edge(UP, buff=0.28).set_z_index(100)
+
+        bin_center = origin + 0.5 * (bin_start + bin_end) * direction
+        self.play(
+            FadeIn(volume_bin),
+            FadeOut(title),
+            FadeIn(bin_title),
+            self.frame.animate.reorient(
+                -32,
+                68,
+                0,
+                center=bin_center,
+                height=4.6,
+            ),
+            run_time=2.2,
+        )
+        self.wait(0.5)
+
+        rng = np.random.default_rng(8)
+        particle_count = 180
+        distances = np.cbrt(rng.uniform(bin_start**3, bin_end**3, particle_count))
+        angles = rng.uniform(0, TAU, particle_count)
+        radial_fractions = np.sqrt(rng.uniform(0, 0.84**2, particle_count))
+        particle_points = np.array(
+            [
+                bin_point(distance, angle, radial_fraction)
+                for distance, angle, radial_fraction in zip(
+                    distances,
+                    angles,
+                    radial_fractions,
+                )
+            ]
+        )
+        if not np.all(beam.contains_points(particle_points)):
+            raise RuntimeError("Generated a particle outside the beam")
+
+        particle_radii = np.concatenate(
+            [
+                rng.uniform(0.022, 0.038, particle_count // 3),
+                rng.uniform(0.042, 0.068, particle_count // 3),
+                rng.uniform(0.075, 0.115, particle_count - 2 * (particle_count // 3)),
+            ]
+        )
+        rng.shuffle(particle_radii)
+
+        particle_clouds = Group()
+        particle_animations = []
+        for indices in np.array_split(rng.permutation(particle_count), 5):
+            cloud = DotCloud(
+                particle_points[indices],
+                radius=0.04,
+                color=BLUE_B,
+                glow_factor=0.3,
+            )
+            cloud.set_color_by_gradient(BLUE_B, BLUE_A, WHITE)
+            cloud.set_radii(np.zeros(len(indices)))
+            particle_clouds.add(cloud)
+            particle_animations.append(cloud.animate.set_radii(particle_radii[indices]))
+
+        particle_label = VGroup(
+            Text("many particles", font=FONT, font_size=31),
+            Text(
+                "different sizes (not to scale)",
+                font=FONT,
+                font_size=22,
+                color=BLUE_A,
+            ),
+        ).arrange(DOWN, buff=0.08)
+        particle_label.fix_in_frame().to_edge(DOWN, buff=0.3).set_z_index(100)
+
+        self.add(particle_clouds)
+        self.play(
+            LaggedStart(*particle_animations, lag_ratio=0.18, run_time=2.6),
+            FadeIn(particle_label),
+        )
+        self.wait(0.5)
+
+        summary = Text(
+            "many particles  →  one measurement",
+            font=FONT,
+            font_size=29,
+        )
+        summary.fix_in_frame().to_edge(DOWN, buff=0.3).set_z_index(100)
+        self.play(
+            FadeOut(particle_label),
+            FadeIn(summary),
+            self.frame.animate.reorient(
+                -42,
+                64,
+                0,
+                center=bin_center,
+                height=4.6,
+            ),
+            run_time=2.0,
+        )
+        self.wait(1.5)
+
+
+class ResolutionVolumeP2(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR}
+
+    def refresh_terrain(self):
+        self.terrain.set_profile(self.terrain_profile)
+        for radar, (site_x, site_y) in zip(self.radars, self.terrain_sites):
+            base_z = radar.get_bounding_box()[0, 2]
+            target_z = self.terrain.height_at(site_x, site_y) + 0.015
+            radar.shift((target_z - base_z) * OUT)
+        return self
+
+    def construct(self):
+        self.terrain_profile = {
+            "broad_ridge": 1.25,
+            "east_hill": 0.95,
+            "valley_depth": 0.52,
+            "rolling_ground": 0.4,
+            "fine_relief": 0.12,
+            "minor_ridges": 0.10,
+        }
+        self.terrain_sites = (
+            (-4.6, -1.55),
+            (4.15, 1.45),
+            (8, -9),
+        )
+        self.terrain = Terrain(
+            size=(40, 28),
+            profile=self.terrain_profile,
+            level_sites=self.terrain_sites,
+        )
+        west_radar_rotation = 22 * DEG
+        self.west_radar = place_wsr88_on_terrain(
+            self.terrain_sites[0],
+            self.terrain,
+            rotation=west_radar_rotation,
+        )
+
+        self.add(self.west_radar, self.terrain)
+
+        self.frame.reorient(
+            40, 85, 0, center=self.west_radar.antenna.get_center(), height=5.4
+        ).shift(OUT * 10)
+
+        self.play(self.frame.animate(run_time=2).shift(IN * 10))
+
+        self.wait(0.5)
+
+        panel_indices = list(np.arange(len(self.west_radar.upper_dome)))
+        seed(0)
+        shuffle(panel_indices)
+
+        panel_fade = LaggedStart(
+            *[
+                self.west_radar.upper_dome[idx].animate.set_opacity(0)
+                for idx in panel_indices
+            ],
+            lag_ratio=0.01,
+        )
+
+        self.play(
+            LaggedStart(
+                panel_fade,
+                self.west_radar.el @ (20 * DEG),
+                lag_ratio=0.5,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+        self.west_radar.upper_dome.deactivate_depth_test()
+
+        bw_deg = VT(8)
+        beam_range = VT(0.1)
+        beam_opacity = VT(0)
+        beam = always_redraw(
+            lambda: self.west_radar.get_beam(
+                ~bw_deg * DEG, ~beam_range, opacity=~beam_opacity
+            )
+        )
+        self.add(beam)
+
+        self.play(
+            AnimationGroup(
+                beam_range @ 8,
+                beam_opacity.animate(run_time=0.3).set_value(1),
+            ),
+            self.frame.animate.reorient(
+                0,
+                0,
+                0,
+                center=Group(self.west_radar.antenna).get_center(),
+                height=3.4,
+            ).rotate(west_radar_rotation),
+        )
+
+        self.wait(0.5)
+
+        arc = Arc(
+            start_angle=west_radar_rotation - (~bw_deg * DEG / 2),
+            arc_center=beam.get_start(),
+            angle=~bw_deg * DEG,
+            radius=~beam_range / 4,
+        ).rotate(-~self.west_radar.el, about_point=beam.get_start(), axis=UP)
+
+        self.play(ShowCreation(arc))
+
+        # self.play()
+
+        self.wait(0.5)
+
+        # self.wait(0.5)
+        #
+        # rres = beam.get_section(
+        #     2,
+        #     3,
+        #     color=GATE_COLOR,
+        #     opacity=0.5,
+        #     shading=(0.08, 0.18, 0.12),
+        #     depth_test=False,
+        #     resolution=(36, 8),
+        # )
+        #
+        # self.play(
+        #     self.frame.animate(run_time=3).reorient(
+        #         60,
+        #         80,
+        #         0,
+        #         center=Group(self.west_radar.antenna, rres).get_center(),
+        #         height=3.4,
+        #     ),
+        #     LaggedStart(
+        #         beam.animate.set_opacity(0.1),
+        #         FadeIn(rres),
+        #         lag_ratio=0.3,
+        #         run_time=3,
+        #     ),
+        # )
+        # self.play()
 
         self.embed()

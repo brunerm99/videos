@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import heapq
 import sys
 from pathlib import Path
 
@@ -16,7 +17,7 @@ MODEL_COLORS = {
     "radome": np.array([0.82, 0.88, 0.90, 1.0], dtype=np.float32),
 }
 
-EXCLUDED_OBJECTS = {"Plane"}
+EXCLUDED_OBJECTS = {"Plane", "Cube.045"}
 UPPER_DOME_OBJECT = "Icosphere.001"
 LOWER_DOME_OBJECT = "Icosphere"
 ANTENNA_ROOT_OBJECT = "UP_DOWN"
@@ -108,6 +109,110 @@ def clip_triangle_to_z_range(vertices, normals, min_z=None, max_z=None):
     return polygon
 
 
+def get_radome_panel_group_indices(mesh):
+    vertex_points = np.array([vertex.co for vertex in mesh.vertices], dtype=float)
+    design = np.column_stack((2 * vertex_points, np.ones(len(vertex_points))))
+    target = np.sum(vertex_points**2, axis=1)
+    dome_center = np.linalg.lstsq(design, target, rcond=None)[0][:3]
+
+    face_centers = np.array([polygon.center for polygon in mesh.polygons], dtype=float)
+    face_normals = np.array([polygon.normal for polygon in mesh.polygons], dtype=float)
+    radial_directions = face_centers - dome_center
+    radial_directions /= np.linalg.norm(radial_directions, axis=1, keepdims=True)
+    surface_faces = set(
+        np.flatnonzero(np.abs(np.sum(face_normals * radial_directions, axis=1)) > 0.8)
+    )
+
+    edge_faces = {}
+    for polygon in mesh.polygons:
+        for edge_key in polygon.edge_keys:
+            edge_faces.setdefault(tuple(sorted(edge_key)), []).append(polygon.index)
+
+    adjacency = [set() for _ in mesh.polygons]
+    for face_indices in edge_faces.values():
+        for first in face_indices:
+            adjacency[first].update(
+                second for second in face_indices if second != first
+            )
+
+    surface_components = []
+    remaining = set(surface_faces)
+    while remaining:
+        seed = min(remaining)
+        remaining.remove(seed)
+        component = {seed}
+        stack = [seed]
+        while stack:
+            current = stack.pop()
+            for neighbor in adjacency[current] & remaining & surface_faces:
+                remaining.remove(neighbor)
+                component.add(neighbor)
+                stack.append(neighbor)
+        surface_components.append(component)
+
+    if len(surface_components) < 2:
+        raise RuntimeError("Unable to find logical panels in the radome mesh")
+
+    # The authored panel caps are isolated by narrow side walls. The one large
+    # surface component is the seam/backing geometry shared between them.
+    backing = max(
+        surface_components,
+        key=lambda component: (len(component), -min(component)),
+    )
+    panel_components = [
+        component for component in surface_components if component is not backing
+    ]
+    if any(len(component) != 1 for component in panel_components):
+        component_sizes = sorted(len(component) for component in panel_components)
+        raise RuntimeError(
+            "Expected each logical radome panel face to be isolated; "
+            f"got component sizes {component_sizes}"
+        )
+
+    panel_seeds = sorted(next(iter(component)) for component in panel_components)
+    distances = np.full(len(mesh.polygons), np.inf)
+    owners = np.full(len(mesh.polygons), -1, dtype=np.int64)
+    queue = []
+    for panel_index, face_index in enumerate(panel_seeds):
+        distances[face_index] = 0.0
+        owners[face_index] = panel_index
+        heapq.heappush(queue, (0.0, panel_index, face_index))
+
+    while queue:
+        distance, panel_index, face_index = heapq.heappop(queue)
+        if distance != distances[face_index] or panel_index != owners[face_index]:
+            continue
+
+        for neighbor in adjacency[face_index]:
+            edge_length = np.linalg.norm(
+                face_centers[face_index] - face_centers[neighbor]
+            )
+            candidate = (distance + edge_length, panel_index)
+            existing = (distances[neighbor], owners[neighbor])
+            if candidate >= existing:
+                continue
+            distances[neighbor], owners[neighbor] = candidate
+            heapq.heappush(queue, (candidate[0], panel_index, neighbor))
+
+    if np.any(owners < 0):
+        missing = np.flatnonzero(owners < 0).tolist()
+        raise RuntimeError(f"Radome faces are disconnected from all panels: {missing}")
+
+    for panel_index, face_index in enumerate(panel_seeds):
+        panel_faces = set(np.flatnonzero(owners == panel_index))
+        reached = {face_index}
+        stack = [face_index]
+        while stack:
+            current = stack.pop()
+            for neighbor in (adjacency[current] & panel_faces) - reached:
+                reached.add(neighbor)
+                stack.append(neighbor)
+        if reached != panel_faces:
+            raise RuntimeError(f"Logical radome panel {panel_index} is disconnected")
+
+    return owners
+
+
 def evaluated_triangles(obj, depsgraph, min_z=None, max_z=None):
     evaluated = obj.evaluated_get(depsgraph)
     mesh = evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
@@ -122,6 +227,11 @@ def evaluated_triangles(obj, depsgraph, min_z=None, max_z=None):
     normals = []
     colors = []
     polygon_point_ranges = []
+    panel_group_indices = (
+        get_radome_panel_group_indices(mesh)
+        if obj.name in {UPPER_DOME_OBJECT, LOWER_DOME_OBJECT}
+        else None
+    )
 
     triangles_by_polygon = {polygon.index: [] for polygon in mesh.polygons}
     for triangle in mesh.loop_triangles:
@@ -168,7 +278,14 @@ def evaluated_triangles(obj, depsgraph, min_z=None, max_z=None):
         polygon_count = len(points) - polygon_start
         if polygon_count:
             polygon_point_ranges.append(
-                (polygon.index, polygon_start, polygon_count)
+                (
+                    polygon.index,
+                    -1
+                    if panel_group_indices is None
+                    else panel_group_indices[polygon.index],
+                    polygon_start,
+                    polygon_count,
+                )
             )
 
     evaluated.to_mesh_clear()
@@ -312,6 +429,7 @@ def main():
     object_point_counts = []
     radome_panel_object_names = []
     radome_panel_polygon_indices = []
+    radome_panel_group_indices = []
     radome_panel_point_starts = []
     radome_panel_point_counts = []
 
@@ -327,9 +445,15 @@ def main():
         included_objects.append(name)
 
         if name in {UPPER_DOME_OBJECT, LOWER_DOME_OBJECT}:
-            for polygon_index, point_start, point_count in polygon_point_ranges:
+            for (
+                polygon_index,
+                panel_group_index,
+                point_start,
+                point_count,
+            ) in polygon_point_ranges:
                 radome_panel_object_names.append(name)
                 radome_panel_polygon_indices.append(polygon_index)
+                radome_panel_group_indices.append(panel_group_index)
                 radome_panel_point_starts.append(part_start + point_start)
                 radome_panel_point_counts.append(point_count)
 
@@ -443,6 +567,10 @@ def main():
         radome_panel_object_names=np.asarray(radome_panel_object_names),
         radome_panel_polygon_indices=np.asarray(
             radome_panel_polygon_indices,
+            dtype=np.int64,
+        ),
+        radome_panel_group_indices=np.asarray(
+            radome_panel_group_indices,
             dtype=np.int64,
         ),
         radome_panel_point_starts=np.asarray(

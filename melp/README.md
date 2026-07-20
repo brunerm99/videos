@@ -8,7 +8,7 @@ Reusable ManimGL helpers and radar mobjects for this repository.
 axis match the model's current feed-horn pose:
 
 ```python
-from manimlib import BLUE, DEG
+from manimlib import BLUE, DEG, TEAL
 
 from melp.props import get_wsr88_model
 
@@ -26,6 +26,25 @@ self.add(radar, beam)
 Manim scene units. The returned beam captures the current radar pose. Use
 `always_redraw(lambda: radar.get_beam(...))` when it should follow animated
 azimuth or elevation changes.
+
+Use `get_section(start_range, stop_range)` to isolate a range-resolution
+volume from the current beam:
+
+```python
+volume_bin = beam.get_section(
+    4.0,
+    5.2,
+    color=TEAL,
+    opacity=0.3,
+    depth_test=False,
+)
+self.add(volume_bin)
+```
+
+Both ranges are measured from the beam origin in scene units. The section
+captures the beam's current pose, so wrap the call in `always_redraw(...)` if
+it should follow a moving beam. Disabling depth testing avoids z-fighting when
+the highlighted section is drawn over the full beam.
 
 ### Highlighting a cloud inside a beam
 
@@ -48,6 +67,27 @@ outside opacity drops. `inside_opacity` and `outside_opacity` are multipliers
 of the cloud's existing alpha. The shader mask follows transformed beams and
 clouds automatically. Use `cloud.highlight_in_beam(beam, ...)` for an
 immediate highlight and `cloud.clear_beam_highlight()` to remove it.
+
+## WSR-88 scan controls and radome panels
+
+The built-in `az` and `el` controls keep driving the antenna when their
+animations are nested inside `LaggedStart` or `AnimationGroup`:
+
+```python
+panel_fade = LaggedStart(
+    *[panel.animate.set_opacity(0) for panel in radar.upper_dome],
+    lag_ratio=0.01,
+)
+self.play(
+    LaggedStart(panel_fade, radar.el @ (20 * DEG), lag_ratio=0.4),
+    run_time=2,
+)
+```
+
+With `indexed_radome_panels=True`, the upper dome's direct children are its 180
+authored logical panels, not the 1,401 individual mesh faces. The source face
+IDs remain available through `upper_dome.face_polygon_ids` and each panel's
+`polygon_ids` attribute.
 
 ## PPIGrid
 
