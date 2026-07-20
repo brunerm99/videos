@@ -354,11 +354,43 @@ class Intro(InteractiveScene):
 
         self.wait(0.5)
 
+        zl = Text("Reflectivity", font=FONT).next_to(ppi, UP)
+        zb = RoundedRectangle(
+            width=zl.get_width() * 1.2,
+            height=zl.get_height() * 1.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            stroke_opacity=0,
+            corner_radius=0.2,
+        ).move_to(zl)
+
+        self.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=2.5)
+                .reorient(0, 0, 0, center=ppi.get_center(), height=6)
+                .shift(UP * 0.5),
+                FadeIn(ppi),
+                FadeIn(zb),
+                Write(zl),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.frame.animate(run_time=2).restore(),
+            FadeOut(ppi),
+            FadeOut(zb),
+            FadeOut(zl),
+        )
+
         # self.play(self.frame.animate(run_time=3).shift(OUT * 30))
 
         self.wait(0.5)
 
-        self.frame.save_state()
+        # self.frame.save_state()
         self.east_radar.feed_horn.save_state()
         self.east_radar["waveguides"].save_state()
         self.play(
