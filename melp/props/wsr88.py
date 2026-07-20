@@ -10,6 +10,10 @@ from .beam import Beam
 from .mesh import TriangleMeshMobject
 
 MODEL_PATH = Path(__file__).resolve().parent / "static" / "wsr88_mesh.npz"
+WAVEGUIDE_PART_NAMES = (
+    "Cube.016",
+    "Cube.018",
+)
 
 
 def _update_scan_control(tracker):
@@ -30,8 +34,11 @@ class WSR88Model(Group):
     radome_face_polygon_ids: tuple[int, ...]
     radome_panels_indexed: bool
     antenna: Group
+    waveguides: Group
+    reflector: Mobject
     feed_horn: Group
     feed_horn_mesh: Mobject
+    pedestal: Group
     base: Group
     base_sections: tuple[Mobject, ...]
     base_section_1: Mobject
@@ -41,6 +48,20 @@ class WSR88Model(Group):
     base_section_5: Mobject
     base_section_6: Mobject
     references: Group
+
+    def __getitem__(self, value: int | slice | str):
+        if isinstance(value, str):
+            try:
+                return self.parts[value]
+            except KeyError:
+                raise KeyError(
+                    f"Unknown WSR-88 part {value!r}. "
+                    "Call get_parts() for the available names."
+                ) from None
+        return super().__getitem__(value)
+
+    def get_parts(self) -> list[str]:
+        return list(self.parts)
 
     def get_scan_pivot(self):
         return self.get_elevation_pivot()
@@ -414,6 +435,10 @@ def get_wsr88_model(
             elevation_pivot_anchor,
             elevation_axis_anchor,
         )
+        waveguides = Group(*(parts[name] for name in WAVEGUIDE_PART_NAMES))
+        waveguides.parts = {
+            name: parts[name] for name in WAVEGUIDE_PART_NAMES
+        }
 
         base_sections = tuple(parts[name] for name in base_part_names)
         base = Group(*base_sections)
@@ -426,6 +451,11 @@ def get_wsr88_model(
             and name not in base_part_names
         ]
         fixed_body = Group(*(parts[name] for name in fixed_part_names))
+        pedestal_part_names = [
+            name for name in fixed_part_names if name != lower_dome_part_name
+        ]
+        pedestal = Group(*(parts[name] for name in pedestal_part_names))
+        pedestal.parts = {name: parts[name] for name in pedestal_part_names}
         body = Group(fixed_body, antenna, base)
 
         azimuth_pivot = fixed_body.get_center()
@@ -444,6 +474,7 @@ def get_wsr88_model(
         model = WSR88Model(body, dome, references)
 
         model.parts = parts
+        model.reflector = parts["Circle"]
         model.body = body
         model.fixed_body = fixed_body
         model.dome = dome
@@ -464,13 +495,32 @@ def get_wsr88_model(
         model.antenna.parts = {
             name: parts[name] for name in object_names if name in antenna_part_names
         }
+        model.waveguides = waveguides
         model.feed_horn = feed_horn
         model.feed_horn_mesh = feed_horn_mesh
+        model.pedestal = pedestal
         model.base = base
         model.base.parts = {name: parts[name] for name in base_part_names}
         model.base_sections = base_sections
         for index, section in enumerate(base_sections, start=1):
             setattr(model, f"base_section_{index}", section)
+
+        model.parts.update(
+            {
+                "body": model.body,
+                "fixed_body": model.fixed_body,
+                "dome": model.dome,
+                "upper_dome": model.upper_dome,
+                "lower_dome": model.lower_dome,
+                "antenna": model.antenna,
+                "waveguides": model.waveguides,
+                "reflector": model.reflector,
+                "feed_horn": model.feed_horn,
+                "feed_horn_mesh": model.feed_horn_mesh,
+                "pedestal": model.pedestal,
+                "base": model.base,
+            }
+        )
 
         model.references = references
         model._beam_origin_anchor = beam_origin_anchor

@@ -2,7 +2,7 @@
 
 import os
 import sys
-from random import seed, shuffle
+from random import random, seed, shuffle
 
 import numpy as np
 from dotenv import load_dotenv
@@ -178,6 +178,7 @@ class Intro(InteractiveScene):
         )
 
         self.frame.save_state()
+        self.cloud.set_z_index(10)
         self.play(
             Succession(
                 FadeIn(ppi),
@@ -187,6 +188,7 @@ class Intro(InteractiveScene):
                 0, 0, center=ppi.get_center(), height=5.5
             ),
         )
+        self.cloud.set_z_index(0)
 
         self.wait(0.5)
 
@@ -200,7 +202,13 @@ class Intro(InteractiveScene):
             color=BLUE,
             opacity=0.3,
         )
+        beams = [self.west_beam]
         self.play(ShowCreation(self.west_beam), run_time=3)
+
+        # for beam in beams:
+        #     beam.deactivate_depth_test()
+        # self.bring_to_back(*beams)
+        # self.bring_to_back(self.terrain)
 
         # self.cloud.bind_beam_highlight(
         #     self.west_beam,
@@ -268,7 +276,13 @@ class Intro(InteractiveScene):
             color=BLUE,
             opacity=0.3,
         )
+        beams.append(self.east_beam)
         self.play(ShowCreation(self.east_beam), run_time=3)
+
+        # for beam in beams:
+        #     beam.deactivate_depth_test()
+        # self.bring_to_back(*beams)
+        # self.bring_to_back(self.terrain)
 
         self.wait(0.5)
 
@@ -329,14 +343,224 @@ class Intro(InteractiveScene):
             color=BLUE,
             opacity=0.3,
         )
+        beams.append(self.third_beam)
 
         self.play(ShowCreation(self.third_beam), run_time=3)
 
+        # for beam in beams:
+        #     beam.deactivate_depth_test()
+        # self.bring_to_back(*beams)
+        # self.bring_to_back(self.terrain)
+
         self.wait(0.5)
 
-        self.play(self.frame.animate(run_time=3).shift(OUT * 30))
+        # self.play(self.frame.animate(run_time=3).shift(OUT * 30))
 
-        self.wait(2)
+        self.wait(0.5)
+
+        self.frame.save_state()
+        self.east_radar.feed_horn.save_state()
+        self.east_radar["waveguides"].save_state()
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=3).reorient(
+                    5, 85, 0, center=self.east_radar.antenna.get_center(), height=1
+                ),
+                self.east_radar.feed_horn.animate.set_color(ORANGE),
+                self.east_radar["waveguides"].animate.set_color(ORANGE),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        radars = (self.west_radar, self.east_radar, self.third_radar)
+
+        for beam in beams:
+            beam.deactivate_depth_test()
+
+        self.bring_to_back(self.terrain)
+        self.bring_to_front(*beams)
+        self.bring_to_front(*radars)
+        self.bring_to_front(self.cloud, self.cloud_2)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=3).reorient(
+                    -20,
+                    100,
+                    0,
+                    center=Group(
+                        self.west_radar.antenna,
+                        self.east_radar.antenna,
+                        self.third_radar.antenna,
+                    ).get_center(),
+                    height=12.4,
+                ),
+                self.west_beam.animate.set_opacity(0),
+                self.east_beam.animate.set_opacity(0),
+                self.third_beam.animate.set_opacity(0),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        west_screen_pos = self.frame.to_fixed_frame_point(
+            self.west_radar.antenna.get_center()
+        )
+        west_radar_coords = (
+            Text(
+                "41.262778, -112.447770",
+                font=FONT,
+                fill_color=BLUE,
+            )
+            .scale(0.4)
+            .fix_in_frame()
+            .move_to(west_screen_pos + 0.35 * UP)
+            .set_z_index(100)
+        )
+        east_screen_pos = self.frame.to_fixed_frame_point(
+            self.east_radar.antenna.get_center()
+        )
+        east_radar_coords = (
+            Text(
+                "43.901892, -114.928347",
+                font=FONT,
+                fill_color=BLUE,
+            )
+            .scale(0.4)
+            .fix_in_frame()
+            .move_to(east_screen_pos + 0.35 * UP)
+            .set_z_index(100)
+        )
+        third_screen_pos = self.frame.to_fixed_frame_point(
+            self.third_radar.antenna.get_center()
+        )
+        third_radar_coords = (
+            Text(
+                "41.239847, -110.293874",
+                font=FONT,
+                fill_color=BLUE,
+            )
+            .scale(0.4)
+            .fix_in_frame()
+            .move_to(third_screen_pos + 0.35 * UP)
+            .set_z_index(100)
+        )
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(
+                    west_radar_coords,
+                    rate_func=utils.rate_functions.overshoot,
+                    run_time=0.5,
+                ),
+                GrowFromCenter(
+                    third_radar_coords,
+                    rate_func=utils.rate_functions.overshoot,
+                    run_time=0.5,
+                ),
+                GrowFromCenter(
+                    east_radar_coords,
+                    rate_func=utils.rate_functions.overshoot,
+                    run_time=0.5,
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            FadeOut(west_radar_coords),
+            FadeOut(east_radar_coords),
+            FadeOut(third_radar_coords),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.frame.animate.reorient(
+                10, 102, 0, center=self.cloud.get_center(), height=2.5
+            ).shift(IN * 0.3)
+        )
+
+        seed(0)
+
+        def get_drop_spec():
+            return (
+                random.random() * 2 - 1,
+                random.random() * 0.8 - 0.4,
+                random.random() * 0.5,
+                random.random() * 0.2,
+            )
+
+        n_drops = 20
+        cloud_bottom = self.cloud.get_bounding_box_point(IN)
+        drop_specs = [get_drop_spec() for _ in range(n_drops)]
+        self.raindrops = []
+        for x_offset, y_offset, length, gap in drop_specs:
+            drop = (
+                Cylinder(
+                    height=length,
+                    radius=0.014,
+                    axis=IN,
+                    resolution=(24, 3),
+                    color=BLUE,
+                    shading=(0.15, 0.35, 0.2),
+                )
+                .rotate(-20 * DEG, axis=UP)
+                .set_opacity(0.82)
+            )
+            drop.move_to(
+                cloud_bottom
+                + x_offset * RIGHT
+                + y_offset * UP
+                + (0.5 * length + gap) * IN
+            )
+            self.raindrops.append(drop)
+
+        # self.add(*self.raindrops)
+        self.play(
+            LaggedStart(
+                *[ShowCreation(m, run_time=0.4) for m in self.raindrops],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        flake_specs = [get_drop_spec() for _ in range(n_drops)]
+        self.snowflakes = []
+        for x_offset, y_offset, length, gap in flake_specs:
+            drop = Sphere(
+                radius=random.random() * 0.05 + 0.02,
+                color=WHITE,
+                resolution=(16, 8),
+                shading=(0.1, 0.25, 0.15),
+            ).set_opacity(0.82)
+            drop.move_to(
+                cloud_bottom
+                + x_offset * RIGHT
+                + y_offset * UP
+                + (0.5 * length + gap) * IN
+            )
+            self.snowflakes.append(drop)
+
+        self.play(
+            LaggedStart(
+                *[Uncreate(m, run_time=0.4) for m in self.raindrops],
+                *[ShowCreation(m, run_time=0.4) for m in self.snowflakes],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.frame.animate.shift(OUT * 10))
+
+        # self.wait(2)
 
         self.embed()
 
