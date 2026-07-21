@@ -36,7 +36,7 @@ def fh(scene, scale=1):
     return scene.frame.get_height() * scale
 
 
-def fw(scene, scale=1):
+def fw(scene, scale: float = 1):
     return scene.frame.get_width() * scale
 
 
