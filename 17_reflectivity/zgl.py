@@ -964,6 +964,27 @@ class WeatherRadarEqn(InteractiveScene):
             theta=0,  # Beam centerline
         )
 
+        self.play()
+
+        rres_line_start = self.radar.beam_location_to_point(range=1.5, theta=6 * DEG)
+        rres_line_end = self.radar.beam_location_to_point(
+            range=1.5 + ~rres, theta=6 * DEG
+        )
+        rres_line = Line(
+            self.frame.to_fixed_frame_point(rres_line_start),
+            self.frame.to_fixed_frame_point(rres_line_end),
+        )
+        # (
+        #     Sphere(
+        #         radius=0.05,
+        #         color=WHITE,
+        #         resolution=(16, 8),
+        #         shading=(0.1, 0.25, 0.15),
+        #     )
+        #     .set_opacity(1)
+        #     .move_to()
+        # )
+
         self.embed()
 
         # self.add(self.radar, self.terrain)
