@@ -11,7 +11,7 @@ from manimlib import *
 sys.path.insert(0, "..")
 load_dotenv()
 
-from melp import VT, fh, fw, get_nexrad_product_ppi_data
+from melp import VT, fh, fw, get_nexrad_product_ppi_data, unit
 from melp.props import (
     Beam,
     Cloud,
@@ -798,10 +798,43 @@ class WeatherRadarEqn(InteractiveScene):
         beam_range = VT(0.1)
         beam_opacity = VT(0)
         self.beam = always_redraw(
-            lambda: self.radar.get_beam(8 * DEG, ~beam_range, opacity=~beam_opacity)
+            lambda: self.radar.get_beam(
+                8 * DEG,
+                ~beam_range,
+                opacity=~beam_opacity,
+            ).deactivate_depth_test()
         )
 
+        def get_beam_edges():
+            origin = self.beam.get_origin()
+            direction = self.beam.get_direction()
+            camera_direction = self.frame.get_implied_camera_location() - origin
+            screen_side = np.cross(camera_direction, direction)
+            if np.linalg.norm(screen_side) < 1e-8:
+                camera_right = self.frame.get_inverse_camera_rotation_matrix()[0]
+                screen_side = camera_right - np.dot(camera_right, direction) * direction
+            screen_side = unit(screen_side)
+            base_center = self.beam.get_end()
+            base_radius = self.beam.get_base_radius()
+            stroke_opacity = np.clip(2.5 * ~beam_opacity, 0, 1)
+            return VGroup(
+                *[
+                    Line(
+                        origin,
+                        base_center + sign * base_radius * screen_side,
+                        stroke_color=BEAM_COLOR,
+                        stroke_width=2,
+                        stroke_opacity=stroke_opacity,
+                    )
+                    for sign in (-1, 1)
+                ]
+            ).deactivate_depth_test()
+
+        beam_edges = always_redraw(get_beam_edges)
+
         self.add(self.beam)
+        self.bring_to_front(self.radar)
+        self.add(beam_edges)
 
         pt = pr_eqn1p2[3:5]
         pt.save_state()
@@ -835,7 +868,7 @@ class WeatherRadarEqn(InteractiveScene):
                     140, 85, 0, center=self.radar.waveguides.get_center(), height=1
                 ).shift(OUT * 0.2),
                 self.radar.waveguides.animate.set_color(RED),
-                lag_ratio=0.3,
+                lag_ratio=0.6,
             )
         )
 
@@ -893,11 +926,12 @@ class WeatherRadarEqn(InteractiveScene):
         vol_end = VT(0.1)
         vol_opacity = VT(0)
         rres = VT(0.1)
+        resvol_color_interp = VT(0)
         self.resvol = always_redraw(
             lambda: self.beam.get_section(
                 ~vol_start,
                 ~vol_start + ~rres,
-                color=GATE_COLOR,
+                color=interpolate_color(GATE_COLOR, RED, ~resvol_color_interp),
                 opacity=~vol_opacity,
                 shading=(0.08, 0.18, 0.12),
                 depth_test=False,
@@ -905,6 +939,8 @@ class WeatherRadarEqn(InteractiveScene):
             )
         )
         self.add(self.resvol)
+        self.bring_to_front(self.radar)
+        self.bring_to_front(beam_edges)
 
         pr_eqn1p3 = Tex(
             r"P_r = \frac{P_t G^2}{(4 \pi)^3 L} "
@@ -961,28 +997,196 @@ class WeatherRadarEqn(InteractiveScene):
 
         beam_point = self.radar.beam_location_to_point(
             range=4,
-            theta=0,  # Beam centerline
+            az=0,
+            el=0,
         )
 
         self.play()
 
-        rres_line_start = self.radar.beam_location_to_point(range=1.5, theta=6 * DEG)
+        self.play(vol_start @ 1.5, self.frame.animate.shift(OUT * 0.5))
+
+        self.wait(0.5)
+
+        rres_line_start = self.radar.beam_location_to_point(
+            range=1.5,
+            az=0,
+            el=6 * DEG,
+        )
         rres_line_end = self.radar.beam_location_to_point(
-            range=1.5 + ~rres, theta=6 * DEG
+            range=1.5 + ~rres,
+            az=0,
+            el=6 * DEG,
         )
-        rres_line = Line(
-            self.frame.to_fixed_frame_point(rres_line_start),
-            self.frame.to_fixed_frame_point(rres_line_end),
+        dot1 = (
+            Sphere(
+                radius=0.05,
+                color=WHITE,
+                resolution=(16, 8),
+                shading=(0.1, 0.25, 0.15),
+            )
+            .set_opacity(1)
+            .move_to(rres_line_start)
         )
-        # (
-        #     Sphere(
-        #         radius=0.05,
-        #         color=WHITE,
-        #         resolution=(16, 8),
-        #         shading=(0.1, 0.25, 0.15),
-        #     )
-        #     .set_opacity(1)
-        #     .move_to()
+        dot2 = (
+            Sphere(
+                radius=0.05,
+                color=WHITE,
+                resolution=(16, 8),
+                shading=(0.1, 0.25, 0.15),
+            )
+            .set_opacity(1)
+            .move_to(rres_line_end)
+        )
+        rres_line = Line(dot1.get_center(), dot2.get_center())
+        rres_label = Tex(r"\Delta R").fix_in_frame()
+
+        rres_label_opacity = VT(0)
+
+        def position_rres_label(label):
+            return (
+                label.next_to(
+                    self.frame.to_fixed_frame_point(rres_line.get_center()),
+                    UP,
+                    SMALL_BUFF * 1.5,
+                )
+                .shift(LEFT * SMALL_BUFF * 0.7)
+                .set_opacity(~rres_label_opacity)
+            )
+
+        position_rres_label(rres_label)
+        rres_label.add_updater(position_rres_label)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(rres_line),
+                rres_label_opacity @ 1,
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        rres_eqn = (
+            Tex(r"\Delta R = \frac{c \tau}{2}").fix_in_frame().next_to(pr_eqn1p3, DOWN)
+        )
+        rres_eqn[4].set_color(RED)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(rres_label[:], rres_eqn[:2]),
+                GrowFromCenter(rres_eqn[2]),
+                GrowFromCenter(rres_eqn[3]),
+                TransformFromCopy(tau, rres_eqn[4]),
+                GrowFromCenter(rres_eqn[5]),
+                GrowFromCenter(rres_eqn[6]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            tau.animate.restore().set_color(YELLOW),
+            pr_eqn1p3[14].animate.set_color(YELLOW),
+            pr_eqn1p3[17:19].animate.set_color(YELLOW),
+        )
+
+        self.wait(0.5)
+
+        self.play(rres_eqn[3:].animate.set_color(YELLOW))
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[ShrinkToCenter(m) for m in rres_eqn], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        self.play(
+            self.frame.animate.reorient(
+                30, 78, 0, center=self.resvol.get_center(), height=2
+            ).shift(OUT * 0.1)
+        )
+
+        self.wait(0.5)
+
+        theta_line = Line(
+            self.radar.beam_location_to_point(~vol_start + ~rres, el=4 * DEG, az=0),
+            self.radar.beam_location_to_point(~vol_start + ~rres, el=-4 * DEG, az=0),
+        )
+        phi_line = Line(
+            self.radar.beam_location_to_point(~vol_start + ~rres, az=-4 * DEG, el=0),
+            self.radar.beam_location_to_point(~vol_start + ~rres, az=4 * DEG, el=0),
+        )
+
+        theta_label = Tex(r"\angle \theta").fix_in_frame()
+        phi_label = Tex(r"\angle \phi").fix_in_frame()
+
+        theta_opacity = VT(0)
+        phi_opacity = VT(0)
+
+        def position_theta_label(label):
+            return label.set_opacity(~theta_opacity).next_to(
+                self.frame.to_fixed_frame_point(theta_line.get_end()),
+                DOWN,
+            )
+
+        def position_phi_label(label):
+            return label.set_opacity(~phi_opacity).next_to(
+                self.frame.to_fixed_frame_point(phi_line.get_end()),
+                RIGHT,
+            )
+
+        position_theta_label(theta_label)
+        position_phi_label(phi_label)
+        theta_label.add_updater(position_theta_label)
+        phi_label.add_updater(position_phi_label)
+        self.add(theta_label, phi_label)
+
+        self.play(ShowCreation(theta_line), theta_opacity @ 1)
+
+        self.wait(0.5)
+
+        self.play(ShowCreation(phi_line), phi_opacity @ 1)
+
+        self.wait(0.5)
+
+        self.play(
+            self.frame.animate(run_time=2)
+            .reorient(0, 85, 0, center=self.radar.antenna.get_center(), height=4)
+            .shift(OUT * 0.1),
+            theta_opacity @ 0,
+            phi_opacity @ 0,
+            FadeOut(theta_line),
+            FadeOut(phi_line),
+            rres_label_opacity @ 0,
+            FadeOut(rres_line),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    tau.animate.restore().set_color(RED),
+                    pr_eqn1p3[14].animate.set_color(RED),
+                    pr_eqn1p3[17:19].animate.set_color(RED),
+                ),
+                resvol_color_interp @ 1,
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(resvol_color_interp @ 0)
+
+        self.wait(0.5)
+
+        # el_line = Line(
+        #     self.radar.beam_location_to_point(~vol_start + ~rres, 0, 4 * DEG),
+        #     self.radar.beam_location_to_point(~vol_start + ~rres, 0, -4 * DEG),
         # )
 
         self.embed()
