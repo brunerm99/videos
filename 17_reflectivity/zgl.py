@@ -11,7 +11,7 @@ from manimlib import *
 sys.path.insert(0, "..")
 load_dotenv()
 
-from melp import VT, get_nexrad_product_ppi_data
+from melp import VT, fh, fw, get_nexrad_product_ppi_data
 from melp.props import (
     Beam,
     Cloud,
@@ -25,6 +25,8 @@ from melp.props import (
 )
 
 BACKGROUND_COLOR = "#183340"
+RX_COLOR = RED
+TX_COLOR = BLUE
 TOWER_LIGHT = "#DCE6EB"
 TOWER_MID = "#A9BBC4"
 BEAM_COLOR = BLUE
@@ -616,6 +618,108 @@ class NexradPPI(InteractiveScene):
         self.play(ppi.scan_progress @ 360, run_time=4)
 
         self.embed()
+
+
+class WeatherRadarEqn(InteractiveScene):
+    default_camera_config = {
+        "background_color": BACKGROUND_COLOR,
+        "fps": 60,
+    }
+
+    def refresh_terrain(self):
+        self.terrain.set_profile(self.terrain_profile)
+        for radar, (site_x, site_y) in zip(self.radars, self.terrain_sites):
+            base_z = radar.get_bounding_box()[0, 2]
+            target_z = self.terrain.height_at(site_x, site_y) + 0.015
+            radar.shift((target_z - base_z) * OUT)
+        return self
+
+    def construct(self):
+        self.terrain_profile = {
+            "broad_ridge": 1.25,
+            "east_hill": 0.95,
+            "valley_depth": 0.52,
+            "rolling_ground": 0.4,
+            "fine_relief": 0.12,
+            "minor_ridges": 0.10,
+        }
+        self.terrain_sites = (
+            # (-4.6, -1.55),
+            (4.15, 1.45),
+            # (8, -9),
+        )
+        self.terrain = Terrain(
+            size=(40, 28),
+            profile=self.terrain_profile,
+            level_sites=self.terrain_sites,
+        )
+        west_radar_rotation = 22 * DEG
+        self.radar = place_wsr88_on_terrain(
+            self.terrain_sites[0],
+            self.terrain,
+            rotation=west_radar_rotation,
+        )
+
+        pr_to_z = Tex(r"P_r \rightarrow Z").rescale_to_fit(fw(self, 0.3), 0)
+        pr_to_z[:2].set_color(RED)
+        pr_to_z[3].set_color(BLUE)
+
+        self.play(LaggedStart(*[FadeIn(m, shift=UP) for m in pr_to_z], lag_ratio=0.2))
+
+        self.wait(0.5)
+
+        pr_eqn1 = Tex(
+            r"P_r = \frac{P_t G^2 c \tau \Omega \pi^5 |K|^2 Z}{2 (4 \pi)^3 L \lambda^2 R^2}"
+        ).scale(2)
+        pr_eqn1[:2].set_color(RX_COLOR)
+        pr_eqn1[16].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_to_z[:2], pr_eqn1[:2]),
+                FadeOut(pr_to_z[2]),
+                ReplacementTransform(pr_to_z[3], pr_eqn1[16]),
+                LaggedStart(
+                    *[
+                        GrowFromPoint(m, pr_eqn1.get_center())
+                        for m in [*pr_eqn1[2:16], *pr_eqn1[17:]]
+                    ],
+                    lag_ratio=0.05,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        eqn_label = (
+            Text("Weather Radar Equation", font=FONT)
+            .rescale_to_fit(fw(self, 0.7), 0)
+            .next_to(pr_eqn1, UP, fh(self, 1))
+        )
+
+        pr_eqn1.save_state()
+        self.play(Group(eqn_label, pr_eqn1).animate.arrange(DOWN, buff=LARGE_BUFF * 1))
+
+        self.wait(0.5)
+
+        mug = ImageMobject("../15_psat/static/mug.png").rescale_to_fit(fh(self, 0.7), 0)
+
+        self.play(mug.shift(RIGHT * fw(self)).animate.shift(LEFT * fw(self)))
+
+        self.wait(0.5)
+
+        self.play(mug.animate.shift(RIGHT * fw(self)))
+
+        self.wait(0.5)
+
+        self.play(eqn_label.animate.shift(UP * fh(self)), pr_eqn1.animate.restore())
+
+        self.wait(0.5)
+
+        self.embed()
+
+        # self.add(self.radar, self.terrain)
 
 
 class BeamVolumeParticles(InteractiveScene):
