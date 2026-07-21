@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from manimlib import Arc, BLUE, ORIGIN, RIGHT, TAU, Cone, DotCloud, ParametricSurface
+from manimlib import BLUE, ORIGIN, RIGHT, TAU, Arc, Cone, DotCloud, ParametricSurface
 
 __all__ = ["Beam"]
 
@@ -112,16 +112,12 @@ class Beam(Cone):
         if not np.isfinite(arc_range) or arc_range <= 0:
             raise ValueError("range must be positive and finite")
         if arc_range > beam_range:
-            raise ValueError(
-                f"range must not exceed the beam range ({beam_range:g})"
-            )
+            raise ValueError(f"range must not exceed the beam range ({beam_range:g})")
 
         origin = self.get_origin()
         direction = self.get_direction()
         arc_midpoint = origin + arc_range * direction
-        camera_direction = (
-            camera_frame.get_implied_camera_location() - arc_midpoint
-        )
+        camera_direction = camera_frame.get_implied_camera_location() - arc_midpoint
         camera_distance = np.linalg.norm(camera_direction)
         camera_view_direction = (
             camera_direction / camera_distance
@@ -235,10 +231,7 @@ class Beam(Cone):
             raise ValueError("count must be a positive integer")
         count = int(numeric_count)
         max_radius_fraction = float(max_radius_fraction)
-        if (
-            not np.isfinite(max_radius_fraction)
-            or not 0 < max_radius_fraction <= 1
-        ):
+        if not np.isfinite(max_radius_fraction) or not 0 < max_radius_fraction <= 1:
             raise ValueError("max_radius_fraction must be in (0, 1]")
 
         rng = np.random.default_rng(seed)
@@ -248,17 +241,14 @@ class Beam(Cone):
 
         distances = np.cbrt(rng.uniform(start_range**3, stop_range**3, count))
         angles = rng.uniform(0, TAU, count)
-        radial_fractions = np.sqrt(
-            rng.uniform(0, max_radius_fraction**2, count)
-        )
+        radial_fractions = np.sqrt(rng.uniform(0, max_radius_fraction**2, count))
         ring_indices = angles * len(base_ring) / TAU
         lower_indices = np.floor(ring_indices).astype(int) % len(base_ring)
         upper_indices = (lower_indices + 1) % len(base_ring)
         interpolation = ring_indices - np.floor(ring_indices)
-        boundary_points = (
-            (1 - interpolation)[:, None] * base_ring[lower_indices]
-            + interpolation[:, None] * base_ring[upper_indices]
-        )
+        boundary_points = (1 - interpolation)[:, None] * base_ring[
+            lower_indices
+        ] + interpolation[:, None] * base_ring[upper_indices]
         range_fractions = distances / beam_range
         points = (
             origin

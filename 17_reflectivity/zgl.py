@@ -653,11 +653,11 @@ class WeatherRadarEqn(InteractiveScene):
             profile=self.terrain_profile,
             level_sites=self.terrain_sites,
         )
-        west_radar_rotation = 22 * DEG
+        radar_rotation = 22 * DEG
         self.radar = place_wsr88_on_terrain(
             self.terrain_sites[0],
             self.terrain,
-            rotation=west_radar_rotation,
+            rotation=radar_rotation,
         )
 
         pr_to_z = Tex(r"P_r \rightarrow Z").rescale_to_fit(fw(self, 0.3), 0)
@@ -714,8 +714,255 @@ class WeatherRadarEqn(InteractiveScene):
         self.wait(0.5)
 
         self.play(eqn_label.animate.shift(UP * fh(self)), pr_eqn1.animate.restore())
+        self.remove(mug, eqn_label)
 
         self.wait(0.5)
+
+        tower_parts = [
+            *self.radar.base_sections[::-1],
+            self.radar.fixed_body,
+            self.radar.antenna,
+        ]
+        for part in tower_parts:
+            part.set_opacity(0)
+        self.radar.dome.set_opacity(0)
+        self.radar.dome.deactivate_depth_test()
+
+        self.add(self.radar)
+
+        radar_build = LaggedStart(
+            *[part.animate.set_opacity(1) for part in tower_parts],
+            lag_ratio=0.3,
+            run_time=3,
+        )
+        radar_build.group = self.radar
+        radar_build.mobject = self.radar
+
+        pr_eqn1.fix_in_frame()
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    self.frame.animate.reorient(
+                        0, 85, 0, center=self.radar.antenna.get_center(), height=6
+                    ),
+                    pr_eqn1.animate.rescale_to_fit(fw(self, 0.55), 0).next_to(
+                        self.frame.get_top(), DOWN, MED_SMALL_BUFF
+                    ),
+                    LaggedStart(radar_build),
+                    ShowCreation(self.terrain),
+                    lag_ratio=0.3,
+                ),
+                AnimationGroup(
+                    self.radar.az @ (-60 * DEG),
+                    self.radar.el @ (20 * DEG),
+                    run_time=2,
+                ),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        pr_eqn1p2 = Tex(
+            r"P_r = \frac{P_t G^2}{(4 \pi)^3 L} "
+            r"\frac{c \tau \Omega \pi^5 |K|^2 Z}{2 \lambda^2 R^2}"
+        )
+        pr_eqn1p2.fix_in_frame().rescale_to_fit(fw(self, 0.7), 0).move_to(pr_eqn1)
+        pr_eqn1p2[:2].set_color(RX_COLOR)
+        pr_eqn1p2[23].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_eqn1[:3], pr_eqn1p2[:3]),
+                ReplacementTransform(pr_eqn1[7:17], pr_eqn1p2[14:24]),
+                ReplacementTransform(pr_eqn1[3:7], pr_eqn1p2[3:7]),
+                ReplacementTransform(pr_eqn1[17], pr_eqn1p2[24]),
+                ReplacementTransform(pr_eqn1[19:25], pr_eqn1p2[8:14], path_arc=-PI),
+                ReplacementTransform(pr_eqn1[18], pr_eqn1p2[25]),
+                GrowFromCenter(pr_eqn1p2[7]),
+                ReplacementTransform(pr_eqn1[25:29], pr_eqn1p2[26:31]),
+                lag_ratio=0.3,
+            ),
+            run_time=3.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pr_eqn1p2[8:14].animate.set_color(ORANGE),
+            pr_eqn1p2[3:8].animate.set_color(ORANGE),
+        )
+
+        self.wait(0.5)
+
+        beam_range = VT(0.1)
+        beam_opacity = VT(0)
+        self.beam = always_redraw(
+            lambda: self.radar.get_beam(8 * DEG, ~beam_range, opacity=~beam_opacity)
+        )
+
+        self.add(self.beam)
+
+        pt = pr_eqn1p2[3:5]
+        pt.save_state()
+        self.play(
+            LaggedStart(
+                pt.animate.set_color(YELLOW)
+                .scale(1.2)
+                .shift(UL * pt.get_height() * 0.2),
+                self.frame.animate.reorient(
+                    0, 85, 0, center=self.radar.antenna.get_center(), height=4
+                ),
+                beam_opacity @ 0.4,
+                beam_range @ 8,
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(pt.animate.restore())
+
+        self.wait(0.5)
+
+        l = pr_eqn1p2[13]
+        l.save_state()
+        self.radar.waveguides.save_state()
+        self.play(
+            LaggedStart(
+                l.animate.set_color(YELLOW).scale(1.2).shift(DR * l.get_height() * 0.2),
+                self.frame.animate.reorient(
+                    140, 85, 0, center=self.radar.waveguides.get_center(), height=1
+                ).shift(OUT * 0.2),
+                self.radar.waveguides.animate.set_color(RED),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.radar.waveguides.animate.restore(),
+            self.frame.animate.reorient(
+                0, 85, 0, center=self.radar.antenna.get_center(), height=4
+            ),
+            l.animate.restore(),
+        )
+
+        self.wait(0.5)
+
+        g2 = pr_eqn1p2[5:7]
+        g2.save_state()
+        self.radar.reflector.save_state()
+        self.play(
+            LaggedStart(
+                g2.animate.set_color(YELLOW).scale(1.2).shift(UR * 0.2),
+                self.frame.animate.reorient(
+                    10, 85, 0, center=self.radar.antenna.get_center(), height=2
+                ).shift(OUT * 0.2),
+                self.radar.reflector.animate.set_color(GREEN),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.radar.reflector.animate.restore(),
+            g2.animate.restore(),
+            self.frame.animate.reorient(
+                0, 85, 0, center=self.radar.antenna.get_center(), height=4
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            pr_eqn1p2[8:13]
+            .animate(
+                rate_func=utils.rate_functions.there_and_back_with_pause,
+                run_time=2,
+            )
+            .set_color(YELLOW)
+            .shift(DL * 0.2),
+        )
+
+        self.wait(0.5)
+
+        vol_start = VT(0)
+        vol_end = VT(0.1)
+        vol_opacity = VT(0)
+        rres = VT(0.1)
+        self.resvol = always_redraw(
+            lambda: self.beam.get_section(
+                ~vol_start,
+                ~vol_start + ~rres,
+                color=GATE_COLOR,
+                opacity=~vol_opacity,
+                shading=(0.08, 0.18, 0.12),
+                depth_test=False,
+                resolution=(36, 8),
+            )
+        )
+        self.add(self.resvol)
+
+        pr_eqn1p3 = Tex(
+            r"P_r = \frac{P_t G^2}{(4 \pi)^3 L} "
+            r"\frac{c \tau \Omega}{2} "
+            r"\frac{\pi^5 |K|^2 Z}{\lambda^2 R^2}"
+        )
+        pr_eqn1p3.fix_in_frame()
+        pr_eqn1p3.rescale_to_fit(fw(self, 1), 0).move_to(pr_eqn1p2)
+        pr_eqn1p3[:2].set_color(RX_COLOR)
+        pr_eqn1p3[25].set_color(BLUE)
+        pr_eqn1p3[8:14].set_color(ORANGE)
+        pr_eqn1p3[3:8].set_color(ORANGE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_eqn1p2[:3], pr_eqn1p3[:3]),
+                ReplacementTransform(pr_eqn1p2[3:14], pr_eqn1p3[3:14]),
+                ReplacementTransform(pr_eqn1p2[17:24], pr_eqn1p3[19:26]),
+                ReplacementTransform(pr_eqn1p2[24], pr_eqn1p3[26]),
+                ReplacementTransform(pr_eqn1p2[26:30], pr_eqn1p3[27:31]),
+                ReplacementTransform(pr_eqn1p2[14:17], pr_eqn1p3[14:17]),
+                GrowFromCenter(pr_eqn1p3[17]),
+                ReplacementTransform(pr_eqn1p2[25], pr_eqn1p3[18]),
+                lag_ratio=0.3,
+                run_time=2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(pr_eqn1p3[14:19].animate.set_color(RED))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                beam_opacity @ 0.1,
+                vol_opacity @ 0.5,
+                Succession(
+                    rres @ 0.5,
+                    vol_start.animate(run_time=3).set_value(6),
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        tau = pr_eqn1p3[15]
+        tau.save_state()
+        self.play(tau.animate.set_color(YELLOW).scale(1.2).shift(UP * 0.2))
+
+        self.wait(0.5)
+
+        beam_point = self.radar.beam_location_to_point(
+            range=4,
+            theta=0,  # Beam centerline
+        )
 
         self.embed()
 
