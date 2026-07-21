@@ -107,14 +107,15 @@ class WSR88Model(Group):
     def get_beam_direction(self):
         return self.get_feed_horn_direction()
 
-    def beam_location_to_point(self, range, theta):
-        """Return a point at a signed vertical angle from the beam centerline."""
+    def beam_location_to_point(self, range, az, el):
+        """Return a point at beam-relative azimuth and elevation offsets."""
         beam_range = float(range)
-        theta = float(theta)
+        az = float(az)
+        el = float(el)
         if not np.isfinite(beam_range) or beam_range < 0:
             raise ValueError("range must be nonnegative and finite")
-        if not np.isfinite(theta):
-            raise ValueError("theta must be finite")
+        if not np.isfinite(az) or not np.isfinite(el):
+            raise ValueError("az and el must be finite")
 
         direction = self.get_beam_direction()
         scan_up = self.get_scan_up_direction()
@@ -126,7 +127,13 @@ class WSR88Model(Group):
             beam_up_norm = np.linalg.norm(beam_up)
         beam_up /= beam_up_norm
 
-        point_direction = np.cos(theta) * direction + np.sin(theta) * beam_up
+        beam_left = np.cross(beam_up, direction)
+        beam_left /= np.linalg.norm(beam_left)
+        point_direction = (
+            np.cos(el)
+            * (np.cos(az) * direction + np.sin(az) * beam_left)
+            + np.sin(el) * beam_up
+        )
         return self.get_beam_origin() + beam_range * point_direction
 
     def get_beam(self, beamwidth, range, **kwargs) -> Beam:
