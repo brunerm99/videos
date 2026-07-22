@@ -12,7 +12,7 @@ from manimlib import *
 sys.path.insert(0, "..")
 load_dotenv()
 
-from melp import VT, fh, fw, get_nexrad_product_ppi_data, unit
+from melp import VT, VideoMobject, fh, fw, get_nexrad_product_ppi_data, unit
 from melp.props import (
     Beam,
     Cloud,
@@ -1516,6 +1516,156 @@ class WeatherRadarEqn(InteractiveScene):
         self.embed()
 
 
+class Dbz(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        video = VideoMobject("./dbz_callback.mp4", speed=1)
+        box = SurroundingRectangle(video, buff=0)
+        video_label = Text("earlier...", font=FONT).next_to(
+            box, UP, SMALL_BUFF, aligned_edge=LEFT
+        )
+        callback = Group(video, box, video_label)
+
+        self.play(callback.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
+
+        self.wait(video.get_time_remaining() - 0.5)
+        video.pause()
+
+        self.wait(0.5)
+
+        self.play(callback.animate.shift(UP * fh(self)))
+        self.remove(callback)
+
+        lin_units = Tex(r"\frac{\text{mm}^6}{\text{m}^3}").rescale_to_fit(
+            fh(self, 0.3), 1
+        )
+
+        dbz_units = Tex(
+            r"\text{dBZ} = 10 \log{\left(\frac{\text{mm}^6}{\text{m}^3} \right)}"
+        ).rescale_to_fit(fh(self, 0.3), 1)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in lin_units], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    *[
+                        ReplacementTransform(a, b)
+                        for a, b in zip(lin_units, dbz_units[10:16])
+                    ],
+                    lag_ratio=0.05,
+                ),
+                LaggedStart(
+                    GrowFromCenter(dbz_units[0]),
+                    GrowFromCenter(dbz_units[1]),
+                    GrowFromCenter(dbz_units[2]),
+                    GrowFromCenter(dbz_units[3]),
+                    GrowFromCenter(dbz_units[4]),
+                    GrowFromCenter(dbz_units[5]),
+                    GrowFromCenter(dbz_units[6]),
+                    GrowFromCenter(dbz_units[7]),
+                    GrowFromCenter(dbz_units[8]),
+                    GrowFromCenter(dbz_units[9]),
+                    GrowFromCenter(dbz_units[16]),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        z_data = get_nexrad_product_ppi_data(
+            "reflectivity",
+            s3_key="2024/05/07/KTLX/KTLX20240507_023811_V06",
+            sweep="lowest",
+            max_range_km=150,
+            resolution=600,
+        )
+        ppi = PPIGrid(
+            z_data,
+            colorbar_label=z_data["units"],
+            font=FONT,
+            init_scan_progress=0,
+        ).rescale_to_fit(fh(self, 0.8), 1)
+        ppi.remove(ppi.colorbar_label)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeOut(m) for m in dbz_units[3:]], lag_ratio=0.1),
+                dbz_units[:3]
+                .animate.rescale_to_fit(ppi.colorbar_label.get_height(), 1)
+                .move_to(ppi.colorbar_label),
+                FadeIn(ppi),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(ppi.scan_progress @ 360, run_time=3)
+
+        self.wait(0.5)
+
+        dbz_arrow = CurvedArrow(
+            ppi.colorbar_ticks[0].get_right() + RIGHT * 0.1,
+            ppi.colorbar_ticks[-1].get_right() + RIGHT * 0.1,
+            angle=PI / 2,
+        )
+
+        self.play(GrowArrow(dbz_arrow))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(dbz_arrow))
+
+        self.wait(0.5)
+
+        lin_min = (
+            Text("0.01", font=FONT)
+            .rescale_to_fit(ppi.colorbar_ticks[0].get_height(), 1)
+            .next_to(ppi.colorbar_ticks[0], RIGHT, MED_SMALL_BUFF)
+        )
+        lin_max = (
+            Text("10,000,000", font=FONT)
+            .rescale_to_fit(ppi.colorbar_ticks[0].get_height() * 1.2, 1)
+            .next_to(ppi.colorbar_ticks[-1], RIGHT, MED_SMALL_BUFF)
+        )
+
+        lin_arrow = CurvedArrow(
+            lin_min.get_right() + RIGHT * 0.1,
+            lin_max.get_right() + RIGHT * 0.1,
+            angle=PI / 2,
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeIn(m) for m in lin_min], lag_ratio=0.1),
+                LaggedStart(*[FadeIn(m) for m in lin_max], lag_ratio=0.1),
+                lag_ratio=0.4,
+            )
+        )
+        self.play(GrowArrow(lin_arrow))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[m.animate.set_color(GREEN).scale(1.5) for m in ppi.colorbar_ticks],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(*[FadeOut(m) for m in self.mobjects])
+
+        self.embed()
+
+
 class BeamVolumeParticles(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR}
 
@@ -2074,31 +2224,33 @@ class ResolutionVolumeP2(InteractiveScene):
         self.embed()
 
 
-class PowerVsZ(InteractiveScene):
+class PowerVsZP1(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
         self.cloud = Cloud(width=2.4)
 
-        rng = np.random.default_rng(0)
+        rng = np.random.default_rng(1)
 
         def get_drop_spec():
             return (
                 rng.uniform(-1, 1),
                 rng.uniform(-0.4, 0.4),
-                rng.uniform(0, 0.5),
+                rng.uniform(0, 0.3),
                 rng.uniform(0, 1),
             )
 
+        max_drops = 100
         n_drops = VT(20)
         show_rain = VT(0)
-        drop_specs = [get_drop_spec() for _ in range(int(~n_drops))]
+        drop_specs = [get_drop_spec() for _ in range(max_drops)]
+        shuffle(drop_specs)
 
         def get_raindrops():
             cloud_bottom = self.cloud.get_bounding_box_point(IN)
             raindrops = []
 
-            for x_offset, y_offset, length, gap in drop_specs:
+            for x_offset, y_offset, length, gap in drop_specs[: int(~n_drops)]:
                 drop = (
                     Cylinder(
                         height=length * ~show_rain,
@@ -2122,6 +2274,8 @@ class PowerVsZ(InteractiveScene):
 
         self.raindrops = always_redraw(get_raindrops)
 
+        hud_opacity = VT(1)
+
         dbz_slider = (
             NumberLine(
                 x_range=[-20, 70, 10],
@@ -2134,26 +2288,89 @@ class PowerVsZ(InteractiveScene):
                 },
             )
             .fix_in_frame()
-            .shift(LEFT * fw(self, 0.25))
+            .shift(LEFT * fw(self, 0.35))
             .rotate(PI / 2)
         )
         for num in dbz_slider.numbers:
             num.rotate(-PI / 2)
+        dbz_label = (
+            Text("Z [dBZ]", font=FONT)
+            .fix_in_frame()
+            .next_to(dbz_slider, UP, MED_SMALL_BUFF)
+        )
 
         self.add(self.raindrops)
 
+        dbz_value = VT(10)
+        dbz_value_dot = always_redraw(
+            lambda: Dot(
+                dbz_slider.n2p(~dbz_value),
+                radius=DEFAULT_DOT_RADIUS * 2,
+                color=BLUE,
+                fill_color=BLUE,
+                fill_opacity=~hud_opacity,
+                stroke_opacity=~hud_opacity,
+            ).fix_in_frame()
+        )
+
         self.play(
             ShowCreation(dbz_slider),
+            Write(dbz_label),
+            ShowCreation(dbz_value_dot),
             self.frame.animate.reorient(
                 0, 90, 0, center=self.cloud.get_center(), height=4
-            ).shift(LEFT + IN),
-            ShowCreation(self.cloud),
+            ).shift(IN),
+            LaggedStart(ShowCreation(self.cloud), show_rain @ 1, lag_ratio=0.9),
             run_time=3,
         )
 
         self.wait(0.5)
 
-        self.play(show_rain @ 1)
+        frame_rotation = VT(0)
+
+        def rotate_frame(frame):
+            frame.reorient(
+                ~frame_rotation, 90, 0, center=self.cloud.get_center(), height=4
+            ).shift(IN)
+
+        # self.frame.add_updater(rotate_frame)
+
+        total_time = 10
+        self.play(
+            n_drops.animate(run_time=total_time / 2).set_value(100),
+            dbz_value.animate(run_time=total_time / 2).set_value(60),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            n_drops.animate(run_time=total_time / 2).set_value(10),
+            dbz_value.animate(run_time=total_time / 2).set_value(5),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    n_drops.animate(run_time=total_time / 2).set_value(100),
+                    dbz_value.animate(run_time=total_time / 2).set_value(60),
+                    run_time=3,
+                ),
+                AnimationGroup(
+                    self.frame.animate.reorient(
+                        0, 90, 0, center=self.raindrops.get_center() + UP, height=0.5
+                    ),
+                    FadeOut(dbz_slider),
+                    FadeOut(dbz_label),
+                    hud_opacity @ 0,
+                    run_time=4,
+                ),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(2)
 
         # self.add(*self.raindrops)
         # self.play(
@@ -2162,5 +2379,232 @@ class PowerVsZ(InteractiveScene):
         #         lag_ratio=0.1,
         #     )
         # )
+
+        self.embed()
+
+
+class PowerVsZP2(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        self.terrain_profile = {
+            "broad_ridge": 1.25,
+            "east_hill": 0.95,
+            "valley_depth": 0.52,
+            "rolling_ground": 0.4,
+            "fine_relief": 0.12,
+            "minor_ridges": 0.10,
+        }
+        self.terrain_sites = ((4.15, 1.45),)
+        self.terrain = Terrain(
+            size=(40, 28),
+            profile=self.terrain_profile,
+            level_sites=self.terrain_sites,
+        )
+        radar_rotation = 22 * DEG
+        self.radar = place_wsr88_on_terrain(
+            self.terrain_sites[0],
+            self.terrain,
+            rotation=radar_rotation,
+        )
+
+        z = Tex(r"Z").scale(2)
+        pr = Tex(r"P_r").scale(2)
+        zep = Tex(r"Z = P_r").scale(2)
+        zsp = Tex(r"Z \sim P_r").scale(2)
+
+        self.play(GrowFromCenter(z))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(z[0], zep[0]),
+                GrowFromCenter(zep[1]),
+                zep[2:].shift(RIGHT * fw(self)).animate.shift(LEFT * fw(self)),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                zep[1].animate.shift(UP).set_opacity(0.2),
+                AnimationGroup(
+                    zsp[1].shift(DOWN).set_opacity(0).animate.shift(UP).set_opacity(1),
+                    ReplacementTransform(zep[0], zsp[0]),
+                    ReplacementTransform(zep[2:], zsp[2:]),
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        tower_parts = [
+            *self.radar.base_sections[::-1],
+            self.radar.fixed_body,
+            self.radar.antenna,
+        ]
+        for part in tower_parts:
+            part.set_opacity(0)
+
+        self.radar.dome.set_opacity(0)
+        self.radar.dome.deactivate_depth_test()
+        self.add(self.radar)
+
+        radar_build = LaggedStart(
+            *[part.animate.set_opacity(1) for part in tower_parts],
+            lag_ratio=0.3,
+            run_time=4,
+        )
+        radar_build.group = self.radar
+        radar_build.mobject = self.radar
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(FadeOut(zsp), FadeOut(zep[1])),
+                ShowCreation(self.terrain, run_time=3),
+                self.frame.animate(run_time=3).reorient(
+                    60, 80, 0, center=self.radar.antenna.get_center(), height=4
+                ),
+                radar_build,
+                self.radar.el.animate(run_time=4).set_value(20 * DEG),
+                lag_ratio=0.3,
+            )
+        )
+
+        beam_range = VT(0.1)
+        beam_opacity = VT(0)
+        self.beam = always_redraw(
+            lambda: self.radar.get_beam(
+                8 * DEG, ~beam_range, opacity=~beam_opacity, depth_test=False
+            )
+        )
+        self.add(self.beam)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                beam_opacity @ 0.3,
+                beam_range.animate(run_time=3).set_value(8),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.cloud = (
+            Cloud(width=2.4)
+            .move_to(self.radar.beam_location_to_point(4, 0, 0))
+            .rotate(-PI / 3, axis=OUT)
+            .shift(OUT)
+        )
+
+        rng = np.random.default_rng(1)
+
+        def get_drop_spec():
+            return (
+                rng.uniform(-1, 1),
+                rng.uniform(-0.4, 0.4),
+                rng.uniform(0, 0.3),
+                rng.uniform(0, 1),
+            )
+
+        max_drops = 100
+        n_drops = VT(100)
+        show_rain = VT(0)
+        show_snowflakes = VT(0)
+        drop_specs = [get_drop_spec() for _ in range(max_drops)]
+        shuffle(drop_specs)
+        snowflake_specs = [
+            (*spec, radius)
+            for spec, radius in zip(
+                drop_specs,
+                rng.uniform(0.02, 0.07, max_drops),
+            )
+        ]
+
+        def get_raindrops():
+            cloud_bottom = self.cloud.get_bounding_box_point(IN)
+            raindrops = []
+            active_count = max(0, min(int(~n_drops), max_drops))
+
+            for x_offset, y_offset, length, gap in drop_specs[:active_count:2]:
+                drop = (
+                    Cylinder(
+                        height=length * ~show_rain,
+                        radius=0.014,
+                        axis=IN,
+                        resolution=(24, 3),
+                        color=BLUE,
+                        shading=(0.15, 0.35, 0.2),
+                    )
+                    .rotate(-20 * DEG, axis=UP)
+                    .set_opacity(0.82)
+                )
+                drop.move_to(
+                    cloud_bottom
+                    + x_offset * RIGHT
+                    + y_offset * UP
+                    + (0.5 * length + gap) * IN
+                )
+                raindrops.append(drop)
+            return Group(raindrops)
+
+        def get_snowflakes():
+            cloud_bottom = self.cloud.get_bounding_box_point(IN)
+            snowflakes = []
+            active_count = max(0, min(int(~n_drops), max_drops))
+            snowflake_scale = np.clip(~show_snowflakes, 0, 1)
+            snowflakes_visible = snowflake_scale > 0
+
+            for x_offset, y_offset, length, gap, radius in snowflake_specs[
+                1:active_count:2
+            ]:
+                snowflake = Sphere(
+                    radius=max(radius * snowflake_scale, 1e-6),
+                    color=WHITE,
+                    resolution=(16, 8),
+                    shading=(0.1, 0.25, 0.15),
+                    depth_test=snowflakes_visible,
+                ).set_opacity(0.82 if snowflakes_visible else 0)
+                snowflake.move_to(
+                    cloud_bottom
+                    + x_offset * RIGHT
+                    + y_offset * UP
+                    + (0.5 * length + gap) * IN
+                )
+                snowflakes.append(snowflake)
+            return Group(snowflakes)
+
+        self.raindrops = always_redraw(get_raindrops)
+        self.snowflakes = always_redraw(get_snowflakes)
+        self.add(self.raindrops, self.snowflakes)
+
+        self.play(
+            self.frame.animate.reorient(
+                -20,
+                110,
+                0,
+                center=Group(self.radar.antenna, self.cloud).get_center(),
+                height=5,
+            ),
+            ShowCreation(self.cloud),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                show_rain @ 1,
+                show_snowflakes @ 1,
+                lag_ratio=0.7,
+            ),
+            run_time=4,
+        )
+
+        # self.wait(2)
 
         self.embed()
