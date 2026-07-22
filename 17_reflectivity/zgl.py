@@ -37,10 +37,7 @@ FONT = os.getenv("FONT", "Maple Mono CN")
 
 
 class Intro(InteractiveScene):
-    default_camera_config = {
-        "background_color": BACKGROUND_COLOR,
-        "fps": 60,
-    }
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def refresh_terrain(self):
         self.terrain.set_profile(self.terrain_profile)
@@ -2073,5 +2070,97 @@ class ResolutionVolumeP2(InteractiveScene):
         self.wait(0.5)
 
         self.play(FadeOut(dbz_value), self.frame.animate.shift(OUT * 20))
+
+        self.embed()
+
+
+class PowerVsZ(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        self.cloud = Cloud(width=2.4)
+
+        rng = np.random.default_rng(0)
+
+        def get_drop_spec():
+            return (
+                rng.uniform(-1, 1),
+                rng.uniform(-0.4, 0.4),
+                rng.uniform(0, 0.5),
+                rng.uniform(0, 1),
+            )
+
+        n_drops = VT(20)
+        show_rain = VT(0)
+        drop_specs = [get_drop_spec() for _ in range(int(~n_drops))]
+
+        def get_raindrops():
+            cloud_bottom = self.cloud.get_bounding_box_point(IN)
+            raindrops = []
+
+            for x_offset, y_offset, length, gap in drop_specs:
+                drop = (
+                    Cylinder(
+                        height=length * ~show_rain,
+                        radius=0.014,
+                        axis=IN,
+                        resolution=(24, 3),
+                        color=BLUE,
+                        shading=(0.15, 0.35, 0.2),
+                    )
+                    .rotate(-20 * DEG, axis=UP)
+                    .set_opacity(0.82)
+                )
+                drop.move_to(
+                    cloud_bottom
+                    + x_offset * RIGHT
+                    + y_offset * UP
+                    + (0.5 * length + gap) * IN
+                )
+                raindrops.append(drop)
+            return Group(raindrops)
+
+        self.raindrops = always_redraw(get_raindrops)
+
+        dbz_slider = (
+            NumberLine(
+                x_range=[-20, 70, 10],
+                include_numbers=True,
+                width=fh(self, 0.7),
+                decimal_number_config={
+                    "font_size": 24,
+                    "num_decimal_places": 0,
+                    "text_config": {"font": FONT},
+                },
+            )
+            .fix_in_frame()
+            .shift(LEFT * fw(self, 0.25))
+            .rotate(PI / 2)
+        )
+        for num in dbz_slider.numbers:
+            num.rotate(-PI / 2)
+
+        self.add(self.raindrops)
+
+        self.play(
+            ShowCreation(dbz_slider),
+            self.frame.animate.reorient(
+                0, 90, 0, center=self.cloud.get_center(), height=4
+            ).shift(LEFT + IN),
+            ShowCreation(self.cloud),
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(show_rain @ 1)
+
+        # self.add(*self.raindrops)
+        # self.play(
+        #     LaggedStart(
+        #         *[ShowCreation(m, run_time=0.4) for m in self.raindrops],
+        #         lag_ratio=0.1,
+        #     )
+        # )
 
         self.embed()
