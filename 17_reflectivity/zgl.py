@@ -1001,8 +1001,6 @@ class WeatherRadarEqn(InteractiveScene):
             el=0,
         )
 
-        self.play()
-
         self.play(vol_start @ 1.5, self.frame.animate.shift(OUT * 0.5))
 
         self.wait(0.5)
@@ -1055,6 +1053,7 @@ class WeatherRadarEqn(InteractiveScene):
 
         position_rres_label(rres_label)
         rres_label.add_updater(position_rres_label)
+        self.add(rres_label)
 
         self.play(
             LaggedStart(
@@ -1184,10 +1183,61 @@ class WeatherRadarEqn(InteractiveScene):
 
         self.wait(0.5)
 
-        # el_line = Line(
-        #     self.radar.beam_location_to_point(~vol_start + ~rres, 0, 4 * DEG),
-        #     self.radar.beam_location_to_point(~vol_start + ~rres, 0, -4 * DEG),
-        # )
+        blue_section = pr_eqn1p3[19:]
+        blue_section.save_state()
+        self.play(blue_section.animate.set_color(BLUE))
+
+        self.wait(0.5)
+
+        self.cloud = Cloud(width=2.4).move_to(
+            self.radar.beam_location_to_point(3, az=0, el=0)
+        )
+
+        self.play(
+            self.frame.animate.reorient(
+                -63,
+                100,
+                0,
+                center=Group(self.radar.antenna, self.cloud).get_center(),
+                height=4,
+            ).shift(UP * 0.5 + OUT * 0.3),
+            vol_start @ 3.1,
+        )
+
+        self.wait(0.5)
+
+        particle_count = 20
+        particles = self.beam.get_section_particles(
+            ~vol_start,
+            ~vol_start + ~rres,
+            count=particle_count,
+            max_radius_fraction=0.44,
+            seed=8,
+            radius=0.04,
+            color=BLUE_B,
+            glow_factor=0.3,
+        )
+
+        particles.set_color_by_gradient(BLUE_B, BLUE_A, WHITE)
+
+        rng = np.random.default_rng(10)
+        particles_per_size = particle_count // 3
+        particle_radii = np.concatenate(
+            [
+                rng.uniform(0.022, 0.038, particles_per_size),
+                rng.uniform(0.042, 0.068, particles_per_size),
+                rng.uniform(
+                    0.075,
+                    0.115,
+                    particle_count - 2 * particles_per_size,
+                ),
+            ]
+        )
+        rng.shuffle(particle_radii)
+        particles.set_radii(np.zeros(len(particle_radii)))
+
+        self.add(particles)
+        self.play(particles.animate.set_radii(particle_radii), run_time=4)
 
         self.embed()
 
