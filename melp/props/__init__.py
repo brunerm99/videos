@@ -3,6 +3,7 @@ from .cloud import Cloud
 from .mesh import TriangleMeshMobject
 from .ppi import PPIGrid, field_to_rgba, polar_to_cartesian
 from .terrain import Terrain
+from .video import VideoMobject
 from .wsr88 import (
     MODEL_PATH,
     WSR88Model,
@@ -18,6 +19,7 @@ __all__ = [
     "PPIGrid",
     "Terrain",
     "TriangleMeshMobject",
+    "VideoMobject",
     "WSR88Model",
     "field_to_rgba",
     "get_wsr88_model",

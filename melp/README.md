@@ -2,6 +2,25 @@
 
 Reusable ManimGL helpers and radar mobjects for this repository.
 
+## Video playback
+
+`VideoMobject` decodes video frames with FFmpeg and updates a ManimGL image
+texture. Durations and remaining times are returned in seconds:
+
+```python
+from melp import VideoMobject
+
+video = VideoMobject("clip.mp4", speed=1.0)
+self.add(video)
+
+video.pause()
+video.play()
+video.set_speed(2)
+
+duration = video.get_duration()
+remaining = video.get_time_remaining()
+```
+
 ## WSR-88 beams
 
 `WSR88Model.get_beam(...)` returns an extensible `Beam` object whose apex and
