@@ -1,4 +1,5 @@
 # zgl.py
+# manimgl is incredible
 
 import os
 import sys
@@ -1119,8 +1120,9 @@ class WeatherRadarEqn(InteractiveScene):
             self.radar.beam_location_to_point(~vol_start + ~rres, az=4 * DEG, el=0),
         )
 
-        theta_label = Tex(r"\angle \theta").fix_in_frame()
-        phi_label = Tex(r"\angle \phi").fix_in_frame()
+        # yes, I know these are backwards. I'm too far in and too tired to do it the right way
+        theta_label = Tex(r"\angle \phi").fix_in_frame()
+        phi_label = Tex(r"\angle \theta").fix_in_frame()
 
         theta_opacity = VT(0)
         phi_opacity = VT(0)
@@ -1193,27 +1195,16 @@ class WeatherRadarEqn(InteractiveScene):
             self.radar.beam_location_to_point(3, az=0, el=0)
         )
 
-        self.play(
-            self.frame.animate.reorient(
-                -63,
-                100,
-                0,
-                center=Group(self.radar.antenna, self.cloud).get_center(),
-                height=4,
-            ).shift(UP * 0.5 + OUT * 0.3),
-            vol_start @ 3.1,
-        )
+        self.cloud.bind_beam_highlight(self.beam, outside_opacity=0.1, feather=0)
 
-        self.wait(0.5)
-
-        particle_count = 20
+        cloud_vol_start = 2.6
+        particle_count = 60
         particles = self.beam.get_section_particles(
-            ~vol_start,
-            ~vol_start + ~rres,
+            cloud_vol_start,
+            cloud_vol_start + ~rres,
             count=particle_count,
-            max_radius_fraction=0.44,
+            max_radius_fraction=0.8,
             seed=8,
-            radius=0.04,
             color=BLUE_B,
             glow_factor=0.3,
         )
@@ -1222,26 +1213,310 @@ class WeatherRadarEqn(InteractiveScene):
 
         rng = np.random.default_rng(10)
         particles_per_size = particle_count // 3
-        particle_radii = np.concatenate(
-            [
-                rng.uniform(0.022, 0.038, particles_per_size),
-                rng.uniform(0.042, 0.068, particles_per_size),
-                rng.uniform(
-                    0.075,
-                    0.115,
-                    particle_count - 2 * particles_per_size,
-                ),
-            ]
+        particle_radii = (
+            np.concatenate(
+                [
+                    rng.uniform(0.012, 0.028, particles_per_size),
+                    rng.uniform(0.022, 0.048, particles_per_size),
+                    rng.uniform(
+                        0.055,
+                        0.095,
+                        particle_count - 2 * particles_per_size,
+                    ),
+                ]
+            )
+            * 0.4
         )
         rng.shuffle(particle_radii)
         particles.set_radii(np.zeros(len(particle_radii)))
 
         self.add(particles)
-        self.play(particles.animate.set_radii(particle_radii), run_time=4)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=2)
+                .reorient(
+                    -63,
+                    100,
+                    0,
+                    center=Group(self.radar.antenna, self.cloud).get_center(),
+                    height=4,
+                )
+                .shift(UP * 0.5 + OUT * 0.3),
+                FadeIn(self.cloud, run_time=2),
+                vol_start @ cloud_vol_start,
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.cloud.beam_highlight.animate(run_time=2).set_value(1),
+                particles.animate(run_time=3).set_radii(particle_radii),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        orbit_theta = VT(-60)
+        self.play(
+            self.frame.animate(run_time=2)
+            .reorient(~orbit_theta, 95, 0, center=self.cloud.get_center(), height=2.2)
+            .shift(OUT * 0.1)
+        )
+
+        self.wait(0.5)
+
+        kw = pr_eqn1p3[-10:-6]
+        kw.save_state()
+        self.play(kw.animate.set_color(YELLOW).shift(UP * 0.2))
+
+        self.wait(0.5)
+
+        def frame_orbiter(frame):
+            frame.reorient(
+                ~orbit_theta, 95, 0, center=self.cloud.get_center(), height=2.2
+            ).shift(OUT * 0.1)
+
+        self.frame.add_updater(frame_orbiter)
+
+        water_label = (
+            VGroup(Text("Water", font=FONT), Text("Droplets", font=FONT))
+            .arrange(DOWN, SMALL_BUFF)
+            .rescale_to_fit(fw(self, 0.6), 0)
+        )
+        water_box = RoundedRectangle(
+            width=water_label.get_width() * 1.2,
+            height=water_label.get_height() * 1.2,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            stroke_color=BLUE,
+            stroke_opacity=1,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            corner_radius=0.2,
+        ).move_to(water_label)
+        water_callout = (
+            Group(water_box, water_label)
+            .fix_in_frame()
+            .to_corner(DR, buff=MED_LARGE_BUFF)
+            .set_z_index(100)
+        )
+
+        connector_opacity = VT(0)
+        connector_top = always_redraw(
+            lambda: (
+                Line(
+                    water_callout.get_left(),
+                    self.frame.to_fixed_frame_point(
+                        self.radar.beam_location_to_point(
+                            ~vol_start + ~rres, az=0, el=-4 * DEG
+                        )
+                    ),
+                    stroke_width=DEFAULT_STROKE_WIDTH * 3,
+                    color=BLUE,
+                )
+                .fix_in_frame()
+                .set_opacity(~connector_opacity)
+            )
+        )
+        connector_bot = always_redraw(
+            lambda: (
+                Line(
+                    water_callout.get_left(),
+                    self.frame.to_fixed_frame_point(
+                        self.radar.beam_location_to_point(~vol_start, az=0, el=-4 * DEG)
+                    ),
+                    stroke_width=DEFAULT_STROKE_WIDTH * 3,
+                    color=BLUE,
+                )
+                .fix_in_frame()
+                .set_opacity(~connector_opacity)
+            )
+        )
+        self.add(connector_top, connector_bot)
+
+        self.play(
+            connector_opacity @ 1,
+            FadeIn(water_callout),
+        )
+
+        self.wait(0.5)
+
+        self.play(orbit_theta + 360, run_time=15)
+
+        self.frame.remove_updater(frame_orbiter)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(water_callout), connector_opacity @ 0, kw.animate.restore())
+
+        self.wait(0.5)
+
+        wl = pr_eqn1p3[-4:-2]
+        wl.save_state()
+        self.play(wl.animate.set_color(YELLOW).shift(DOWN * 0.2))
+
+        self.wait(0.5)
+
+        r = pr_eqn1p3[-2:]
+        r.save_state()
+        self.play(
+            LaggedStart(
+                wl.animate.restore(),
+                r.animate.set_color(YELLOW).shift(DOWN * 0.2),
+                self.frame.animate.reorient(
+                    -30 + 360,
+                    80,
+                    0,
+                    center=Group(self.radar.antenna, self.cloud).get_center(),
+                    height=4,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        r_line = Arrow(
+            self.frame.to_fixed_frame_point(
+                self.radar.beam_location_to_point(0, az=0, el=0)
+            ),
+            self.frame.to_fixed_frame_point(
+                self.radar.beam_location_to_point(~vol_start + ~rres / 2, az=0, el=0)
+            ),
+            color=YELLOW,
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            fill_color=YELLOW,
+            fill_opacity=1,
+            buff=0,
+        ).fix_in_frame()
+
+        self.play(GrowArrow(r_line))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(r_line), r.animate.restore())
+
+        self.wait(0.5)
+
+        z = pr_eqn1p3[-6]
+        z.save_state()
+        self.play(z.animate.set_color(YELLOW).scale(1.2).shift(UR * 0.2))
+
+        self.wait(0.5)
+
+        self.play(self.frame.animate.shift(OUT * 10))
+        self.play(
+            pr_eqn1p3.animate.move_to(
+                self.frame.to_fixed_frame_point(self.frame.get_center())
+            )
+        )
+        self.play(z.animate.set_color(BLUE).shift(DL * 0.2).scale(1 / 1.2))
+
+        self.wait(0.5)
+
+        z_eqn = (
+            Tex(
+                r"Z = P_r \frac{(4 \pi)^3 L}{P_t G^2} "
+                r"\frac{2}{c \tau \Omega} "
+                r"\frac{\lambda^2 R^2}{\pi^5 |K|^2}"
+            )
+            .fix_in_frame()
+            .rescale_to_fit(pr_eqn1p3.get_width(), 0)
+            .move_to(pr_eqn1p3)
+        )
+        z_eqn[0].set_color(BLUE)
+        z_eqn[2:4].set_color(RED)
+        z_eqn[4:15].set_color(ORANGE)
+        z_eqn[15:20].set_color(RED)
+        z_eqn[20:].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_eqn1p3[25], z_eqn[0], path_arc=PI / 2),
+                ReplacementTransform(pr_eqn1p3[:2], z_eqn[2:4], path_arc=PI / 2),
+                ReplacementTransform(pr_eqn1p3[2], z_eqn[1]),
+                ReplacementTransform(pr_eqn1p3[3:7], z_eqn[11:15], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[8:14], z_eqn[4:10], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[7], z_eqn[10]),
+                ReplacementTransform(pr_eqn1p3[14:17], z_eqn[17:20], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[18], z_eqn[15], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[17], z_eqn[16]),
+                ReplacementTransform(pr_eqn1p3[19:25], z_eqn[25:31], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[27:31], z_eqn[20:24], path_arc=PI),
+                ReplacementTransform(pr_eqn1p3[26], z_eqn[24]),
+            )
+        )
+
+        self.wait(0.5)
+
+        units = (
+            Tex(r"\left[ \frac{\text{m}^6}{\text{m}^3} \right]")
+            .fix_in_frame()
+            .rescale_to_fit(z_eqn.get_height(), 1)
+            .next_to(z_eqn[24], RIGHT, MED_SMALL_BUFF)
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[GrowFromCenter(m) for m in units], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        z_eqn_mm = (
+            Tex(
+                r"Z = P_r \frac{(4 \pi)^3 L}{P_t G^2} "
+                r"\frac{2}{c \tau \Omega} "
+                r"\frac{\lambda^2 R^2}{\pi^5 |K|^2} 10^{18}"
+                r"\ \left[ \frac{\text{mm}^6}{\text{m}^3} \right]"
+            )
+            .fix_in_frame()
+            .rescale_to_fit(z_eqn.get_height(), 1)
+            .move_to(z_eqn)
+        )
+        z_eqn_mm[0].set_color(BLUE)
+        z_eqn_mm[2:4].set_color(RED)
+        z_eqn_mm[4:15].set_color(ORANGE)
+        z_eqn_mm[15:20].set_color(RED)
+        z_eqn_mm[20:31].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(z_eqn, z_eqn_mm[:-12]),
+                LaggedStart(*[GrowFromCenter(m) for m in z_eqn_mm[-12:-8]]),
+                ReplacementTransform(units[0], z_eqn_mm[-8]),
+                ReplacementTransform(units[1], z_eqn_mm[-7]),
+                GrowFromCenter(z_eqn_mm[-6]),
+                ReplacementTransform(units[2], z_eqn_mm[-5]),
+                ReplacementTransform(units[3], z_eqn_mm[-4]),
+                ReplacementTransform(units[4], z_eqn_mm[-3]),
+                ReplacementTransform(units[5], z_eqn_mm[-2]),
+                ReplacementTransform(units[6], z_eqn_mm[-1]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        pr_to_z_arrow = CurvedArrow(
+            z_eqn[2:4].get_top() + UP * 0.1,
+            z_eqn[0].get_top() + UP * 0.1,
+            angle=TAU / 3,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        ).fix_in_frame()
+
+        self.play(GrowArrow(pr_to_z_arrow), run_time=0.6)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(z_eqn_mm), FadeOut(pr_to_z_arrow))
+
+        self.wait(2)
 
         self.embed()
-
-        # self.add(self.radar, self.terrain)
 
 
 class BeamVolumeParticles(InteractiveScene):
