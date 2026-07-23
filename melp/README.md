@@ -2,6 +2,27 @@
 
 Reusable ManimGL helpers and radar mobjects for this repository.
 
+## Easing functions
+
+`melp` includes the complete easings.net collection as scalar Manim rate
+functions. Names use the same snake_case convention as Manim:
+
+```python
+from melp import ease_in_out_back, ease_out_bounce
+
+self.play(
+    tracker @ 1,
+    rate_func=ease_in_out_back,
+    run_time=2,
+)
+```
+
+The collection includes `linear` and the `ease_in_*`, `ease_out_*`, and
+`ease_in_out_*` variants of sine, quad, cubic, quart, quint, expo, circ, back,
+elastic, and bounce. Back and elastic curves intentionally overshoot the
+`[0, 1]` output range. `cubic_bezier(...)`, `bezier_out_in`, `smootherstep`,
+and `get_phase_eased_sine(...)` are also available for custom motion.
+
 ## Video playback
 
 `VideoMobject` decodes video frames with FFmpeg and updates a ManimGL image
