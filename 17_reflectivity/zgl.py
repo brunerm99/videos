@@ -1911,10 +1911,7 @@ class BeamSectionParticlesTest(InteractiveScene):
 
 
 class ResolutionVolumeP2(InteractiveScene):
-    default_camera_config = {
-        "background_color": BACKGROUND_COLOR,
-        "fps": 60,
-    }
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def refresh_terrain(self):
         self.terrain.set_profile(self.terrain_profile)
@@ -2072,6 +2069,18 @@ class ResolutionVolumeP2(InteractiveScene):
                 lag_ratio=0.4,
                 run_time=3,
             ),
+        )
+
+        self.wait(0.5)
+
+        self.play(gate_start - 0.5, rate_func=utils.rate_functions.there_and_back)
+
+        self.wait(0.5)
+
+        self.play(
+            self.west_radar.az - (20 * DEG),
+            run_time=3,
+            rate_func=utils.rate_functions.there_and_back,
         )
 
         self.wait(0.5)
