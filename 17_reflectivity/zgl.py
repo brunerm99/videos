@@ -12,7 +12,15 @@ from manimlib import *
 sys.path.insert(0, "..")
 load_dotenv()
 
-from melp import VT, VideoMobject, fh, fw, get_nexrad_product_ppi_data, unit
+from melp import (
+    VT,
+    VideoMobject,
+    ease_out_cubic,
+    fh,
+    fw,
+    get_nexrad_product_ppi_data,
+    unit,
+)
 from melp.props import (
     Beam,
     Cloud,
@@ -2614,6 +2622,208 @@ class PowerVsZP2(InteractiveScene):
             run_time=4,
         )
 
-        # self.wait(2)
+        precipitation = Group(self.raindrops, self.snowflakes)
+        scatter_origin = precipitation.get_center().copy()
+        receiver = self.radar.get_feed_horn_origin().copy()
+        backscatter_vector = receiver - scatter_origin
+        receiver_distance = np.linalg.norm(backscatter_vector)
+        backscatter_axis = unit(backscatter_vector)
+
+        reference = OUT if abs(np.dot(backscatter_axis, OUT)) < 0.95 else UP
+        tangent1 = unit(np.cross(backscatter_axis, reference))
+        tangent2 = unit(np.cross(backscatter_axis, tangent1))
+
+        scatter_radius = VT(0.001)
+        scatter_opacity = VT(0)
+        backscatter_half_angle = 10 * DEG
+
+        def get_backscatter_visibility():
+            return float(~scatter_radius < receiver_distance)
+
+        def get_backscatter_cap(radius):
+            return ParametricSurface(
+                lambda polar, azimuth: (
+                    scatter_origin
+                    + radius
+                    * (
+                        np.cos(polar) * backscatter_axis
+                        + np.sin(polar)
+                        * (np.cos(azimuth) * tangent1 + np.sin(azimuth) * tangent2)
+                    )
+                ),
+                u_range=(0, backscatter_half_angle),
+                v_range=(0, TAU),
+                resolution=(14, 48),
+                color=BLUE_A,
+                opacity=~scatter_opacity * get_backscatter_visibility(),
+                shading=(0.1, 0.2, 0.15),
+                depth_test=False,
+            )
+
+        def get_scatter_wave():
+            radius = max(~scatter_radius, 0.001)
+            all_directions = Sphere(
+                radius=radius,
+                resolution=(48, 24),
+                color=BLUE,
+                opacity=0.07 * ~scatter_opacity,
+                shading=(0.05, 0.1, 0.05),
+                depth_test=False,
+            ).move_to(scatter_origin)
+            backscatter = get_backscatter_cap(radius * 1.003)
+            return Group(all_directions, backscatter)
+
+        def get_scatter_arrow(direction, opacity, color=BLUE):
+            arrow_length = max(~scatter_radius, 0.001)
+            return (
+                Arrow(
+                    scatter_origin,
+                    scatter_origin + arrow_length * direction,
+                    buff=0,
+                    fill_color=color,
+                    thickness=2.5,
+                )
+                .set_perpendicular_to_camera(self.frame)
+                .set_opacity(opacity * ~scatter_opacity)
+                .deactivate_depth_test()
+            )
+
+        def get_scatter_arrows():
+            return Group(
+                get_scatter_arrow(
+                    backscatter_axis,
+                    get_backscatter_visibility(),
+                    BLUE_A,
+                ),
+                get_scatter_arrow(-backscatter_axis, 0.15),
+                get_scatter_arrow(tangent1, 0.15),
+                get_scatter_arrow(-tangent1, 0.15),
+                get_scatter_arrow(tangent2, 0.15),
+                get_scatter_arrow(-tangent2, 0.15),
+            )
+
+        scatter_wave = always_redraw(get_scatter_wave)
+        scatter_arrows = always_redraw(get_scatter_arrows)
+        self.add(scatter_wave, scatter_arrows)
+
+        radar_extent = np.linalg.norm(
+            self.radar.antenna.get_all_points() - scatter_origin,
+            axis=1,
+        ).max()
+        target_radius = max(
+            1.5
+            * max(
+                precipitation.get_width(),
+                precipitation.get_height(),
+            ),
+            1.25 * radar_extent,
+        )
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=12).reorient(
+                    -140 + 360,
+                    110,
+                    0,
+                    center=Group(self.radar.antenna, self.cloud).get_center(),
+                    height=5,
+                ),
+                AnimationGroup(
+                    scatter_opacity @ 1,
+                    scatter_radius.animate(run_time=12).set_value(target_radius),
+                ),
+                lag_ratio=0.1,
+                # rate_func=ease_out_cubic,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(scatter_wave), FadeOut(scatter_arrows))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=3)
+                .reorient(
+                    -160 + 360,
+                    85,
+                    0,
+                    center=self.radar.antenna.get_center(),
+                    height=1.5,
+                )
+                .shift(LEFT * 0.8),
+                self.radar.waveguides.animate.set_color(RED),
+                lag_ratio=0.7,
+            )
+        )
+
+        pr_ax = (
+            Axes(
+                x_range=[0, 1, 0.1],
+                y_range=[0, 1, 0.25],
+                width=fw(self, 1),
+                height=fh(self, 1),
+                axis_config={"stroke_width": DEFAULT_STROKE_WIDTH * 2},
+            )
+            .fix_in_frame()
+            .next_to(
+                self.frame.get_corner(UR),
+                DL,
+                MED_LARGE_BUFF,
+            )
+            .shift(LEFT * 1.5 + DOWN * 0.5)
+        )
+
+        cloud_range = VT(0.7)
+        cloud_range2 = VT(0.3)
+        pr_norm = VT(0)
+        norm_val1 = VT(0.3)
+        norm_val2 = VT(0.5)
+        cloud2_show = VT(0)
+
+        def get_rx():
+            range_samples = np.linspace(0, 1, 200)
+            cloud_sigma = 0.055
+            rng = np.random.default_rng(7)
+            received_power = (
+                0.08
+                + (1 - (~cloud_range * 0.9 * (1 - ~pr_norm)) - ~norm_val1 * ~pr_norm)
+                * np.exp(-0.5 * ((range_samples - ~cloud_range) / cloud_sigma) ** 2)
+                + rng.normal(0, 0.025, range_samples.size)
+                + ~norm_val2
+                * ~cloud2_show
+                * np.exp(-0.5 * ((range_samples - ~cloud_range2) / cloud_sigma) ** 2)
+            )
+            received_power = np.clip(received_power, pr_ax.y_range[0], None)
+            return lambda r: np.interp(r, range_samples, received_power)
+
+        pr_plot = always_redraw(
+            lambda: pr_ax.get_graph(
+                get_rx(),
+                x_range=[0, 1, 1 / 800],
+                color=RX_COLOR,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                use_smoothing=False,
+            )
+        )
+        waveguide_point = self.frame.to_fixed_frame_point(
+            self.radar.waveguides.get_center()
+        )
+        to_plot = CubicBezier(
+            waveguide_point,
+            waveguide_point + RIGHT * 0.5,
+            pr_ax.get_bottom() + DOWN * 0.2,
+            pr_ax.get_bottom(),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        )
+
+        pr = MathTex(r"P_r").scale(1.5).rotate(PI / 2).next_to(pr_ax, LEFT, SMALL_BUFF)
+        pr_bez = CubicBezier(
+            radar.radome.get_left(),
+            radar.radome.get_left() + [-0.5, 0.5, 0],
+            pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL) + [-0.5, -0.5, 0],
+            pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL),
+        )
 
         self.embed()
