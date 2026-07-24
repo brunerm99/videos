@@ -2740,7 +2740,8 @@ class PowerVsZP2(InteractiveScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(scatter_wave), FadeOut(scatter_arrows))
+        self.play(scatter_opacity @ 0)
+        self.remove(scatter_wave, scatter_arrows)
 
         self.wait(0.5)
 
@@ -2783,6 +2784,13 @@ class PowerVsZP2(InteractiveScene):
         )
         self.add(pr_ax)
 
+        pr_label = (
+            Tex(r"P_r", color=RED, fill_color=RED, fill_opacity=1)
+            .fix_in_frame()
+            .rescale_to_fit(pr_ax.get_height() * 0.2, 1)
+            .next_to(pr_ax.copy().shift(LEFT * 3.5), UP, 0)
+        )
+
         cloud_range = VT(0.5)
         cloud_range2 = VT(0.3)
         pr_norm = VT(0)
@@ -2807,15 +2815,20 @@ class PowerVsZP2(InteractiveScene):
             return lambda r: np.interp(r, range_samples, received_power)
 
         pr_plot_x1 = VT(0)
+        pr_plot_opacity = VT(1)
         pr_plot = always_redraw(
-            lambda: pr_ax.get_graph(
-                get_rx(),
-                x_range=[0, ~pr_plot_x1, 1 / 800],
-                color=RX_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
-                scale_stroke_with_zoom=True,
-                use_smoothing=False,
-            ).fix_in_frame()
+            lambda: (
+                pr_ax.get_graph(
+                    get_rx(),
+                    x_range=[0, ~pr_plot_x1, 1 / 800],
+                    color=RX_COLOR,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+                    scale_stroke_with_zoom=True,
+                    use_smoothing=False,
+                )
+                .set_stroke(opacity=~pr_plot_opacity)
+                .fix_in_frame()
+            )
         )
 
         def to_screen_plane(point):
@@ -2833,14 +2846,18 @@ class PowerVsZP2(InteractiveScene):
             waveguide_point = to_screen_plane(
                 self.frame.to_fixed_frame_point(self.radar.waveguides.get_center())
             )
-            return CubicBezier(
-                waveguide_point,
-                waveguide_point + RIGHT * 0.1,
-                plot_point + DOWN * 1.5,
-                plot_point,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1,
-                scale_stroke_with_zoom=True,
-            ).fix_in_frame()
+            return (
+                CubicBezier(
+                    waveguide_point,
+                    waveguide_point + RIGHT * 0.1,
+                    plot_point + DOWN * 1.5,
+                    plot_point,
+                    stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                    scale_stroke_with_zoom=True,
+                )
+                .set_stroke(opacity=~pr_plot_opacity)
+                .fix_in_frame()
+            )
 
         to_plot = get_bez()
 
@@ -2848,6 +2865,7 @@ class PowerVsZP2(InteractiveScene):
 
         self.play(
             ShowCreation(to_plot),
+            FadeIn(pr_label),
             pr_ax.animate.shift(LEFT * 3.5),
             pr_plot_x1.animate(run_time=2).set_value(1),
         )
@@ -2884,9 +2902,61 @@ class PowerVsZP2(InteractiveScene):
             self.cloud.animate.shift(self.radar.get_beam_direction() * 4.5),
         )
 
+        # i would like to be done now, sir
+
         self.wait(0.5)
 
         self.play(pr_norm @ 1)
+
+        self.wait(0.5)
+
+        self.play(
+            cloud_range @ 0.2,
+            self.cloud.animate.shift(self.radar.get_beam_direction() * -4.5),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            # FadeOut(pr_plot),
+            pr_plot_opacity @ 0,
+            FadeOut(pr_ax),
+            # FadeOut(to_plot),
+            self.frame.animate(run_time=3).shift(OUT * 10),
+            pr_label.animate.move_to(ORIGIN).scale(3),
+        )
+
+        self.wait(0.5)
+
+        pr_rel = (
+            Tex(
+                r"P_r \sim R \text{, } P_t\text{, } G \text{, } \lambda \text{, } \ldots"
+            )
+            .fix_in_frame()
+            .rescale_to_fit(fw(self, 0.8), 0)
+            .move_to(pr_label)
+        )
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(pr_label, pr_rel[:2]),
+                *[GrowFromCenter(m) for m in pr_rel[2:]],
+                lag_ratio=0.2,
+            )
+        )
+        #
+        # self.wait(0.5)
+        #
+        # z = (
+        #     Tex(r"Z")
+        #     .fix_in_frame()
+        #     .rescale_to_fit(pr_label.get_height(), 1)
+        #     .move_to(ORIGIN)
+        #     .shift(UP * 10)
+        # )
+        # self.add(z)
+
+        self.play(pr_rel.animate.shift(DOWN * 10))
 
         # pr = MathTex(r"P_r").scale(1.5).rotate(PI / 2).next_to(pr_ax, LEFT, SMALL_BUFF)
         # pr_bez = CubicBezier(
@@ -2895,6 +2965,94 @@ class PowerVsZP2(InteractiveScene):
         #     pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL) + [-0.5, -0.5, 0],
         #     pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL),
         # )
+
+        self.embed()
+
+
+class PowerVsZP3(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        self.terrain_profile = {
+            "broad_ridge": 1.25,
+            "east_hill": 0.95,
+            "valley_depth": 0.52,
+            "rolling_ground": 0.25,
+            "fine_relief": 0.12,
+            "minor_ridges": 0.10,
+        }
+        self.terrain_sites = (
+            (-4.6, -1.55),
+            (4.15, 1.45),
+            (8, -9),
+        )
+        self.terrain = Terrain(
+            size=(40, 28),
+            profile=self.terrain_profile,
+            level_sites=self.terrain_sites,
+        )
+        self.west_radar = place_wsr88_on_terrain(
+            self.terrain_sites[0],
+            self.terrain,
+            rotation=22 * DEG,
+        )
+        self.east_radar = place_wsr88_on_terrain(
+            self.terrain_sites[1],
+            self.terrain,
+            rotation=-18 * DEG,
+        )
+
+        self.west_radar.az @= 30 * DEG
+        self.west_radar.el @= 10 * DEG
+        self.east_radar.az @= -70 * DEG
+        self.east_radar.el @= 0 * DEG
+
+        self.frame.reorient(
+            60,
+            75,
+            0,
+            center=Group(self.west_radar, self.east_radar).get_center(),
+            height=11,
+        ).shift(OUT * 30)
+        self.add(self.terrain, self.west_radar, self.east_radar)
+
+        z = Tex("Z").fix_in_frame().rescale_to_fit(fh(self, 0.1), 1).move_to(ORIGIN)
+
+        self.play(GrowFromCenter(z))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(z),
+                self.frame.animate(run_time=3).shift(IN * 30),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.west_cloud = Cloud(3).move_to(
+            self.west_radar.beam_location_to_point(3, 0, 0)
+        )
+        self.east_cloud = (
+            Cloud(4)
+            .move_to(self.east_radar.beam_location_to_point(7, 0, 0))
+            .rotate(PI / 6, axis=OUT)
+        )
+
+        self.west_beam = self.west_radar.get_beam(
+            8 * DEG, 11, color=BLUE, opacity=1
+        ).apply_depth_test()
+        self.east_beam = self.east_radar.get_beam(
+            8 * DEG, 11, color=BLUE, opacity=1
+        ).apply_depth_test()
+
+        self.play(ShowCreation(self.west_cloud), ShowCreation(self.west_beam))
+
+        self.wait(0.5)
+
+        self.play(ShowCreation(self.east_cloud), ShowCreation(self.east_beam))
 
         self.embed()
 
