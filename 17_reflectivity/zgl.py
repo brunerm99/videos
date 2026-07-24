@@ -6,8 +6,10 @@ import sys
 from random import random, seed, shuffle
 
 import numpy as np
+import pandas as pd
 from dotenv import load_dotenv
 from manimlib import *
+from scipy.special import spherical_jn, spherical_yn
 
 sys.path.insert(0, "..")
 load_dotenv()
@@ -1506,18 +1508,7 @@ class WeatherRadarEqn(InteractiveScene):
 
         self.wait(0.5)
 
-        pr_to_z_arrow = CurvedArrow(
-            z_eqn[2:4].get_top() + UP * 0.1,
-            z_eqn[0].get_top() + UP * 0.1,
-            angle=TAU / 3,
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-        ).fix_in_frame()
-
-        self.play(GrowArrow(pr_to_z_arrow), run_time=0.6)
-
-        self.wait(0.5)
-
-        self.play(FadeOut(z_eqn_mm), FadeOut(pr_to_z_arrow))
+        self.play(FadeOut(z_eqn_mm))
 
         self.wait(2)
 
@@ -3054,6 +3045,10 @@ class PowerVsZP3(InteractiveScene):
 
         self.play(ShowCreation(self.east_cloud), ShowCreation(self.east_beam))
 
+        self.wait(0.5)
+
+        self.play(self.frame.animate(run_time=3).shift(OUT * 30))
+
         self.embed()
 
 
@@ -3061,13 +3056,446 @@ class Wrapup(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
+        def pec_sphere_backscatter(size_parameter):
+            values = np.atleast_1d(np.asarray(size_parameter, dtype=float))
+            result = np.empty_like(values)
+
+            for index, x in enumerate(values.flat):
+                orders = np.arange(1, int(np.ceil(x + 4 * x ** (1 / 3) + 2)) + 1)
+                jn = spherical_jn(orders, x)
+                yn = spherical_yn(orders, x)
+                jn_prime = spherical_jn(orders, x, derivative=True)
+                yn_prime = spherical_yn(orders, x, derivative=True)
+
+                psi = x * jn
+                xi = x * (jn + 1j * yn)
+                psi_prime = jn + x * jn_prime
+                xi_prime = psi_prime + 1j * (yn + x * yn_prime)
+                a_n = -psi_prime / xi_prime
+                b_n = -psi / xi
+
+                amplitude = np.sum((2 * orders + 1) * (-1) ** orders * (a_n - b_n))
+                result.flat[index] = abs(amplitude) ** 2 / x**2
+
+            return result.item() if np.ndim(size_parameter) == 0 else result
+
+        x_min, x_max = -1, 2
+        y_min, y_max = -4, 1
+        chart_width = fw(self, 0.72)
+        chart_height = fh(self, 0.62)
+
+        x_axis = NumberLine(
+            x_range=[x_min, x_max, 1],
+            width=chart_width,
+            include_tip=False,
+            tick_size=0.06,
+        )
+        y_axis = NumberLine(
+            x_range=[y_min, y_max, 1],
+            width=chart_height,
+            include_tip=False,
+            tick_size=0.06,
+        ).rotate(PI / 2)
+        y_axis.shift(x_axis.get_start() - y_axis.get_start())
+
+        def log_to_point(log_x, log_y):
+            return x_axis.n2p(log_x) + y_axis.n2p(log_y) - y_axis.n2p(y_min)
+
+        grid = VGroup(
+            *[
+                Line(
+                    log_to_point(log_x, y_min),
+                    log_to_point(log_x, y_max),
+                ).set_stroke(GREY_B, 1, opacity=0.2)
+                for log_x in range(x_min, x_max + 1)
+            ],
+            *[
+                Line(
+                    log_to_point(x_min, log_y),
+                    log_to_point(x_max, log_y),
+                ).set_stroke(GREY_B, 1, opacity=0.2)
+                for log_y in range(y_min, y_max + 1)
+            ],
+        )
+
+        x_tick_labels = VGroup(
+            *[
+                Tex(rf"10^{{{exponent}}}")
+                .scale(0.55)
+                .next_to(x_axis.n2p(exponent), DOWN, SMALL_BUFF)
+                for exponent in range(x_min, x_max + 1)
+            ]
+        )
+        y_tick_labels = VGroup(
+            *[
+                Tex(rf"10^{{{exponent}}}")
+                .scale(0.55)
+                .next_to(y_axis.n2p(exponent), LEFT, SMALL_BUFF)
+                for exponent in range(y_min, y_max + 1)
+            ]
+        )
+        x_label = Tex(r"ka = 2\pi a / \lambda").next_to(x_axis, DOWN, MED_LARGE_BUFF)
+        y_label = (
+            Tex(r"\sigma / (\pi a^2)")
+            .rotate(PI / 2)
+            .next_to(y_axis, LEFT, MED_LARGE_BUFF)
+        )
+
+        regime_specs = [
+            ("Rayleigh", x_min, 0, GREEN),
+            ("Mie", 0, 1, PURPLE),
+            ("Optical", 1, x_max, YELLOW),
+        ]
+        regime_bands = VGroup()
+        regime_labels = VGroup()
+        for name, regime_min, regime_max, color in regime_specs:
+            band = Polygon(
+                log_to_point(regime_min, y_min),
+                log_to_point(regime_max, y_min),
+                log_to_point(regime_max, y_max),
+                log_to_point(regime_min, y_max),
+                stroke_width=0,
+                fill_color=color,
+                fill_opacity=0.12,
+            )
+            label = (
+                Text(name, font=FONT, color=color)
+                .scale(0.6)
+                .next_to(band.get_top(), DOWN, SMALL_BUFF)
+            )
+            regime_bands.add(band)
+            regime_labels.add(label)
+
+        ka_values = np.logspace(x_min, x_max, 1600)
+        normalized_rcs = pec_sphere_backscatter(ka_values)
+        log_ka = np.log10(ka_values)
+        log_rcs = np.log10(normalized_rcs)
+
+        regime_curves = VGroup()
+        for _, regime_min, regime_max, color in regime_specs:
+            regime_mask = (log_ka >= regime_min) & (log_ka <= regime_max)
+            points = [
+                log_to_point(x_value, y_value)
+                for x_value, y_value in zip(
+                    log_ka[regime_mask],
+                    log_rcs[regime_mask],
+                )
+            ]
+            regime_curves.add(
+                VMobject().set_points_as_corners(points).set_stroke(color, 4)
+            )
+
+        rcs_chart = Group(
+            regime_bands,
+            grid,
+            x_axis,
+            y_axis,
+            x_tick_labels,
+            y_tick_labels,
+            x_label,
+            y_label,
+            regime_curves,
+            regime_labels,
+        )
+        rcs_chart.move_to(ORIGIN).shift(LEFT * fw(self, 0.25)).rescale_to_fit(
+            fw(self, 0.4), 0
+        ).fix_in_frame()
+
+        self.play(
+            ShowCreation(x_axis),
+            ShowCreation(y_axis),
+            FadeIn(grid),
+            LaggedStart(
+                Write(x_tick_labels),
+                Write(y_tick_labels),
+                Write(x_label),
+                Write(y_label),
+                lag_ratio=0.15,
+            ),
+        )
+
         self.cloud = Cloud(width=3)
 
-        self.frame.reorient(0, 90, 0, center=self.cloud.get_center(), height=5)
-        self.play(ShowCreation(self.cloud))
+        self.frame.reorient(0, 90, 0, center=self.cloud.get_center(), height=5).shift(
+            LEFT * 2
+        )
+
+        # other_anims = []
+        # for idx, (band, label, curve) in enumerate(
+        #     zip(
+        #         regime_bands,
+        #         regime_labels,
+        #         regime_curves,
+        #     )
+        # ):
+        #     if idx == 1:
+        #         other_anims.append(ShowCreation(self.cloud))
+        #
+        #     self.play(
+        #         FadeIn(band),
+        #         Write(label),
+        #         ShowCreation(curve),
+        #         *other_anims,
+        #         run_time=1.5,
+        #     )
+        #     other_anims.clear()
+
+        regime_sequence = LaggedStart(
+            *[
+                AnimationGroup(
+                    FadeIn(band),
+                    Write(label),
+                    ShowCreation(curve),
+                    run_time=1.5,
+                )
+                for band, label, curve in zip(
+                    regime_bands,
+                    regime_labels,
+                    regime_curves,
+                )
+            ],
+            lag_ratio=1,
+        )
+
+        self.play(
+            LaggedStart(
+                regime_sequence,
+                ShowCreation(self.cloud, run_time=3),
+                lag_ratio=0.3,
+            )
+        )
 
         self.wait(0.5)
 
-        dsd_eqn = Tex(r"\Large Z = \int_0^\infty N(D)D^6\,dD")
+        self.play(rcs_chart.animate.shift(UP * fh(self, 0.3)))
+
+        self.wait(0.5)
+
+        dsd_eqn = (
+            Tex(r"\Large Z = \int_0^\infty N(D)D^6\,dD")
+            .fix_in_frame()
+            .next_to(rcs_chart, DOWN, fh(self, 0.3))
+        )
+        regimes_title = (
+            Text("Scattering Regimes", font=FONT)
+            .fix_in_frame()
+            .scale(0.7)
+            .next_to(rcs_chart, UP)
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeIn(m) for m in dsd_eqn], lag_ratio=0.1),
+                Write(regimes_title),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        notebooks = (
+            VideoMobject("~/Movies/2026-07-24_11-41-09.mov", start=20)
+            .fix_in_frame()
+            .move_to(ORIGIN)
+            .rescale_to_fit(fw(self, 0.8), 0)
+        )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(self.cloud),
+                    FadeOut(rcs_chart),
+                    FadeOut(dsd_eqn),
+                    FadeOut(regimes_title),
+                ),
+                notebooks.shift(DOWN * fh(self, 2)).animate.shift(UP * fh(self, 2)),
+            )
+        )
+
+        self.wait(5)
+
+        merch1 = (
+            ImageMobject("../14_amp_gain/static/merch1.png")
+            .rescale_to_fit(notebooks.get_height(), 1)
+            .fix_in_frame()
+            .next_to(notebooks.copy().shift(LEFT * 3), RIGHT)
+        )
+        merch2 = (
+            ImageMobject("../14_amp_gain/static/merch5.png")
+            .rescale_to_fit(notebooks.get_height(), 1)
+            .fix_in_frame()
+            .move_to(merch1)
+        )
+        merch3 = (
+            ImageMobject("../14_amp_gain/static/merch9.png")
+            .rescale_to_fit(notebooks.get_height(), 1)
+            .fix_in_frame()
+            .move_to(merch1)
+        )
+
+        self.play(
+            notebooks.animate.shift(LEFT * 3),
+            merch1.shift(RIGHT * 10).animate.shift(LEFT * 10),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            merch1.animate.shift(UP * 10),
+            merch2.shift(DOWN * 10).animate.shift(UP * 10),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            merch2.animate.shift(UP * 10),
+            merch3.shift(DOWN * 10).animate.shift(UP * 10),
+        )
+
+        with open(__file__, "r", encoding="utf-8") as source_file:
+            lines_str = f"{sum(1 for _ in source_file):,}"
+
+        stats_title = Text("Stats for Nerds", font=FONT).scale(0.7)
+        stats_data = [
+            ("Lines of code", lines_str),
+            ("Script word count", "2,138"),
+            ("Days to make", "54"),
+            ("Git commits", "39"),
+        ]
+        row_height = 0.55
+        label_column_width = 3.2
+        value_column_width = 1.6
+        table_width = label_column_width + value_column_width
+        table_height = row_height * len(stats_data)
+
+        table_grid = VGroup(
+            Rectangle(
+                width=table_width,
+                height=table_height,
+                color=GREY_B,
+                stroke_width=2,
+            ),
+            Line(
+                UP * table_height / 2,
+                DOWN * table_height / 2,
+                color=GREY_B,
+                stroke_width=2,
+            ).shift(LEFT * table_width / 2 + RIGHT * label_column_width),
+            *[
+                Line(
+                    LEFT * table_width / 2,
+                    RIGHT * table_width / 2,
+                    color=GREY_B,
+                    stroke_width=2,
+                ).shift(UP * table_height / 2 + DOWN * row_height * row_index)
+                for row_index in range(1, len(stats_data))
+            ],
+        )
+        table_entries = VGroup()
+        for row_index, (label_text, value_text) in enumerate(stats_data):
+            row_y = table_height / 2 - row_height * (row_index + 0.5)
+            label = Text(
+                label_text,
+                font=FONT,
+                font_size=17,
+            ).move_to(
+                LEFT * table_width / 2 + RIGHT * label_column_width / 2 + UP * row_y
+            )
+            value = Text(
+                value_text,
+                font=FONT,
+                font_size=17,
+                color=GREEN,
+            ).move_to(
+                LEFT * table_width / 2
+                + RIGHT * (label_column_width + value_column_width / 2)
+                + UP * row_y
+            )
+            table_entries.add(label, value)
+
+        stats_table = VGroup(table_grid, table_entries).next_to(
+            stats_title,
+            DOWN,
+            MED_LARGE_BUFF,
+        )
+        stats_group = VGroup(stats_title, stats_table).to_corner(
+            UR,
+            buff=LARGE_BUFF * 2,
+        )
+
+        thank_you_sabrina = Text(
+            "Thank you, Sabrina, for\nediting the whole video :)",
+            font=FONT,
+            font_size=24,
+        ).next_to(stats_group, DOWN)
+
+        marshall_bruner = (
+            Text(
+                "Marshall Bruner",
+                font=FONT,
+                font_size=24,
+            )
+            .set_y(thank_you_sabrina.get_y())
+            .set_x(-fw(self, 0.25))
+        )
+        end_screen = VGroup(
+            stats_group,
+            thank_you_sabrina,
+            marshall_bruner,
+        ).fix_in_frame()
+
+        self.play(
+            FadeOut(notebooks, shift=UP * fh(self)),
+            FadeOut(merch3, shift=UP * fh(self)),
+        )
+
+        df = pd.read_csv("~/Downloads/members-2026-07-24_18-24-58.csv")
+        members = df[(df["Member Status"] == "Active member")].Nickname.tolist()
+        mem_list = (
+            Group(*[Text(member, font=FONT) for member in members])
+            .arrange_in_grid(
+                n_cols=2,
+                n_rows=len(members) // 2,
+                h_buff=MED_LARGE_BUFF,
+                v_buff=SMALL_BUFF,
+            )
+            .fix_in_frame()
+            .move_to(ORIGIN)
+            .shift(DOWN / 2)
+        )
+        members_title = (
+            Text("Thanks to the Members!!", font=FONT)
+            .fix_in_frame()
+            .scale(1.5)
+            .next_to(mem_list, UP, MED_LARGE_BUFF)
+        )
+        members_title[-8:].set_color(ORANGE)
+
+        self.play(
+            LaggedStart(
+                Write(members_title),
+                *[Write(m) for m in mem_list],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(members_title), FadeOut(mem_list))
+
+        self.play(
+            LaggedStart(
+                FadeIn(marshall_bruner, shift=UP),
+                AnimationGroup(
+                    FadeIn(stats_title, shift=DOWN),
+                    FadeIn(stats_table),
+                ),
+                Write(thank_you_sabrina),
+                lag_ratio=0.9,
+                run_time=4,
+            )
+        )
+
+        self.wait(2)
 
         self.embed()
