@@ -63,7 +63,15 @@ def _update_video(video, dt):
 
 
 class VideoMobject(ImageMobject):
-    def __init__(self, filename, speed=1.0, autoplay=True, **kwargs):
+    def __init__(
+        self,
+        filename,
+        speed=1.0,
+        autoplay=True,
+        start=0.0,
+        end=None,
+        **kwargs,
+    ):
         if shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None:
             raise RuntimeError("VideoMobject requires ffmpeg and ffprobe")
 
@@ -75,10 +83,23 @@ class VideoMobject(ImageMobject):
             self.frame_width,
             self.frame_height,
             self.frame_rate,
-            self.duration,
+            self.source_duration,
             self._decoder_name,
         ) = _probe_video(self.video_path)
 
+        self.start = float(start)
+        self.end = self.source_duration if end is None else float(end)
+        if not np.isfinite(self.start) or self.start < 0:
+            raise ValueError("start must be nonnegative and finite")
+        if self.start >= self.source_duration:
+            raise ValueError("start must be less than the video duration")
+        if not np.isfinite(self.end) or self.end <= self.start:
+            raise ValueError("end must be finite and greater than start")
+        if self.end > self.source_duration:
+            raise ValueError("end must not exceed the video duration")
+
+        self.duration = self.end - self.start
+        self._has_explicit_end = end is not None
         self.speed = 1.0
         self.set_speed(speed)
         self.paused = not autoplay
@@ -108,10 +129,18 @@ class VideoMobject(ImageMobject):
         command = ["ffmpeg", "-v", "error"]
         if self._decoder_name:
             command.extend(["-c:v", self._decoder_name])
+        if self.start > 0:
+            command.extend(["-ss", str(self.start)])
         command.extend(
             [
                 "-i",
                 str(self.video_path),
+            ]
+        )
+        if self._has_explicit_end:
+            command.extend(["-t", str(self.duration)])
+        command.extend(
+            [
                 "-an",
                 "-sn",
                 "-dn",
