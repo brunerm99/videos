@@ -2330,6 +2330,8 @@ class PowerVsZP1(InteractiveScene):
             ).fix_in_frame()
         )
 
+        self.wait(0.5)
+
         self.play(
             ShowCreation(dbz_slider),
             Write(dbz_label),
@@ -2693,7 +2695,7 @@ class PowerVsZP2(InteractiveScene):
                 get_scatter_arrow(
                     backscatter_axis,
                     get_backscatter_visibility(),
-                    BLUE_A,
+                    RED,
                 ),
                 get_scatter_arrow(-backscatter_axis, 0.15),
                 get_scatter_arrow(tangent1, 0.15),
@@ -2764,7 +2766,11 @@ class PowerVsZP2(InteractiveScene):
                 y_range=[0, 1, 0.25],
                 width=fw(self, 1),
                 height=fh(self, 1),
-                axis_config={"stroke_width": DEFAULT_STROKE_WIDTH * 2},
+                axis_config={
+                    "stroke_width": DEFAULT_STROKE_WIDTH * 0.5,
+                    "tick_size": 0.04,
+                    "scale_stroke_with_zoom": True,
+                },
             )
             .fix_in_frame()
             .next_to(
@@ -2773,9 +2779,11 @@ class PowerVsZP2(InteractiveScene):
                 MED_LARGE_BUFF,
             )
             .shift(LEFT * 1.5 + DOWN * 0.5)
+            .shift(RIGHT * 3.5)
         )
+        self.add(pr_ax)
 
-        cloud_range = VT(0.7)
+        cloud_range = VT(0.5)
         cloud_range2 = VT(0.3)
         pr_norm = VT(0)
         norm_val1 = VT(0.3)
@@ -2798,32 +2806,110 @@ class PowerVsZP2(InteractiveScene):
             received_power = np.clip(received_power, pr_ax.y_range[0], None)
             return lambda r: np.interp(r, range_samples, received_power)
 
+        pr_plot_x1 = VT(0)
         pr_plot = always_redraw(
             lambda: pr_ax.get_graph(
                 get_rx(),
-                x_range=[0, 1, 1 / 800],
+                x_range=[0, ~pr_plot_x1, 1 / 800],
                 color=RX_COLOR,
-                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                stroke_width=DEFAULT_STROKE_WIDTH * 0.5,
+                scale_stroke_with_zoom=True,
                 use_smoothing=False,
-            )
-        )
-        waveguide_point = self.frame.to_fixed_frame_point(
-            self.radar.waveguides.get_center()
-        )
-        to_plot = CubicBezier(
-            waveguide_point,
-            waveguide_point + RIGHT * 0.5,
-            pr_ax.get_bottom() + DOWN * 0.2,
-            pr_ax.get_bottom(),
-            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            ).fix_in_frame()
         )
 
-        pr = MathTex(r"P_r").scale(1.5).rotate(PI / 2).next_to(pr_ax, LEFT, SMALL_BUFF)
-        pr_bez = CubicBezier(
-            radar.radome.get_left(),
-            radar.radome.get_left() + [-0.5, 0.5, 0],
-            pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL) + [-0.5, -0.5, 0],
-            pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL),
+        def to_screen_plane(point):
+            point = point.copy()
+            perspective_scale = (
+                1 - point[2] * self.frame.get_scale() / self.frame.get_focal_distance()
+            )
+            point[:2] /= perspective_scale
+            point[2] = 0
+            return point
+
+        plot_point = to_screen_plane(pr_ax.c2p(0.5, 0) + LEFT * 3.5)
+
+        def get_bez():
+            waveguide_point = to_screen_plane(
+                self.frame.to_fixed_frame_point(self.radar.waveguides.get_center())
+            )
+            return CubicBezier(
+                waveguide_point,
+                waveguide_point + RIGHT * 0.1,
+                plot_point + DOWN * 1.5,
+                plot_point,
+                stroke_width=DEFAULT_STROKE_WIDTH * 1,
+                scale_stroke_with_zoom=True,
+            ).fix_in_frame()
+
+        to_plot = get_bez()
+
+        self.add(pr_plot)
+
+        self.play(
+            ShowCreation(to_plot),
+            pr_ax.animate.shift(LEFT * 3.5),
+            pr_plot_x1.animate(run_time=2).set_value(1),
         )
+
+        self.remove(to_plot)
+        to_plot = always_redraw(get_bez)
+        self.add(to_plot)
+
+        self.wait(0.5)
+
+        self.play(
+            self.frame.animate(run_time=2)
+            .reorient(
+                -140 + 360,
+                85,
+                0,
+                center=Group(self.cloud, self.radar.antenna).get_center(),
+                height=4,
+            )
+            .shift(LEFT)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            cloud_range @ 0.2,
+            self.cloud.animate.shift(self.radar.get_beam_direction() * -1.5),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            cloud_range @ 0.8,
+            self.cloud.animate.shift(self.radar.get_beam_direction() * 4.5),
+        )
+
+        self.wait(0.5)
+
+        self.play(pr_norm @ 1)
+
+        # pr = MathTex(r"P_r").scale(1.5).rotate(PI / 2).next_to(pr_ax, LEFT, SMALL_BUFF)
+        # pr_bez = CubicBezier(
+        #     radar.radome.get_left(),
+        #     radar.radome.get_left() + [-0.5, 0.5, 0],
+        #     pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL) + [-0.5, -0.5, 0],
+        #     pr_ax.copy().shift(DOWN * fh(self)).get_corner(DL),
+        # )
+
+        self.embed()
+
+
+class Wrapup(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        self.cloud = Cloud(width=3)
+
+        self.frame.reorient(0, 90, 0, center=self.cloud.get_center(), height=5)
+        self.play(ShowCreation(self.cloud))
+
+        self.wait(0.5)
+
+        dsd_eqn = Tex(r"\Large Z = \int_0^\infty N(D)D^6\,dD")
 
         self.embed()
