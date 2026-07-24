@@ -3299,6 +3299,11 @@ class Wrapup(InteractiveScene):
             .move_to(ORIGIN)
             .rescale_to_fit(fw(self, 0.8), 0)
         )
+        website_name = (
+            Text("marshallbruner.com", font=FONT)
+            .fix_in_frame()
+            .next_to(notebooks, UP, MED_SMALL_BUFF)
+        )
 
         self.play(
             LaggedStart(
@@ -3308,7 +3313,10 @@ class Wrapup(InteractiveScene):
                     FadeOut(dsd_eqn),
                     FadeOut(regimes_title),
                 ),
-                notebooks.shift(DOWN * fh(self, 2)).animate.shift(UP * fh(self, 2)),
+                AnimationGroup(
+                    notebooks.shift(DOWN * fh(self, 2)).animate.shift(UP * fh(self, 2)),
+                    Write(website_name),
+                ),
             )
         )
 
@@ -3334,7 +3342,7 @@ class Wrapup(InteractiveScene):
         )
 
         self.play(
-            notebooks.animate.shift(LEFT * 3),
+            Group(notebooks, website_name).animate.shift(LEFT * 3),
             merch1.shift(RIGHT * 10).animate.shift(LEFT * 10),
         )
 
@@ -3446,10 +3454,12 @@ class Wrapup(InteractiveScene):
 
         self.play(
             FadeOut(notebooks, shift=UP * fh(self)),
+            FadeOut(website_name, shift=UP * fh(self)),
             FadeOut(merch3, shift=UP * fh(self)),
         )
 
         df = pd.read_csv("~/Downloads/members-2026-07-24_18-24-58.csv")
+        df.sort_values(by="Account Signup Date (UTC)", inplace=True)
         members = df[(df["Member Status"] == "Active member")].Nickname.tolist()
         mem_list = (
             Group(*[Text(member, font=FONT) for member in members])
