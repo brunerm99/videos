@@ -182,6 +182,8 @@ class Intro(InteractiveScene):
         )
         ppi = PPIGrid(
             z_data,
+            vmin=-20,
+            vmax=70,
             colorbar_label=z_data["units"],
             font=FONT,
             init_scan_progress=0,
@@ -618,6 +620,8 @@ class NexradPPI(InteractiveScene):
         )
         ppi = PPIGrid(
             data,
+            vmin=-20,
+            vmax=70,
             colorbar_label=data["units"],
             font="Maple Mono CN",
             init_scan_progress=0,
@@ -1586,6 +1590,8 @@ class Dbz(InteractiveScene):
         )
         ppi = PPIGrid(
             z_data,
+            vmin=-20,
+            vmax=70,
             colorbar_label=z_data["units"],
             font=FONT,
             init_scan_progress=0,
