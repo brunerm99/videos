@@ -140,3 +140,11 @@ In this video, I'll break down what these specs actually mean, why they matter f
 In this video, I’ll explain how dual-polarization weather radar works, why sending both horizontal and vertical polarizations reveals target shape and consistency, and how products like ZDR, rhoHV, PhiDP, and KDP help distinguish rain, hail, snow, birds, insects, and more.
 
 ![thumbnail](./16_dual_pol/static/Thumbnail%20-%20How%20Weather%20Radars%20See%20Shape.png)
+
+## [17 - What Weather Radar Colors Actually Mean (Reflectivity Explained)](https://youtu.be/5cr4x4A2dfc)
+
+Reflectivity is an extremely important concept for understanding weather radar data, because it's often the first product you look at.
+
+In this video, I'll explain how reflectivity is computed, why it's useful, and give you resources to further learn on your own!
+
+![thumbnail](./17_reflectivity/static/thumbnail1.png)
