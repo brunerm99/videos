@@ -2160,80 +2160,80 @@ class ResolutionVolumeP2(InteractiveScene):
             run_time=2,
         )
 
-        self.wait(0.5)
-
-        dbz_value = (
-            Tex(r"\rightarrow 31.2 \text{ dBZ}")
-            .scale(1.2)
-            .fix_in_frame()
-            .next_to(
-                self.frame.to_fixed_frame_point(gate.get_center()),
-                RIGHT,
-                LARGE_BUFF,
-            )
-        )
-        gate_screen = self.frame.to_fixed_frame_point(gate.get_center())
-        composition_center = 0.5 * (gate_screen + dbz_value.get_center())
-        composition_center[2] = 0
-
-        camera_shift = self.frame.from_fixed_frame_point(
-            composition_center,
-            relative=True,
-        )
-
-        self.play(self.frame.animate.shift(camera_shift))
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                *[
-                    FadeIn(m)
-                    for m in dbz_value.next_to(
-                        self.frame.to_fixed_frame_point(gate.get_center()),
-                        RIGHT,
-                        LARGE_BUFF,
-                    )
-                ]
-            )
-        )
-
-        self.wait(0.5)
-
-        res_thumbnail = ImageMobject(
-            "../09_resolution/static/Resolution Thumbnail.png"
-        ).fix_in_frame()
-        thumbnail_box = SurroundingRectangle(res_thumbnail, buff=0, color=YELLOW)
-        thumbnail_label = (
-            Group(
-                Text(
-                    "How Radars Tell Targets Apart",
-                    font=FONT,
-                ).fix_in_frame(),
-                Text(
-                    "(and When They Can’t)",
-                    font=FONT,
-                ).fix_in_frame(),
-            )
-            .arrange(DOWN, MED_SMALL_BUFF)
-            .next_to(thumbnail_box, DOWN)
-        )
-
-        thumbnail = (
-            Group(res_thumbnail, thumbnail_box, thumbnail_label)
-            .fix_in_frame()
-            .shift(UP / 4)
-        )
-
-        self.play(GrowFromCenter(thumbnail))
-
-        self.wait(0.5)
-
-        self.play(FadeOut(thumbnail))
-
-        self.wait(0.5)
-
-        self.play(FadeOut(dbz_value), self.frame.animate.shift(OUT * 20))
+        # self.wait(0.5)
+        #
+        # dbz_value = (
+        #     Tex(r"\rightarrow 31.2 \text{ dBZ}")
+        #     .scale(1.2)
+        #     .fix_in_frame()
+        #     .next_to(
+        #         self.frame.to_fixed_frame_point(gate.get_center()),
+        #         RIGHT,
+        #         LARGE_BUFF,
+        #     )
+        # )
+        # gate_screen = self.frame.to_fixed_frame_point(gate.get_center())
+        # composition_center = 0.5 * (gate_screen + dbz_value.get_center())
+        # composition_center[2] = 0
+        #
+        # camera_shift = self.frame.from_fixed_frame_point(
+        #     composition_center,
+        #     relative=True,
+        # )
+        #
+        # self.play(self.frame.animate.shift(camera_shift))
+        #
+        # self.wait(0.5)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         *[
+        #             FadeIn(m)
+        #             for m in dbz_value.next_to(
+        #                 self.frame.to_fixed_frame_point(gate.get_center()),
+        #                 RIGHT,
+        #                 LARGE_BUFF,
+        #             )
+        #         ]
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # res_thumbnail = ImageMobject(
+        #     "../09_resolution/static/Resolution Thumbnail.png"
+        # ).fix_in_frame()
+        # thumbnail_box = SurroundingRectangle(res_thumbnail, buff=0, color=YELLOW)
+        # thumbnail_label = (
+        #     Group(
+        #         Text(
+        #             "How Radars Tell Targets Apart",
+        #             font=FONT,
+        #         ).fix_in_frame(),
+        #         Text(
+        #             "(and When They Can’t)",
+        #             font=FONT,
+        #         ).fix_in_frame(),
+        #     )
+        #     .arrange(DOWN, MED_SMALL_BUFF)
+        #     .next_to(thumbnail_box, DOWN)
+        # )
+        #
+        # thumbnail = (
+        #     Group(res_thumbnail, thumbnail_box, thumbnail_label)
+        #     .fix_in_frame()
+        #     .shift(UP / 4)
+        # )
+        #
+        # self.play(GrowFromCenter(thumbnail))
+        #
+        # self.wait(0.5)
+        #
+        # self.play(FadeOut(thumbnail))
+        #
+        # self.wait(0.5)
+        #
+        # self.play(FadeOut(dbz_value), self.frame.animate.shift(OUT * 20))
 
         self.embed()
 
@@ -3828,21 +3828,23 @@ class ThumbnailTesting(InteractiveScene):
         )
         beams.append(self.third_beam)
 
-        self.play(ShowCreation(self.third_beam), run_time=3)
+        # self.play(ShowCreation(self.third_beam), run_time=3)
         self.play(
             self.frame.animate(run_time=1)
             .reorient(
-                -24,
-                82,
+                -4,
+                86,
                 0,
                 center=Group(
                     self.west_radar.antenna,
                     self.east_radar.antenna,
-                    self.third_radar.antenna,
+                    # self.third_radar.antenna,
                 ).get_center(),
-                height=11.4,
+                height=8.4,
             )
             .shift(OUT * 0.5),
         )
+
+        self.remove(self.terrain)
 
         self.embed()

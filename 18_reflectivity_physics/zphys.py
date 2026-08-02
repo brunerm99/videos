@@ -45,6 +45,10 @@ ACCENT_COLOR = YELLOW
 FONT = os.getenv("FONT", "Maple Mono CN")
 
 
+class Intro(InteractiveScene):
+    def construct(self): ...
+
+
 class BrightBand(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
