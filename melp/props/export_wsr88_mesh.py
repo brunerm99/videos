@@ -555,7 +555,7 @@ def main():
         elevation_axis=elevation_axis,
         source_lower=lower,
         source_upper=upper,
-        source_file=str(Path(bpy.data.filepath).resolve()),
+        source_file=Path(bpy.data.filepath).name,
         source_frame=scene.frame_current,
         clip_z=np.nan if args.clip_z is None else args.clip_z,
         normalization_lower_z=REFERENCE_LOWER_Z,

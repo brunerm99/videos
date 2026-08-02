@@ -3848,3 +3848,23 @@ class ThumbnailTesting(InteractiveScene):
         self.remove(self.terrain)
 
         self.embed()
+
+
+class Dsd(InteractiveScene):
+    def construct(self):
+        rng = np.random.default_rng(1)
+        vals = rng.normal(0.5, 0.1, 100)
+        hist, bins = np.histogram(vals, range=(0, 1), bins=10)
+        # hist = hist / hist.max()
+        bar = BarChart(
+            hist,
+            height=fh(self, 0.7),
+            width=fw(self, 0.7),
+            max_value=hist.max(),
+            include_x_ticks=True,
+            bar_names=list(map(lambda bin: f"{bin:.1f}", bins)),
+        )
+
+        self.add(bar)
+
+        self.embed()

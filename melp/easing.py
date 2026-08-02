@@ -1,9 +1,4 @@
-"""Scalar easing functions for Manim ``rate_func`` arguments.
-
-The named easing curves follow the canonical definitions from easings.net.
-Inputs are expected to be normalized animation progress values in ``[0, 1]``.
-Outputs are intentionally not clamped because back and elastic curves overshoot.
-"""
+"""Inputs are normalized to [0, 1]; back and elastic outputs may overshoot."""
 
 from __future__ import annotations
 
@@ -238,8 +233,6 @@ def cubic_bezier(
     max_newton_iters: int = 10,
     max_bisection_iters: int = 24,
 ) -> Callable[[float], float]:
-    """Return a rate function for the given CSS-style cubic Bezier curve."""
-
     x1 = float(x1)
     y1 = float(y1)
     x2 = float(x2)

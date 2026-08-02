@@ -217,7 +217,7 @@ def main():
         args.output,
         points=points.astype(np.float32),
         normals=normals.astype(np.float32),
-        source_file=str(args.input.expanduser().resolve()),
+        source_file=args.input.expanduser().name,
         source_member=archive_member,
         source_dimensions=source_dimensions.astype(np.float32),
         normalization_width=normalization_width,
