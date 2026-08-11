@@ -31,6 +31,24 @@ class VT(ValueTracker):
         self.increment_value(-difference)
         return self
 
+    def __mul__(self, factor):
+        return self.animate.set_value(self.get_value() * factor)
+
+    def __imul__(self, factor):
+        self.set_value(self.get_value() * factor)
+        return self
+
+    def __truediv__(self, divisor):
+        if divisor == 0:
+            raise ZeroDivisionError("division by zero")
+        return self.animate.set_value(self.get_value() / divisor)
+
+    def __itruediv__(self, divisor):
+        if divisor == 0:
+            raise ZeroDivisionError("division by zero")
+        self.set_value(self.get_value() / divisor)
+        return self
+
 
 def fh(scene, scale=1):
     return scene.frame.get_height() * scale
