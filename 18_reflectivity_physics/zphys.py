@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from dotenv import load_dotenv
 from manimlib import *
+from scipy.spatial.transform import Rotation
 from scipy.special import spherical_jn, spherical_yn
 
 sys.path.insert(0, "..")
@@ -47,6 +48,200 @@ FONT = os.getenv("FONT", "Maple Mono CN")
 
 class Intro(InteractiveScene):
     def construct(self): ...
+
+
+class Rayleigh(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        drop = Sphere(
+            radius=1,
+            color=BLUE,
+            resolution=(16, 8),
+            shading=(0.1, 0.25, 0.15),
+        ).set_opacity(1)
+
+        self.play(GrowFromCenter(drop))
+
+        self.wait(0.5)
+
+        ax = Axes(
+            x_range=[0, 1, 0.25],
+            y_range=[-1, 1, 0.5],
+            width=drop.get_width(),
+            height=drop.get_height(),
+            axis_config={
+                "stroke_width": DEFAULT_STROKE_WIDTH * 0.5,
+                "tick_size": 0.04,
+                "scale_stroke_with_zoom": True,
+            },
+        )
+
+        A = VT(1)
+        default_f = 4
+        f = VT(4)
+        xshift = VT(-15)
+        xlen = VT(1)
+        ei = always_redraw(
+            lambda: ax.get_graph(
+                lambda t: ~A * np.sin(2 * PI * ~f * t),
+                x_range=[0, default_f * ~xlen / ~f, 1 / 200],
+                color=TX_COLOR,
+            ).shift(RIGHT * ~xshift)
+        )
+        self.add(ei)
+
+        def get_drop_overlap():
+            wave_x_max = default_f * ~xlen / ~f
+            overlap_x_min = max(
+                0,
+                ax.p2c(drop.get_left() - RIGHT * ~xshift)[0],
+            )
+            overlap_x_max = min(
+                wave_x_max,
+                ax.p2c(drop.get_right() - RIGHT * ~xshift)[0],
+            )
+
+            if overlap_x_min >= overlap_x_max:
+                return VMobject()
+
+            return (
+                ax.get_graph(
+                    lambda t: ~A * np.sin(2 * PI * ~f * t),
+                    x_range=[overlap_x_min, overlap_x_max, 1 / 200],
+                    color=ACCENT_COLOR,
+                )
+                .shift(RIGHT * ~xshift)
+                .set_stroke(width=DEFAULT_STROKE_WIDTH * 1.5)
+                .set_z_index(1)
+            )
+
+        drop_overlap = always_redraw(get_drop_overlap)
+        self.add(drop_overlap)
+
+        wlo = VT(0)
+        wlol = VT(0)
+        wlor = VT(0)
+        wl_line = always_redraw(
+            lambda: (
+                Line(
+                    ax.c2p(0, -~A - 0.2), ax.c2p(default_f * ~xlen / ~f / 4, -~A - 0.2)
+                )
+                .shift(RIGHT * ~xshift)
+                .set_opacity(~wlo)
+            )
+        )
+        wl_line_l = always_redraw(
+            lambda: (
+                Line(ax.c2p(0, -~A - 0.1), ax.c2p(0, -~A - 0.3))
+                .shift(RIGHT * ~xshift)
+                .set_opacity(~wlol)
+            )
+        )
+        wl_line_r = always_redraw(
+            lambda: (
+                Line(
+                    ax.c2p(default_f * ~xlen / ~f / 4, -~A - 0.1),
+                    ax.c2p(default_f * ~xlen / ~f / 4, -~A - 0.3),
+                )
+                .shift(RIGHT * ~xshift)
+                .set_opacity(~wlor)
+            )
+        )
+        wl_label = always_redraw(
+            lambda: Tex(r"\lambda").set_opacity(~wlo).next_to(wl_line, DOWN, SMALL_BUFF)
+        )
+        self.add(wl_line, wl_line_l, wl_line_r, wl_label)
+
+        self.play(
+            self.frame.animate.shift(LEFT * 4),
+            xshift.animate(run_time=2).set_value(-5),
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(wlol @ 1, wlo @ 1, wlor @ 1, lag_ratio=0.2))
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(f / 2, xshift - 2, lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        coords = [
+            [0.9036873, 0.25698839, -0.34249998],
+            [-0.42819303, 0.54236555, -0.72283493],
+            [0.0, 0.79987285, 0.60016949],
+        ]
+        orientation = Rotation.from_matrix(coords)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate.move_to(ORIGIN),
+                xshift.animate(run_time=2).set_value(0),
+                drop.animate.set_opacity(0.2),
+                FadeIn(ax),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.frame.animate.set_orientation(orientation).set_height(5))
+
+        self.wait(0.5)
+
+        self.play(
+            drop.animate.scale(0.25),
+            f / 4,
+            self.frame.animate.reorient(
+                0, 0, 0, center=drop.get_center(), height=2.5
+            ).shift(UP * 0.5),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        wave_x_max = default_f * ~xlen / ~f
+        overlap_x_min = max(
+            0,
+            ax.p2c(drop.get_left() - RIGHT * ~xshift)[0],
+        )
+        overlap_x_max = min(
+            wave_x_max,
+            ax.p2c(drop.get_right() - RIGHT * ~xshift)[0],
+        )
+
+        amp_line = Line(
+            [ax.i2gp(overlap_x_max, ei)[0], ax.i2gp(overlap_x_min, ei)[1], 0],
+            [ax.i2gp(overlap_x_max, ei)[0], ax.c2p(0, 1)[1], 0],
+        ).shift(RIGHT * 0.2)
+        amp_line_u = DashedLine(
+            amp_line.get_end() + RIGHT * 0.05,
+            amp_line.get_end() + LEFT * 1,
+            dash_length=DEFAULT_DASH_LENGTH / 1.4,
+        )
+        amp_line_d = DashedLine(
+            amp_line.get_start() + RIGHT * 0.05,
+            amp_line.get_start() + LEFT * 1,
+            dash_length=DEFAULT_DASH_LENGTH / 1.4,
+        )
+        delA = Tex(r"\Delta A").scale(0.3).next_to(amp_line, RIGHT, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(amp_line),
+                LaggedStart(
+                    ShowCreation(amp_line_u),
+                    ShowCreation(amp_line_d),
+                    lag_ratio=0,
+                ),
+                FadeIn(delA),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.embed()
 
 
 class BrightBand(InteractiveScene):
