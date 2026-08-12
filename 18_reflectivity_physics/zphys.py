@@ -228,6 +228,24 @@ class Rayleigh(InteractiveScene):
         )
         delA = Tex(r"\Delta A").scale(0.3).next_to(amp_line, RIGHT, SMALL_BUFF)
 
+        phase_line = Line(
+            ax.i2gp(overlap_x_min, ei),
+            [ax.i2gp(overlap_x_max, ei)[0], ax.i2gp(overlap_x_min, ei)[1], 0],
+        ).shift(DOWN * 0.1)
+        phase_line_l = DashedLine(
+            phase_line.get_start() + DOWN * 0.05,
+            phase_line.get_start() + UP * 0.3,
+            dash_length=DEFAULT_DASH_LENGTH / 1.4,
+        )
+        phase_line_r = DashedLine(
+            phase_line.get_end() + DOWN * 0.05,
+            phase_line.get_end() + UP * 0.3,
+            dash_length=DEFAULT_DASH_LENGTH / 1.4,
+        )
+        phase_label = (
+            Tex(r"\Delta \varphi").scale(0.3).next_to(phase_line, DOWN, SMALL_BUFF)
+        )
+
         self.play(
             LaggedStart(
                 ShowCreation(amp_line),
@@ -240,6 +258,29 @@ class Rayleigh(InteractiveScene):
                 lag_ratio=0.3,
             )
         )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(phase_line),
+                LaggedStart(
+                    ShowCreation(phase_line_l),
+                    ShowCreation(phase_line_r),
+                    lag_ratio=0,
+                ),
+                FadeIn(phase_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        arrow = CurvedArrow(
+            self.frame.to_fixed_frame_point(drop.get_top()),
+            self.frame.to_fixed_frame_point(drop.get_left()),
+            angle=PI / 3,
+        ).fix_in_frame()
 
         self.embed()
 
