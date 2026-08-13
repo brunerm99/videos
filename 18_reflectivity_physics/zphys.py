@@ -27,13 +27,17 @@ from melp.props import (
     Beam,
     Cloud,
     PPIGrid,
+    RainDrop,
+    Router,
     Terrain,
     TriangleMeshMobject,
     WSR88Model,
+    Yagi,
     get_wsr88_model,
     place_wsr88_model,
     place_wsr88_on_terrain,
 )
+from melp.props import Dipole as DipoleAntenna
 
 BACKGROUND_COLOR = "#183340"
 RX_COLOR = RED
@@ -57,7 +61,7 @@ class Rayleigh(InteractiveScene):
         drop = Sphere(
             radius=1,
             color=BLUE,
-            resolution=(16, 8),
+            resolution=(24, 16),
             shading=(0.1, 0.25, 0.15),
         ).set_opacity(1)
 
@@ -276,11 +280,310 @@ class Rayleigh(InteractiveScene):
 
         self.wait(0.5)
 
-        arrow = CurvedArrow(
+        left_arrow = CurvedArrow(
             self.frame.to_fixed_frame_point(drop.get_top()),
             self.frame.to_fixed_frame_point(drop.get_left()),
             angle=PI / 3,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
         ).fix_in_frame()
+        right_arrow = CurvedArrow(
+            self.frame.to_fixed_frame_point(drop.get_top()),
+            self.frame.to_fixed_frame_point(drop.get_right()),
+            angle=-PI / 3,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        ).fix_in_frame()
+
+        self.play(ShowCreation(left_arrow), ShowCreation(right_arrow), run_time=3)
+
+        self.wait(0.5)
+
+        rayleigh = (
+            Text("Rayleigh Regime", font=FONT)
+            .scale(0.6)
+            .next_to(ax, UP, MED_LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    FadeOut(left_arrow),
+                    FadeOut(right_arrow),
+                    lag_ratio=0,
+                ),
+                self.frame.animate.shift(UP * 0.4),
+                Write(rayleigh),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.next_to(ei, RIGHT, LARGE_BUFF), run_time=3)
+
+        self.embed()
+
+
+class Dipole(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        antenna_base = Line(DOWN, ORIGIN)
+        antenna_tri = (
+            Triangle(fill_opacity=1, fill_color=BACKGROUND_COLOR)
+            .rotate(PI / 3)
+            .rescale_to_fit(antenna_base.get_length() * 1, 1)
+            .round_corners(radius=0.05)
+            .set_z_index(2)
+        )
+        antenna_base.next_to(antenna_tri, DOWN, 0).set_z_index(1)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(antenna_base),
+                ShowCreation(antenna_tri),
+                lag_ratio=0.3,
+            )
+        )
+        self.add(antenna_tri, antenna_base)
+
+        self.wait(0.5)
+
+        nrads = 5
+        circ_prog = VT(0)
+
+        def get_rad_updater(lag=0.3, max_width=5, fade=False):
+            def updater(m):
+                prog = min(max(~circ_prog - lag, 0.0001), 1)
+                opacity = 1
+                if fade:
+                    opacity = 1 - prog
+                m.rescale_to_fit(prog * max_width, 0).set_z_index(-1).set_stroke(
+                    opacity=opacity
+                )
+                if prog >= 1:
+                    self.remove(m)
+
+            return updater
+
+        lag = 0.2
+        max_prog = 1 + nrads * lag
+        rads = VGroup(
+            [
+                Circle(stroke_color=TX_COLOR)
+                .set_z_index(-1)
+                .move_to(antenna_tri)
+                .add_updater(get_rad_updater(lag=idx * lag, max_width=fw(self, 1.5)))
+                for idx in range(nrads)
+            ]
+        )
+
+        self.add(rads)
+
+        self.play(circ_prog @ max_prog, run_time=8)
+
+        self.wait(0.5)
+
+        self.radar, self.beam_origin = place_wsr88_model(height=fh(self, 1), shift=0)
+
+        self.radar.shift(IN * 30).rotate(-PI / 2, axis=RIGHT, about_point=ORIGIN)
+
+        tower_parts = [
+            *self.radar.base_sections[:2][::-1],
+            self.radar.fixed_body,
+            self.radar.antenna,
+        ]
+        for part in tower_parts:
+            part.set_opacity(0)
+        self.radar.dome.set_opacity(0)
+        self.radar.dome.deactivate_depth_test()
+
+        radar_build = LaggedStart(
+            *[part.animate.set_opacity(1) for part in tower_parts],
+            lag_ratio=0.3,
+            run_time=2,
+        )
+        radar_build.group = self.radar
+        radar_build.mobject = self.radar
+
+        radar_destroy = LaggedStart(
+            *[part.animate.set_opacity(0) for part in tower_parts],
+            lag_ratio=0.3,
+            run_time=2,
+        )
+        radar_destroy.group = self.radar
+        radar_destroy.mobject = self.radar
+
+        self.play(
+            LaggedStart(
+                self.frame.animate.reorient(
+                    0, -20, 0, center=self.radar.upper_dome.get_center(), height=8
+                ),
+                radar_build,
+                self.radar.az @ (-45 * DEG),
+                self.radar.el @ (20 * DEG),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(self.radar.reflector.animate.set_color(BLUE))
+
+        self.wait(0.5)
+
+        human = (
+            ImageMobject("../props/static/human_outline_white.png")
+            .rescale_to_fit(fh(self, 0.6), 1)
+            .fix_in_frame()
+            .shift(RIGHT * 4)
+        )
+
+        router = (
+            Router()
+            .move_to(self.radar.upper_dome)
+            .shift(RIGHT * 12)
+            .rotate(-PI / 2, axis=RIGHT)
+            .rotate(PI, axis=UP)
+            .set_z_index(1)
+        )
+
+        self.add(router)
+
+        self.play(
+            LaggedStart(
+                radar_destroy,
+                self.frame.animate(run_time=3)
+                .reorient(0, -10, 0, center=router.get_center(), height=8)
+                .shift(RIGHT * 3 + UP * 2),
+                router.antenna_angle.animate(run_time=2).set_value(100 * DEG),
+                human.shift(RIGHT * 10).animate.shift(LEFT * 10),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        nrads = 5
+        circ_prog = VT(0)
+        lag = 0.2
+        max_prog = 1 + nrads * lag
+        router_rads_r = VGroup(
+            [
+                Circle(stroke_color=TX_COLOR)
+                .set_z_index(-1)
+                .move_to(router.antennas[0].get_top())
+                .rotate(-100 * DEG, axis=RIGHT)
+                .shift(DOWN * np.sin(100 * DEG) + IN * np.cos(100 * DEG))
+                .add_updater(
+                    get_rad_updater(lag=idx * lag, max_width=fw(self, 1.5), fade=True)
+                )
+                for idx in range(nrads)
+            ]
+        )
+        router_rads_l = VGroup(
+            [
+                Circle(stroke_color=TX_COLOR)
+                .set_z_index(-1)
+                .move_to(router.antennas[1].get_top())
+                .rotate(-100 * DEG, axis=RIGHT)
+                .shift(DOWN * np.sin(100 * DEG) + IN * np.cos(100 * DEG))
+                .add_updater(
+                    get_rad_updater(lag=idx * lag, max_width=fw(self, 1.5), fade=True)
+                )
+                for idx in range(nrads)
+            ]
+        )
+
+        self.add(router_rads_r, router_rads_l)
+
+        self.play(circ_prog @ max_prog, run_time=8)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(human), FadeOut(router))
+
+        self.wait(0.5)
+
+        raindrop = RainDrop().move_to(router.get_center()).shift(UP * 10)
+        self.add(raindrop)
+
+        self.play(
+            self.frame.animate(run_time=3).reorient(
+                0, 0, 0, center=raindrop.get_center(), height=6
+            ),
+        )
+
+        self.wait(0.5)
+
+        out_rotation = PI / 6
+        rotation_speed = PI / 6
+        yagi = (
+            Yagi()
+            .scale(0.6)
+            .move_to(raindrop)
+            .shift(RIGHT * 4 + UP * 1.5)
+            .rotate(out_rotation, axis=OUT)
+            .shift(RIGHT * 10)
+        )
+        yagi_axis = Line(LEFT, RIGHT).rotate(out_rotation, axis=OUT).get_vector()
+
+        def get_rotation_updater(speed, axis):
+            def updater(m, dt):
+                m.rotate(dt * speed, axis=axis)
+
+            return updater
+
+        yagi.add_updater(get_rotation_updater(rotation_speed, yagi_axis), call=False)
+
+        dipole = (
+            DipoleAntenna(
+                length=3,
+                radius=0.06,
+                feed_gap=0.2,
+                feed_length=0.7,
+            )
+            .move_to(raindrop)
+            .shift(RIGHT * 4 + DOWN * 1)
+            .shift(RIGHT * 10)
+        )
+
+        dipole.add_updater(get_rotation_updater(rotation_speed, UP), call=False)
+
+        self.play(
+            self.frame.animate(run_time=3)
+            .reorient(0, 0, 0, center=raindrop.get_center(), height=6)
+            .shift(RIGHT * 2.5),
+            LaggedStart(
+                yagi.animate.shift(LEFT * 10),
+                dipole.animate.shift(LEFT * 10),
+                lag_ratio=0.3,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        bez_u = CubicBezier(
+            self.frame.to_fixed_frame_point(raindrop.get_right()) + [0.1, 0, 0],
+            self.frame.to_fixed_frame_point(raindrop.get_right()) + [2.5, 0, 0],
+            self.frame.to_fixed_frame_point(yagi.get_left()) + [-2.5, 0, 0],
+            self.frame.to_fixed_frame_point(yagi.get_left()) + [-0.1, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        ).fix_in_frame()
+        bez_d = CubicBezier(
+            self.frame.to_fixed_frame_point(raindrop.get_right()) + [0.1, 0, 0],
+            self.frame.to_fixed_frame_point(raindrop.get_right()) + [2.5, 0, 0],
+            self.frame.to_fixed_frame_point(dipole.get_left()) + [-2.5, 0, 0],
+            self.frame.to_fixed_frame_point(dipole.get_left()) + [-0.1, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        ).fix_in_frame()
+
+        self.play(
+            ShowCreation(bez_u),
+            ShowCreation(bez_d),
+        )
+
+        self.wait(8)
 
         self.embed()
 

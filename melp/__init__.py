@@ -41,13 +41,18 @@ from .nexrad import (
     get_available_nexrad_products,
     get_nexrad_product_ppi_data,
 )
+from .props.dipole import Dipole
 from .props.ppi import PPIGrid, field_to_rgba, polar_to_cartesian
 from .props.video import VideoMobject
+from .props.yagi import YAGI_MODEL_PATH, Yagi
 
 __all__ = [
+    "Dipole",
     "PPIGrid",
     "VT",
     "VideoMobject",
+    "YAGI_MODEL_PATH",
+    "Yagi",
     "bezier_out_in",
     "cubic_bezier",
     "ease_in_back",
