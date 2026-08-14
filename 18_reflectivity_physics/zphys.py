@@ -768,7 +768,7 @@ class Charge(InteractiveScene):
 
         self.wait(0.5)
 
-        def face_camera(m, get_center):
+        def face_camera(m, get_center, scale_tracker):
             m.center()
             local_points = [member.get_points().copy() for member in m.get_family()]
 
@@ -777,7 +777,8 @@ class Charge(InteractiveScene):
                 center = get_center()
                 for member, points in zip(m.get_family(), local_points):
                     if len(points):
-                        member.set_points(points @ rotation.T + center)
+                        scaled_points = points * ~scale_tracker
+                        member.set_points(scaled_points @ rotation.T + center)
 
             return m.add_updater(update)
 
@@ -786,6 +787,7 @@ class Charge(InteractiveScene):
         directions = rng.normal(size=(npluses, 3))
         directions /= np.linalg.norm(directions, axis=1, keepdims=True)
         offsets = directions * rng.uniform(0.2, 0.3, size=(npluses, 1))
+        plus_scales = [VT(1) for _ in range(npluses)]
 
         pluses = VGroup(
             *[
@@ -794,8 +796,9 @@ class Charge(InteractiveScene):
                     .scale(0.25)
                     .apply_depth_test(),
                     lambda offset=offset: raindrop.get_center() + offset,
+                    scale_tracker,
                 )
-                for offset in offsets
+                for offset, scale_tracker in zip(offsets, plus_scales)
             ]
         )
 
@@ -832,6 +835,130 @@ class Charge(InteractiveScene):
         self.frame.add_updater(rotate_cam)
 
         self.wait(12)
+
+        wl = (
+            Tex(r"\lambda")
+            .fix_in_frame()
+            .scale(1.5)
+            .next_to(
+                self.frame.to_fixed_frame_point(self.frame.get_bottom()),
+                UP,
+                LARGE_BUFF,
+            )
+        )
+        wl_bez_l = CubicBezier(
+            wl.get_left() + LEFT * 0.1,
+            wl.get_left() + LEFT * 0.5,
+            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(4, 0, 0))
+            + DOWN * 1,
+            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(4, 0, 0)),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        ).fix_in_frame()
+        wl_bez_r = CubicBezier(
+            wl.get_right() + RIGHT * 0.1,
+            wl.get_right() + RIGHT * 1,
+            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(6, 0, 0))
+            + DOWN * 2,
+            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(6, 0, 0)),
+            stroke_width=DEFAULT_STROKE_WIDTH * 3,
+        ).fix_in_frame()
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(wl),
+                LaggedStart(
+                    ShowCreation(wl_bez_l), ShowCreation(wl_bez_r), lag_ratio=0
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        D_line = (
+            Line(
+                self.frame.to_fixed_frame_point(raindrop.get_left()),
+                self.frame.to_fixed_frame_point(raindrop.get_right()),
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            )
+            .fix_in_frame()
+            .shift(UP * 1.5 + LEFT * 0.2)
+        )
+        D_line_l = (
+            Line(
+                D_line.get_start() + UP * 0.1,
+                D_line.get_start() + DOWN * 0.1,
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            )
+            .fix_in_frame()
+            .rotate(D_line.get_angle(), about_point=D_line.get_start())
+        )
+        D_line_r = (
+            Line(
+                D_line.get_end() + UP * 0.1,
+                D_line.get_end() + DOWN * 0.1,
+                stroke_width=DEFAULT_STROKE_WIDTH * 3,
+            )
+            .fix_in_frame()
+            .rotate(D_line.get_angle(), about_point=D_line.get_end())
+        )
+
+        D_label = Tex("D").fix_in_frame().scale(1.5).next_to(D_line, UP, MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(D_line_l),
+                ShowCreation(D_line),
+                ShowCreation(D_line_r),
+                GrowFromCenter(D_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_constant = (
+            Tex(r"\Delta \varphi = C")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(self.frame.to_fixed_frame_point(self.frame.get_top()))
+            .shift(RIGHT * 2.5 + UP * 2.8)
+        )
+
+        self.play(LaggedStart(*[FadeIn(m) for m in phase_constant], lag_ratio=0.2))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Uncreate(wl_bez_l),
+                    Uncreate(wl_bez_r),
+                    FadeOut(wl),
+                    Uncreate(D_line_l),
+                    Uncreate(D_line_r),
+                    Uncreate(D_line),
+                    FadeOut(phase_constant),
+                    FadeOut(D_label),
+                ),
+                self.frame.animate(run_time=2).scale(0.8),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    plus_scale.animate(
+                        rate_func=utils.rate_functions.there_and_back
+                    ).increment_value(1)
+                    for plus_scale in plus_scales
+                ],
+                lag_ratio=0.2,
+            )
+        )
 
         self.embed()
 
