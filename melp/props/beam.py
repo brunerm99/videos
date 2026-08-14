@@ -1,7 +1,23 @@
 from __future__ import annotations
 
 import numpy as np
-from manimlib import BLUE, ORIGIN, RIGHT, TAU, Arc, Cone, DotCloud, ParametricSurface
+from manimlib import (
+    BLUE,
+    ORIGIN,
+    OUT,
+    RED,
+    RIGHT,
+    TAU,
+    UP,
+    Arc,
+    Cone,
+    DotCloud,
+    Group,
+    ParametricSurface,
+    VMobject,
+)
+
+from ..animation_helpers import VT
 
 __all__ = ["Beam"]
 
@@ -96,6 +112,69 @@ class Beam(Cone):
     def get_base_radius(self):
         base_ring = self._get_reference_ring(-1)
         return np.linalg.norm(base_ring - self.get_end(), axis=1).max()
+
+    def get_em_wave(
+        self,
+        wavelength,
+        n_oscillations,
+        beamwidth,
+        *,
+        e_color=BLUE,
+        h_color=RED,
+        stroke_width=4,
+        depth_test=False,
+    ):
+        wavelength = float(wavelength)
+        beamwidth = float(beamwidth)
+        numeric_n_oscillations = float(n_oscillations)
+
+        if not np.isfinite(wavelength) or wavelength <= 0:
+            raise ValueError("wavelength must be positive and finite")
+        if not np.isfinite(beamwidth) or not 0 < beamwidth < np.pi:
+            raise ValueError("beamwidth must be finite and in (0, PI) radians")
+        if (
+            not np.isfinite(numeric_n_oscillations)
+            or not numeric_n_oscillations.is_integer()
+            or numeric_n_oscillations < 1
+        ):
+            raise ValueError("n_oscillations must be a positive integer")
+        n_oscillations = int(numeric_n_oscillations)
+
+        e_field = VMobject().set_stroke(e_color, stroke_width)
+        h_field = VMobject().set_stroke(h_color, stroke_width)
+        em_wave = Group(e_field, h_field)
+        em_wave.e_field = e_field
+        em_wave.h_field = h_field
+        em_wave.range = VT(0)
+        em_wave.add(em_wave.range)
+
+        if depth_test:
+            em_wave.apply_depth_test()
+        else:
+            em_wave.deactivate_depth_test()
+
+        pulse_length = wavelength * n_oscillations
+        sample_count = 32 * n_oscillations + 1
+
+        def update_wave(wave):
+            wave_range = np.clip(~wave.range, 0, self.get_range())
+            start_range = max(0, wave_range - pulse_length)
+            distances = np.linspace(start_range, wave_range, sample_count)
+            direction = self.get_direction()
+            e_reference = UP if abs(np.dot(direction, UP)) < 0.9 else OUT
+            e_direction = e_reference - np.dot(e_reference, direction) * direction
+            e_direction /= np.linalg.norm(e_direction)
+            h_direction = np.cross(direction, e_direction)
+            phase = TAU * (distances - wave_range) / wavelength
+            amplitude = distances * np.tan(beamwidth / 2)
+            centers = self.get_origin() + distances[:, None] * direction
+            oscillation = (amplitude * np.sin(phase))[:, None]
+            wave.e_field.set_points_smoothly(centers + oscillation * e_direction)
+            wave.h_field.set_points_smoothly(centers + oscillation * h_direction)
+
+        em_wave.range.add_updater(lambda _tracker: update_wave(em_wave), call=False)
+        update_wave(em_wave)
+        return em_wave
 
     def get_beamwidth_arc(
         self,

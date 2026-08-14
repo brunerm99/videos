@@ -17,6 +17,7 @@ load_dotenv()
 from melp import (
     VT,
     VideoMobject,
+    ease_in_sine,
     ease_out_cubic,
     fh,
     fw,
@@ -695,6 +696,142 @@ class Charge(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
+        self.radar, self.beam_origin = place_wsr88_model(height=fh(self, 1), shift=0)
+
+        tower_parts = [
+            *self.radar.base_sections[::-1],
+            self.radar.fixed_body,
+            self.radar.antenna,
+        ]
+        for part in tower_parts:
+            part.set_opacity(0)
+        tower_parts = tower_parts[-5:]
+        self.radar.dome.set_opacity(0)
+        self.radar.dome.deactivate_depth_test()
+
+        radar_build = LaggedStart(
+            *[part.animate.set_opacity(1) for part in tower_parts],
+            lag_ratio=0.3,
+            run_time=3,
+        )
+        radar_build.group = self.radar
+        radar_build.mobject = self.radar
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    self.frame.animate(run_time=3).reorient(
+                        30, 75, 0, center=self.radar.dome.get_center(), height=9
+                    ),
+                    radar_build,
+                    lag_ratio=0,
+                ),
+                self.radar.el.animate(run_time=3).set_value(20 * DEG),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        raindrop = (
+            RainDrop()
+            .scale(0.2)
+            .move_to(self.radar.beam_location_to_point(5, 0 * DEG, 0 * DEG))
+        )
+
+        bw = 8 * DEG
+        beam = self.radar.get_beam(bw, 10)
+        em_wave = beam.get_em_wave(
+            wavelength=2,
+            n_oscillations=1,
+            beamwidth=bw,
+            stroke_width=DEFAULT_STROKE_WIDTH,
+        )
+        self.add(em_wave)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=3).reorient(
+                    40,
+                    75,
+                    0,
+                    center=Group(self.radar.dome, raindrop).get_center(),
+                    height=9,
+                ),
+                FadeIn(raindrop),
+                # ShowCreation(beam, run_time=3),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        def face_camera(m, get_center):
+            m.center()
+            local_points = [member.get_points().copy() for member in m.get_family()]
+
+            def update(m):
+                rotation = self.frame.get_orientation().as_matrix()
+                center = get_center()
+                for member, points in zip(m.get_family(), local_points):
+                    if len(points):
+                        member.set_points(points @ rotation.T + center)
+
+            return m.add_updater(update)
+
+        rng = np.random.default_rng(0)
+        npluses = 8
+        directions = rng.normal(size=(npluses, 3))
+        directions /= np.linalg.norm(directions, axis=1, keepdims=True)
+        offsets = directions * rng.uniform(0.2, 0.3, size=(npluses, 1))
+
+        pluses = VGroup(
+            *[
+                face_camera(
+                    Text("+", font=FONT, fill_color=YELLOW)
+                    .scale(0.25)
+                    .apply_depth_test(),
+                    lambda offset=offset: raindrop.get_center() + offset,
+                )
+                for offset in offsets
+            ]
+        )
+
+        self.play(
+            LaggedStart(
+                em_wave.range.animate(run_time=6).set_value(10),
+                self.frame.animate(run_time=4).reorient(
+                    20, 90, 0, center=raindrop.get_center(), height=2
+                ),
+                LaggedStart(
+                    *[FadeIn(plus) for plus in pluses],
+                    lag_ratio=0.15,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(em_wave.range @ 6)
+
+        self.wait(0.5)
+
+        rotate_rate = PI / 9
+
+        def rotate_cam(m, dt):
+            m.rotate(rotate_rate * dt, axis=beam.direction)
+
+        self.play(
+            self.frame.animate.rotate(rotate_rate, axis=beam.direction),
+            rate_func=ease_in_sine,
+        )
+
+        self.frame.add_updater(rotate_cam)
+
+        self.wait(12)
 
         self.embed()
 
