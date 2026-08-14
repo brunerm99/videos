@@ -585,6 +585,117 @@ class Dipole(InteractiveScene):
 
         self.wait(8)
 
+        rayleigh_label = (
+            Text("Rayleigh: ", font=FONT)
+            .fix_in_frame()
+            .rescale_to_fit(fw(self, 0.2), 0)
+            .next_to(
+                self.frame.to_fixed_frame_point(raindrop.get_bottom()),
+                DOWN,
+                LARGE_BUFF,
+            )
+        )
+        rayleigh_condition = (
+            Tex(r"D \ll \lambda")
+            .fix_in_frame()
+            .rescale_to_fit(rayleigh_label.get_height(), 1)
+            .next_to(rayleigh_label, RIGHT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                *[FadeIn(m) for m in [*rayleigh_label, *rayleigh_condition]],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        bez_d_center = Line(
+            self.frame.to_fixed_frame_point(raindrop.get_right()) + [0.1, 0, 0],
+            self.frame.to_fixed_frame_point(
+                dipole.copy().set_y(raindrop.get_y()).get_left()
+            )
+            + [-0.1, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        ).fix_in_frame()
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Uncreate(bez_u),
+                    yagi.animate(run_time=2).shift(UP * 5),
+                    lag_ratio=0,
+                ),
+                LaggedStart(
+                    ReplacementTransform(bez_d, bez_d_center),
+                    dipole.animate.set_y(raindrop.get_y()),
+                    lag_ratio=0,
+                    run_time=2,
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        dipole_label = (
+            Text("Dipole", font=FONT)
+            .fix_in_frame()
+            .rescale_to_fit(fw(self, 0.3), 0)
+            .next_to(
+                self.frame.to_fixed_frame_point(dipole.get_top()), UP, MED_LARGE_BUFF
+            )
+        )
+
+        self.play(Write(dipole_label))
+
+        self.wait(6)
+
+        self.play(
+            FadeOut(rayleigh_condition),
+            FadeOut(dipole_label),
+            FadeOut(rayleigh_label),
+            FadeOut(bez_d_center),
+        )
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    dipole.animate.shift(RIGHT * 2),
+                    self.frame.animate.shift(RIGHT * 5.5),
+                    lag_ratio=0,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        er_eqn = (
+            Tex(
+                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \epsilon_0 r} \sin{\theta}"
+            )
+            .fix_in_frame()
+            .rescale_to_fit(fw(self, 0.4), 0)
+            .next_to(
+                self.frame.to_fixed_frame_point(dipole.get_right()),
+                RIGHT,
+                LARGE_BUFF * 2,
+            )
+        )
+
+        self.play(LaggedStart(*[FadeIn(m) for m in er_eqn], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        self.play(self.frame.animate.shift(RIGHT * 10), er_eqn.animate.shift(UP * 6))
+
+        self.embed()
+
+
+class Charge(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+
         self.embed()
 
 
