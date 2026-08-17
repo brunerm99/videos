@@ -789,6 +789,18 @@ class Charge(InteractiveScene):
         offsets = directions * rng.uniform(0.2, 0.3, size=(npluses, 1))
         plus_scales = [VT(1) for _ in range(npluses)]
 
+        back_pluses = VGroup(
+            *[
+                face_camera(
+                    Text("+", font=FONT, fill_color=YELLOW)
+                    .scale(0.25)
+                    .deactivate_depth_test(),
+                    lambda offset=offset: raindrop.get_center() + offset,
+                    scale_tracker,
+                )
+                for offset, scale_tracker in zip(offsets, plus_scales)
+            ]
+        )
         pluses = VGroup(
             *[
                 face_camera(
@@ -801,6 +813,8 @@ class Charge(InteractiveScene):
                 for offset, scale_tracker in zip(offsets, plus_scales)
             ]
         )
+        self.remove(raindrop)
+        self.add(back_pluses, raindrop, pluses)
 
         self.play(
             LaggedStart(
@@ -809,7 +823,14 @@ class Charge(InteractiveScene):
                     20, 90, 0, center=raindrop.get_center(), height=2
                 ),
                 LaggedStart(
-                    *[FadeIn(plus) for plus in pluses],
+                    *[
+                        AnimationGroup(
+                            FadeIn(back_plus),
+                            FadeIn(plus),
+                            lag_ratio=0,
+                        )
+                        for back_plus, plus in zip(back_pluses, pluses)
+                    ],
                     lag_ratio=0.15,
                 ),
                 lag_ratio=0.3,
@@ -959,6 +980,44 @@ class Charge(InteractiveScene):
                 lag_ratio=0.2,
             )
         )
+
+        self.wait(0.5)
+
+        er_eqn = (
+            Tex(
+                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \epsilon_0 r} \sin{\theta}"
+            )
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(ORIGIN)
+            .shift(RIGHT * 3 + DOWN * 2)
+        )
+
+        bez_opacity = VT(0)
+        plus_bez = always_redraw(
+            lambda: CubicBezier(
+                self.frame.to_fixed_frame_point(pluses[0].get_center()) + DOWN * 0.2,
+                self.frame.to_fixed_frame_point(pluses[0].get_center()) + DOWN * 1,
+                er_eqn[6].get_top() + UP * 1,
+                er_eqn[6].get_top() + UP * 0.1,
+                stroke_width=DEFAULT_STROKE_WIDTH * 4,
+                stroke_opacity=~bez_opacity,
+            ).fix_in_frame()
+        )
+        self.add(plus_bez)
+
+        self.play(
+            LaggedStart(
+                bez_opacity @ 1,
+                er_eqn.shift(DOWN * 5).animate.shift(UP * 5),
+                lag_ratio=0.3,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(er_eqn[6].animate.set_color(YELLOW))
 
         self.embed()
 
