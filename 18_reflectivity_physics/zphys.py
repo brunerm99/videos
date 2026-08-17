@@ -672,7 +672,7 @@ class Dipole(InteractiveScene):
 
         er_eqn = (
             Tex(
-                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \epsilon_0 r} \sin{\theta}"
+                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}"
             )
             .fix_in_frame()
             .rescale_to_fit(fw(self, 0.4), 0)
@@ -748,6 +748,8 @@ class Charge(InteractiveScene):
             n_oscillations=1,
             beamwidth=bw,
             stroke_width=DEFAULT_STROKE_WIDTH,
+            e_highlight_color=BLUE,
+            h_highlight_color=RED,
         )
         self.add(em_wave)
 
@@ -843,17 +845,14 @@ class Charge(InteractiveScene):
 
         self.wait(0.5)
 
-        rotate_rate = PI / 9
+        rotate_rate = VT(0)
 
         def rotate_cam(m, dt):
-            m.rotate(rotate_rate * dt, axis=beam.direction)
-
-        self.play(
-            self.frame.animate.rotate(rotate_rate, axis=beam.direction),
-            rate_func=ease_in_sine,
-        )
+            m.rotate(~rotate_rate * dt, axis=beam.direction)
 
         self.frame.add_updater(rotate_cam)
+
+        self.play(rotate_rate @ (PI / 9), run_time=2)
 
         self.wait(12)
 
@@ -985,7 +984,7 @@ class Charge(InteractiveScene):
 
         er_eqn = (
             Tex(
-                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \epsilon_0 r} \sin{\theta}"
+                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}"
             )
             .fix_in_frame()
             .scale(1.5)
@@ -1018,6 +1017,106 @@ class Charge(InteractiveScene):
         self.wait(0.5)
 
         self.play(er_eqn[6].animate.set_color(YELLOW))
+
+        self.wait(0.5)
+
+        er_eqn_ei = (
+            Tex(
+                r"E_{\theta} = \frac{k_0^2 \mathbf E_i \varepsilon_0 (\varepsilon_r - 1) V}"
+                r"{2 \pi \varepsilon_0 r} \sin{\theta}"
+            )
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(er_eqn)
+            .shift(DOWN * 0.5 + LEFT * 0.5)
+        )
+        er_eqn_ei[6:16].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(er_eqn[:6], er_eqn_ei[:6]),
+                ReplacementTransform(er_eqn[7:], er_eqn_ei[16:]),
+                er_eqn[6]
+                .animate.set_opacity(0)
+                .move_to(er_eqn_ei[10], aligned_edge=UP),
+                LaggedStart(*[FadeIn(m) for m in er_eqn_ei[6:16]]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            er_eqn_ei[6:8].animate.set_color(BLUE).shift(UP * 0.4),
+            em_wave.e_highlight @ 1,
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    er_eqn_ei[6:8].animate.shift(DOWN * 0.4).set_color(YELLOW),
+                    em_wave.e_highlight @ 0,
+                    lag_ratio=0,
+                ),
+                er_eqn_ei[8:10].animate.shift(UP * 0.4),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                er_eqn_ei[8:10].animate.shift(DOWN * 0.4),
+                er_eqn_ei[11:13].animate.shift(UP * 0.4),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                er_eqn_ei[11:13].animate.shift(DOWN * 0.4),
+                LaggedStart(
+                    er_eqn_ei[13].animate.shift(UP * 0.4),
+                    er_eqn_ei[14].animate.shift(UP * 0.4),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                er_eqn_ei[8].animate.shift(UP * 0.4),
+                er_eqn_ei[9].animate.shift(UP * 0.4),
+                LaggedStart(
+                    er_eqn_ei[10].animate.shift(UP * 0.4),
+                    er_eqn[6].animate.shift(UP * 0.4),
+                    lag_ratio=0,
+                ),
+                er_eqn_ei[11].animate.shift(UP * 0.4),
+                er_eqn_ei[12].animate.shift(UP * 0.4),
+                er_eqn_ei[15].animate.shift(UP * 0.4),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                er_eqn_ei[13].animate.shift(DOWN * 0.4),
+                er_eqn_ei[14].animate.shift(DOWN * 0.4),
+                lag_ratio=0.2,
+            ),
+        )
 
         self.embed()
 

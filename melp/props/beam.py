@@ -9,12 +9,14 @@ from manimlib import (
     RIGHT,
     TAU,
     UP,
+    YELLOW,
     Arc,
     Cone,
     DotCloud,
     Group,
     ParametricSurface,
     VMobject,
+    interpolate_color,
 )
 
 from ..animation_helpers import VT
@@ -121,7 +123,10 @@ class Beam(Cone):
         *,
         e_color=BLUE,
         h_color=RED,
+        e_highlight_color=YELLOW,
+        h_highlight_color=YELLOW,
         stroke_width=4,
+        stroke_width_highlight_mult=2.5,
         depth_test=False,
     ):
         wavelength = float(wavelength)
@@ -146,6 +151,8 @@ class Beam(Cone):
         em_wave.e_field = e_field
         em_wave.h_field = h_field
         em_wave.range = VT(0)
+        em_wave.e_highlight = VT(0)
+        em_wave.h_highlight = VT(0)
         em_wave.add(em_wave.range)
 
         if depth_test:
@@ -171,6 +178,16 @@ class Beam(Cone):
             oscillation = (amplitude * np.sin(phase))[:, None]
             wave.e_field.set_points_smoothly(centers + oscillation * e_direction)
             wave.h_field.set_points_smoothly(centers + oscillation * h_direction)
+            wave.e_field.set_stroke(
+                color=interpolate_color(e_color, e_highlight_color, ~wave.e_highlight),
+                width=stroke_width * (1 - ~wave.e_highlight)
+                + stroke_width * stroke_width_highlight_mult * (~wave.e_highlight),
+            )
+            wave.h_field.set_stroke(
+                color=interpolate_color(h_color, h_highlight_color, ~wave.h_highlight),
+                width=stroke_width * (1 - ~wave.h_highlight)
+                + stroke_width * stroke_width_highlight_mult * (~wave.h_highlight),
+            )
 
         em_wave.range.add_updater(lambda _tracker: update_wave(em_wave), call=False)
         update_wave(em_wave)
