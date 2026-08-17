@@ -1049,7 +1049,7 @@ class Charge(InteractiveScene):
         self.play(
             er_eqn_ei[6:8].animate.set_color(BLUE).shift(UP * 0.4),
             em_wave.e_highlight @ 1,
-            run_time=3,
+            run_time=1,
         )
 
         self.wait(0.5)
@@ -1062,7 +1062,7 @@ class Charge(InteractiveScene):
                     lag_ratio=0,
                 ),
                 er_eqn_ei[8:10].animate.shift(UP * 0.4),
-                lag_ratio=0.5,
+                lag_ratio=0.3,
             )
         )
 
@@ -1072,7 +1072,7 @@ class Charge(InteractiveScene):
             LaggedStart(
                 er_eqn_ei[8:10].animate.shift(DOWN * 0.4),
                 er_eqn_ei[11:13].animate.shift(UP * 0.4),
-                lag_ratio=0.5,
+                lag_ratio=0.3,
             )
         )
 
@@ -1086,7 +1086,7 @@ class Charge(InteractiveScene):
                     er_eqn_ei[14].animate.shift(UP * 0.4),
                     lag_ratio=0.2,
                 ),
-                lag_ratio=0.5,
+                lag_ratio=0.3,
             )
         )
 
@@ -1110,13 +1110,75 @@ class Charge(InteractiveScene):
 
         self.wait(0.5)
 
+        eps_air = (
+            Tex(r"\varepsilon_{r \text{,air}}")
+            .rescale_to_fit(er_eqn_ei[11:13].get_height(), 1)
+            .fix_in_frame()
+            .next_to(er_eqn_ei[14], UP, MED_SMALL_BUFF)
+            .shift(UP * 0.5 + RIGHT)
+        )
+        eps_air_bez = CubicBezier(
+            er_eqn_ei[14].get_top() + [0, 0.1, 0],
+            er_eqn_ei[14].get_top() + [0, 1, 0],
+            eps_air.get_bottom() + [0, -1, 0],
+            eps_air.get_bottom() + [0, -0.1, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
+        ).fix_in_frame()
+
         self.play(
             LaggedStart(
-                er_eqn_ei[13].animate.shift(DOWN * 0.4),
-                er_eqn_ei[14].animate.shift(DOWN * 0.4),
-                lag_ratio=0.2,
-            ),
+                ShowCreation(eps_air_bez),
+                LaggedStart(*[FadeIn(m) for m in eps_air], lag_ratio=0.1),
+                lag_ratio=0.3,
+            )
         )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(*[FadeOut(m) for m in eps_air], lag_ratio=0.1),
+                Uncreate(eps_air_bez),
+                bez_opacity @ 0,
+                er_eqn_ei[8:16].animate.shift(DOWN * 0.4),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            raindrop.D.animate(
+                rate_func=utils.rate_functions.there_and_back
+            ).increment_value(1)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            er_eqn_ei[6:16]
+            .animate(rate_func=utils.rate_functions.there_and_back)
+            .shift(UP * 0.4),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            er_eqn_ei[16]
+            .animate(rate_func=utils.rate_functions.there_and_back_with_pause)
+            .shift(UP * 0.4),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        # self.play(
+        #     LaggedStart(
+        #         er_eqn_ei[13].animate.shift(DOWN * 0.4),
+        #         er_eqn_ei[14].animate.shift(DOWN * 0.4),
+        #         lag_ratio=0.2,
+        #     ),
+        # )
 
         self.embed()
 
@@ -1358,3 +1420,156 @@ class BrightBand(InteractiveScene):
         )
 
         self.wait(20)
+
+        hydrometeors.clear_updaters()
+        profile.clear_updaters()
+
+        diameter_min = 0.0
+        diameter_max = 8.0
+        surface_scale = 2.3
+
+        def diameter_to_x(diameter):
+            alpha = (diameter - diameter_min) / (diameter_max - diameter_min)
+            return column_left + alpha * column_width
+
+        def size_mode(diameter, center, width):
+            diameter = max(diameter, 0.05)
+            log_distance = np.log(diameter / center) / width
+            return np.exp(-0.5 * log_distance**2)
+
+        def size_density(diameter, height):
+            if height >= melting_top:
+                progress = (snow_top - height) / (snow_top - melting_top)
+                center = 3.6 + 0.8 * progress
+                return 0.62 * size_mode(diameter, center, 0.3)
+
+            if height >= melting_bottom:
+                progress = (melting_top - height) / (melting_top - melting_bottom)
+                large_mode = (1 - progress) * size_mode(
+                    diameter,
+                    4.4 - 0.7 * progress,
+                    0.3,
+                )
+                small_mode = (
+                    0.85
+                    * progress
+                    * size_mode(
+                        diameter,
+                        1.65 + 0.2 * (1 - progress),
+                        0.38,
+                    )
+                )
+                transition_mode = (
+                    0.3
+                    * np.sin(PI * progress)
+                    * size_mode(diameter, 3.0 - 0.7 * progress, 0.5)
+                )
+                concentration = 0.68 - 0.18 * progress
+                return concentration * (large_mode + small_mode + transition_mode)
+
+            progress = (melting_bottom - height) / (melting_bottom - rain_bottom)
+            center = 1.65 - 0.15 * progress
+            width = 0.38 - 0.04 * progress
+            return 0.42 * size_mode(diameter, center, width)
+
+        ice_rgb = color_to_rgb(TOWER_LIGHT)
+        wet_snow_rgb = color_to_rgb(ACCENT_COLOR)
+        water_rgb = color_to_rgb(BLUE_A)
+
+        def dielectric_rgb(height):
+            if height >= melting_top:
+                return ice_rgb
+            if height <= melting_bottom:
+                return water_rgb
+
+            progress = (melting_top - height) / (melting_top - melting_bottom)
+            if progress < 0.5:
+                alpha = 2 * progress
+                return (1 - alpha) * ice_rgb + alpha * wet_snow_rgb
+
+            alpha = 2 * progress - 1
+            return (1 - alpha) * wet_snow_rgb + alpha * water_rgb
+
+        raised_surface = ParametricSurface(
+            lambda diameter, height: np.array(
+                [
+                    diameter_to_x(diameter),
+                    height,
+                    0.025 + surface_scale * size_density(diameter, height),
+                ]
+            ),
+            u_range=(diameter_min, diameter_max),
+            v_range=(rain_bottom, snow_top),
+            resolution=(81, 61),
+            shading=(0.08, 0.18, 0.12),
+            depth_test=True,
+        ).set_color_by_rgb_func(
+            lambda point: dielectric_rgb(point[1]),
+            opacity=1,
+        )
+
+        trace_heights = np.linspace(
+            rain_bottom + 0.12,
+            snow_top - 0.12,
+            17,
+        )
+        waterfall_guides = VGroup()
+        waterfall_traces = VGroup()
+        for height in trace_heights:
+            trace_color = rgb_to_color(dielectric_rgb(height))
+            waterfall_guides.add(
+                Line(
+                    [column_left, height, 0.01],
+                    [column_right, height, 0.01],
+                )
+                .set_stroke(GREY_B, 0.8, opacity=0.22)
+                .apply_depth_test()
+            )
+            waterfall_traces.add(
+                ParametricCurve(
+                    lambda diameter, height=height: np.array(
+                        [
+                            diameter_to_x(diameter),
+                            height,
+                            0.015 + surface_scale * size_density(diameter, height),
+                        ]
+                    ),
+                    t_range=(diameter_min + 0.03, diameter_max, 0.035),
+                    stroke_color=trace_color,
+                    stroke_width=2.4,
+                    stroke_opacity=0.95,
+                ).apply_depth_test()
+            )
+
+        surface_center = np.array(
+            [
+                (column_left + profile_x + profile_width) / 2,
+                0,
+                0.55,
+            ]
+        )
+        self.play(
+            FadeOut(hydrometeors),
+            FadeIn(raised_surface),
+            self.frame.animate.reorient(
+                -36,
+                68,
+                0,
+                center=surface_center,
+                height=8.4,
+            ),
+            run_time=4.5,
+        )
+
+        self.wait(0.5)
+
+        self.add(waterfall_guides, waterfall_traces)
+        raised_surface.deactivate_depth_test()
+        self.bring_to_front(raised_surface)
+
+        self.play(
+            raised_surface.animate.set_opacity(0.08),
+            run_time=2.5,
+        )
+
+        self.wait(4)
