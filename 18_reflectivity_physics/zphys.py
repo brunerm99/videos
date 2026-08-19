@@ -1,4 +1,4 @@
-# zgl.py
+# zphys.py
 
 import os
 import sys
