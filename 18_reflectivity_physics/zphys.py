@@ -2074,6 +2074,7 @@ class BrightBandP2(InteractiveScene):
             VMobject().set_stroke(ACCENT_COLOR, 5),
             VMobject().set_stroke(TOWER_LIGHT, 4),
         ).set_z_index(2)
+        profile_initialized = [False]
 
         def update_profile(curves, dt):
             dt_scale = dt * ~scale_time
@@ -2086,8 +2087,12 @@ class BrightBandP2(InteractiveScene):
                 0.02,
                 0.98,
             )
-            response = 1 if dt_scale == 0 else 1 - np.exp(-dt_scale / 0.18)
-            profile_values[:] += response * (target_values - profile_values)
+            if not profile_initialized[0]:
+                profile_values[:] = target_values
+                profile_initialized[0] = True
+            elif dt_scale > 0:
+                response = 1 - np.exp(-dt_scale / 0.18)
+                profile_values[:] += response * (target_values - profile_values)
 
             for curve, indices in zip(curves, profile_indices):
                 points = np.column_stack(
