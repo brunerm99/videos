@@ -1901,4 +1901,403 @@ class BrightBandP2(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
-        pass
+        snow_top = 3.0
+        melting_top = 0.6
+        melting_bottom = -0.6
+        rain_bottom = -3.0
+
+        column_left = -4.5
+        column_right = 1.0
+        column_width = column_right - column_left
+        column_center_x = (column_left + column_right) / 2
+
+        snow_layer = Rectangle(
+            width=column_width,
+            height=snow_top - melting_top,
+            stroke_width=0,
+            fill_color=TOWER_LIGHT,
+            fill_opacity=0,
+        ).move_to([column_center_x, (snow_top + melting_top) / 2, 0])
+        melting_layer = Rectangle(
+            width=column_width,
+            height=melting_top - melting_bottom,
+            stroke_width=0,
+            fill_color=TEAL,
+            fill_opacity=0,
+        ).move_to([column_center_x, 0, 0])
+        rain_layer = Rectangle(
+            width=column_width,
+            height=melting_bottom - rain_bottom,
+            stroke_width=0,
+            fill_color=BLUE_E,
+            fill_opacity=0,
+        ).move_to([column_center_x, (melting_bottom + rain_bottom) / 2, 0])
+        layers = VGroup(snow_layer, melting_layer, rain_layer).set_z_index(-2)
+
+        profile_x = 2.4
+        profile_width = 2.2
+        melting_edges = (
+            VGroup(
+                Line(
+                    [column_left, melting_top, 0],
+                    [profile_x + profile_width, melting_top, 0],
+                ),
+                Line(
+                    [column_left, melting_bottom, 0],
+                    [profile_x + profile_width, melting_bottom, 0],
+                ),
+            )
+            .set_stroke(TEAL, 1.5, opacity=0.5)
+            .set_z_index(-1)
+        )
+
+        profile_axes = VGroup(
+            Line(
+                [profile_x, rain_bottom, 0],
+                [profile_x, snow_top, 0],
+            ),
+            Line(
+                [profile_x, rain_bottom, 0],
+                [profile_x + profile_width, rain_bottom, 0],
+            ),
+        ).set_stroke(GREY_B, 2, opacity=0.75)
+        profile_label = Tex(r"E_s").scale(1.5).next_to(profile_axes[1], DOWN, buff=0.18)
+
+        rng = np.random.default_rng(4)
+        particle_count = 54
+        particle_x = rng.uniform(
+            column_left + 0.35, column_right - 0.35, particle_count
+        )
+        particle_size = rng.uniform(0.09, 0.14, particle_count)
+        drift_phase = rng.uniform(0, TAU, particle_count)
+        rotation_rate = rng.uniform(-0.8, 0.8, particle_count)
+        cycle_rate = rng.uniform(0.88, 1.12, particle_count)
+
+        snow_duration = 5.0
+        melting_duration = 1.5
+        rain_duration = 1.5
+        cycle_duration = snow_duration + melting_duration + rain_duration
+        age_offsets = np.linspace(0, cycle_duration, particle_count, endpoint=False)
+        rng.shuffle(age_offsets)
+
+        hydrometeors = Group()
+        for radius in particle_size:
+            snowflake = VGroup(
+                *[
+                    Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
+                    for angle in (0, PI / 3, 2 * PI / 3)
+                ]
+            ).set_stroke(TOWER_LIGHT, 1.5)
+            water_shell = (
+                Circle(radius=radius * 1.15)
+                .set_fill(BLUE, opacity=0)
+                .set_stroke(BLUE, 1.5, opacity=0)
+            )
+            raindrop = (
+                Circle(
+                    radius=radius * 0.5,
+                )
+                .set_stroke(BLUE, 0)
+                .set_fill(BLUE, 0.2)
+            )
+
+            hydrometeors.add(Group(water_shell, snowflake, raindrop))
+
+        elapsed = [0.0]
+        current_heights = np.zeros(particle_count)
+        current_reflectivity = np.zeros(particle_count)
+
+        scale_time = VT(1)
+
+        def update_hydrometeors(group, dt):
+            dt_scale = dt * ~scale_time
+            elapsed[0] += dt_scale
+
+            for index, particle in enumerate(group):
+                age = (
+                    elapsed[0] * cycle_rate[index] + age_offsets[index]
+                ) % cycle_duration
+
+                if age < snow_duration:
+                    alpha = age / snow_duration
+                    height = snow_top + alpha * (melting_top - snow_top)
+                    snow_opacity = 1
+                    shell_opacity = 0
+                    rain_opacity = 0
+                    drift_scale = 1
+                    reflectivity = 0.35
+                elif age < snow_duration + melting_duration:
+                    alpha = (age - snow_duration) / melting_duration
+                    height = melting_top + alpha * (melting_bottom - melting_top)
+                    snow_opacity = 1 - alpha
+                    shell_opacity = np.sin(PI * alpha)
+                    rain_opacity = alpha
+                    drift_scale = 1 - 0.7 * alpha
+                    reflectivity = 0.35 + 2.2 * shell_opacity + 0.65 * alpha
+                else:
+                    alpha = (age - snow_duration - melting_duration) / rain_duration
+                    height = melting_bottom + alpha * (rain_bottom - melting_bottom)
+                    snow_opacity = 0
+                    shell_opacity = 0
+                    rain_opacity = 1
+                    drift_scale = 0.3
+                    reflectivity = 1
+
+                x_position = particle_x[index] + drift_scale * 0.12 * np.sin(
+                    0.8 * elapsed[0] + drift_phase[index]
+                )
+                particle.move_to([x_position, height, 0])
+                current_heights[index] = height
+                current_reflectivity[index] = reflectivity
+
+                water_shell, snowflake, raindrop = particle
+                snowflake.set_opacity(snow_opacity)
+                water_shell.set_opacity(0.7 * shell_opacity)
+                raindrop.set_opacity(rain_opacity)
+                snowflake.rotate(rotation_rate[index] * dt_scale)
+
+        update_hydrometeors(hydrometeors, 0)
+        hydrometeors.add_updater(update_hydrometeors, call=False)
+        hydrometeors.set_z_index(1)
+
+        profile_heights = np.linspace(rain_bottom, snow_top, 73)
+        profile_values = np.zeros_like(profile_heights)
+        melting_bottom_index = np.argmin(np.abs(profile_heights - melting_bottom))
+        melting_top_index = np.argmin(np.abs(profile_heights - melting_top))
+        profile_indices = (
+            np.arange(melting_bottom_index + 1),
+            np.arange(melting_bottom_index, melting_top_index + 1),
+            np.arange(melting_top_index, len(profile_heights)),
+        )
+        profile = VGroup(
+            VMobject().set_stroke(BLUE_A, 4),
+            VMobject().set_stroke(ACCENT_COLOR, 5),
+            VMobject().set_stroke(TOWER_LIGHT, 4),
+        ).set_z_index(2)
+
+        def update_profile(curves, dt):
+            dt_scale = dt * ~scale_time
+            vertical_distance = (
+                profile_heights[:, None] - current_heights[None, :]
+            ) / 0.14
+            kernel = np.exp(-0.5 * vertical_distance**2)
+            target_values = np.clip(
+                0.02 + kernel @ current_reflectivity / 9,
+                0.02,
+                0.98,
+            )
+            response = 1 if dt_scale == 0 else 1 - np.exp(-dt_scale / 0.18)
+            profile_values[:] += response * (target_values - profile_values)
+
+            for curve, indices in zip(curves, profile_indices):
+                points = np.column_stack(
+                    (
+                        profile_x + profile_width * profile_values[indices],
+                        profile_heights[indices],
+                        np.zeros(len(indices)),
+                    )
+                )
+                curve.set_points_smoothly(points)
+
+        update_profile(profile, 0)
+        profile.add_updater(update_profile, call=False)
+
+        self.add(layers, melting_edges, hydrometeors)
+
+        self.frame.rescale_to_fit(snow_layer.get_height() * 0.9, 1).move_to(
+            snow_layer
+        ).shift(UP * snow_layer.get_height() * 0.1).shift(
+            RIGHT * snow_layer.get_width()
+        )
+
+        self.play(
+            self.frame.animate.rescale_to_fit(snow_layer.get_height() * 0.9, 1)
+            .move_to(snow_layer)
+            .shift(UP * snow_layer.get_height() * 0.1),
+            run_time=3,
+        )
+
+        self.wait(3)
+
+        melting_label = (
+            VGroup(
+                Text("Melting", font=FONT).scale(0.4),
+                Text("Layer", font=FONT).scale(0.4),
+            )
+            .arrange(DOWN, buff=SMALL_BUFF * 0.5, aligned_edge=LEFT)
+            .next_to(melting_layer, LEFT, -SMALL_BUFF)
+        )
+        self.add(melting_label)
+
+        self.play(
+            self.frame.animate.rescale_to_fit(
+                Group(snow_layer, melting_layer).get_height() * 1, 1
+            ).move_to(Group(snow_layer, melting_layer), RIGHT),
+            run_time=3,
+        )
+
+        self.wait(5)
+
+        self.play(scale_time @ 0, run_time=3)
+
+        self.wait(0.5)
+
+        idx = 28
+        hdm = hydrometeors[idx]
+        inner_structure = (
+            RoundedRectangle(
+                width=fw(self, 0.4),
+                height=fh(self, 0.3),
+                corner_radius=0.2,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+                stroke_color=GREEN,
+                stroke_opacity=1,
+            )
+            .set_z_index(5)
+            .next_to(hdm, RIGHT, MED_LARGE_BUFF)
+            .shift(UP)
+        )
+        hdm_copy = hdm.copy().set_z_index(6)
+        hdm_dest = hdm_copy.copy().move_to(inner_structure).shift(LEFT * 0.9)
+        hdm_copy.remove(hdm_copy[2])
+
+        hdm_bez = CubicBezier(
+            hdm.get_right() + [0.1, 0, 0],
+            hdm.get_right() + [1, 0, 0],
+            inner_structure.get_bottom() + [0, -1, 0],
+            inner_structure.get_bottom() + [0, 0, 0],
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+        hdm_path = CubicBezier(
+            hdm.get_center() + [0, 0, 0],
+            hdm.get_center() + [1, 0, 0],
+            hdm_dest.get_center() + [0, -1, 0],
+            hdm_dest.get_center() + [0, 0, 0],
+        )
+
+        self.play(ShowCreation(hdm_bez), FadeIn(inner_structure))
+        self.play(MoveAlongPath(hdm_copy, hdm_path), run_time=2)
+
+        self.wait(0.5)
+
+        hdm_split = hdm_copy.copy().arrange(DOWN, buff=MED_SMALL_BUFF).move_to(hdm_copy)
+        snow_structure = (
+            Text("Snow structure", font=FONT)
+            .scale(0.4)
+            .next_to(hdm_split[1], RIGHT, MED_SMALL_BUFF)
+            .set_z_index(6)
+        )
+        liquid_water = (
+            Text("Liquid Water", font=FONT)
+            .scale(0.4)
+            .next_to(hdm_split[0], RIGHT, MED_SMALL_BUFF)
+            .set_z_index(6)
+        )
+
+        self.play(
+            hdm_copy.animate.arrange(DOWN, buff=MED_SMALL_BUFF)
+            .move_to(hdm_copy)
+            .set_z_index(6),
+        )
+        self.play(Write(snow_structure))
+        self.play(Write(liquid_water))
+
+        self.wait(0.5)
+
+        large_v = (
+            Tex(r"V \uparrow")
+            .rescale_to_fit(liquid_water.get_height() * 1.1, 1)
+            .move_to(snow_structure, LEFT)
+            .set_z_index(6)
+        )
+        large_v[1].set_color(GREEN)
+
+        large_eps = (
+            Tex(r"\varepsilon_r \uparrow")
+            .rescale_to_fit(liquid_water.get_height() * 1.1, 1)
+            .move_to(liquid_water, LEFT)
+            .set_z_index(6)
+        )
+        large_eps[2].set_color(GREEN)
+
+        self.play(FadeOut(snow_structure))
+        self.play(FadeIn(large_v))
+
+        self.play(FadeOut(liquid_water))
+        self.play(FadeIn(large_eps))
+
+        self.wait(0.5)
+
+        self.add(profile, profile_label, profile_axes)
+
+        self.play(
+            FadeOut(hdm_bez),
+            FadeOut(inner_structure),
+            FadeOut(hdm_copy),
+            FadeOut(large_eps),
+            FadeOut(large_v),
+        )
+        self.play(
+            LaggedStart(
+                scale_time @ 1,
+                self.frame.animate.rescale_to_fit(
+                    Group(*self.mobjects).get_width() * 1.3, 0
+                ).move_to(Group(*self.mobjects)),
+                # .shift(DOWN * 0.5),
+                lag_ratio=0.2,
+            ),
+            run_time=4,
+        )
+
+        self.wait(0.5)
+
+        es_propto = Tex(r"E_s \propto")
+        reflectivity_label = Text("Reflectivity", font=FONT)
+        profile_label_new = (
+            Group(es_propto, reflectivity_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .rescale_to_fit(profile_axes[1].get_width() * 1.8, 0)
+            .move_to(profile_label)
+        )
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(profile_label, profile_label_new[0][:2]),
+                LaggedStart(
+                    *[
+                        FadeIn(m)
+                        for m in [profile_label_new[0][2], *profile_label_new[1]]
+                    ],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(2)
+
+        z_inc = (
+            Rectangle(
+                width=profile_axes[1].get_width() * 1.1,
+                height=melting_layer.get_height() * 1.1,
+                stroke_color=GREEN,
+            )
+            .set_x(profile_axes[1].get_x())
+            .set_y(melting_layer.get_y())
+        )
+
+        self.play(ShowCreation(z_inc))
+
+        self.wait(5)
+
+        self.play(self.frame.animate.shift(DOWN * fh(self, 2)))
+
+        self.embed()
+
+
+class BrightBandP3(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        self.embed()
