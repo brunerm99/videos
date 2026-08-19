@@ -671,9 +671,7 @@ class Dipole(InteractiveScene):
         self.wait(0.5)
 
         er_eqn = (
-            Tex(
-                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}"
-            )
+            Tex(r"E_{s} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}")
             .fix_in_frame()
             .rescale_to_fit(fw(self, 0.4), 0)
             .next_to(
@@ -983,9 +981,7 @@ class Charge(InteractiveScene):
         self.wait(0.5)
 
         er_eqn = (
-            Tex(
-                r"E_{\theta} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}"
-            )
+            Tex(r"E_{s} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}")
             .fix_in_frame()
             .scale(1.5)
             .move_to(ORIGIN)
@@ -1022,7 +1018,7 @@ class Charge(InteractiveScene):
 
         er_eqn_ei = (
             Tex(
-                r"E_{\theta} = \frac{k_0^2 \mathbf E_i \varepsilon_0 (\varepsilon_r - 1) V}"
+                r"E_{s} = \frac{k_0^2 \mathbf E_i \varepsilon_0 (\varepsilon_r - 1) V}"
                 r"{2 \pi \varepsilon_0 r} \sin{\theta}"
             )
             .fix_in_frame()
@@ -1573,3 +1569,336 @@ class BrightBand(InteractiveScene):
         )
 
         self.wait(4)
+
+
+class BrightBandP1(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        bb_label = Text("Bright Band", font=FONT).scale(1.4)
+
+        self.play(Write(bb_label))
+
+        self.wait(0.5)
+
+        ml_label = Text(
+            "or Melting Layer", font=FONT, t2s={"Melting Layer": ITALIC}
+        ).next_to(bb_label, DOWN, MED_SMALL_BUFF)
+
+        self.play(Write(ml_label))
+
+        self.wait(0.5)
+
+        cloud = Cloud(width=5.4).shift(UP * 7)  # .rotate(PI, axis=UP)
+
+        self.add(cloud)
+
+        self.play(
+            self.frame.animate.reorient(0, 70, 0, center=cloud.get_center(), height=8),
+            run_time=3,
+        )
+
+        self.remove(bb_label, ml_label)
+
+        self.wait(0.5)
+
+        rng = np.random.default_rng(4)
+        particle_count = 12
+        particle_size = rng.uniform(0.2, 0.5, particle_count)
+        rotations = rng.uniform(0, PI, particle_count)
+
+        screen_width = fw(self)
+        screen_height = fh(self)
+        edge_buffer = 0.2
+        gap = 0.25
+        shifts = []
+        placed_radii = []
+
+        for radius in particle_size:
+            for _ in range(1000):
+                shift = np.array(
+                    [
+                        rng.uniform(
+                            -screen_width / 2 + radius + edge_buffer,
+                            screen_width / 2 - radius - edge_buffer,
+                        ),
+                        rng.uniform(
+                            -screen_height / 2 + radius + edge_buffer,
+                            screen_height / 2 - radius - edge_buffer,
+                        ),
+                    ]
+                )
+
+                if all(
+                    np.linalg.norm(shift - other_shift) >= radius + other_radius + gap
+                    for other_shift, other_radius in zip(shifts, placed_radii)
+                ):
+                    shifts.append(shift)
+                    placed_radii.append(radius)
+                    break
+            else:
+                raise RuntimeError("Could not place snowflakes without overlap")
+
+        snowflakes = Group()
+
+        for radius, rotation, shift in zip(particle_size, rotations, shifts):
+            snowflake = (
+                VGroup(
+                    *[
+                        Line(
+                            -radius * RIGHT,
+                            radius * RIGHT,
+                            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                        ).rotate(angle)
+                        for angle in (0, PI / 3, 2 * PI / 3)
+                    ]
+                )
+                .rotate(rotation)
+                .set_stroke(WHITE, 30)
+                .fix_in_frame()
+                .move_to(ORIGIN)
+                .shift([shift[0], shift[1], 0])
+            )
+            snowflakes.add(snowflake)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=3).reorient(
+                    0, 80, 0, center=cloud.get_center(), height=1
+                ),
+                cloud.animate(run_time=3).set_opacity(0),
+                LaggedStart(
+                    *[
+                        m.set_stroke(opacity=0)
+                        .scale(1 / 100)
+                        .animate.scale(100)
+                        .set_stroke(opacity=1)
+                        for m in snowflakes
+                    ],
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.2,
+            ),
+        )
+        self.remove(cloud)
+
+        self.wait(0.5)
+
+        main_center = snowflakes[0].get_center()
+
+        def get_sf_vec(center, scale=1):
+            angle_rad = Line(main_center, center).fix_in_frame().get_angle()
+            return np.array([np.cos(angle_rad), np.sin(angle_rad), 0]) * scale
+
+        self.play(
+            LaggedStart(
+                *[
+                    sf.animate(run_time=1).shift(get_sf_vec(sf.get_center(), 5))
+                    for sf in snowflakes[1:]
+                ],
+                snowflakes[0].animate.move_to(ORIGIN),
+                lag_ratio=0.1,
+            ),
+        )
+
+        self.remove(snowflakes[1:])
+        sf = snowflakes[0]
+
+        self.wait(0.5)
+
+        self.play(sf.animate.scale(1.5))
+
+        self.wait(0.5)
+
+        raindrop = (
+            RainDrop(opacity=1, unit_size=0.5)
+            .fix_in_frame()
+            .next_to(sf, RIGHT, LARGE_BUFF)
+            .shift(RIGHT * 10)
+        )
+        self.add(raindrop)
+
+        precip = Group(sf.copy(), raindrop.copy()).arrange(RIGHT, LARGE_BUFF * 3)
+
+        self.play(
+            sf.animate.scale(2).move_to(precip[0]).shift(LEFT * 1.5),
+            raindrop.animate.move_to(precip[1]).shift(RIGHT * 1.5),
+        )
+
+        self.wait(0.5)
+
+        liquid_line = (
+            Line(
+                raindrop.get_left(),
+                raindrop.get_right(),
+                stroke_width=DEFAULT_STROKE_WIDTH * 4,
+            )
+            .fix_in_frame()
+            .shift(DOWN * 2)
+        )
+        liquid_line_l = Line(
+            liquid_line.get_left() + DOWN / 8,
+            liquid_line.get_left() + UP / 8,
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
+        ).fix_in_frame()
+        liquid_line_r = Line(
+            liquid_line.get_right() + DOWN / 8,
+            liquid_line.get_right() + UP / 8,
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
+        ).fix_in_frame()
+        D_liquid = (
+            Tex(r"D_{\text{liquid}}")
+            .fix_in_frame()
+            .next_to(liquid_line, DOWN, MED_SMALL_BUFF)
+        )
+
+        snow_line = (
+            Line(
+                sf.get_left(),
+                sf.get_right(),
+                stroke_width=DEFAULT_STROKE_WIDTH * 4,
+            )
+            .fix_in_frame()
+            .set_y(liquid_line.get_y())
+        )
+        snow_line_l = Line(
+            snow_line.get_left() + DOWN / 8,
+            snow_line.get_left() + UP / 8,
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
+        ).fix_in_frame()
+        snow_line_r = Line(
+            snow_line.get_right() + DOWN / 8,
+            snow_line.get_right() + UP / 8,
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
+        ).fix_in_frame()
+        D_snow = (
+            Tex(r"D_{\text{snow}}")
+            .fix_in_frame()
+            .next_to(snow_line, DOWN, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(snow_line_l),
+                ShowCreation(snow_line),
+                ShowCreation(snow_line_r),
+                FadeIn(D_snow),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(liquid_line_l),
+                ShowCreation(liquid_line),
+                ShowCreation(liquid_line_r),
+                FadeIn(D_liquid),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        er_eqn_ei = (
+            Tex(
+                r"E_{s} = \frac{k_0^2 \mathbf E_i (\varepsilon_r - 1) V}"
+                r"{2 \pi r} \sin{\theta}"
+            )
+            .fix_in_frame()
+            .scale(1.5)
+            .next_to(precip.fix_in_frame(), UP, LARGE_BUFF)
+            # .shift(UP * 0.6)
+        )
+        er_eqn_ei[9:11].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                Uncreate(liquid_line_r),
+                Uncreate(snow_line_r),
+                Uncreate(liquid_line),
+                Uncreate(snow_line),
+                Uncreate(liquid_line_l),
+                Uncreate(snow_line_l),
+                FadeOut(D_liquid),
+                FadeOut(D_snow),
+                LaggedStart(
+                    sf.animate.shift(DOWN),
+                    raindrop.animate.shift(DOWN),
+                    lag_ratio=0,
+                ),
+                er_eqn_ei.shift(UP * 5).animate.shift(DOWN * 5),
+                lag_ratio=0.1,
+            )
+        )
+        self.play(
+            er_eqn_ei[9:11]
+            .animate(rate_func=utils.rate_functions.there_and_back)
+            .scale(1.5)
+        )
+
+        self.wait(0.5)
+
+        eps_r_snow = (
+            Tex(r"\varepsilon_r \approx 1 - 3")
+            .fix_in_frame()
+            .next_to(sf, UP, MED_SMALL_BUFF)
+        )
+        eps_r_snow[:2].set_color(YELLOW)
+        eps_r_liquid = (
+            Tex(r"\varepsilon_r \approx 80")
+            .fix_in_frame()
+            .next_to(raindrop, UP, MED_SMALL_BUFF)
+            .set_y(eps_r_snow.get_y())
+        )
+        eps_r_liquid[:2].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(er_eqn_ei[9:11], eps_r_snow[:2], path_arc=PI / 3),
+                LaggedStart(*[FadeIn(m) for m in eps_r_snow[2:]], lag_ratio=0.1),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(er_eqn_ei[9:11], eps_r_liquid[:2], path_arc=-PI / 3),
+                LaggedStart(*[FadeIn(m) for m in eps_r_liquid[2:]], lag_ratio=0.1),
+                lag_ratio=0.5,
+            )
+        )
+
+        es_rel = (
+            Tex(r"E_{s \text{,snow}} < E_{s \text{,liquid}}")
+            .fix_in_frame()
+            .scale(1.5)
+            .next_to(precip.fix_in_frame(), DOWN, MED_LARGE_BUFF)
+            .shift(DOWN * 1.4)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(er_eqn_ei[:2], es_rel[:2]),
+                *[FadeIn(m) for m in es_rel[2:8]],
+                TransformFromCopy(er_eqn_ei[:2], es_rel[8:10]),
+                *[FadeIn(m) for m in es_rel[10:]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Group(*self.mobjects).animate.shift(UP * 10))
+
+        self.embed()
+
+
+class BrightBandP2(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        pass
