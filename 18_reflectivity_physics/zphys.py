@@ -1264,7 +1264,16 @@ class BrightBand(InteractiveScene):
         particle_x = rng.uniform(
             column_left + 0.35, column_right - 0.35, particle_count
         )
-        particle_size = rng.uniform(0.09, 0.14, particle_count)
+        snow_diameters = np.clip(
+            rng.lognormal(np.log(3.8), 0.28, particle_count),
+            1.6,
+            7.4,
+        )
+        rain_diameters = np.clip(
+            0.28 * snow_diameters + rng.normal(0.35, 0.15, particle_count),
+            0.45,
+            2.6,
+        )
         drift_phase = rng.uniform(0, TAU, particle_count)
         rotation_rate = rng.uniform(-0.8, 0.8, particle_count)
         cycle_rate = rng.uniform(0.88, 1.12, particle_count)
@@ -1277,30 +1286,33 @@ class BrightBand(InteractiveScene):
         rng.shuffle(age_offsets)
 
         hydrometeors = Group()
-        for radius in particle_size:
+        for snow_diameter, rain_diameter in zip(snow_diameters, rain_diameters):
+            snow_radius = np.interp(snow_diameter, [1.6, 7.4], [0.08, 0.15])
+            rain_radius = np.interp(rain_diameter, [0.45, 2.6], [0.04, 0.075])
             snowflake = VGroup(
                 *[
-                    Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
+                    Line(-snow_radius * RIGHT, snow_radius * RIGHT).rotate(angle)
                     for angle in (0, PI / 3, 2 * PI / 3)
                 ]
             ).set_stroke(TOWER_LIGHT, 1.5)
             water_shell = (
-                Circle(radius=radius * 1.15)
+                Circle(radius=snow_radius * 1.15)
                 .set_fill(
                     BLUE_A,
                     opacity=0,
                 )
                 .set_stroke(BLUE_A, 1.5, opacity=0)
             )
-            raindrop = Line(
-                radius * 1.25 * UP,
-                radius * 1.25 * DOWN,
-            ).set_stroke(BLUE_A, 3, opacity=0)
+            raindrop = (
+                Circle(radius=rain_radius).set_stroke(BLUE, 0).set_fill(BLUE, 0.2)
+            )
 
             hydrometeors.add(Group(water_shell, snowflake, raindrop))
 
         elapsed = [0.0]
         current_heights = np.zeros(particle_count)
+        current_diameters = np.zeros(particle_count)
+        current_epsilon_r = np.zeros(particle_count)
         current_reflectivity = np.zeros(particle_count)
 
         def update_hydrometeors(group, dt):
@@ -1318,15 +1330,27 @@ class BrightBand(InteractiveScene):
                     shell_opacity = 0
                     rain_opacity = 0
                     drift_scale = 1
+                    diameter = snow_diameters[index]
+                    epsilon_r = 3.2
                     reflectivity = 0.35
                 elif age < snow_duration + melting_duration:
                     alpha = (age - snow_duration) / melting_duration
                     height = melting_top + alpha * (melting_bottom - melting_top)
-                    snow_opacity = 1 - alpha
-                    shell_opacity = np.sin(PI * alpha)
-                    rain_opacity = alpha
-                    drift_scale = 1 - 0.7 * alpha
-                    reflectivity = 0.35 + 2.2 * shell_opacity + 0.65 * alpha
+                    melt_exponent = np.interp(
+                        snow_diameters[index],
+                        [1.6, 7.4],
+                        [0.72, 1.35],
+                    )
+                    melt_fraction = alpha**melt_exponent
+                    snow_opacity = 1 - melt_fraction
+                    shell_opacity = np.sin(PI * melt_fraction)
+                    rain_opacity = melt_fraction
+                    drift_scale = 1 - 0.7 * melt_fraction
+                    diameter = (1 - melt_fraction) * snow_diameters[
+                        index
+                    ] + melt_fraction * rain_diameters[index]
+                    epsilon_r = 3.2 + (80 - 3.2) * melt_fraction
+                    reflectivity = 0.35 + 2.2 * shell_opacity + 0.65 * melt_fraction
                 else:
                     alpha = (age - snow_duration - melting_duration) / rain_duration
                     height = melting_bottom + alpha * (rain_bottom - melting_bottom)
@@ -1334,6 +1358,8 @@ class BrightBand(InteractiveScene):
                     shell_opacity = 0
                     rain_opacity = 1
                     drift_scale = 0.3
+                    diameter = rain_diameters[index]
+                    epsilon_r = 80
                     reflectivity = 1
 
                 x_position = particle_x[index] + drift_scale * 0.12 * np.sin(
@@ -1341,6 +1367,8 @@ class BrightBand(InteractiveScene):
                 )
                 particle.move_to([x_position, height, 0])
                 current_heights[index] = height
+                current_diameters[index] = diameter
+                current_epsilon_r[index] = epsilon_r
                 current_reflectivity[index] = reflectivity
 
                 water_shell, snowflake, raindrop = particle
@@ -1355,6 +1383,7 @@ class BrightBand(InteractiveScene):
 
         profile_heights = np.linspace(rain_bottom, snow_top, 73)
         profile_values = np.zeros_like(profile_heights)
+        profile_initialized = [False]
         melting_bottom_index = np.argmin(np.abs(profile_heights - melting_bottom))
         melting_top_index = np.argmin(np.abs(profile_heights - melting_top))
         profile_indices = (
@@ -1368,6 +1397,8 @@ class BrightBand(InteractiveScene):
             VMobject().set_stroke(TOWER_LIGHT, 4),
         ).set_z_index(2)
 
+        profile_x_offset = VT(0)
+
         def update_profile(curves, dt):
             vertical_distance = (
                 profile_heights[:, None] - current_heights[None, :]
@@ -1378,13 +1409,19 @@ class BrightBand(InteractiveScene):
                 0.02,
                 0.98,
             )
-            response = 1 if dt == 0 else 1 - np.exp(-dt / 0.18)
-            profile_values[:] += response * (target_values - profile_values)
+            if not profile_initialized[0]:
+                profile_values[:] = target_values
+                profile_initialized[0] = True
+            elif dt > 0:
+                response = 1 - np.exp(-dt / 0.18)
+                profile_values[:] += response * (target_values - profile_values)
 
             for curve, indices in zip(curves, profile_indices):
                 points = np.column_stack(
                     (
-                        profile_x + profile_width * profile_values[indices],
+                        profile_x
+                        + profile_width * profile_values[indices]
+                        + ~profile_x_offset,
                         profile_heights[indices],
                         np.zeros(len(indices)),
                     )
@@ -1415,104 +1452,40 @@ class BrightBand(InteractiveScene):
             profile,
         )
 
-        self.wait(20)
-
-        hydrometeors.clear_updaters()
-        profile.clear_updaters()
+        self.wait(5)
 
         diameter_min = 0.0
         diameter_max = 8.0
-        surface_scale = 2.3
+        trace_scale = 2.3
 
         def diameter_to_x(diameter):
             alpha = (diameter - diameter_min) / (diameter_max - diameter_min)
             return column_left + alpha * column_width
 
-        def size_mode(diameter, center, width):
-            diameter = max(diameter, 0.05)
-            log_distance = np.log(diameter / center) / width
-            return np.exp(-0.5 * log_distance**2)
-
-        def size_density(diameter, height):
-            if height >= melting_top:
-                progress = (snow_top - height) / (snow_top - melting_top)
-                center = 3.6 + 0.8 * progress
-                return 0.62 * size_mode(diameter, center, 0.3)
-
-            if height >= melting_bottom:
-                progress = (melting_top - height) / (melting_top - melting_bottom)
-                large_mode = (1 - progress) * size_mode(
-                    diameter,
-                    4.4 - 0.7 * progress,
-                    0.3,
-                )
-                small_mode = (
-                    0.85
-                    * progress
-                    * size_mode(
-                        diameter,
-                        1.65 + 0.2 * (1 - progress),
-                        0.38,
-                    )
-                )
-                transition_mode = (
-                    0.3
-                    * np.sin(PI * progress)
-                    * size_mode(diameter, 3.0 - 0.7 * progress, 0.5)
-                )
-                concentration = 0.68 - 0.18 * progress
-                return concentration * (large_mode + small_mode + transition_mode)
-
-            progress = (melting_bottom - height) / (melting_bottom - rain_bottom)
-            center = 1.65 - 0.15 * progress
-            width = 0.38 - 0.04 * progress
-            return 0.42 * size_mode(diameter, center, width)
-
         ice_rgb = color_to_rgb(TOWER_LIGHT)
         wet_snow_rgb = color_to_rgb(ACCENT_COLOR)
         water_rgb = color_to_rgb(BLUE_A)
 
-        def dielectric_rgb(height):
-            if height >= melting_top:
-                return ice_rgb
-            if height <= melting_bottom:
-                return water_rgb
-
-            progress = (melting_top - height) / (melting_top - melting_bottom)
-            if progress < 0.5:
-                alpha = 2 * progress
+        def epsilon_r_to_rgb(epsilon_r):
+            alpha = np.clip((epsilon_r - 3.2) / (80 - 3.2), 0, 1)
+            if alpha < 0.5:
+                alpha *= 2
                 return (1 - alpha) * ice_rgb + alpha * wet_snow_rgb
 
-            alpha = 2 * progress - 1
+            alpha = 2 * alpha - 1
             return (1 - alpha) * wet_snow_rgb + alpha * water_rgb
 
-        raised_surface = ParametricSurface(
-            lambda diameter, height: np.array(
-                [
-                    diameter_to_x(diameter),
-                    height,
-                    0.025 + surface_scale * size_density(diameter, height),
-                ]
-            ),
-            u_range=(diameter_min, diameter_max),
-            v_range=(rain_bottom, snow_top),
-            resolution=(81, 61),
-            shading=(0.08, 0.18, 0.12),
-            depth_test=True,
-        ).set_color_by_rgb_func(
-            lambda point: dielectric_rgb(point[1]),
-            opacity=1,
-        )
-
-        trace_heights = np.linspace(
-            rain_bottom + 0.12,
-            snow_top - 0.12,
-            17,
-        )
+        gate_edges = np.linspace(rain_bottom, snow_top, 18)
+        trace_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
+        gate_response_width = gate_edges[1] - gate_edges[0]
+        diameter_samples = np.linspace(diameter_min + 0.03, diameter_max, 181)
+        density_values = np.zeros((len(trace_heights), len(diameter_samples)))
+        gate_epsilon_values = np.full(len(trace_heights), 3.2)
+        gate_occupancies = np.zeros(len(trace_heights))
+        dsd_reveal = VT(0)
         waterfall_guides = VGroup()
         waterfall_traces = VGroup()
         for height in trace_heights:
-            trace_color = rgb_to_color(dielectric_rgb(height))
             waterfall_guides.add(
                 Line(
                     [column_left, height, 0.01],
@@ -1522,20 +1495,63 @@ class BrightBand(InteractiveScene):
                 .apply_depth_test()
             )
             waterfall_traces.add(
-                ParametricCurve(
-                    lambda diameter, height=height: np.array(
-                        [
-                            diameter_to_x(diameter),
-                            height,
-                            0.015 + surface_scale * size_density(diameter, height),
-                        ]
-                    ),
-                    t_range=(diameter_min + 0.03, diameter_max, 0.035),
-                    stroke_color=trace_color,
+                VMobject(
+                    stroke_color=TOWER_LIGHT,
                     stroke_width=2.4,
-                    stroke_opacity=0.95,
+                    stroke_opacity=0,
                 ).apply_depth_test()
             )
+
+        def update_dsd_traces(traces, dt):
+            for gate_index, (trace, height) in enumerate(zip(traces, trace_heights)):
+                range_weights = np.clip(
+                    1 - np.abs(current_heights - height) / gate_response_width,
+                    0,
+                    1,
+                )
+                in_gate = range_weights > 0
+
+                gate_diameters = current_diameters[in_gate]
+                if len(gate_diameters):
+                    particle_range_weights = range_weights[in_gate]
+                    diameter_distance = (
+                        diameter_samples[:, None] - gate_diameters[None, :]
+                    ) / 0.55
+                    target_density = (
+                        np.exp(-0.5 * diameter_distance**2)
+                        * particle_range_weights[None, :]
+                    ).sum(axis=1) / 5
+                    volume_weights = particle_range_weights * gate_diameters**3
+                    target_epsilon_r = np.average(
+                        current_epsilon_r[in_gate],
+                        weights=volume_weights,
+                    )
+                    target_occupancy = min(particle_range_weights.sum() / 3, 1)
+                else:
+                    target_density = np.zeros_like(diameter_samples)
+                    target_epsilon_r = gate_epsilon_values[gate_index]
+                    target_occupancy = 0
+
+                density_values[gate_index] = target_density
+                gate_epsilon_values[gate_index] = target_epsilon_r
+                gate_occupancies[gate_index] = target_occupancy
+
+                points = np.column_stack(
+                    (
+                        [diameter_to_x(diameter) for diameter in diameter_samples],
+                        np.full(len(diameter_samples), height),
+                        0.015 + ~dsd_reveal * trace_scale * density_values[gate_index],
+                    )
+                )
+                trace.set_points_smoothly(points)
+                trace.set_stroke(
+                    rgb_to_color(epsilon_r_to_rgb(gate_epsilon_values[gate_index])),
+                    width=2.4,
+                    opacity=~dsd_reveal * (0.18 + 0.77 * gate_occupancies[gate_index]),
+                )
+
+        update_dsd_traces(waterfall_traces, 0)
+        waterfall_traces.add_updater(update_dsd_traces, call=False)
 
         surface_center = np.array(
             [
@@ -1544,31 +1560,48 @@ class BrightBand(InteractiveScene):
                 0.55,
             ]
         )
+
+        melting_top_new = (
+            Line(
+                [column_left, melting_top, 0],
+                [column_right, melting_top, 0],
+            )
+            .set_stroke(TEAL, 1.5, opacity=0.5)
+            .set_z_index(-1)
+        )
+        melting_bot_new = (
+            Line(
+                [column_left, melting_bottom, 0],
+                [column_right, melting_bottom, 0],
+            )
+            .set_stroke(TEAL, 1.5, opacity=0.5)
+            .set_z_index(-1)
+        )
+        self.add(waterfall_guides, waterfall_traces)
         self.play(
-            FadeOut(hydrometeors),
-            FadeIn(raised_surface),
+            LaggedStart(
+                Group(profile_axes, profile_label).animate.shift(RIGHT * 10),
+                profile_x_offset @ 10,
+                Transform(melting_edges[0], melting_top_new),
+                Transform(melting_edges[1], melting_bot_new),
+                lag_ratio=0,
+            ),
+            FadeIn(waterfall_guides),
+            dsd_reveal @ 1,
             self.frame.animate.reorient(
-                -36,
-                68,
                 0,
-                center=surface_center,
-                height=8.4,
+                52,
+                0,
+                center=melting_layer.get_center(),
+                height=7.8,
             ),
             run_time=4.5,
         )
 
         self.wait(0.5)
+        self.wait(10)
 
-        self.add(waterfall_guides, waterfall_traces)
-        raised_surface.deactivate_depth_test()
-        self.bring_to_front(raised_surface)
-
-        self.play(
-            raised_surface.animate.set_opacity(0.08),
-            run_time=2.5,
-        )
-
-        self.wait(4)
+        self.embed()
 
 
 class BrightBandP1(InteractiveScene):
