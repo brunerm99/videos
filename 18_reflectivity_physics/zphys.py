@@ -51,8 +51,197 @@ ACCENT_COLOR = YELLOW
 FONT = os.getenv("FONT", "Maple Mono CN")
 
 
-class Intro(InteractiveScene):
-    def construct(self): ...
+class IntroP1(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        def get_thumbnail(path):
+            thumbnail = ImageMobject(path).rescale_to_fit(fh(self, 0.3), 1)
+            box = SurroundingRectangle(thumbnail, buff=0, color=GREEN)
+            return Group(thumbnail, box)
+
+        rf_thumbnails = Group(
+            Text("RF", font=FONT, fill_color=RED),
+            *[
+                get_thumbnail(path)
+                for path in [
+                    "../05_phased_array/media/images/phased_array//thumbnails/Thumbnail1.png",
+                    # "../08_beamforming/media/images/beamforming/Thumbnail_ManimCE_v0.18.1.png",
+                    # "../11_aliasing/static/Aliasing Thumbnail.png",
+                    "../12_iq_sampling/static/IQ Sampling Thumbnail.png",
+                    "../09_resolution/static/Resolution Thumbnail.png",
+                ]
+            ],
+            Text("...", font=FONT).rotate(PI / 2),
+        ).arrange(DOWN, buff=MED_SMALL_BUFF * 0.9)
+        radar_thumbnails = Group(
+            Text("Radar", font=FONT, fill_color=YELLOW),
+            *[
+                get_thumbnail(path)
+                for path in [
+                    "../01_fmcw/media/images/fmcw/thumbnails/comparison.png",
+                    # "../02_fmcw_implementation/media/images/fmcw_implementation/Thumbnail_Option_1.png",
+                    "../03_cfar/media/images/cfar/thumbnails/Thumbnail_1.png",
+                    # "../06_radar_range_equation/media/images/radar_equation/thumbnails/Thumbnail_1.png",
+                    "../04_fmcw_doppler/media/images/fmcw_doppler/thumbnails/Thumbnail_2.png",
+                ]
+            ],
+            Text("...", font=FONT).rotate(PI / 2),
+        ).arrange(DOWN, buff=MED_SMALL_BUFF * 0.9)
+        wx_radar_thumbnails = Group(
+            Text("Weather Radar", font=FONT, fill_color=BLUE),
+            *[
+                get_thumbnail(path)
+                for path in [
+                    "../16_dual_pol/static/Thumbnail - How Weather Radars See Shape.png",
+                    "../17_reflectivity/static/thumbnail2.png",
+                ]
+            ],
+        ).arrange(DOWN, buff=MED_SMALL_BUFF * 0.9)
+        thumbnails = (
+            Group(radar_thumbnails, wx_radar_thumbnails, rf_thumbnails).arrange(
+                RIGHT, buff=MED_SMALL_BUFF, aligned_edge=UP
+            )
+            # .rescale_to_fit(fh(self, 0.9), 1)
+        )
+
+        self.frame.rescale_to_fit(thumbnails.get_height() * 1.1, 1)
+
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(
+                        *[
+                            LaggedStart(FadeIn(t[0]), ShowCreation(t[1]), lag_ratio=0)
+                            if type(t) is Group
+                            else FadeIn(t)
+                            for t in ts
+                        ],
+                        lag_ratio=0.3,
+                    )
+                    for ts in thumbnails
+                ],
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        this_vid_box = (
+            rf_thumbnails[1][1]
+            .copy()
+            .next_to(wx_radar_thumbnails[-1], DOWN, MED_SMALL_BUFF)
+            .set_y(rf_thumbnails[-2].get_y())
+        )
+        this_vid_text = Text("This video", font=FONT).move_to(this_vid_box)
+
+        self.play(ShowCreation(this_vid_box), Write(this_vid_text))
+
+        self.wait(0.5)
+
+        # self.frame.shift(DOWN * fh(self))
+
+        line = Line(self.frame.get_center(), self.frame.get_center() + UP * 2)
+        top = (
+            Circle(radius=fh(self, 1 / 4), stroke_color=BLUE)
+            .move_to(self.frame)
+            .move_to(line.get_end())
+        )
+        line.rotate(2 * PI / 3, about_point=self.frame.get_center())
+        left = (
+            Circle(radius=fh(self, 1 / 4), stroke_color=YELLOW)
+            .move_to(self.frame)
+            .move_to(line.get_end())
+        )
+        line.rotate(2 * PI / 3, about_point=self.frame.get_center())
+        right = (
+            Circle(radius=fh(self, 1 / 4), stroke_color=RED)
+            .move_to(self.frame)
+            .move_to(line.get_end())
+        )
+        venn = (
+            Group(top, left, right)
+            .move_to(self.frame)
+            .rescale_to_fit(fh(self, 0.95), 1)
+        )
+
+        self.add(thumbnails, this_vid_box, this_vid_text)
+        # self.add(venn)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    FadeOut(radar_thumbnails[0]),
+                    FadeOut(radar_thumbnails[-1]),
+                    FadeOut(wx_radar_thumbnails[0]),
+                    FadeOut(rf_thumbnails[0]),
+                    FadeOut(rf_thumbnails[-1]),
+                    lag_ratio=0,
+                ),
+                radar_thumbnails[3]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(left.get_bottom(), UP, MED_SMALL_BUFF * 1.2)
+                .shift(UP * 0.1),
+                radar_thumbnails[2]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(left.get_left(), RIGHT, MED_SMALL_BUFF)
+                .shift(RIGHT * 0.7 + DOWN * 0.6),
+                radar_thumbnails[1]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(left.get_left(), RIGHT, MED_SMALL_BUFF)
+                .shift(RIGHT * 0.5 + UP * 0.8),
+                rf_thumbnails[3]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(right.get_bottom(), UP, MED_SMALL_BUFF * 1.2)
+                .shift(UP * 0.1),
+                rf_thumbnails[2]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(right.get_right(), LEFT, MED_SMALL_BUFF)
+                .shift(LEFT * 0.7 + DOWN * 0.6),
+                rf_thumbnails[1]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(right.get_right(), LEFT, MED_SMALL_BUFF)
+                .shift(LEFT * 0.5 + UP * 0.8),
+                wx_radar_thumbnails[1]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(top.get_top(), DOWN, LARGE_BUFF * 1.4)
+                .shift(LEFT * 1.2),
+                wx_radar_thumbnails[2]
+                .animate.rescale_to_fit(top.get_height() * 0.2, 1)
+                .next_to(top.get_top(), DOWN, LARGE_BUFF * 1.4)
+                .shift(RIGHT * 1.2),
+                Group(this_vid_box, this_vid_text)
+                .animate.rescale_to_fit(top.get_height() * 0.1, 1)
+                .move_to(venn)
+                .shift(DOWN * 0.7),
+                ShowCreation(left),
+                ShowCreation(right),
+                ShowCreation(top),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            self.frame.animate.rescale_to_fit(this_vid_text.get_height(), 1).move_to(
+                this_vid_text
+            ),
+            FadeOut(this_vid_text),
+            run_time=1.5,
+        )
+
+        self.wait(2)
+
+        self.embed()
+
+
+class IntroP2(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+
+        self.embed()
 
 
 class Rayleigh(InteractiveScene):
@@ -1179,7 +1368,7 @@ class Charge(InteractiveScene):
         self.embed()
 
 
-class BrightBand(InteractiveScene):
+class Dsd(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
@@ -1253,9 +1442,13 @@ class BrightBand(InteractiveScene):
                 [profile_x + profile_width, rain_bottom, 0],
             ),
         ).set_stroke(GREY_B, 2, opacity=0.75)
+
+        es_propto = Tex(r"E_s \propto")
+        reflectivity_label = Text("Reflectivity", font=FONT)
         profile_label = (
-            Text("Reflectivity", font=FONT, font_size=28)
-            .set_color(TOWER_LIGHT)
+            Group(es_propto, reflectivity_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .rescale_to_fit(profile_axes[1].get_width() * 1.8, 0)
             .next_to(profile_axes[1], DOWN, buff=0.18)
         )
 
@@ -1284,6 +1477,16 @@ class BrightBand(InteractiveScene):
         cycle_duration = snow_duration + melting_duration + rain_duration
         age_offsets = np.linspace(0, cycle_duration, particle_count, endpoint=False)
         rng.shuffle(age_offsets)
+
+        ice_epsilon_r = 3.2
+        water_epsilon_r = 80.0
+
+        # Looyenga mixing rule for the effective ice-water permittivity.
+        def mixed_phase_epsilon_r(melt_fraction):
+            return (
+                (1 - melt_fraction) * np.cbrt(ice_epsilon_r)
+                + melt_fraction * np.cbrt(water_epsilon_r)
+            ) ** 3
 
         hydrometeors = Group()
         for snow_diameter, rain_diameter in zip(snow_diameters, rain_diameters):
@@ -1331,7 +1534,7 @@ class BrightBand(InteractiveScene):
                     rain_opacity = 0
                     drift_scale = 1
                     diameter = snow_diameters[index]
-                    epsilon_r = 3.2
+                    epsilon_r = ice_epsilon_r
                     reflectivity = 0.35
                 elif age < snow_duration + melting_duration:
                     alpha = (age - snow_duration) / melting_duration
@@ -1349,7 +1552,7 @@ class BrightBand(InteractiveScene):
                     diameter = (1 - melt_fraction) * snow_diameters[
                         index
                     ] + melt_fraction * rain_diameters[index]
-                    epsilon_r = 3.2 + (80 - 3.2) * melt_fraction
+                    epsilon_r = mixed_phase_epsilon_r(melt_fraction)
                     reflectivity = 0.35 + 2.2 * shell_opacity + 0.65 * melt_fraction
                 else:
                     alpha = (age - snow_duration - melting_duration) / rain_duration
@@ -1359,7 +1562,7 @@ class BrightBand(InteractiveScene):
                     rain_opacity = 1
                     drift_scale = 0.3
                     diameter = rain_diameters[index]
-                    epsilon_r = 80
+                    epsilon_r = water_epsilon_r
                     reflectivity = 1
 
                 x_position = particle_x[index] + drift_scale * 0.12 * np.sin(
@@ -1452,6 +1655,11 @@ class BrightBand(InteractiveScene):
             profile,
         )
 
+        self.play(
+            self.frame.shift(DOWN * fh(self, 1.5)).animate.shift(UP * fh(self, 1.5)),
+            run_time=1.5,
+        )
+
         self.wait(5)
 
         diameter_min = 0.0
@@ -1462,25 +1670,24 @@ class BrightBand(InteractiveScene):
             alpha = (diameter - diameter_min) / (diameter_max - diameter_min)
             return column_left + alpha * column_width
 
-        ice_rgb = color_to_rgb(TOWER_LIGHT)
-        wet_snow_rgb = color_to_rgb(ACCENT_COLOR)
-        water_rgb = color_to_rgb(BLUE_A)
+        epsilon_r_min = ice_epsilon_r
+        epsilon_r_max = water_epsilon_r
+        epsilon_r_colormap = get_color_map("coolwarm")
 
         def epsilon_r_to_rgb(epsilon_r):
-            alpha = np.clip((epsilon_r - 3.2) / (80 - 3.2), 0, 1)
-            if alpha < 0.5:
-                alpha *= 2
-                return (1 - alpha) * ice_rgb + alpha * wet_snow_rgb
-
-            alpha = 2 * alpha - 1
-            return (1 - alpha) * wet_snow_rgb + alpha * water_rgb
+            alpha = np.clip(
+                (epsilon_r - epsilon_r_min) / (epsilon_r_max - epsilon_r_min),
+                0,
+                1,
+            )
+            return np.array(epsilon_r_colormap(alpha)[:3])
 
         gate_edges = np.linspace(rain_bottom, snow_top, 18)
         trace_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
         gate_response_width = gate_edges[1] - gate_edges[0]
         diameter_samples = np.linspace(diameter_min + 0.03, diameter_max, 181)
         density_values = np.zeros((len(trace_heights), len(diameter_samples)))
-        gate_epsilon_values = np.full(len(trace_heights), 3.2)
+        gate_epsilon_values = np.full(len(trace_heights), epsilon_r_min)
         gate_occupancies = np.zeros(len(trace_heights))
         dsd_reveal = VT(0)
         waterfall_guides = VGroup()
@@ -1589,17 +1796,251 @@ class BrightBand(InteractiveScene):
             FadeIn(waterfall_guides),
             dsd_reveal @ 1,
             self.frame.animate.reorient(
-                0,
-                52,
-                0,
-                center=melting_layer.get_center(),
-                height=7.8,
-            ),
+                0, 52, 0, center=melting_layer.get_center(), height=7.8
+            ).shift(DOWN * 0.5),
             run_time=4.5,
+        )
+        self.remove(profile_axes, profile_label, profile)
+
+        orbit_rate = VT(0)
+
+        def orbit(m, dt):
+            m.rotate(~orbit_rate * dt)
+
+        # self.frame.add_updater(orbit)
+
+        self.wait(0.5)
+
+        # self.play(orbit_rate @ (-PI / 12), run_time=2)
+
+        # self.wait(5)
+
+        D_arrow = Arrow(
+            rain_layer.get_corner(DL), rain_layer.get_corner(DR), buff=0
+        ).shift(DOWN * 0.5)
+        D_label = Tex(r"D").next_to(D_arrow, DOWN, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(D_arrow),
+                GrowFromCenter(D_label),
+                lag_ratio=0.2,
+            )
         )
 
         self.wait(0.5)
-        self.wait(10)
+
+        h_arrow = Arrow(
+            rain_layer.get_corner(DR), snow_layer.get_corner(UR), buff=0
+        ).shift(RIGHT * 0.5)
+        h_label = Text("height", font=FONT).next_to(h_arrow, RIGHT, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(h_arrow),
+                Write(h_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        colorbar_height = 3.2
+        colorbar_width = 0.28
+        colorbar_steps = 64
+        colorbar_slice_height = colorbar_height / colorbar_steps
+        colorbar_gradient = VGroup()
+        for index in range(colorbar_steps):
+            alpha = (index + 0.5) / colorbar_steps
+            epsilon_r = epsilon_r_min + alpha * (epsilon_r_max - epsilon_r_min)
+            colorbar_gradient.add(
+                Rectangle(
+                    width=colorbar_width,
+                    height=colorbar_slice_height * 1.02,
+                )
+                .set_stroke(width=0)
+                .set_fill(rgb_to_color(epsilon_r_to_rgb(epsilon_r)), opacity=1)
+                .move_to(
+                    [
+                        0,
+                        -colorbar_height / 2 + (index + 0.5) * colorbar_slice_height,
+                        0,
+                    ]
+                )
+            )
+
+        colorbar_frame = Rectangle(
+            width=colorbar_width,
+            height=colorbar_height,
+            fill_opacity=0,
+            stroke_color=TOWER_LIGHT,
+            stroke_width=1,
+        )
+        colorbar_ticks = VGroup()
+        for epsilon_r in (3.2, 20, 40, 60, 80):
+            alpha = (epsilon_r - epsilon_r_min) / (epsilon_r_max - epsilon_r_min)
+            tick_y = -colorbar_height / 2 + alpha * colorbar_height
+            tick = Line(
+                [colorbar_width / 2, tick_y, 0],
+                [colorbar_width / 2 + 0.1, tick_y, 0],
+                stroke_color=WHITE,
+                stroke_width=1,
+            )
+            tick_label = (
+                Text(f"{epsilon_r:g}", font=FONT)
+                .scale(0.28)
+                .next_to(tick, RIGHT, buff=0.06)
+            )
+            colorbar_ticks.add(VGroup(tick, tick_label))
+
+        colorbar_label = (
+            Tex(r"\varepsilon_r")
+            .scale(0.7)
+            .next_to(
+                colorbar_frame,
+                UP,
+                buff=0.15,
+            )
+        )
+        epsilon_r_colorbar = (
+            Group(
+                colorbar_gradient,
+                colorbar_frame,
+                colorbar_ticks,
+                colorbar_label,
+            )
+            .fix_in_frame()
+            .to_edge(LEFT, buff=0.35)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(colorbar_gradient),
+                ShowCreation(colorbar_frame),
+                FadeIn(colorbar_ticks),
+                Write(colorbar_label),
+                lag_ratio=0.15,
+            ),
+            run_time=2,
+        )
+
+        # self.wait(10)
+
+        self.wait(0.5)
+
+        self.play(
+            colorbar_label.animate(rate_func=utils.rate_functions.there_and_back)
+            .scale(2)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        snow_line = (
+            Line(
+                colorbar_frame.get_corner(DR),
+                colorbar_frame.get_corner(DR) + colorbar_frame.get_height() * 0.3 * UP,
+            )
+            .fix_in_frame()
+            .shift(RIGHT * 0.6)
+        )
+        snow_line_d = Line(
+            snow_line.get_bottom() + LEFT * 0.06,
+            snow_line.get_bottom() + RIGHT * 0.06,
+        ).fix_in_frame()
+        snow_line_u = Line(
+            snow_line.get_top() + LEFT * 0.06,
+            snow_line.get_top() + RIGHT * 0.06,
+        ).fix_in_frame()
+        snow_label = (
+            Text("snow", font=FONT)
+            .fix_in_frame()
+            .scale(0.5)
+            .next_to(snow_line, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(snow_line_d),
+                ShowCreation(snow_line),
+                ShowCreation(snow_line_u),
+                FadeIn(snow_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        rain_line = (
+            Line(
+                colorbar_frame.get_corner(UR),
+                colorbar_frame.get_corner(UR)
+                + colorbar_frame.get_height() * 0.3 * DOWN,
+            )
+            .fix_in_frame()
+            .shift(RIGHT * 0.6)
+        )
+        rain_line_d = Line(
+            rain_line.get_bottom() + LEFT * 0.06,
+            rain_line.get_bottom() + RIGHT * 0.06,
+        ).fix_in_frame()
+        rain_line_u = Line(
+            rain_line.get_top() + LEFT * 0.06,
+            rain_line.get_top() + RIGHT * 0.06,
+        ).fix_in_frame()
+        rain_label = (
+            Text("rain", font=FONT)
+            .fix_in_frame()
+            .scale(0.5)
+            .next_to(rain_line, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(rain_line_u),
+                ShowCreation(rain_line),
+                ShowCreation(rain_line_d),
+                FadeIn(rain_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        melting_line = (
+            Line(
+                colorbar_frame.get_edge_center(RIGHT)
+                + colorbar_frame.get_height() * 0.15 * UP,
+                colorbar_frame.get_edge_center(RIGHT)
+                + colorbar_frame.get_height() * 0.15 * DOWN,
+            )
+            .fix_in_frame()
+            .shift(RIGHT * 0.6)
+        )
+        melting_line_d = Line(
+            melting_line.get_bottom() + LEFT * 0.06,
+            melting_line.get_bottom() + RIGHT * 0.06,
+        ).fix_in_frame()
+        melting_line_u = Line(
+            melting_line.get_top() + LEFT * 0.06,
+            melting_line.get_top() + RIGHT * 0.06,
+        ).fix_in_frame()
+        melting_label = (
+            Text("melting", font=FONT)
+            .fix_in_frame()
+            .scale(0.5)
+            .next_to(melting_line, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(melting_line_u),
+                ShowCreation(melting_line),
+                ShowCreation(melting_line_d),
+                FadeIn(melting_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
 
         self.embed()
 
