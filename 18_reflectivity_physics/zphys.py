@@ -240,6 +240,36 @@ class IntroP2(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
+        cloud = (
+            Cloud()
+            .rotate(-PI / 2, axis=RIGHT)
+            .shift(RIGHT * fw(self, 0.3))
+            .shift(UP * 10)
+        )
+
+        radar, beam_origin = place_wsr88_model(height=fh(self, 1), shift=0)
+        radar.rotate(-PI / 2, axis=RIGHT).shift(DOWN * 9 + LEFT * 4 + IN * 4)
+        radar.dome.set_opacity(0)
+        radar.dome.deactivate_depth_test()
+        radar.shift(DOWN * 10)
+        self.add(radar)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate.shift(DOWN * 10),
+                radar.el.animate(run_time=2).set_value(20 * DEG),
+                cloud.animate.shift(DOWN * 20),
+                lag_ratio=0.3,
+            )
+        )
+
+        dipole = DipoleAntenna(
+            length=3,
+            radius=0.06,
+            feed_gap=0.2,
+            feed_length=0.7,
+        )
+        yagi = Yagi()
 
         self.embed()
 
