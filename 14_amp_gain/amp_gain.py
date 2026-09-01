@@ -599,7 +599,7 @@ class Amp(MovingCameraScene):
         f = 4
         input_plot = input_ax.plot(
             lambda t: A1 * np.sin(2 * PI * f * t),
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
             x_range=[0, 1, 1 / 200],
             color=INPUT_COLOR,
         )
@@ -616,7 +616,7 @@ class Amp(MovingCameraScene):
         f = 4
         output_plot = output_ax.plot(
             lambda t: 2 * A1 * np.sin(2 * PI * f * t),
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            stroke_width=DEFAULT_STROKE_WIDTH * 4,
             x_range=[0, 1, 1 / 200],
             color=OUTPUT_COLOR,
         )
@@ -702,314 +702,317 @@ class Amp(MovingCameraScene):
             )
         )
 
-        self.wait(0.5)
+        self.remove(*gain_eqn[0])
+        self.camera.frame.move_to(amp)
 
-        ip_ld = Line(
-            input_plot.get_corner(DL),
-            input_plot.get_corner(DL) + LEFT / 2,
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-        ).shift(LEFT * 0.2)
-        ip_lu = (
-            Line(
-                input_plot.get_corner(DL),
-                input_plot.get_corner(DL) + LEFT / 2,
-                stroke_width=DEFAULT_STROKE_WIDTH * 2,
-            )
-            .set_y(input_plot.get_top()[1])
-            .shift(LEFT * 0.2)
-        )
-        ip_line = Line(
-            ip_ld.get_midpoint(),
-            ip_lu.get_midpoint(),
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-        )
-        vin_label = (
-            MathTex(r"\text{in}")
-            .scale(2)
-            .set_color(INPUT_COLOR)
-            .next_to(ip_ld, DOWN, MED_SMALL_BUFF)
-        )
-
-        op_ld = Line(
-            output_plot.get_corner(DR),
-            output_plot.get_corner(DR) + RIGHT / 2,
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-        ).shift(RIGHT * 0.2)
-        op_lu = (
-            Line(
-                output_plot.get_corner(DR),
-                output_plot.get_corner(DR) + RIGHT / 2,
-                stroke_width=DEFAULT_STROKE_WIDTH * 2,
-            )
-            .set_y(output_plot.get_top()[1])
-            .shift(RIGHT * 0.2)
-        )
-        op_line = Line(
-            op_ld.get_midpoint(),
-            op_lu.get_midpoint(),
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-        )
-        vout_label = (
-            MathTex(r"\text{out}")
-            .scale(2)
-            .set_color(OUTPUT_COLOR)
-            .next_to(op_ld, DOWN, MED_SMALL_BUFF)
-        )
-
-        # self.add(gain_eqn[0][1:])
-        self.play(
-            LaggedStart(
-                Create(ip_ld),
-                Create(ip_line),
-                Create(ip_lu),
-                LaggedStart(*[FadeIn(m) for m in vin_label[0]], lag_ratio=0.1),
-                lag_ratio=0.2,
-            ),
-            LaggedStart(
-                Create(op_ld),
-                Create(op_line),
-                Create(op_lu),
-                LaggedStart(*[FadeIn(m) for m in vout_label[0]], lag_ratio=0.1),
-                lag_ratio=0.2,
-            ),
-        )
-
-        self.wait(0.5)
-
-        self.next_section(skip_animations=skip_animations(True))
-
-        self.play(
-            LaggedStart(
-                ReplacementTransform(vout_label[0], gain_eqn[0][2:5], path_arc=-PI / 3),
-                Create(gain_eqn[0][5]),
-                ReplacementTransform(vin_label[0], gain_eqn[0][6:], path_arc=PI / 3),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                ReplacementTransform(gain_eqn[0][:8], gain_eqn_pv[0][:8]),
-                GrowFromCenter(gain_eqn_pv[0][8]),
-                LaggedStart(
-                    *[GrowFromCenter(m) for m in gain_eqn_pv[0][9:17]],
-                    lag_ratio=0.05,
-                ),
-                GrowFromCenter(gain_eqn_pv[0][17:19]),
-                LaggedStart(
-                    *[GrowFromCenter(m) for m in gain_eqn_pv[0][19:]],
-                    lag_ratio=0.05,
-                ),
-                lag_ratio=0.4,
-            )
-        )
-
-        self.wait(0.5)
-
-        gain_soln = (
-            MathTex(r"G = \frac{\text{out}}{\text{in}} = \frac{2}{1}")
-            .scale(2)
-            .move_to(gain_eqn_pv)
-        )
-        gain_soln[0][0].set_color(GREEN)
-        gain_soln[0][2:5].set_color(OUTPUT_COLOR)
-        gain_soln[0][6:8].set_color(INPUT_COLOR)
-        gain_soln[0][9].set_color(OUTPUT_COLOR)
-        gain_soln[0][11].set_color(INPUT_COLOR)
-
-        self.next_section(skip_animations=skip_animations(True))
-
-        self.play(
-            LaggedStart(
-                LaggedStart(*[FadeOut(m) for m in gain_eqn_pv[0][8:]], lag_ratio=0.02),
-                ReplacementTransform(gain_eqn_pv[0][:8], gain_soln[0][:8]),
-                GrowFromCenter(gain_soln[0][8]),
-                GrowFromCenter(gain_soln[0][9]),
-                GrowFromCenter(gain_soln[0][10]),
-                GrowFromCenter(gain_soln[0][11]),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.next_section(skip_animations=skip_animations(False))
-
-        vpv = (
-            MathTex(r"\left[ \frac{V}{V} \right]")
-            .scale(2)
-            .next_to(gain_soln, RIGHT, MED_SMALL_BUFF)
-        )
-        vpv.shift((gain_soln[0][-2].get_y() - vpv[0][2].get_y()) * UP)
-        wpw = MathTex(r"\left[ \frac{W}{W} \right]").scale(2).move_to(vpv, LEFT)
-        wpw.shift((vpv[0][2].get_y() - wpw[0][2].get_y()) * UP)
-
-        self.play(
-            LaggedStart(
-                *[GrowFromCenter(m) for m in wpw[0]],
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                *[ReplacementTransform(a, b) for a, b in zip(wpw[0], vpv[0])],
-                lag_ratio=0.1,
-            )
-        )
-
-        self.wait(0.5)
-        self.next_section(skip_animations=skip_animations(False))
-
-        xu = Text("x", font=FONT, color=RED).scale(2).move_to(vpv[0][1])
-        xd = Text("x", font=FONT, color=RED).scale(2).move_to(vpv[0][3])
-
-        self.play(
-            LaggedStart(
-                GrowFromCenter(xu),
-                GrowFromCenter(xd),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        np.random.seed(1)
-
-        self.play(
-            LaggedStart(
-                ShrinkToCenter(gain_soln[0][-1]),
-                ShrinkToCenter(gain_soln[0][-2]),
-                gain_soln[0][-3].animate.set_y(gain_soln[0][-2].get_y()),
-                lag_ratio=0.3,
-            ),
-            LaggedStart(
-                *[
-                    FadeOut(m, shift=shift)
-                    for m, shift in zip(
-                        [*vpv[0], xu, xd],
-                        np.random.random((7, 3)) * 2 - 1,
-                    )
-                ],
-                lag_ratio=0.05,
-            ),
-        )
-
-        self.wait(0.5)
-        self.camera.frame.save_state()
-        self.next_section(skip_animations=skip_animations(True))
-
-        desired_page = 3
-        npages = desired_page * 2
-        theta_step = PI * 0.03
-        pages = (
-            Group(
-                *[
-                    ImageMobject(f"./static/adl8154-{npages + 1 - idx:02}.png")
-                    .scale_to_fit_height(fh(self, 0.8))
-                    .rotate(-theta_step * npages / 2 + idx * theta_step)
-                    for idx in range(1, npages + 1)
-                ]
-            )
-            .move_to(self.camera.frame)
-            .shift(DOWN * fh(self, 1.5))
-        )
-
-        self.add(pages)
-        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.5)))
-
-        self.wait(0.5)
-
-        self.next_section(skip_animations=skip_animations(True))
-
-        width = pages.width
-        self.play(
-            pages[-1]
-            .animate(rate_func=rate_functions.ease_in_circ, run_time=0.3)
-            .shift(LEFT * width),
-        )
-        pages[-1].set_z_index(-npages)
-        self.play(
-            pages[-1]
-            .animate(rate_func=rate_functions.ease_out_circ, run_time=0.3)
-            .shift(RIGHT * width),
-        )
-        self.play(
-            pages[-2]
-            .animate(rate_func=rate_functions.ease_in_circ, run_time=0.3)
-            .shift(LEFT * width),
-        )
-        pages[-2].set_z_index(-npages)
-        self.play(
-            pages[-2]
-            .animate(rate_func=rate_functions.ease_out_circ, run_time=0.3)
-            .shift(RIGHT * width),
-        )
-        self.play(
-            pages[-3]
-            .animate(rate_func=rate_functions.ease_in_circ, run_time=0.3)
-            .shift(LEFT * width),
-        )
-        pages[-3].set_z_index(-npages)
-        self.play(
-            LaggedStart(
-                pages[-3]
-                .animate(rate_func=rate_functions.ease_out_circ, run_time=0.3)
-                .shift(RIGHT * width),
-                self.camera.frame.animate.scale(0.35).shift(UP * 2),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(0.5)
-
-        highlight = (
-            Rectangle(
-                width=fw(self, 0.5),
-                height=fh(self, 0.03),
-                color=YELLOW,
-                stroke_opacity=0,
-                fill_color=YELLOW,
-                fill_opacity=0.3,
-            )
-            .move_to(self.camera.frame)
-            .shift(LEFT + UP * 0.14)
-        )
-
-        self.play(FadeIn(highlight))
-
-        self.wait(0.5)
-
-        self.remove(ip_ld, ip_line, ip_lu, op_ld, op_line, op_lu)
-        self.play(self.camera.frame.animate.restore())
-        # self.play(self.camera.frame.animate.shift(DOWN * fh(self, 3)))
-
-        db_label = (
-            Text("dB", font=FONT)
-            .scale_to_fit_width(fw(self, 0.15))
-            .move_to(self.camera.frame)
-            .shift(RIGHT * fw(self, 1.5))
-            .set_y(gain_soln.get_y())
-        )
-        self.add(db_label)
-
-        arrow = Arrow(gain_soln.get_right(), db_label.get_left())
-
-        self.play(
-            LaggedStart(
-                GrowArrow(arrow),
-                self.camera.frame.animate.move_to(db_label),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(FadeOut(arrow))
+        # self.wait(0.5)
+        #
+        # ip_ld = Line(
+        #     input_plot.get_corner(DL),
+        #     input_plot.get_corner(DL) + LEFT / 2,
+        #     stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        # ).shift(LEFT * 0.2)
+        # ip_lu = (
+        #     Line(
+        #         input_plot.get_corner(DL),
+        #         input_plot.get_corner(DL) + LEFT / 2,
+        #         stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        #     )
+        #     .set_y(input_plot.get_top()[1])
+        #     .shift(LEFT * 0.2)
+        # )
+        # ip_line = Line(
+        #     ip_ld.get_midpoint(),
+        #     ip_lu.get_midpoint(),
+        #     stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        # )
+        # vin_label = (
+        #     MathTex(r"\text{in}")
+        #     .scale(2)
+        #     .set_color(INPUT_COLOR)
+        #     .next_to(ip_ld, DOWN, MED_SMALL_BUFF)
+        # )
+        #
+        # op_ld = Line(
+        #     output_plot.get_corner(DR),
+        #     output_plot.get_corner(DR) + RIGHT / 2,
+        #     stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        # ).shift(RIGHT * 0.2)
+        # op_lu = (
+        #     Line(
+        #         output_plot.get_corner(DR),
+        #         output_plot.get_corner(DR) + RIGHT / 2,
+        #         stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        #     )
+        #     .set_y(output_plot.get_top()[1])
+        #     .shift(RIGHT * 0.2)
+        # )
+        # op_line = Line(
+        #     op_ld.get_midpoint(),
+        #     op_lu.get_midpoint(),
+        #     stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        # )
+        # vout_label = (
+        #     MathTex(r"\text{out}")
+        #     .scale(2)
+        #     .set_color(OUTPUT_COLOR)
+        #     .next_to(op_ld, DOWN, MED_SMALL_BUFF)
+        # )
+        #
+        # # self.add(gain_eqn[0][1:])
+        # self.play(
+        #     LaggedStart(
+        #         Create(ip_ld),
+        #         Create(ip_line),
+        #         Create(ip_lu),
+        #         LaggedStart(*[FadeIn(m) for m in vin_label[0]], lag_ratio=0.1),
+        #         lag_ratio=0.2,
+        #     ),
+        #     LaggedStart(
+        #         Create(op_ld),
+        #         Create(op_line),
+        #         Create(op_lu),
+        #         LaggedStart(*[FadeIn(m) for m in vout_label[0]], lag_ratio=0.1),
+        #         lag_ratio=0.2,
+        #     ),
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.next_section(skip_animations=skip_animations(True))
+        #
+        # self.play(
+        #     LaggedStart(
+        #         ReplacementTransform(vout_label[0], gain_eqn[0][2:5], path_arc=-PI / 3),
+        #         Create(gain_eqn[0][5]),
+        #         ReplacementTransform(vin_label[0], gain_eqn[0][6:], path_arc=PI / 3),
+        #         lag_ratio=0.2,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         ReplacementTransform(gain_eqn[0][:8], gain_eqn_pv[0][:8]),
+        #         GrowFromCenter(gain_eqn_pv[0][8]),
+        #         LaggedStart(
+        #             *[GrowFromCenter(m) for m in gain_eqn_pv[0][9:17]],
+        #             lag_ratio=0.05,
+        #         ),
+        #         GrowFromCenter(gain_eqn_pv[0][17:19]),
+        #         LaggedStart(
+        #             *[GrowFromCenter(m) for m in gain_eqn_pv[0][19:]],
+        #             lag_ratio=0.05,
+        #         ),
+        #         lag_ratio=0.4,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # gain_soln = (
+        #     MathTex(r"G = \frac{\text{out}}{\text{in}} = \frac{2}{1}")
+        #     .scale(2)
+        #     .move_to(gain_eqn_pv)
+        # )
+        # gain_soln[0][0].set_color(GREEN)
+        # gain_soln[0][2:5].set_color(OUTPUT_COLOR)
+        # gain_soln[0][6:8].set_color(INPUT_COLOR)
+        # gain_soln[0][9].set_color(OUTPUT_COLOR)
+        # gain_soln[0][11].set_color(INPUT_COLOR)
+        #
+        # self.next_section(skip_animations=skip_animations(True))
+        #
+        # self.play(
+        #     LaggedStart(
+        #         LaggedStart(*[FadeOut(m) for m in gain_eqn_pv[0][8:]], lag_ratio=0.02),
+        #         ReplacementTransform(gain_eqn_pv[0][:8], gain_soln[0][:8]),
+        #         GrowFromCenter(gain_soln[0][8]),
+        #         GrowFromCenter(gain_soln[0][9]),
+        #         GrowFromCenter(gain_soln[0][10]),
+        #         GrowFromCenter(gain_soln[0][11]),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.next_section(skip_animations=skip_animations(False))
+        #
+        # vpv = (
+        #     MathTex(r"\left[ \frac{V}{V} \right]")
+        #     .scale(2)
+        #     .next_to(gain_soln, RIGHT, MED_SMALL_BUFF)
+        # )
+        # vpv.shift((gain_soln[0][-2].get_y() - vpv[0][2].get_y()) * UP)
+        # wpw = MathTex(r"\left[ \frac{W}{W} \right]").scale(2).move_to(vpv, LEFT)
+        # wpw.shift((vpv[0][2].get_y() - wpw[0][2].get_y()) * UP)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         *[GrowFromCenter(m) for m in wpw[0]],
+        #         lag_ratio=0.2,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         *[ReplacementTransform(a, b) for a, b in zip(wpw[0], vpv[0])],
+        #         lag_ratio=0.1,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        # self.next_section(skip_animations=skip_animations(False))
+        #
+        # xu = Text("x", font=FONT, color=RED).scale(2).move_to(vpv[0][1])
+        # xd = Text("x", font=FONT, color=RED).scale(2).move_to(vpv[0][3])
+        #
+        # self.play(
+        #     LaggedStart(
+        #         GrowFromCenter(xu),
+        #         GrowFromCenter(xd),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # np.random.seed(1)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         ShrinkToCenter(gain_soln[0][-1]),
+        #         ShrinkToCenter(gain_soln[0][-2]),
+        #         gain_soln[0][-3].animate.set_y(gain_soln[0][-2].get_y()),
+        #         lag_ratio=0.3,
+        #     ),
+        #     LaggedStart(
+        #         *[
+        #             FadeOut(m, shift=shift)
+        #             for m, shift in zip(
+        #                 [*vpv[0], xu, xd],
+        #                 np.random.random((7, 3)) * 2 - 1,
+        #             )
+        #         ],
+        #         lag_ratio=0.05,
+        #     ),
+        # )
+        #
+        # self.wait(0.5)
+        # self.camera.frame.save_state()
+        # self.next_section(skip_animations=skip_animations(True))
+        #
+        # desired_page = 3
+        # npages = desired_page * 2
+        # theta_step = PI * 0.03
+        # pages = (
+        #     Group(
+        #         *[
+        #             ImageMobject(f"./static/adl8154-{npages + 1 - idx:02}.png")
+        #             .scale_to_fit_height(fh(self, 0.8))
+        #             .rotate(-theta_step * npages / 2 + idx * theta_step)
+        #             for idx in range(1, npages + 1)
+        #         ]
+        #     )
+        #     .move_to(self.camera.frame)
+        #     .shift(DOWN * fh(self, 1.5))
+        # )
+        #
+        # self.add(pages)
+        # self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.5)))
+        #
+        # self.wait(0.5)
+        #
+        # self.next_section(skip_animations=skip_animations(True))
+        #
+        # width = pages.width
+        # self.play(
+        #     pages[-1]
+        #     .animate(rate_func=rate_functions.ease_in_circ, run_time=0.3)
+        #     .shift(LEFT * width),
+        # )
+        # pages[-1].set_z_index(-npages)
+        # self.play(
+        #     pages[-1]
+        #     .animate(rate_func=rate_functions.ease_out_circ, run_time=0.3)
+        #     .shift(RIGHT * width),
+        # )
+        # self.play(
+        #     pages[-2]
+        #     .animate(rate_func=rate_functions.ease_in_circ, run_time=0.3)
+        #     .shift(LEFT * width),
+        # )
+        # pages[-2].set_z_index(-npages)
+        # self.play(
+        #     pages[-2]
+        #     .animate(rate_func=rate_functions.ease_out_circ, run_time=0.3)
+        #     .shift(RIGHT * width),
+        # )
+        # self.play(
+        #     pages[-3]
+        #     .animate(rate_func=rate_functions.ease_in_circ, run_time=0.3)
+        #     .shift(LEFT * width),
+        # )
+        # pages[-3].set_z_index(-npages)
+        # self.play(
+        #     LaggedStart(
+        #         pages[-3]
+        #         .animate(rate_func=rate_functions.ease_out_circ, run_time=0.3)
+        #         .shift(RIGHT * width),
+        #         self.camera.frame.animate.scale(0.35).shift(UP * 2),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # highlight = (
+        #     Rectangle(
+        #         width=fw(self, 0.5),
+        #         height=fh(self, 0.03),
+        #         color=YELLOW,
+        #         stroke_opacity=0,
+        #         fill_color=YELLOW,
+        #         fill_opacity=0.3,
+        #     )
+        #     .move_to(self.camera.frame)
+        #     .shift(LEFT + UP * 0.14)
+        # )
+        #
+        # self.play(FadeIn(highlight))
+        #
+        # self.wait(0.5)
+        #
+        # self.remove(ip_ld, ip_line, ip_lu, op_ld, op_line, op_lu)
+        # self.play(self.camera.frame.animate.restore())
+        # # self.play(self.camera.frame.animate.shift(DOWN * fh(self, 3)))
+        #
+        # db_label = (
+        #     Text("dB", font=FONT)
+        #     .scale_to_fit_width(fw(self, 0.15))
+        #     .move_to(self.camera.frame)
+        #     .shift(RIGHT * fw(self, 1.5))
+        #     .set_y(gain_soln.get_y())
+        # )
+        # self.add(db_label)
+        #
+        # arrow = Arrow(gain_soln.get_right(), db_label.get_left())
+        #
+        # self.play(
+        #     LaggedStart(
+        #         GrowArrow(arrow),
+        #         self.camera.frame.animate.move_to(db_label),
+        #         lag_ratio=0.2,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.play(FadeOut(arrow))
 
         self.wait(2)
 
@@ -2170,11 +2173,13 @@ class FrequencyDependence(MovingCameraScene):
         input_offset = VT(0)
         input_plot = always_redraw(
             lambda: input_ax.plot(
-                lambda t: ~A1 * np.sin(2 * PI * f1 * t + ~phi0)
-                + ~A2 * np.sin(2 * PI * f2 * t + ~phi1)
-                + ~A3 * np.sin(2 * PI * f3 * t + ~phi2)
-                + ~A4 * np.sin(2 * PI * f4 * t + ~phi3)
-                + ~input_offset,
+                lambda t: (
+                    ~A1 * np.sin(2 * PI * f1 * t + ~phi0)
+                    + ~A2 * np.sin(2 * PI * f2 * t + ~phi1)
+                    + ~A3 * np.sin(2 * PI * f3 * t + ~phi2)
+                    + ~A4 * np.sin(2 * PI * f4 * t + ~phi3)
+                    + ~input_offset
+                ),
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=INPUT_COLOR,
@@ -2390,10 +2395,12 @@ class FrequencyDependence(MovingCameraScene):
         f1_dot_scale = VT(0)
 
         xdot = always_redraw(
-            lambda: Dot(radius=DEFAULT_DOT_RADIUS * 0.5, color=BLUE)
-            .scale(~f1_dot_scale)
-            .move_to(ax.c2p(~f1_dot_x, ~f1_dot_y))
-            .set_z_index(3)
+            lambda: (
+                Dot(radius=DEFAULT_DOT_RADIUS * 0.5, color=BLUE)
+                .scale(~f1_dot_scale)
+                .move_to(ax.c2p(~f1_dot_x, ~f1_dot_y))
+                .set_z_index(3)
+            )
         )
         line_to_dot1_x = always_redraw(
             lambda: DashedLine(
@@ -2653,11 +2660,10 @@ class FrequencyDependence(MovingCameraScene):
         output_en_4_full = VT(0)
         output1 = always_redraw(
             lambda: output_ax.plot(
-                lambda t: ~output_en_1
-                * ~g1
-                * ~A1_single
-                * np.sin(2 * PI * f1 * t + ~phi0)
-                + ~output_offset1,
+                lambda t: (
+                    ~output_en_1 * ~g1 * ~A1_single * np.sin(2 * PI * f1 * t + ~phi0)
+                    + ~output_offset1
+                ),
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=OUTPUT_COLOR,
@@ -2666,11 +2672,10 @@ class FrequencyDependence(MovingCameraScene):
         )
         output2 = always_redraw(
             lambda: output_ax.plot(
-                lambda t: ~output_en_2
-                * ~g2
-                * ~A2_single
-                * np.sin(2 * PI * f2 * t + ~phi1)
-                + ~output_offset2,
+                lambda t: (
+                    ~output_en_2 * ~g2 * ~A2_single * np.sin(2 * PI * f2 * t + ~phi1)
+                    + ~output_offset2
+                ),
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=OUTPUT_COLOR,
@@ -2679,11 +2684,10 @@ class FrequencyDependence(MovingCameraScene):
         )
         output3 = always_redraw(
             lambda: output_ax.plot(
-                lambda t: ~output_en_3
-                * ~g3
-                * ~A3_single
-                * np.sin(2 * PI * f3 * t + ~phi2)
-                + ~output_offset3,
+                lambda t: (
+                    ~output_en_3 * ~g3 * ~A3_single * np.sin(2 * PI * f3 * t + ~phi2)
+                    + ~output_offset3
+                ),
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=OUTPUT_COLOR,
@@ -2692,11 +2696,10 @@ class FrequencyDependence(MovingCameraScene):
         )
         output4 = always_redraw(
             lambda: output_ax.plot(
-                lambda t: ~output_en_4
-                * ~g4
-                * ~A4_single
-                * np.sin(2 * PI * f4 * t + ~phi3)
-                + ~output_offset4,
+                lambda t: (
+                    ~output_en_4 * ~g4 * ~A4_single * np.sin(2 * PI * f4 * t + ~phi3)
+                    + ~output_offset4
+                ),
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=OUTPUT_COLOR,
@@ -2706,26 +2709,28 @@ class FrequencyDependence(MovingCameraScene):
         output_gain_scale = VT(1)
         output_plot = always_redraw(
             lambda: output_ax.plot(
-                lambda t: ~output_gain_scale
-                * (
-                    ~output_en_1_full
-                    * ~g1
-                    * ~A1_single_out
-                    * np.sin(2 * PI * f1 * t + ~phi0)
-                    + ~output_en_2_full
-                    * ~g2
-                    * ~A2_single_out
-                    * np.sin(2 * PI * f2 * t + ~phi1)
-                    + ~output_en_3_full
-                    * ~g3
-                    * ~A3_single_out
-                    * np.sin(2 * PI * f3 * t + ~phi2)
-                    + ~output_en_4_full
-                    * ~g4
-                    * ~A4_single_out
-                    * np.sin(2 * PI * f4 * t + ~phi3)
-                )
-                + ~output_offset,
+                lambda t: (
+                    ~output_gain_scale
+                    * (
+                        ~output_en_1_full
+                        * ~g1
+                        * ~A1_single_out
+                        * np.sin(2 * PI * f1 * t + ~phi0)
+                        + ~output_en_2_full
+                        * ~g2
+                        * ~A2_single_out
+                        * np.sin(2 * PI * f2 * t + ~phi1)
+                        + ~output_en_3_full
+                        * ~g3
+                        * ~A3_single_out
+                        * np.sin(2 * PI * f3 * t + ~phi2)
+                        + ~output_en_4_full
+                        * ~g4
+                        * ~A4_single_out
+                        * np.sin(2 * PI * f4 * t + ~phi3)
+                    )
+                    + ~output_offset
+                ),
                 stroke_width=DEFAULT_STROKE_WIDTH * ~stroke_width_vt,
                 x_range=[0, 1, 1 / 200],
                 color=OUTPUT_COLOR,
