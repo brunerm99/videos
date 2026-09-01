@@ -274,6 +274,90 @@ class IntroP2(InteractiveScene):
         self.embed()
 
 
+class IntroP2v2(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        rabbit_ears = (
+            ImageMobject("./static/rabbit_ears.jpg")
+            .rescale_to_fit(fw(self, 0.3), 0)
+            .move_to(self.frame)
+        )
+        self.play(rabbit_ears.shift(LEFT * fw(self)).animate.shift(RIGHT * fw(self)))
+
+        self.wait(0.5)
+
+        raindrop = RainDrop().move_to(self.frame).shift(RIGHT * fw(self))
+
+        self.add(raindrop)
+
+        group = Group(rabbit_ears, raindrop)
+
+        self.play(group.animate.arrange(RIGHT, buff=LARGE_BUFF * 3))
+
+        self.wait(0.5)
+
+        dipole = DipoleAntenna(
+            length=3,
+            radius=0.06,
+            feed_gap=0.2,
+            feed_length=0.7,
+        ).next_to(group, DOWN, buff=LARGE_BUFF * 3)
+
+        def get_rotation_updater(speed, axis):
+            def updater(m, dt):
+                m.rotate(dt * speed, axis=axis)
+
+            return updater
+
+        rotation_speed = PI / 6
+        self.add(dipole)
+        dipole.add_updater(get_rotation_updater(rotation_speed, UP), call=False)
+
+        ears_bez = CubicBezier(
+            rabbit_ears.get_bottom() + [0, -0.1, 0],
+            rabbit_ears.get_bottom() + [0, -1, 0],
+            dipole.get_top() + [0, 1, 0],
+            dipole.get_top() + [0, 0.1, 0],
+        )
+        raindrop_bez = CubicBezier(
+            raindrop.get_bottom() + [0, -0.1, 0],
+            raindrop.get_bottom() + [0, -1, 0],
+            dipole.get_top() + [0, 1, 0],
+            dipole.get_top() + [0, 0.1, 0],
+        )
+
+        dipole_group = Group(group, dipole)
+
+        self.play(
+            ShowCreation(ears_bez),
+            ShowCreation(raindrop_bez),
+            self.frame.animate.rescale_to_fit(dipole_group.get_height() * 1.2, 1).set_y(
+                dipole_group.get_y()
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Uncreate(raindrop_bez),
+                    Uncreate(ears_bez),
+                    rabbit_ears.animate.shift(LEFT * fw(self)),
+                    raindrop.animate.shift(RIGHT * fw(self)),
+                    lag_ratio=0,
+                ),
+                dipole.animate.set_y(self.frame.get_y()),
+                lag_ratio=0.3,
+            )
+        )
+
+        # now the stuff on em waves
+
+        self.embed()
+
+
 class Rayleigh(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
@@ -2283,6 +2367,18 @@ class BrightBandP1(InteractiveScene):
 
         self.play(
             LaggedStart(
+                ShowCreation(liquid_line_l),
+                ShowCreation(liquid_line),
+                ShowCreation(liquid_line_r),
+                FadeIn(D_liquid),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
                 ShowCreation(snow_line_l),
                 ShowCreation(snow_line),
                 ShowCreation(snow_line_r),
@@ -2295,108 +2391,191 @@ class BrightBandP1(InteractiveScene):
 
         self.play(
             LaggedStart(
-                ShowCreation(liquid_line_l),
-                ShowCreation(liquid_line),
-                ShowCreation(liquid_line_r),
-                FadeIn(D_liquid),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        er_eqn_ei = (
-            Tex(
-                r"E_{s} = \frac{k_0^2 \mathbf E_i (\varepsilon_r - 1) V}"
-                r"{2 \pi r} \sin{\theta}"
-            )
-            .fix_in_frame()
-            .scale(1.5)
-            .next_to(precip.fix_in_frame(), UP, LARGE_BUFF)
-            # .shift(UP * 0.6)
-        )
-        er_eqn_ei[9:11].set_color(YELLOW)
-
-        self.play(
-            LaggedStart(
-                Uncreate(liquid_line_r),
-                Uncreate(snow_line_r),
-                Uncreate(liquid_line),
-                Uncreate(snow_line),
-                Uncreate(liquid_line_l),
                 Uncreate(snow_line_l),
-                FadeOut(D_liquid),
+                Uncreate(snow_line),
+                Uncreate(snow_line_r),
                 FadeOut(D_snow),
-                LaggedStart(
-                    sf.animate.shift(DOWN),
-                    raindrop.animate.shift(DOWN),
-                    lag_ratio=0,
-                ),
-                er_eqn_ei.shift(UP * 5).animate.shift(DOWN * 5),
-                lag_ratio=0.1,
+                Uncreate(liquid_line_l),
+                Uncreate(liquid_line),
+                Uncreate(liquid_line_r),
+                FadeOut(D_liquid),
+                raindrop.animate.shift(RIGHT * fw(self) * 3),
+                sf.animate.move_to(ORIGIN),
+                lag_ratio=0.05,
             )
         )
-        self.play(
-            er_eqn_ei[9:11]
-            .animate(rate_func=utils.rate_functions.there_and_back)
-            .scale(1.5)
-        )
 
-        self.wait(0.5)
+        tri1 = Polygon(
+            sf.get_center(),
+            sf[0].get_end(),
+            sf[1].get_end(),
+            fill_opacity=0.5,
+            fill_color=WHITE,
+            stroke_opacity=0,
+        ).fix_in_frame()
+        pt1 = tri1.get_center()
+        tri1.scale(0.9).move_to(pt1)
 
-        eps_r_snow = (
-            Tex(r"\varepsilon_r \approx 1 - 3")
-            .fix_in_frame()
-            .next_to(sf, UP, MED_SMALL_BUFF)
-        )
-        eps_r_snow[:2].set_color(YELLOW)
-        eps_r_liquid = (
-            Tex(r"\varepsilon_r \approx 80")
-            .fix_in_frame()
-            .next_to(raindrop, UP, MED_SMALL_BUFF)
-            .set_y(eps_r_snow.get_y())
-        )
-        eps_r_liquid[:2].set_color(YELLOW)
+        tri2 = Polygon(
+            sf.get_center(),
+            sf[1].get_end(),
+            sf[2].get_end(),
+            fill_opacity=0.5,
+            fill_color=WHITE,
+            stroke_opacity=0,
+        ).fix_in_frame()
+        pt2 = tri2.get_center()
+        tri2.scale(0.9).move_to(pt2)
+
+        tri3 = Polygon(
+            sf.get_center(),
+            sf[2].get_end(),
+            sf[0].get_start(),
+            fill_opacity=0.5,
+            fill_color=WHITE,
+            stroke_opacity=0,
+        ).fix_in_frame()
+        pt3 = tri3.get_center()
+
+        tri4 = Polygon(
+            sf.get_center(),
+            sf[0].get_start(),
+            sf[1].get_start(),
+            fill_opacity=0.5,
+            fill_color=WHITE,
+            stroke_opacity=0,
+        ).fix_in_frame()
+        pt4 = tri4.get_center()
+        tri4.scale(0.9).move_to(pt4)
+
+        tri5 = Polygon(
+            sf.get_center(),
+            sf[1].get_start(),
+            sf[2].get_start(),
+            fill_opacity=0.5,
+            fill_color=WHITE,
+            stroke_opacity=0,
+        ).fix_in_frame()
+        pt5 = tri5.get_center()
+        tri5.scale(0.9).move_to(pt5)
+
+        tri6 = Polygon(
+            sf.get_center(),
+            sf[2].get_start(),
+            sf[0].get_end(),
+            fill_opacity=0.5,
+            fill_color=WHITE,
+            stroke_opacity=0,
+        ).fix_in_frame()
+        pt6 = tri6.get_center()
+        tri6.scale(0.9).move_to(pt6)
 
         self.play(
             LaggedStart(
-                TransformFromCopy(er_eqn_ei[9:11], eps_r_snow[:2], path_arc=PI / 3),
-                LaggedStart(*[FadeIn(m) for m in eps_r_snow[2:]], lag_ratio=0.1),
-                lag_ratio=0.5,
+                *[
+                    FadeIn(
+                        m,
+                        rate_func=utils.rate_functions.there_and_back_with_pause,
+                        run_time=2,
+                    )
+                    for m in [tri1, tri2, tri3, tri4, tri5, tri6]
+                ],
+                lag_ratio=0.15,
             )
         )
 
-        self.wait(0.5)
-
-        self.play(
-            LaggedStart(
-                TransformFromCopy(er_eqn_ei[9:11], eps_r_liquid[:2], path_arc=-PI / 3),
-                LaggedStart(*[FadeIn(m) for m in eps_r_liquid[2:]], lag_ratio=0.1),
-                lag_ratio=0.5,
-            )
-        )
-
-        es_rel = (
-            Tex(r"E_{s \text{,snow}} < E_{s \text{,liquid}}")
-            .fix_in_frame()
-            .scale(1.5)
-            .next_to(precip.fix_in_frame(), DOWN, MED_LARGE_BUFF)
-            .shift(DOWN * 1.4)
-        )
-
-        self.play(
-            LaggedStart(
-                TransformFromCopy(er_eqn_ei[:2], es_rel[:2]),
-                *[FadeIn(m) for m in es_rel[2:8]],
-                TransformFromCopy(er_eqn_ei[:2], es_rel[8:10]),
-                *[FadeIn(m) for m in es_rel[10:]],
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.play(Group(*self.mobjects).animate.shift(UP * 10))
+        # er_eqn_ei = (
+        #     Tex(
+        #         r"E_{s} = \frac{k_0^2 \mathbf E_i (\varepsilon_r - 1) V}"
+        #         r"{2 \pi r} \sin{\theta}"
+        #     )
+        #     .fix_in_frame()
+        #     .scale(1.5)
+        #     .next_to(precip.fix_in_frame(), UP, LARGE_BUFF)
+        #     # .shift(UP * 0.6)
+        # )
+        # er_eqn_ei[9:11].set_color(YELLOW)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         Uncreate(liquid_line_r),
+        #         Uncreate(snow_line_r),
+        #         Uncreate(liquid_line),
+        #         Uncreate(snow_line),
+        #         Uncreate(liquid_line_l),
+        #         Uncreate(snow_line_l),
+        #         FadeOut(D_liquid),
+        #         FadeOut(D_snow),
+        #         LaggedStart(
+        #             sf.animate.shift(DOWN),
+        #             raindrop.animate.shift(DOWN),
+        #             lag_ratio=0,
+        #         ),
+        #         er_eqn_ei.shift(UP * 5).animate.shift(DOWN * 5),
+        #         lag_ratio=0.1,
+        #     )
+        # )
+        # self.play(
+        #     er_eqn_ei[9:11]
+        #     .animate(rate_func=utils.rate_functions.there_and_back)
+        #     .scale(1.5)
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # eps_r_snow = (
+        #     Tex(r"\varepsilon_r \approx 1 - 3")
+        #     .fix_in_frame()
+        #     .next_to(sf, UP, MED_SMALL_BUFF)
+        # )
+        # eps_r_snow[:2].set_color(YELLOW)
+        # eps_r_liquid = (
+        #     Tex(r"\varepsilon_r \approx 80")
+        #     .fix_in_frame()
+        #     .next_to(raindrop, UP, MED_SMALL_BUFF)
+        #     .set_y(eps_r_snow.get_y())
+        # )
+        # eps_r_liquid[:2].set_color(YELLOW)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         TransformFromCopy(er_eqn_ei[9:11], eps_r_snow[:2], path_arc=PI / 3),
+        #         LaggedStart(*[FadeIn(m) for m in eps_r_snow[2:]], lag_ratio=0.1),
+        #         lag_ratio=0.5,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         TransformFromCopy(er_eqn_ei[9:11], eps_r_liquid[:2], path_arc=-PI / 3),
+        #         LaggedStart(*[FadeIn(m) for m in eps_r_liquid[2:]], lag_ratio=0.1),
+        #         lag_ratio=0.5,
+        #     )
+        # )
+        #
+        # es_rel = (
+        #     Tex(r"E_{s \text{,snow}} < E_{s \text{,liquid}}")
+        #     .fix_in_frame()
+        #     .scale(1.5)
+        #     .next_to(precip.fix_in_frame(), DOWN, MED_LARGE_BUFF)
+        #     .shift(DOWN * 1.4)
+        # )
+        #
+        # self.play(
+        #     LaggedStart(
+        #         TransformFromCopy(er_eqn_ei[:2], es_rel[:2]),
+        #         *[FadeIn(m) for m in es_rel[2:8]],
+        #         TransformFromCopy(er_eqn_ei[:2], es_rel[8:10]),
+        #         *[FadeIn(m) for m in es_rel[10:]],
+        #         lag_ratio=0.2,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.play(Group(*self.mobjects).animate.shift(UP * 10))
 
         self.embed()
 
