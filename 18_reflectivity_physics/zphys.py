@@ -16,6 +16,7 @@ load_dotenv()
 
 from melp import (
     VT,
+    GrowArrow,
     VideoMobject,
     ease_in_sine,
     ease_out_cubic,

@@ -36,6 +36,7 @@ from .easing import (
     linear,
     smootherstep,
 )
+from .growing import GrowArrow
 from .nexrad import (
     fetch_nexrad_volume,
     get_available_nexrad_products,
@@ -48,6 +49,7 @@ from .props.yagi import YAGI_MODEL_PATH, Yagi
 
 __all__ = [
     "Dipole",
+    "GrowArrow",
     "PPIGrid",
     "VT",
     "VideoMobject",
