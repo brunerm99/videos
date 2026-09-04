@@ -18,6 +18,7 @@ load_dotenv()
 from melp import (
     VT,
     Arrow3D,
+    DimensionLine,
     GrowArrow,
     VideoMobject,
     ease_in_sine,
@@ -2954,46 +2955,26 @@ class BrightBandP1p5(InteractiveScene):
 
         self.wait(0.5)
 
-        d_snow_line = Line(snowflakes[2].get_left(), snowflakes[2].get_right()).next_to(
-            snowflakes[2], DOWN, MED_LARGE_BUFF
+        d_snow = DimensionLine(
+            snowflakes[2],
+            direction=RIGHT,
+            placement=DOWN,
+            buff=MED_LARGE_BUFF,
+            label=r"D",
         )
-        d_snow_line_l = Line(
-            d_snow_line.get_left() + DOWN / 8, d_snow_line.get_left() + UP / 8
+        d_rain = DimensionLine(
+            raindrop,
+            direction=RIGHT,
+            placement=DOWN,
+            buff=MED_LARGE_BUFF,
+            label=r"D",
         )
-        d_snow_line_r = Line(
-            d_snow_line.get_right() + DOWN / 8, d_snow_line.get_right() + UP / 8
-        )
-        d1 = Tex(r"D").next_to(d_snow_line, DOWN, MED_SMALL_BUFF)
-
-        d_rain_line = (
-            Line(raindrop.get_left(), raindrop.get_right())
-            .next_to(raindrop, DOWN, MED_LARGE_BUFF)
-            .set_y(d_snow_line.get_y())
-        )
-        d_rain_line_l = Line(
-            d_rain_line.get_left() + DOWN / 8, d_rain_line.get_left() + UP / 8
-        )
-        d_rain_line_r = Line(
-            d_rain_line.get_right() + DOWN / 8, d_rain_line.get_right() + UP / 8
-        )
-        d2 = Tex(r"D").next_to(d_rain_line, DOWN, MED_SMALL_BUFF)
+        d_rain.shift((d_snow.line.get_y() - d_rain.line.get_y()) * UP)
 
         self.play(
             LaggedStart(
-                LaggedStart(
-                    ShowCreation(d_snow_line_l),
-                    ShowCreation(d_snow_line),
-                    ShowCreation(d_snow_line_r),
-                    GrowFromCenter(d1),
-                    lag_ratio=0.2,
-                ),
-                LaggedStart(
-                    ShowCreation(d_rain_line_l),
-                    ShowCreation(d_rain_line),
-                    ShowCreation(d_rain_line_r),
-                    GrowFromCenter(d2),
-                    lag_ratio=0.2,
-                ),
+                d_snow.get_creation_animation(lag_ratio=0.2),
+                d_rain.get_creation_animation(lag_ratio=0.2),
                 lag_ratio=0.4,
             )
         )
