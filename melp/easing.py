@@ -41,6 +41,7 @@ __all__ = [
     "get_phase_eased_sine",
     "linear",
     "smootherstep",
+    "there_and_back_with_final",
 ]
 
 _BACK_C1 = 1.70158
@@ -298,6 +299,28 @@ def bezier_out_in(x: float) -> float:
 
 def smootherstep(x: float) -> float:
     return x**3 * (x * (x * 6 - 15) + 10)
+
+
+def there_and_back_with_final(
+    final_alpha: float,
+) -> Callable[[float], float]:
+    """Return a smooth rate function that peaks at 1 and ends at final_alpha."""
+    final_alpha = float(final_alpha)
+    if not math.isfinite(final_alpha) or not 0 <= final_alpha <= 1:
+        raise ValueError("final_alpha must be between 0 and 1")
+
+    peak_time = (1 + final_alpha) / 2
+
+    def easing(x: float) -> float:
+        if final_alpha == 1:
+            return smootherstep(x)
+        if x <= peak_time:
+            return smootherstep(x / peak_time)
+        return 1 + (final_alpha - 1) * smootherstep(
+            (x - peak_time) / (1 - peak_time)
+        )
+
+    return easing
 
 
 def get_phase_eased_sine(

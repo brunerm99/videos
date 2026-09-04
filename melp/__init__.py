@@ -1,4 +1,4 @@
-from .animation_helpers import VT, fh, fw, rotate_vector, unit
+from .animation_helpers import VT, fh, fw, multi_anim, rotate_vector, unit
 from .easing import (
     bezier_out_in,
     cubic_bezier,
@@ -35,6 +35,7 @@ from .easing import (
     get_phase_eased_sine,
     linear,
     smootherstep,
+    there_and_back_with_final,
 )
 from .growing import GrowArrow
 from .nexrad import (
@@ -97,8 +98,10 @@ __all__ = [
     "get_nexrad_product_ppi_data",
     "get_phase_eased_sine",
     "linear",
+    "multi_anim",
     "polar_to_cartesian",
     "rotate_vector",
     "smootherstep",
+    "there_and_back_with_final",
     "unit",
 ]
