@@ -26,6 +26,7 @@ from melp import (
     fh,
     fw,
     get_nexrad_product_ppi_data,
+    index_labels,
     multi_anim,
     there_and_back_with_final,
     unit,
@@ -2931,25 +2932,45 @@ class BrightBandP1p5(InteractiveScene):
 
         self.wait(0.5)
 
+        new_snowflake_pos = (
+            self.frame.get_center() + DOWN * fh(self) + LEFT * fw(self, 0.2)
+        )
+
+        raindrop = (
+            RainDrop()
+            .rescale_to_fit(snowflakes[2].get_width() * 1.5, 0)
+            .move_to(self.frame.copy().shift(DOWN * fh(self)))
+            .shift(RIGHT * fw(self, 0.2))
+        )
+
         self.play(
-            multi_anim(snowflakes[2])
-            .move_to(
-                self.frame.get_center() + DOWN * fh(self) + LEFT * fw(self, 0.2),
-                path_arc=PI / 3,
-            )
-            .scale(2, rate_func=there_and_back_with_final(0.5)),
+            LaggedStart(
+                multi_anim(snowflakes[2])
+                .move_to(
+                    new_snowflake_pos,
+                    path_arc=PI / 3,
+                )
+                .scale(2, rate_func=there_and_back_with_final(0.5)),
+                epsr_water.animate.next_to(new_snowflake_pos, UP, LARGE_BUFF).set_x(
+                    raindrop.get_x()
+                ),
+                epsr_snow.animate.next_to(new_snowflake_pos, UP, LARGE_BUFF),
+                Transform(
+                    epsr,
+                    epsr.copy().next_to(
+                        self.frame.copy().shift(DOWN * fh(self)).get_top(),
+                        DOWN,
+                        MED_SMALL_BUFF,
+                    ),
+                    path_arc=PI / 3,
+                ),
+                lag_ratio=0.4,
+            ),
             self.frame.animate.shift(DOWN * fh(self)),
             run_time=2,
         )
 
         self.wait(0.5)
-
-        raindrop = (
-            RainDrop()
-            .rescale_to_fit(snowflakes[2].get_width(), 0)
-            .move_to(self.frame)
-            .shift(RIGHT * fw(self, 0.2))
-        )
 
         self.play(GrowFromCenter(raindrop))
 
@@ -2978,6 +2999,83 @@ class BrightBandP1p5(InteractiveScene):
                 lag_ratio=0.4,
             )
         )
+
+        self.wait(0.5)
+
+        K_diff = Tex(
+            r"\frac{K_{\text{water}}}{K_{\text{snow}}} = \frac"
+            r"{\left( \frac{\varepsilon_{r \text{,water}} - 1}{\varepsilon_{r \text{,water}} + 2} "
+            r"\right)}"
+            r"{\left( \frac{\varepsilon_{r \text{,snow}} - 1}{\varepsilon_{r \text{,snow}} + 2} "
+            r"\right)}"
+        ).next_to(self.frame.get_bottom(), UP)
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(FadeOut(d_snow), FadeOut(d_rain)),
+                AnimationGroup(
+                    TransformFromCopy(epsr[0], K_diff[0], path_arc=PI / 6),
+                    TransformFromCopy(epsr[0], K_diff[7], path_arc=-PI / 6),
+                    TransformFromCopy(epsr[1], K_diff[12]),
+                    FadeIn(
+                        Group(
+                            K_diff[6],
+                            K_diff[13],
+                            K_diff[35:38],
+                            K_diff[57],
+                        )
+                    ),
+                ),
+                AnimationGroup(
+                    TransformFromCopy(epsr_water[3:8], K_diff[1:6]),
+                    TransformFromCopy(epsr_water[:8], K_diff[14:22]),
+                    TransformFromCopy(epsr_water[:8], K_diff[25:33]),
+                    TransformFromCopy(epsr_snow[3:7], K_diff[8:12]),
+                    TransformFromCopy(epsr_snow[:7], K_diff[38:45]),
+                    TransformFromCopy(epsr_snow[:7], K_diff[48:55]),
+                ),
+                AnimationGroup(
+                    TransformFromCopy(epsr[4:6], K_diff[22:24]),
+                    TransformFromCopy(epsr[4:6], K_diff[45:47]),
+                    TransformFromCopy(epsr[6], K_diff[24]),
+                    TransformFromCopy(epsr[6], K_diff[47]),
+                    TransformFromCopy(epsr[9:11], K_diff[33:35]),
+                    TransformFromCopy(epsr[9:11], K_diff[55:57]),
+                ),
+                AnimationGroup(
+                    FadeOut(epsr),
+                    FadeOut(epsr_water),
+                    FadeOut(epsr_snow),
+                ),
+                lag_ratio=0.2,
+            ),
+            run_time=7,
+        )
+
+        self.add(K_diff)
+
+        self.wait(0.5)
+
+        K_diff_value = ((80 - 1) / (80 + 2)) / ((2 - 1) / (2 + 2))
+        K_diff_val = Tex(
+            r"\frac{K_{\text{water}}}{K_{\text{snow}}} = \frac"
+            r"{\left( \frac{\varepsilon_{r \text{,water}} - 1}{\varepsilon_{r \text{,water}} + 2} "
+            r"\right)}"
+            r"{\left( \frac{\varepsilon_{r \text{,snow}} - 1}{\varepsilon_{r \text{,snow}} + 2} "
+            rf"\right)}} = {K_diff_value:.2f}"
+        ).move_to(K_diff)
+
+        self.play(
+            ReplacementTransform(K_diff, K_diff_val[:58]),
+            LaggedStart(
+                FadeIn(K_diff_val[58]),
+                *[GrowFromCenter(m) for m in K_diff_val[59:]],
+                lag_ratio=0.15,
+            ),
+        )
+
+        self.remove(K_diff)
+        self.add(K_diff_val)
 
         self.embed()
 
