@@ -25,6 +25,8 @@ from melp import (
     fh,
     fw,
     get_nexrad_product_ppi_data,
+    multi_anim,
+    there_and_back_with_final,
     unit,
 )
 from melp.props import (
@@ -2601,7 +2603,7 @@ class BrightBandP1p5(InteractiveScene):
             stroke_width=DEFAULT_STROKE_WIDTH * 2,
             dash_length=DEFAULT_DASH_LENGTH * 8,
             positive_space_ratio=0.6,
-        ).fix_in_frame()
+        )
 
         self.play(ShowCreation(boundary))
 
@@ -2670,7 +2672,6 @@ class BrightBandP1p5(InteractiveScene):
                 )
                 .rotate(rotation)
                 .set_stroke(WHITE, 10)
-                .fix_in_frame()
                 .move_to(ORIGIN)
                 .shift([shift[0], shift[1], 0])
             )
@@ -2855,73 +2856,147 @@ class BrightBandP1p5(InteractiveScene):
 
         self.remove(zhat)
 
-        rd_sf = snowflakes[: len(snowflakes) // 2]
-        sf_only = snowflakes[len(snowflakes) // 2 :]
+        # rd_sf = snowflakes[: len(snowflakes) // 2]
+        # sf_only = snowflakes[len(snowflakes) // 2 :]
+        #
+        # raindrops = Group(
+        #     *[
+        #         RainDrop(unit_size=rng.uniform(0.4, 0.7)).move_to(sf).set_opacity(0)
+        #         for sf in rd_sf
+        #     ]
+        # )
+        # self.add(raindrops)
 
-        raindrops = Group(
-            *[
-                RainDrop(unit_size=rng.uniform(0.4, 0.7)).move_to(sf).set_opacity(0)
-                for sf in rd_sf
-            ]
-        )
-        self.add(raindrops)
-
+        # rain_snow_label = Text("Rain, Snow", font=FONT).move_to(snow_label)
+        # rain_snow_label[5:].set_opacity(0.1)
+        #
         # self.play(
-        #     *[
-        #         LaggedStart(*[m.animate.set_opacity(0.1) for m in sf], lag_ratio=0)
-        #         for sf in sf_only
-        #     ],
-        #     *[
-        #         LaggedStart(
+        #     LaggedStart(
+        #         *[
+        #             LaggedStart(*[m.animate.set_opacity(0.1) for m in sf], lag_ratio=0)
+        #             for sf in sf_only
+        #         ],
+        #         *[
         #             LaggedStart(
-        #                 *[m.animate.set_opacity(0) for m in sf],
-        #                 lag_ratio=0.1,
-        #             ),
-        #             rd.animate.set_opacity(1),
-        #             lag_ratio=0.4,
-        #         )
-        #         for sf, rd in zip(rd_sf, raindrops)
-        #     ],
+        #                 LaggedStart(
+        #                     *[m.animate.set_opacity(0) for m in sf],
+        #                     lag_ratio=0.1,
+        #                 ),
+        #                 rd.animate.set_opacity(1),
+        #                 lag_ratio=0.4,
+        #             )
+        #             for sf, rd in zip(rd_sf, raindrops)
+        #         ],
+        #         ReplacementTransform(snow_label, rain_snow_label[5:]),
+        #         Write(rain_snow_label[:5]),
+        #         lag_ratio=0.1,
+        #     )
         # )
         #
         # self.wait(.5)
         #
-        # self.play(
-        #     LaggedStart(
-        #         LaggedStart(
-        #             TransformFromCopy(epsr[2:4], epsr_air[:2]),
-        #             LaggedStart(*[FadeIn(m) for m in epsr_air[2:6]], lag_ratio=0.15),
-        #             lag_ratio=0.8,
-        #         ),
-        #         LaggedStart(
-        #             TransformFromCopy(epsr[2:4], epsr_water[:2]),
-        #             LaggedStart(*[FadeIn(m) for m in epsr_water[2:8]], lag_ratio=0.15),
-        #             lag_ratio=0.8,
-        #         ),
-        #         LaggedStart(
-        #             TransformFromCopy(epsr[2:4], epsr_snow[:2]),
-        #             LaggedStart(*[FadeIn(m) for m in epsr_snow[2:7]], lag_ratio=0.15),
-        #             lag_ratio=0.8,
-        #         ),
-        #         lag_ratio=0.3,
-        #     )
-        # )
-        #
-        # self.wait(0.5)
-        #
-        # self.play(LaggedStart(*[FadeIn(m) for m in epsr_air[6:]], lag_ratio=0.15))
-        #
-        # self.wait(0.5)
-        #
-        # self.play(LaggedStart(*[FadeIn(m) for m in epsr_water[8:]], lag_ratio=0.15))
-        #
-        # self.wait(0.5)
-        #
-        # self.play(LaggedStart(*[FadeIn(m) for m in epsr_snow[7:]], lag_ratio=0.15))
-        #
-        # self.wait(0.5)
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    TransformFromCopy(epsr[2:4], epsr_air[:2]),
+                    LaggedStart(*[FadeIn(m) for m in epsr_air[2:6]], lag_ratio=0.15),
+                    lag_ratio=0.8,
+                ),
+                LaggedStart(
+                    TransformFromCopy(epsr[2:4], epsr_water[:2]),
+                    LaggedStart(*[FadeIn(m) for m in epsr_water[2:8]], lag_ratio=0.15),
+                    lag_ratio=0.8,
+                ),
+                LaggedStart(
+                    TransformFromCopy(epsr[2:4], epsr_snow[:2]),
+                    LaggedStart(*[FadeIn(m) for m in epsr_snow[2:7]], lag_ratio=0.15),
+                    lag_ratio=0.8,
+                ),
+                lag_ratio=0.3,
+            )
+        )
 
-        # self.play()
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in epsr_air[6:]], lag_ratio=0.15))
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in epsr_water[8:]], lag_ratio=0.15))
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[FadeIn(m) for m in epsr_snow[7:]], lag_ratio=0.15))
+
+        self.wait(0.5)
+
+        self.play(
+            multi_anim(snowflakes[2])
+            .move_to(
+                self.frame.get_center() + DOWN * fh(self) + LEFT * fw(self, 0.2),
+                path_arc=PI / 3,
+            )
+            .scale(2, rate_func=there_and_back_with_final(0.5)),
+            self.frame.animate.shift(DOWN * fh(self)),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        raindrop = (
+            RainDrop()
+            .rescale_to_fit(snowflakes[2].get_width(), 0)
+            .move_to(self.frame)
+            .shift(RIGHT * fw(self, 0.2))
+        )
+
+        self.play(GrowFromCenter(raindrop))
+
+        self.wait(0.5)
+
+        d_snow_line = Line(snowflakes[2].get_left(), snowflakes[2].get_right()).next_to(
+            snowflakes[2], DOWN, MED_LARGE_BUFF
+        )
+        d_snow_line_l = Line(
+            d_snow_line.get_left() + DOWN / 8, d_snow_line.get_left() + UP / 8
+        )
+        d_snow_line_r = Line(
+            d_snow_line.get_right() + DOWN / 8, d_snow_line.get_right() + UP / 8
+        )
+        d1 = Tex(r"D").next_to(d_snow_line, DOWN, MED_SMALL_BUFF)
+
+        d_rain_line = (
+            Line(raindrop.get_left(), raindrop.get_right())
+            .next_to(raindrop, DOWN, MED_LARGE_BUFF)
+            .set_y(d_snow_line.get_y())
+        )
+        d_rain_line_l = Line(
+            d_rain_line.get_left() + DOWN / 8, d_rain_line.get_left() + UP / 8
+        )
+        d_rain_line_r = Line(
+            d_rain_line.get_right() + DOWN / 8, d_rain_line.get_right() + UP / 8
+        )
+        d2 = Tex(r"D").next_to(d_rain_line, DOWN, MED_SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    ShowCreation(d_snow_line_l),
+                    ShowCreation(d_snow_line),
+                    ShowCreation(d_snow_line_r),
+                    GrowFromCenter(d1),
+                    lag_ratio=0.2,
+                ),
+                LaggedStart(
+                    ShowCreation(d_rain_line_l),
+                    ShowCreation(d_rain_line),
+                    ShowCreation(d_rain_line_r),
+                    GrowFromCenter(d2),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.4,
+            )
+        )
 
         self.embed()
 
