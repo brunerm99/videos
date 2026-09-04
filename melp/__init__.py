@@ -44,6 +44,7 @@ from .nexrad import (
     get_nexrad_product_ppi_data,
 )
 from .props.arrow import Arrow3D
+from .props.dimension_line import DimensionLine
 from .props.dipole import Dipole
 from .props.ppi import PPIGrid, field_to_rgba, polar_to_cartesian
 from .props.video import VideoMobject
@@ -51,6 +52,7 @@ from .props.yagi import YAGI_MODEL_PATH, Yagi
 
 __all__ = [
     "Arrow3D",
+    "DimensionLine",
     "Dipole",
     "GrowArrow",
     "PPIGrid",

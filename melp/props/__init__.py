@@ -1,6 +1,7 @@
 from .arrow import Arrow3D
 from .beam import Beam
 from .cloud import Cloud
+from .dimension_line import DimensionLine
 from .dipole import Dipole
 from .mesh import TriangleMeshMobject
 from .ppi import PPIGrid, field_to_rgba, polar_to_cartesian
@@ -21,6 +22,7 @@ __all__ = [
     "Arrow3D",
     "Beam",
     "Cloud",
+    "DimensionLine",
     "Dipole",
     "MODEL_PATH",
     "PPIGrid",
