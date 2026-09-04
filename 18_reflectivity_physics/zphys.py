@@ -3077,6 +3077,10 @@ class BrightBandP1p5(InteractiveScene):
         self.remove(K_diff)
         self.add(K_diff_val)
 
+        self.wait(0.5)
+
+        self.play(self.frame.animate.shift(DOWN * fh(self)))
+
         self.embed()
 
 
