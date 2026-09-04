@@ -14,8 +14,10 @@ from scipy.special import spherical_jn, spherical_yn
 sys.path.insert(0, "..")
 load_dotenv()
 
+
 from melp import (
     VT,
+    Arrow3D,
     GrowArrow,
     VideoMobject,
     ease_in_sine,
@@ -42,6 +44,7 @@ from melp.props import (
 from melp.props import Dipole as DipoleAntenna
 
 BACKGROUND_COLOR = "#183340"
+ICE = "#DBF1FD"
 RX_COLOR = RED
 TX_COLOR = BLUE
 TOWER_LIGHT = "#DCE6EB"
@@ -2485,6 +2488,13 @@ class BrightBandP1(InteractiveScene):
             )
         )
 
+        self.wait(0.5)
+        self.remove(raindrop)
+        self.play(sf.animate.shift(RIGHT * fw(self)))
+
+        # self.frame.to_fixed_frame_point(self.frame.get_top()),
+        # self.frame.to_fixed_frame_point(self.frame.get_bottom()),
+
         # er_eqn_ei = (
         #     Tex(
         #         r"E_{s} = \frac{k_0^2 \mathbf E_i (\varepsilon_r - 1) V}"
@@ -2577,6 +2587,341 @@ class BrightBandP1(InteractiveScene):
         # self.wait(0.5)
         #
         # self.play(Group(*self.mobjects).animate.shift(UP * 10))
+
+        self.embed()
+
+
+class BrightBandP1p5(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        boundary = DashedLine(
+            self.frame.get_top(),
+            self.frame.get_bottom(),
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            dash_length=DEFAULT_DASH_LENGTH * 8,
+            positive_space_ratio=0.6,
+        ).fix_in_frame()
+
+        self.play(ShowCreation(boundary))
+
+        self.wait(0.5)
+
+        air_label = (
+            Text("Air", font=FONT)
+            .next_to(self.frame.get_top(), DOWN, MED_SMALL_BUFF)
+            .shift(LEFT * fw(self, 0.25))
+        )
+
+        self.play(LaggedStart(*[FadeIn(m) for m in air_label], lag_ratio=0.1))
+
+        self.wait(0.5)
+
+        rng = np.random.default_rng(4)
+        particle_count = 16
+        particle_size = rng.uniform(0.2, 0.5, particle_count)
+        rotations = rng.uniform(0, PI, particle_count)
+
+        screen_width = fw(self, 0.5)
+        screen_height = fh(self, 0.9)
+        edge_buffer = 0.2
+        gap = 0.25
+        shifts = []
+        placed_radii = []
+
+        for radius in particle_size:
+            for _ in range(1000):
+                shift = np.array(
+                    [
+                        rng.uniform(
+                            -screen_width / 2 + radius + edge_buffer,
+                            screen_width / 2 - radius - edge_buffer,
+                        ),
+                        rng.uniform(
+                            -screen_height / 2 + radius + edge_buffer,
+                            screen_height / 2 - radius - edge_buffer,
+                        ),
+                    ]
+                )
+
+                if all(
+                    np.linalg.norm(shift - other_shift) >= radius + other_radius + gap
+                    for other_shift, other_radius in zip(shifts, placed_radii)
+                ):
+                    shifts.append(shift)
+                    placed_radii.append(radius)
+                    break
+            else:
+                raise RuntimeError("Could not place snowflakes without overlap")
+
+        snowflakes = Group()
+
+        for radius, rotation, shift in zip(particle_size, rotations, shifts):
+            snowflake = (
+                VGroup(
+                    *[
+                        Line(
+                            -radius * RIGHT,
+                            radius * RIGHT,
+                            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+                        ).rotate(angle)
+                        for angle in (0, PI / 3, 2 * PI / 3)
+                    ]
+                )
+                .rotate(rotation)
+                .set_stroke(WHITE, 10)
+                .fix_in_frame()
+                .move_to(ORIGIN)
+                .shift([shift[0], shift[1], 0])
+            )
+            snowflakes.add(snowflake)
+        snowflakes.shift(RIGHT * fw(self, 0.25) + DOWN * fh(self, 0.1))
+
+        snow_label = (
+            Text("Snow", font=FONT)
+            .next_to(self.frame.get_top(), DOWN, MED_SMALL_BUFF)
+            .shift(RIGHT * fw(self, 0.25))
+        )
+
+        self.play(
+            LaggedStart(*[GrowFromCenter(m) for m in snowflakes]),
+            LaggedStart(*[FadeIn(m) for m in snow_label], lag_ratio=0.1),
+        )
+
+        self.wait(0.5)
+
+        zmin = VT(-0.2)
+        zmax = VT(~zmin)
+        field_rot = PI / 9
+        ax = ThreeDAxes(
+            x_range=[-1, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            z_range=[0, 2, 0.5],
+            z_normal=RIGHT,
+            height=fh(self, 0.25),
+            width=fw(self, 0.25),
+            depth=fh(self, 2),
+        ).fix_in_frame()
+        ax.rotate(PI / 2, axis=UP).rotate(field_rot, axis=RIGHT).shift(
+            self.frame.get_left() - ax.c2p(0, 0, 0)
+        )
+
+        zhat_opacity = VT(1)
+        zhat = always_redraw(
+            lambda: Arrow3D(
+                self.frame.get_left() + LEFT * 2,
+                self.frame.to_fixed_frame_point(ax.c2p(0, 0, ~zmax)),
+                buff=SMALL_BUFF,
+                color=GREEN,
+                opacity=~zhat_opacity,
+            )
+        )
+        self.add(zhat)
+
+        k = 2 * PI * 4
+
+        efield = always_redraw(
+            lambda: ax.get_parametric_curve(
+                lambda z: [np.sin(k * z), 0, z],
+                t_range=(~zmin, ~zmax, 1 / 200),
+                color=TX_COLOR,
+            ).apply_depth_test()
+        )
+        hfield = always_redraw(
+            lambda: ax.get_parametric_curve(
+                lambda z: [0, np.sin(k * z), z],
+                t_range=(~zmin, ~zmax, 1 / 200),
+                color=RX_COLOR,
+            ).apply_depth_test()
+        )
+
+        self.add(efield, hfield)
+
+        self.play(
+            GrowArrow(zhat),
+            air_label.animate.set_color(GREEN),
+            zmax @ 0.88,
+            run_time=5,
+        )
+
+        self.wait(0.5)
+
+        zinc = 1.1
+        self.play(
+            zmin + zinc,
+            zmax + zinc,
+            air_label.animate.set_color(WHITE),
+            snow_label.animate.set_color(GREEN),
+            run_time=5,
+        )
+
+        self.wait(0.5)
+
+        air_to_snow = CurvedArrow(
+            air_label.get_bottom() + DOWN * 0.1,
+            snow_label.get_bottom() + DOWN * 0.1,
+            angle=PI / 3,
+        )
+
+        self.play(
+            LaggedStart(
+                air_label.animate(
+                    rate_func=utils.rate_functions.there_and_back_with_pause,
+                    run_time=1.5,
+                )
+                .set_color(GREEN)
+                .scale(1.5),
+                GrowArrow(air_to_snow),
+                snow_label.animate(
+                    rate_func=utils.rate_functions.there_and_back_with_pause,
+                    run_time=1.5,
+                )
+                .set_color(GREEN)
+                .scale(1.5),
+                lag_ratio=0.4,
+            )
+        )
+        self.play(
+            snow_label.animate(run_time=0.5).set_color(WHITE),
+        )
+
+        self.wait(0.5)
+
+        epsr = (
+            Tex(r"K = \frac{\varepsilon_{r} - 1}{\varepsilon_{r} + 2}")
+            .move_to(ORIGIN)
+            .scale(1.5)
+            .shift(LEFT * fw(self, 0.25) + UP)
+            .set_opacity(0)
+        )
+        self.add(epsr)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    FadeOut(air_to_snow),
+                    zmin @ 2.5,
+                    zmax @ 3.5,
+                    zhat_opacity @ 0,
+                    lag_ratio=0,
+                ),
+                epsr.animate.shift(DOWN).set_opacity(1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                epsr[2:4]
+                .animate(rate_func=utils.rate_functions.there_and_back)
+                .scale(1.5)
+                .set_color(GREEN),
+                epsr[7:9]
+                .animate(rate_func=utils.rate_functions.there_and_back)
+                .scale(1.5)
+                .set_color(GREEN),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            epsr.animate.next_to(self.frame.get_bottom(), UP, LARGE_BUFF).shift(
+                LEFT * fw(self, 0.25)
+            )
+        )
+
+        epsr_air = (
+            Tex(r"\varepsilon_{r \text{,air}} \approx 1")
+            .scale(1.5)
+            .next_to(air_label, DOWN, MED_SMALL_BUFF)
+        )
+
+        epsr_water = Tex(
+            r"\varepsilon_{r \text{,water}} \approx 80", fill_color=BLUE
+        ).scale(1.5)
+
+        epsr_snow = Tex(
+            r"\varepsilon_{r \text{,snow}} \approx 2", fill_color=ICE
+        ).scale(1.5)
+        epsr_vals = (
+            Group(epsr_water, epsr_snow)
+            .arrange(DOWN, MED_SMALL_BUFF, aligned_edge=LEFT)
+            .next_to(epsr, UP, LARGE_BUFF)
+        )
+
+        self.remove(zhat)
+
+        rd_sf = snowflakes[: len(snowflakes) // 2]
+        sf_only = snowflakes[len(snowflakes) // 2 :]
+
+        raindrops = Group(
+            *[
+                RainDrop(unit_size=rng.uniform(0.4, 0.7)).move_to(sf).set_opacity(0)
+                for sf in rd_sf
+            ]
+        )
+        self.add(raindrops)
+
+        # self.play(
+        #     *[
+        #         LaggedStart(*[m.animate.set_opacity(0.1) for m in sf], lag_ratio=0)
+        #         for sf in sf_only
+        #     ],
+        #     *[
+        #         LaggedStart(
+        #             LaggedStart(
+        #                 *[m.animate.set_opacity(0) for m in sf],
+        #                 lag_ratio=0.1,
+        #             ),
+        #             rd.animate.set_opacity(1),
+        #             lag_ratio=0.4,
+        #         )
+        #         for sf, rd in zip(rd_sf, raindrops)
+        #     ],
+        # )
+        #
+        # self.wait(.5)
+        #
+        # self.play(
+        #     LaggedStart(
+        #         LaggedStart(
+        #             TransformFromCopy(epsr[2:4], epsr_air[:2]),
+        #             LaggedStart(*[FadeIn(m) for m in epsr_air[2:6]], lag_ratio=0.15),
+        #             lag_ratio=0.8,
+        #         ),
+        #         LaggedStart(
+        #             TransformFromCopy(epsr[2:4], epsr_water[:2]),
+        #             LaggedStart(*[FadeIn(m) for m in epsr_water[2:8]], lag_ratio=0.15),
+        #             lag_ratio=0.8,
+        #         ),
+        #         LaggedStart(
+        #             TransformFromCopy(epsr[2:4], epsr_snow[:2]),
+        #             LaggedStart(*[FadeIn(m) for m in epsr_snow[2:7]], lag_ratio=0.15),
+        #             lag_ratio=0.8,
+        #         ),
+        #         lag_ratio=0.3,
+        #     )
+        # )
+        #
+        # self.wait(0.5)
+        #
+        # self.play(LaggedStart(*[FadeIn(m) for m in epsr_air[6:]], lag_ratio=0.15))
+        #
+        # self.wait(0.5)
+        #
+        # self.play(LaggedStart(*[FadeIn(m) for m in epsr_water[8:]], lag_ratio=0.15))
+        #
+        # self.wait(0.5)
+        #
+        # self.play(LaggedStart(*[FadeIn(m) for m in epsr_snow[7:]], lag_ratio=0.15))
+        #
+        # self.wait(0.5)
+
+        # self.play()
 
         self.embed()
 

@@ -1,3 +1,4 @@
+from .arrow import Arrow3D
 from .beam import Beam
 from .cloud import Cloud
 from .dipole import Dipole
@@ -17,6 +18,7 @@ from .wsr88 import (
 from .yagi import YAGI_MODEL_PATH, Yagi
 
 __all__ = [
+    "Arrow3D",
     "Beam",
     "Cloud",
     "Dipole",
