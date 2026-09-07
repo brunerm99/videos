@@ -1,4 +1,5 @@
 from .animation_helpers import VT, fh, fw, multi_anim, rotate_vector, unit
+from .debug import index_labels
 from .easing import (
     bezier_out_in,
     cubic_bezier,

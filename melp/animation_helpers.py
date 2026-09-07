@@ -178,6 +178,54 @@ class _MultiAnim(Animation):
 
         return self._add_operation(apply, run_time, rate_func)
 
+    def set_opacity(
+        self,
+        opacity,
+        recurse=True,
+        *,
+        rate_func=smooth,
+        run_time=1,
+    ):
+        if not isinstance(opacity, numbers.Number):
+            raise TypeError("opacity must be a number")
+
+        target_opacity = float(opacity)
+        if not np.isfinite(target_opacity) or not 0 <= target_opacity <= 1:
+            raise ValueError("opacity must be a finite number between 0 and 1")
+
+        starting_family = (
+            self.mobject.get_family() if recurse else [self.mobject]
+        )
+        starting_opacity_data = []
+        for family_member in starting_family:
+            opacity_data = {}
+            if family_member.has_points():
+                for data_name in family_member.data.dtype.names or ():
+                    if data_name.endswith("rgba"):
+                        opacity_data[data_name] = family_member.data[data_name][
+                            :, 3
+                        ].copy()
+            starting_opacity_data.append(opacity_data)
+
+        def apply(mobject, alpha):
+            family = mobject.get_family() if recurse else [mobject]
+            for family_member, opacity_data in zip(
+                family,
+                starting_opacity_data,
+            ):
+                for data_name, start_opacity in opacity_data.items():
+                    family_member.set_rgba_array_by_color(
+                        opacity=interpolate(
+                            start_opacity,
+                            target_opacity,
+                            alpha,
+                        ),
+                        name=data_name,
+                        recurse=False,
+                    )
+
+        return self._add_operation(apply, run_time, rate_func)
+
     def begin(self):
         if not self.operations:
             raise ValueError("multi_anim requires at least one operation")

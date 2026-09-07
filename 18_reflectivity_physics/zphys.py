@@ -1490,683 +1490,6 @@ class Charge(InteractiveScene):
         self.embed()
 
 
-class Dsd(InteractiveScene):
-    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
-
-    def construct(self):
-        snow_top = 3.0
-        melting_top = 0.6
-        melting_bottom = -0.6
-        rain_bottom = -3.0
-
-        column_left = -4.5
-        column_right = 1.0
-        column_width = column_right - column_left
-        column_center_x = (column_left + column_right) / 2
-
-        snow_layer = Rectangle(
-            width=column_width,
-            height=snow_top - melting_top,
-            stroke_width=0,
-            fill_color=TOWER_LIGHT,
-            fill_opacity=0.035,
-        ).move_to([column_center_x, (snow_top + melting_top) / 2, 0])
-        melting_layer = Rectangle(
-            width=column_width,
-            height=melting_top - melting_bottom,
-            stroke_width=0,
-            fill_color=TEAL,
-            fill_opacity=0.14,
-        ).move_to([column_center_x, 0, 0])
-        rain_layer = Rectangle(
-            width=column_width,
-            height=melting_bottom - rain_bottom,
-            stroke_width=0,
-            fill_color=BLUE_E,
-            fill_opacity=0.06,
-        ).move_to([column_center_x, (melting_bottom + rain_bottom) / 2, 0])
-        layers = VGroup(snow_layer, melting_layer, rain_layer).set_z_index(-2)
-
-        melting_label = (
-            VGroup(
-                Text("Melting Layer", font=FONT).scale(0.4),
-                Text("(Bright Band)", font=FONT).scale(0.4),
-            )
-            .arrange(DOWN, SMALL_BUFF)
-            .set_color(TOWER_LIGHT)
-            .next_to(melting_layer, LEFT, SMALL_BUFF)
-        )
-
-        profile_x = 2.4
-        profile_width = 2.2
-        melting_edges = (
-            VGroup(
-                Line(
-                    [column_left, melting_top, 0],
-                    [profile_x + profile_width, melting_top, 0],
-                ),
-                Line(
-                    [column_left, melting_bottom, 0],
-                    [profile_x + profile_width, melting_bottom, 0],
-                ),
-            )
-            .set_stroke(TEAL, 1.5, opacity=0.5)
-            .set_z_index(-1)
-        )
-
-        profile_axes = VGroup(
-            Line(
-                [profile_x, rain_bottom, 0],
-                [profile_x, snow_top, 0],
-            ),
-            Line(
-                [profile_x, rain_bottom, 0],
-                [profile_x + profile_width, rain_bottom, 0],
-            ),
-        ).set_stroke(GREY_B, 2, opacity=0.75)
-
-        es_propto = Tex(r"E_s \propto")
-        reflectivity_label = Text("Reflectivity", font=FONT)
-        profile_label = (
-            Group(es_propto, reflectivity_label)
-            .arrange(RIGHT, SMALL_BUFF)
-            .rescale_to_fit(profile_axes[1].get_width() * 1.8, 0)
-            .next_to(profile_axes[1], DOWN, buff=0.18)
-        )
-
-        rng = np.random.default_rng(4)
-        particle_count = 54
-        particle_x = rng.uniform(
-            column_left + 0.35, column_right - 0.35, particle_count
-        )
-        snow_diameters = np.clip(
-            rng.lognormal(np.log(3.8), 0.28, particle_count),
-            1.6,
-            7.4,
-        )
-        rain_diameters = np.clip(
-            0.28 * snow_diameters + rng.normal(0.35, 0.15, particle_count),
-            0.45,
-            2.6,
-        )
-        drift_phase = rng.uniform(0, TAU, particle_count)
-        rotation_rate = rng.uniform(-0.8, 0.8, particle_count)
-        cycle_rate = rng.uniform(0.88, 1.12, particle_count)
-
-        snow_duration = 5.0
-        melting_duration = 1.5
-        rain_duration = 1.5
-        cycle_duration = snow_duration + melting_duration + rain_duration
-        age_offsets = np.linspace(0, cycle_duration, particle_count, endpoint=False)
-        rng.shuffle(age_offsets)
-
-        ice_epsilon_r = 3.2
-        water_epsilon_r = 80.0
-
-        # Looyenga mixing rule for the effective ice-water permittivity.
-        def mixed_phase_epsilon_r(melt_fraction):
-            return (
-                (1 - melt_fraction) * np.cbrt(ice_epsilon_r)
-                + melt_fraction * np.cbrt(water_epsilon_r)
-            ) ** 3
-
-        hydrometeors = Group()
-        for snow_diameter, rain_diameter in zip(snow_diameters, rain_diameters):
-            snow_radius = np.interp(snow_diameter, [1.6, 7.4], [0.08, 0.15])
-            rain_radius = np.interp(rain_diameter, [0.45, 2.6], [0.04, 0.075])
-            snowflake = VGroup(
-                *[
-                    Line(-snow_radius * RIGHT, snow_radius * RIGHT).rotate(angle)
-                    for angle in (0, PI / 3, 2 * PI / 3)
-                ]
-            ).set_stroke(TOWER_LIGHT, 1.5)
-            water_shell = (
-                Circle(radius=snow_radius * 1.15)
-                .set_fill(
-                    BLUE_A,
-                    opacity=0,
-                )
-                .set_stroke(BLUE_A, 1.5, opacity=0)
-            )
-            raindrop = (
-                Circle(radius=rain_radius).set_stroke(BLUE, 0).set_fill(BLUE, 0.2)
-            )
-
-            hydrometeors.add(Group(water_shell, snowflake, raindrop))
-
-        elapsed = [0.0]
-        current_heights = np.zeros(particle_count)
-        current_diameters = np.zeros(particle_count)
-        current_epsilon_r = np.zeros(particle_count)
-        current_reflectivity = np.zeros(particle_count)
-
-        def update_hydrometeors(group, dt):
-            elapsed[0] += dt
-
-            for index, particle in enumerate(group):
-                age = (
-                    elapsed[0] * cycle_rate[index] + age_offsets[index]
-                ) % cycle_duration
-
-                if age < snow_duration:
-                    alpha = age / snow_duration
-                    height = snow_top + alpha * (melting_top - snow_top)
-                    snow_opacity = 1
-                    shell_opacity = 0
-                    rain_opacity = 0
-                    drift_scale = 1
-                    diameter = snow_diameters[index]
-                    epsilon_r = ice_epsilon_r
-                    reflectivity = 0.35
-                elif age < snow_duration + melting_duration:
-                    alpha = (age - snow_duration) / melting_duration
-                    height = melting_top + alpha * (melting_bottom - melting_top)
-                    melt_exponent = np.interp(
-                        snow_diameters[index],
-                        [1.6, 7.4],
-                        [0.72, 1.35],
-                    )
-                    melt_fraction = alpha**melt_exponent
-                    snow_opacity = 1 - melt_fraction
-                    shell_opacity = np.sin(PI * melt_fraction)
-                    rain_opacity = melt_fraction
-                    drift_scale = 1 - 0.7 * melt_fraction
-                    diameter = (1 - melt_fraction) * snow_diameters[
-                        index
-                    ] + melt_fraction * rain_diameters[index]
-                    epsilon_r = mixed_phase_epsilon_r(melt_fraction)
-                    reflectivity = 0.35 + 2.2 * shell_opacity + 0.65 * melt_fraction
-                else:
-                    alpha = (age - snow_duration - melting_duration) / rain_duration
-                    height = melting_bottom + alpha * (rain_bottom - melting_bottom)
-                    snow_opacity = 0
-                    shell_opacity = 0
-                    rain_opacity = 1
-                    drift_scale = 0.3
-                    diameter = rain_diameters[index]
-                    epsilon_r = water_epsilon_r
-                    reflectivity = 1
-
-                x_position = particle_x[index] + drift_scale * 0.12 * np.sin(
-                    0.8 * elapsed[0] + drift_phase[index]
-                )
-                particle.move_to([x_position, height, 0])
-                current_heights[index] = height
-                current_diameters[index] = diameter
-                current_epsilon_r[index] = epsilon_r
-                current_reflectivity[index] = reflectivity
-
-                water_shell, snowflake, raindrop = particle
-                snowflake.set_opacity(snow_opacity)
-                water_shell.set_opacity(0.7 * shell_opacity)
-                raindrop.set_opacity(rain_opacity)
-                snowflake.rotate(rotation_rate[index] * dt)
-
-        update_hydrometeors(hydrometeors, 0)
-        hydrometeors.add_updater(update_hydrometeors, call=False)
-        hydrometeors.set_z_index(1)
-
-        profile_heights = np.linspace(rain_bottom, snow_top, 73)
-        profile_values = np.zeros_like(profile_heights)
-        profile_initialized = [False]
-        melting_bottom_index = np.argmin(np.abs(profile_heights - melting_bottom))
-        melting_top_index = np.argmin(np.abs(profile_heights - melting_top))
-        profile_indices = (
-            np.arange(melting_bottom_index + 1),
-            np.arange(melting_bottom_index, melting_top_index + 1),
-            np.arange(melting_top_index, len(profile_heights)),
-        )
-        profile = VGroup(
-            VMobject().set_stroke(BLUE_A, 4),
-            VMobject().set_stroke(ACCENT_COLOR, 5),
-            VMobject().set_stroke(TOWER_LIGHT, 4),
-        ).set_z_index(2)
-
-        profile_x_offset = VT(0)
-
-        def update_profile(curves, dt):
-            vertical_distance = (
-                profile_heights[:, None] - current_heights[None, :]
-            ) / 0.14
-            kernel = np.exp(-0.5 * vertical_distance**2)
-            target_values = np.clip(
-                0.02 + kernel @ current_reflectivity / 9,
-                0.02,
-                0.98,
-            )
-            if not profile_initialized[0]:
-                profile_values[:] = target_values
-                profile_initialized[0] = True
-            elif dt > 0:
-                response = 1 - np.exp(-dt / 0.18)
-                profile_values[:] += response * (target_values - profile_values)
-
-            for curve, indices in zip(curves, profile_indices):
-                points = np.column_stack(
-                    (
-                        profile_x
-                        + profile_width * profile_values[indices]
-                        + ~profile_x_offset,
-                        profile_heights[indices],
-                        np.zeros(len(indices)),
-                    )
-                )
-                curve.set_points_smoothly(points)
-
-        update_profile(profile, 0)
-        profile.add_updater(update_profile, call=False)
-
-        overview = Group(
-            layers,
-            melting_edges,
-            melting_label,
-            profile_axes,
-            profile_label,
-            profile,
-        )
-        overview_center = overview.get_center()
-        self.frame.reorient(0, 0, 0, center=overview_center, height=7.2)
-
-        self.add(
-            layers,
-            melting_edges,
-            melting_label,
-            profile_axes,
-            profile_label,
-            hydrometeors,
-            profile,
-        )
-
-        self.play(
-            self.frame.shift(DOWN * fh(self, 1.5)).animate.shift(UP * fh(self, 1.5)),
-            run_time=1.5,
-        )
-
-        self.wait(5)
-
-        diameter_min = 0.0
-        diameter_max = 8.0
-        trace_scale = 2.3
-
-        def diameter_to_x(diameter):
-            alpha = (diameter - diameter_min) / (diameter_max - diameter_min)
-            return column_left + alpha * column_width
-
-        epsilon_r_min = ice_epsilon_r
-        epsilon_r_max = water_epsilon_r
-        epsilon_r_colormap = get_color_map("coolwarm")
-
-        def epsilon_r_to_rgb(epsilon_r):
-            alpha = np.clip(
-                (epsilon_r - epsilon_r_min) / (epsilon_r_max - epsilon_r_min),
-                0,
-                1,
-            )
-            return np.array(epsilon_r_colormap(alpha)[:3])
-
-        gate_edges = np.linspace(rain_bottom, snow_top, 18)
-        trace_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
-        gate_response_width = gate_edges[1] - gate_edges[0]
-        diameter_samples = np.linspace(diameter_min + 0.03, diameter_max, 181)
-        density_values = np.zeros((len(trace_heights), len(diameter_samples)))
-        gate_epsilon_values = np.full(len(trace_heights), epsilon_r_min)
-        gate_occupancies = np.zeros(len(trace_heights))
-        dsd_reveal = VT(0)
-        waterfall_guides = VGroup()
-        waterfall_traces = VGroup()
-        for height in trace_heights:
-            waterfall_guides.add(
-                Line(
-                    [column_left, height, 0.01],
-                    [column_right, height, 0.01],
-                )
-                .set_stroke(GREY_B, 0.8, opacity=0.22)
-                .apply_depth_test()
-            )
-            waterfall_traces.add(
-                VMobject(
-                    stroke_color=TOWER_LIGHT,
-                    stroke_width=2.4,
-                    stroke_opacity=0,
-                ).apply_depth_test()
-            )
-
-        def update_dsd_traces(traces, dt):
-            for gate_index, (trace, height) in enumerate(zip(traces, trace_heights)):
-                range_weights = np.clip(
-                    1 - np.abs(current_heights - height) / gate_response_width,
-                    0,
-                    1,
-                )
-                in_gate = range_weights > 0
-
-                gate_diameters = current_diameters[in_gate]
-                if len(gate_diameters):
-                    particle_range_weights = range_weights[in_gate]
-                    diameter_distance = (
-                        diameter_samples[:, None] - gate_diameters[None, :]
-                    ) / 0.55
-                    target_density = (
-                        np.exp(-0.5 * diameter_distance**2)
-                        * particle_range_weights[None, :]
-                    ).sum(axis=1) / 5
-                    volume_weights = particle_range_weights * gate_diameters**3
-                    target_epsilon_r = np.average(
-                        current_epsilon_r[in_gate],
-                        weights=volume_weights,
-                    )
-                    target_occupancy = min(particle_range_weights.sum() / 3, 1)
-                else:
-                    target_density = np.zeros_like(diameter_samples)
-                    target_epsilon_r = gate_epsilon_values[gate_index]
-                    target_occupancy = 0
-
-                density_values[gate_index] = target_density
-                gate_epsilon_values[gate_index] = target_epsilon_r
-                gate_occupancies[gate_index] = target_occupancy
-
-                points = np.column_stack(
-                    (
-                        [diameter_to_x(diameter) for diameter in diameter_samples],
-                        np.full(len(diameter_samples), height),
-                        0.015 + ~dsd_reveal * trace_scale * density_values[gate_index],
-                    )
-                )
-                trace.set_points_smoothly(points)
-                trace.set_stroke(
-                    rgb_to_color(epsilon_r_to_rgb(gate_epsilon_values[gate_index])),
-                    width=2.4,
-                    opacity=~dsd_reveal * (0.18 + 0.77 * gate_occupancies[gate_index]),
-                )
-
-        update_dsd_traces(waterfall_traces, 0)
-        waterfall_traces.add_updater(update_dsd_traces, call=False)
-
-        surface_center = np.array(
-            [
-                (column_left + profile_x + profile_width) / 2,
-                0,
-                0.55,
-            ]
-        )
-
-        melting_top_new = (
-            Line(
-                [column_left, melting_top, 0],
-                [column_right, melting_top, 0],
-            )
-            .set_stroke(TEAL, 1.5, opacity=0.5)
-            .set_z_index(-1)
-        )
-        melting_bot_new = (
-            Line(
-                [column_left, melting_bottom, 0],
-                [column_right, melting_bottom, 0],
-            )
-            .set_stroke(TEAL, 1.5, opacity=0.5)
-            .set_z_index(-1)
-        )
-        self.add(waterfall_guides, waterfall_traces)
-        self.play(
-            LaggedStart(
-                Group(profile_axes, profile_label).animate.shift(RIGHT * 10),
-                profile_x_offset @ 10,
-                Transform(melting_edges[0], melting_top_new),
-                Transform(melting_edges[1], melting_bot_new),
-                lag_ratio=0,
-            ),
-            FadeIn(waterfall_guides),
-            dsd_reveal @ 1,
-            self.frame.animate.reorient(
-                0, 52, 0, center=melting_layer.get_center(), height=7.8
-            ).shift(DOWN * 0.5),
-            run_time=4.5,
-        )
-        self.remove(profile_axes, profile_label, profile)
-
-        orbit_rate = VT(0)
-
-        def orbit(m, dt):
-            m.rotate(~orbit_rate * dt)
-
-        # self.frame.add_updater(orbit)
-
-        self.wait(0.5)
-
-        # self.play(orbit_rate @ (-PI / 12), run_time=2)
-
-        # self.wait(5)
-
-        D_arrow = Arrow(
-            rain_layer.get_corner(DL), rain_layer.get_corner(DR), buff=0
-        ).shift(DOWN * 0.5)
-        D_label = Tex(r"D").next_to(D_arrow, DOWN, SMALL_BUFF)
-
-        self.play(
-            LaggedStart(
-                GrowArrow(D_arrow),
-                GrowFromCenter(D_label),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        h_arrow = Arrow(
-            rain_layer.get_corner(DR), snow_layer.get_corner(UR), buff=0
-        ).shift(RIGHT * 0.5)
-        h_label = Text("height", font=FONT).next_to(h_arrow, RIGHT, SMALL_BUFF)
-
-        self.play(
-            LaggedStart(
-                GrowArrow(h_arrow),
-                Write(h_label),
-                lag_ratio=0.2,
-            )
-        )
-
-        colorbar_height = 3.2
-        colorbar_width = 0.28
-        colorbar_steps = 64
-        colorbar_slice_height = colorbar_height / colorbar_steps
-        colorbar_gradient = VGroup()
-        for index in range(colorbar_steps):
-            alpha = (index + 0.5) / colorbar_steps
-            epsilon_r = epsilon_r_min + alpha * (epsilon_r_max - epsilon_r_min)
-            colorbar_gradient.add(
-                Rectangle(
-                    width=colorbar_width,
-                    height=colorbar_slice_height * 1.02,
-                )
-                .set_stroke(width=0)
-                .set_fill(rgb_to_color(epsilon_r_to_rgb(epsilon_r)), opacity=1)
-                .move_to(
-                    [
-                        0,
-                        -colorbar_height / 2 + (index + 0.5) * colorbar_slice_height,
-                        0,
-                    ]
-                )
-            )
-
-        colorbar_frame = Rectangle(
-            width=colorbar_width,
-            height=colorbar_height,
-            fill_opacity=0,
-            stroke_color=TOWER_LIGHT,
-            stroke_width=1,
-        )
-        colorbar_ticks = VGroup()
-        for epsilon_r in (3.2, 20, 40, 60, 80):
-            alpha = (epsilon_r - epsilon_r_min) / (epsilon_r_max - epsilon_r_min)
-            tick_y = -colorbar_height / 2 + alpha * colorbar_height
-            tick = Line(
-                [colorbar_width / 2, tick_y, 0],
-                [colorbar_width / 2 + 0.1, tick_y, 0],
-                stroke_color=WHITE,
-                stroke_width=1,
-            )
-            tick_label = (
-                Text(f"{epsilon_r:g}", font=FONT)
-                .scale(0.28)
-                .next_to(tick, RIGHT, buff=0.06)
-            )
-            colorbar_ticks.add(VGroup(tick, tick_label))
-
-        colorbar_label = (
-            Tex(r"\varepsilon_r")
-            .scale(0.7)
-            .next_to(
-                colorbar_frame,
-                UP,
-                buff=0.15,
-            )
-        )
-        epsilon_r_colorbar = (
-            Group(
-                colorbar_gradient,
-                colorbar_frame,
-                colorbar_ticks,
-                colorbar_label,
-            )
-            .fix_in_frame()
-            .to_edge(LEFT, buff=0.35)
-        )
-
-        self.play(
-            LaggedStart(
-                FadeIn(colorbar_gradient),
-                ShowCreation(colorbar_frame),
-                FadeIn(colorbar_ticks),
-                Write(colorbar_label),
-                lag_ratio=0.15,
-            ),
-            run_time=2,
-        )
-
-        # self.wait(10)
-
-        self.wait(0.5)
-
-        self.play(
-            colorbar_label.animate(rate_func=utils.rate_functions.there_and_back)
-            .scale(2)
-            .set_color(YELLOW)
-        )
-
-        self.wait(0.5)
-
-        snow_line = (
-            Line(
-                colorbar_frame.get_corner(DR),
-                colorbar_frame.get_corner(DR) + colorbar_frame.get_height() * 0.3 * UP,
-            )
-            .fix_in_frame()
-            .shift(RIGHT * 0.6)
-        )
-        snow_line_d = Line(
-            snow_line.get_bottom() + LEFT * 0.06,
-            snow_line.get_bottom() + RIGHT * 0.06,
-        ).fix_in_frame()
-        snow_line_u = Line(
-            snow_line.get_top() + LEFT * 0.06,
-            snow_line.get_top() + RIGHT * 0.06,
-        ).fix_in_frame()
-        snow_label = (
-            Text("snow", font=FONT)
-            .fix_in_frame()
-            .scale(0.5)
-            .next_to(snow_line, RIGHT, SMALL_BUFF)
-        )
-
-        self.play(
-            LaggedStart(
-                ShowCreation(snow_line_d),
-                ShowCreation(snow_line),
-                ShowCreation(snow_line_u),
-                FadeIn(snow_label),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        rain_line = (
-            Line(
-                colorbar_frame.get_corner(UR),
-                colorbar_frame.get_corner(UR)
-                + colorbar_frame.get_height() * 0.3 * DOWN,
-            )
-            .fix_in_frame()
-            .shift(RIGHT * 0.6)
-        )
-        rain_line_d = Line(
-            rain_line.get_bottom() + LEFT * 0.06,
-            rain_line.get_bottom() + RIGHT * 0.06,
-        ).fix_in_frame()
-        rain_line_u = Line(
-            rain_line.get_top() + LEFT * 0.06,
-            rain_line.get_top() + RIGHT * 0.06,
-        ).fix_in_frame()
-        rain_label = (
-            Text("rain", font=FONT)
-            .fix_in_frame()
-            .scale(0.5)
-            .next_to(rain_line, RIGHT, SMALL_BUFF)
-        )
-
-        self.play(
-            LaggedStart(
-                ShowCreation(rain_line_u),
-                ShowCreation(rain_line),
-                ShowCreation(rain_line_d),
-                FadeIn(rain_label),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        melting_line = (
-            Line(
-                colorbar_frame.get_edge_center(RIGHT)
-                + colorbar_frame.get_height() * 0.15 * UP,
-                colorbar_frame.get_edge_center(RIGHT)
-                + colorbar_frame.get_height() * 0.15 * DOWN,
-            )
-            .fix_in_frame()
-            .shift(RIGHT * 0.6)
-        )
-        melting_line_d = Line(
-            melting_line.get_bottom() + LEFT * 0.06,
-            melting_line.get_bottom() + RIGHT * 0.06,
-        ).fix_in_frame()
-        melting_line_u = Line(
-            melting_line.get_top() + LEFT * 0.06,
-            melting_line.get_top() + RIGHT * 0.06,
-        ).fix_in_frame()
-        melting_label = (
-            Text("melting", font=FONT)
-            .fix_in_frame()
-            .scale(0.5)
-            .next_to(melting_line, RIGHT, SMALL_BUFF)
-        )
-
-        self.play(
-            LaggedStart(
-                ShowCreation(melting_line_u),
-                ShowCreation(melting_line),
-                ShowCreation(melting_line_d),
-                FadeIn(melting_label),
-                lag_ratio=0.2,
-            )
-        )
-
-        self.wait(0.5)
-
-        self.embed()
-
-
 class BrightBandP1(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
@@ -3079,7 +2402,7 @@ class BrightBandP1p5(InteractiveScene):
 
         self.wait(0.5)
 
-        self.play(self.frame.animate.shift(DOWN * fh(self)))
+        self.play(self.frame.animate.shift(LEFT * fw(self)))
 
         self.embed()
 
@@ -3492,4 +2815,923 @@ class BrightBandP3(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
+        self.embed()
+
+
+class Dsd(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        snow_top = 3.0
+        melting_top = 0.6
+        melting_bottom = -0.6
+        rain_bottom = -3.0
+
+        column_left = -4.5
+        column_right = 1.0
+        column_width = column_right - column_left
+        column_center_x = (column_left + column_right) / 2
+
+        snow_layer = Rectangle(
+            width=column_width,
+            height=snow_top - melting_top,
+            stroke_width=0,
+            fill_color=TOWER_LIGHT,
+            fill_opacity=0.035,
+        ).move_to([column_center_x, (snow_top + melting_top) / 2, 0])
+        melting_layer = Rectangle(
+            width=column_width,
+            height=melting_top - melting_bottom,
+            stroke_width=0,
+            fill_color=TEAL,
+            fill_opacity=0.14,
+        ).move_to([column_center_x, 0, 0])
+        rain_layer = Rectangle(
+            width=column_width,
+            height=melting_bottom - rain_bottom,
+            stroke_width=0,
+            fill_color=BLUE_E,
+            fill_opacity=0.06,
+        ).move_to([column_center_x, (melting_bottom + rain_bottom) / 2, 0])
+        layers = VGroup(snow_layer, melting_layer, rain_layer).set_z_index(-2)
+
+        melting_label = (
+            VGroup(
+                Text("Melting Layer", font=FONT).scale(0.4),
+                Text("(Bright Band)", font=FONT).scale(0.4),
+            )
+            .arrange(DOWN, SMALL_BUFF)
+            .set_color(TOWER_LIGHT)
+            .next_to(melting_layer, LEFT, SMALL_BUFF)
+        )
+
+        profile_x = 2.4
+        profile_width = 2.2
+        melting_edges = (
+            VGroup(
+                Line(
+                    [column_left, melting_top, 0],
+                    [profile_x + profile_width, melting_top, 0],
+                ),
+                Line(
+                    [column_left, melting_bottom, 0],
+                    [profile_x + profile_width, melting_bottom, 0],
+                ),
+            )
+            .set_stroke(TEAL, 1.5, opacity=0.5)
+            .set_z_index(-1)
+        )
+
+        profile_axes = VGroup(
+            Line(
+                [profile_x, rain_bottom, 0],
+                [profile_x, snow_top, 0],
+            ),
+            Line(
+                [profile_x, rain_bottom, 0],
+                [profile_x + profile_width, rain_bottom, 0],
+            ),
+        ).set_stroke(GREY_B, 2, opacity=0.75)
+
+        es_propto = Tex(r"E_s \propto")
+        reflectivity_label = Text("Reflectivity", font=FONT)
+        profile_label = (
+            Group(es_propto, reflectivity_label)
+            .arrange(RIGHT, SMALL_BUFF)
+            .rescale_to_fit(profile_axes[1].get_width() * 1.8, 0)
+            .next_to(profile_axes[1], DOWN, buff=0.18)
+        )
+
+        rng = np.random.default_rng(4)
+        particle_count = 54
+        particle_x = rng.uniform(
+            column_left + 0.35, column_right - 0.35, particle_count
+        )
+        snow_diameters = np.clip(
+            rng.lognormal(np.log(3.8), 0.28, particle_count),
+            1.6,
+            7.4,
+        )
+        rain_diameters = np.clip(
+            0.28 * snow_diameters + rng.normal(0.35, 0.15, particle_count),
+            0.45,
+            2.6,
+        )
+        drift_phase = rng.uniform(0, TAU, particle_count)
+        rotation_rate = rng.uniform(-0.8, 0.8, particle_count)
+        cycle_rate = rng.uniform(0.88, 1.12, particle_count)
+
+        snow_duration = 5.0
+        melting_duration = 1.5
+        rain_duration = 1.5
+        cycle_duration = snow_duration + melting_duration + rain_duration
+        age_offsets = np.linspace(0, cycle_duration, particle_count, endpoint=False)
+        rng.shuffle(age_offsets)
+
+        ice_epsilon_r = 3.2
+        water_epsilon_r = 80.0
+
+        def mixed_phase_epsilon_r(melt_fraction):
+            return (
+                (1 - melt_fraction) * np.cbrt(ice_epsilon_r)
+                + melt_fraction * np.cbrt(water_epsilon_r)
+            ) ** 3
+
+        hydrometeors = Group()
+        for snow_diameter, rain_diameter in zip(snow_diameters, rain_diameters):
+            snow_radius = np.interp(snow_diameter, [1.6, 7.4], [0.08, 0.15])
+            rain_radius = np.interp(rain_diameter, [0.45, 2.6], [0.04, 0.075])
+            snowflake = VGroup(
+                *[
+                    Line(-snow_radius * RIGHT, snow_radius * RIGHT).rotate(angle)
+                    for angle in (0, PI / 3, 2 * PI / 3)
+                ]
+            ).set_stroke(TOWER_LIGHT, 1.5)
+            water_shell = (
+                Circle(radius=snow_radius * 1.15)
+                .set_fill(
+                    BLUE_A,
+                    opacity=0,
+                )
+                .set_stroke(BLUE_A, 1.5, opacity=0)
+            )
+            raindrop = (
+                Circle(radius=rain_radius).set_stroke(BLUE, 0).set_fill(BLUE, 0.2)
+            )
+
+            hydrometeors.add(Group(water_shell, snowflake, raindrop))
+
+        elapsed = [0.0]
+        current_heights = np.zeros(particle_count)
+        current_diameters = np.zeros(particle_count)
+        current_epsilon_r = np.zeros(particle_count)
+        current_reflectivity = np.zeros(particle_count)
+
+        def update_hydrometeors(group, dt):
+            elapsed[0] += dt
+
+            for index, particle in enumerate(group):
+                age = (
+                    elapsed[0] * cycle_rate[index] + age_offsets[index]
+                ) % cycle_duration
+
+                if age < snow_duration:
+                    alpha = age / snow_duration
+                    height = snow_top + alpha * (melting_top - snow_top)
+                    snow_opacity = 1
+                    shell_opacity = 0
+                    rain_opacity = 0
+                    drift_scale = 1
+                    diameter = snow_diameters[index]
+                    epsilon_r = ice_epsilon_r
+                    reflectivity = 0.35
+                elif age < snow_duration + melting_duration:
+                    alpha = (age - snow_duration) / melting_duration
+                    height = melting_top + alpha * (melting_bottom - melting_top)
+                    melt_exponent = np.interp(
+                        snow_diameters[index],
+                        [1.6, 7.4],
+                        [0.72, 1.35],
+                    )
+                    melt_fraction = alpha**melt_exponent
+                    snow_opacity = 1 - melt_fraction
+                    shell_opacity = np.sin(PI * melt_fraction)
+                    rain_opacity = melt_fraction
+                    drift_scale = 1 - 0.7 * melt_fraction
+                    diameter = (1 - melt_fraction) * snow_diameters[
+                        index
+                    ] + melt_fraction * rain_diameters[index]
+                    epsilon_r = mixed_phase_epsilon_r(melt_fraction)
+                    reflectivity = 0.35 + 2.2 * shell_opacity + 0.65 * melt_fraction
+                else:
+                    alpha = (age - snow_duration - melting_duration) / rain_duration
+                    height = melting_bottom + alpha * (rain_bottom - melting_bottom)
+                    snow_opacity = 0
+                    shell_opacity = 0
+                    rain_opacity = 1
+                    drift_scale = 0.3
+                    diameter = rain_diameters[index]
+                    epsilon_r = water_epsilon_r
+                    reflectivity = 1
+
+                x_position = particle_x[index] + drift_scale * 0.12 * np.sin(
+                    0.8 * elapsed[0] + drift_phase[index]
+                )
+                particle.move_to([x_position, height, 0])
+                current_heights[index] = height
+                current_diameters[index] = diameter
+                current_epsilon_r[index] = epsilon_r
+                current_reflectivity[index] = reflectivity
+
+                water_shell, snowflake, raindrop = particle
+                snowflake.set_opacity(snow_opacity)
+                water_shell.set_opacity(0.7 * shell_opacity)
+                raindrop.set_opacity(rain_opacity)
+                snowflake.rotate(rotation_rate[index] * dt)
+
+        update_hydrometeors(hydrometeors, 0)
+        hydrometeors.add_updater(update_hydrometeors, call=False)
+        hydrometeors.set_z_index(1)
+
+        profile_heights = np.linspace(rain_bottom, snow_top, 73)
+        profile_values = np.zeros_like(profile_heights)
+        profile_initialized = [False]
+        melting_bottom_index = np.argmin(np.abs(profile_heights - melting_bottom))
+        melting_top_index = np.argmin(np.abs(profile_heights - melting_top))
+        profile_indices = (
+            np.arange(melting_bottom_index + 1),
+            np.arange(melting_bottom_index, melting_top_index + 1),
+            np.arange(melting_top_index, len(profile_heights)),
+        )
+        profile = VGroup(
+            VMobject().set_stroke(BLUE_A, 4),
+            VMobject().set_stroke(ACCENT_COLOR, 5),
+            VMobject().set_stroke(TOWER_LIGHT, 4),
+        ).set_z_index(2)
+
+        profile_x_offset = VT(0)
+
+        def update_profile(curves, dt):
+            vertical_distance = (
+                profile_heights[:, None] - current_heights[None, :]
+            ) / 0.14
+            kernel = np.exp(-0.5 * vertical_distance**2)
+            target_values = np.clip(
+                0.02 + kernel @ current_reflectivity / 9,
+                0.02,
+                0.98,
+            )
+            if not profile_initialized[0]:
+                profile_values[:] = target_values
+                profile_initialized[0] = True
+            elif dt > 0:
+                response = 1 - np.exp(-dt / 0.18)
+                profile_values[:] += response * (target_values - profile_values)
+
+            for curve, indices in zip(curves, profile_indices):
+                points = np.column_stack(
+                    (
+                        profile_x
+                        + profile_width * profile_values[indices]
+                        + ~profile_x_offset,
+                        profile_heights[indices],
+                        np.zeros(len(indices)),
+                    )
+                )
+                curve.set_points_smoothly(points)
+
+        update_profile(profile, 0)
+        profile.add_updater(update_profile, call=False)
+
+        overview = Group(
+            layers,
+            melting_edges,
+            melting_label,
+            profile_axes,
+            profile_label,
+            profile,
+        )
+        overview_center = overview.get_center()
+        self.frame.reorient(0, 0, 0, center=overview_center, height=7.2)
+
+        self.add(
+            layers,
+            melting_edges,
+            melting_label,
+            profile_axes,
+            profile_label,
+            hydrometeors,
+            profile,
+        )
+
+        self.play(
+            self.frame.shift(DOWN * fh(self, 1.5)).animate.shift(UP * fh(self, 1.5)),
+            run_time=1.5,
+        )
+
+        self.wait(2)
+
+        snow_exag = (
+            snow_layer.copy()
+            .set_stroke(color=YELLOW, opacity=0, width=DEFAULT_STROKE_WIDTH)
+            .set_fill(opacity=0)
+        )
+        melting_exag = (
+            melting_layer.copy()
+            .set_stroke(color=YELLOW, opacity=0, width=DEFAULT_STROKE_WIDTH)
+            .set_fill(opacity=0)
+        )
+        rain_exag = (
+            rain_layer.copy()
+            .set_stroke(color=YELLOW, opacity=0, width=DEFAULT_STROKE_WIDTH)
+            .set_fill(opacity=0)
+        )
+        self.add(snow_exag, melting_exag, rain_exag)
+
+        self.play(
+            LaggedStart(
+                snow_exag.animate(
+                    run_time=0.8, rate_func=utils.rate_functions.there_and_back
+                )
+                .scale(1.1)
+                .set_stroke(opacity=1),
+                melting_exag.animate(
+                    run_time=0.8, rate_func=utils.rate_functions.there_and_back
+                )
+                .scale(1.1)
+                .set_stroke(opacity=1),
+                rain_exag.animate(
+                    run_time=0.8, rate_func=utils.rate_functions.there_and_back
+                )
+                .scale(1.1)
+                .set_stroke(opacity=1),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.remove(snow_exag, melting_exag, rain_exag)
+
+        self.wait(5)
+
+        diameter_min = 0.0
+        diameter_max = 8.0
+        trace_scale = 2.3
+
+        def diameter_to_x(diameter):
+            alpha = (diameter - diameter_min) / (diameter_max - diameter_min)
+            return column_left + alpha * column_width
+
+        epsilon_r_min = ice_epsilon_r
+        epsilon_r_max = water_epsilon_r
+        epsilon_r_colormap = get_color_map("coolwarm")
+
+        def epsilon_r_to_rgb(epsilon_r):
+            alpha = np.clip(
+                (epsilon_r - epsilon_r_min) / (epsilon_r_max - epsilon_r_min),
+                0,
+                1,
+            )
+            return np.array(epsilon_r_colormap(alpha)[:3])
+
+        gate_edges = np.linspace(rain_bottom, snow_top, 18)
+        trace_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
+        gate_response_width = gate_edges[1] - gate_edges[0]
+        diameter_samples = np.linspace(diameter_min + 0.03, diameter_max, 181)
+        density_values = np.zeros((len(trace_heights), len(diameter_samples)))
+        gate_epsilon_values = np.full(len(trace_heights), epsilon_r_min)
+        gate_occupancies = np.zeros(len(trace_heights))
+        dsd_reveal = VT(0)
+        waterfall_guides = VGroup()
+        waterfall_traces = VGroup()
+        for height in trace_heights:
+            waterfall_guides.add(
+                Line(
+                    [column_left, height, 0.01],
+                    [column_right, height, 0.01],
+                )
+                .set_stroke(GREY_B, 0.8, opacity=0.22)
+                .apply_depth_test()
+            )
+            waterfall_traces.add(
+                VMobject(
+                    stroke_color=TOWER_LIGHT,
+                    stroke_width=2.4,
+                    stroke_opacity=0,
+                ).apply_depth_test()
+            )
+
+        def update_dsd_traces(traces, dt):
+            for gate_index, (trace, height) in enumerate(zip(traces, trace_heights)):
+                range_weights = np.clip(
+                    1 - np.abs(current_heights - height) / gate_response_width,
+                    0,
+                    1,
+                )
+                in_gate = range_weights > 0
+
+                gate_diameters = current_diameters[in_gate]
+                if len(gate_diameters):
+                    particle_range_weights = range_weights[in_gate]
+                    diameter_distance = (
+                        diameter_samples[:, None] - gate_diameters[None, :]
+                    ) / 0.55
+                    target_density = (
+                        np.exp(-0.5 * diameter_distance**2)
+                        * particle_range_weights[None, :]
+                    ).sum(axis=1) / 5
+                    volume_weights = particle_range_weights * gate_diameters**3
+                    target_epsilon_r = np.average(
+                        current_epsilon_r[in_gate],
+                        weights=volume_weights,
+                    )
+                    target_occupancy = min(particle_range_weights.sum() / 3, 1)
+                else:
+                    target_density = np.zeros_like(diameter_samples)
+                    target_epsilon_r = gate_epsilon_values[gate_index]
+                    target_occupancy = 0
+
+                density_values[gate_index] = target_density
+                gate_epsilon_values[gate_index] = target_epsilon_r
+                gate_occupancies[gate_index] = target_occupancy
+
+                points = np.column_stack(
+                    (
+                        [diameter_to_x(diameter) for diameter in diameter_samples],
+                        np.full(len(diameter_samples), height),
+                        0.015 + ~dsd_reveal * trace_scale * density_values[gate_index],
+                    )
+                )
+                trace.set_points_smoothly(points)
+                trace.set_stroke(
+                    rgb_to_color(epsilon_r_to_rgb(gate_epsilon_values[gate_index])),
+                    width=2.4,
+                    opacity=~dsd_reveal * (0.18 + 0.77 * gate_occupancies[gate_index]),
+                )
+
+        update_dsd_traces(waterfall_traces, 0)
+        waterfall_traces.add_updater(update_dsd_traces, call=False)
+
+        surface_center = np.array(
+            [
+                (column_left + profile_x + profile_width) / 2,
+                0,
+                0.55,
+            ]
+        )
+
+        melting_top_new = (
+            Line(
+                [column_left, melting_top, 0],
+                [column_right, melting_top, 0],
+            )
+            .set_stroke(TEAL, 1.5, opacity=0.5)
+            .set_z_index(-1)
+        )
+        melting_bot_new = (
+            Line(
+                [column_left, melting_bottom, 0],
+                [column_right, melting_bottom, 0],
+            )
+            .set_stroke(TEAL, 1.5, opacity=0.5)
+            .set_z_index(-1)
+        )
+        self.add(waterfall_guides, waterfall_traces)
+        self.play(
+            LaggedStart(
+                Group(profile_axes, profile_label).animate.shift(RIGHT * 10),
+                profile_x_offset @ 10,
+                Transform(melting_edges[0], melting_top_new),
+                Transform(melting_edges[1], melting_bot_new),
+                lag_ratio=0,
+            ),
+            FadeIn(waterfall_guides),
+            dsd_reveal @ 1,
+            self.frame.animate.reorient(
+                0, 52, 0, center=melting_layer.get_center(), height=7.8
+            ).shift(DOWN * 0.5),
+            run_time=4.5,
+        )
+        self.remove(profile_axes, profile_label, profile)
+
+        orbit_rate = VT(0)
+
+        def orbit(m, dt):
+            m.rotate(~orbit_rate * dt)
+
+        # self.frame.add_updater(orbit)
+
+        self.wait(0.5)
+
+        # self.play(orbit_rate @ (-PI / 12), run_time=2)
+
+        # self.wait(5)
+
+        D_arrow = Arrow(
+            rain_layer.get_corner(DL), rain_layer.get_corner(DR), buff=0
+        ).shift(DOWN * 0.5)
+        D_label = Tex(r"D").next_to(D_arrow, DOWN, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(D_arrow),
+                GrowFromCenter(D_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        h_arrow = Arrow(
+            rain_layer.get_corner(DR), snow_layer.get_corner(UR), buff=0
+        ).shift(RIGHT * 0.5)
+        h_label = Text("height", font=FONT).next_to(h_arrow, RIGHT, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(h_arrow),
+                Write(h_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        def get_trace_highlight(trace, time_width=0.2):
+            highlight = trace.copy().set_stroke(YELLOW, width=8, opacity=1)
+
+            def update_highlight(mobject, alpha):
+                upper = min((1 + time_width) * alpha, 1)
+                lower = max((1 + time_width) * alpha - time_width, 0)
+                mobject.pointwise_become_partial(trace, lower, upper)
+
+            return UpdateFromAlphaFunc(
+                highlight,
+                update_highlight,
+                run_time=1.2,
+                remover=True,
+            )
+
+        self.play(
+            LaggedStart(
+                *[get_trace_highlight(trace) for trace in waterfall_traces],
+                lag_ratio=0.08,
+            )
+        )
+
+        self.wait(0.5)
+
+        colorbar_height = 3.2
+        colorbar_width = 0.28
+        colorbar_steps = 64
+        colorbar_slice_height = colorbar_height / colorbar_steps
+        colorbar_gradient = VGroup()
+        for index in range(colorbar_steps):
+            alpha = (index + 0.5) / colorbar_steps
+            epsilon_r = epsilon_r_min + alpha * (epsilon_r_max - epsilon_r_min)
+            colorbar_gradient.add(
+                Rectangle(
+                    width=colorbar_width,
+                    height=colorbar_slice_height * 1.02,
+                )
+                .set_stroke(width=0)
+                .set_fill(rgb_to_color(epsilon_r_to_rgb(epsilon_r)), opacity=1)
+                .move_to(
+                    [
+                        0,
+                        -colorbar_height / 2 + (index + 0.5) * colorbar_slice_height,
+                        0,
+                    ]
+                )
+            )
+
+        colorbar_frame = Rectangle(
+            width=colorbar_width,
+            height=colorbar_height,
+            fill_opacity=0,
+            stroke_color=TOWER_LIGHT,
+            stroke_width=1,
+        )
+        colorbar_ticks = VGroup()
+        for epsilon_r in (3.2, 20, 40, 60, 80):
+            alpha = (epsilon_r - epsilon_r_min) / (epsilon_r_max - epsilon_r_min)
+            tick_y = -colorbar_height / 2 + alpha * colorbar_height
+            tick = Line(
+                [colorbar_width / 2, tick_y, 0],
+                [colorbar_width / 2 + 0.1, tick_y, 0],
+                stroke_color=WHITE,
+                stroke_width=1,
+            )
+            tick_label = (
+                Text(f"{epsilon_r:g}", font=FONT)
+                .scale(0.28)
+                .next_to(tick, RIGHT, buff=0.06)
+            )
+            colorbar_ticks.add(VGroup(tick, tick_label))
+
+        colorbar_label = (
+            Tex(r"\varepsilon_r")
+            .scale(0.7)
+            .next_to(
+                colorbar_frame,
+                UP,
+                buff=0.15,
+            )
+        )
+        epsilon_r_colorbar = (
+            Group(
+                colorbar_gradient,
+                colorbar_frame,
+                colorbar_ticks,
+                colorbar_label,
+            )
+            .fix_in_frame()
+            .to_edge(LEFT, buff=0.35)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(colorbar_gradient),
+                ShowCreation(colorbar_frame),
+                FadeIn(colorbar_ticks),
+                Write(colorbar_label),
+                lag_ratio=0.15,
+            ),
+            run_time=2,
+        )
+
+        # self.wait(10)
+
+        self.wait(0.5)
+
+        self.play(
+            colorbar_label.animate(rate_func=utils.rate_functions.there_and_back)
+            .scale(2)
+            .set_color(YELLOW)
+        )
+
+        self.wait(0.5)
+
+        snow_line = (
+            Line(
+                colorbar_frame.get_corner(DR),
+                colorbar_frame.get_corner(DR) + colorbar_frame.get_height() * 0.3 * UP,
+            )
+            .fix_in_frame()
+            .shift(RIGHT * 0.6)
+        )
+        snow_line_d = Line(
+            snow_line.get_bottom() + LEFT * 0.06,
+            snow_line.get_bottom() + RIGHT * 0.06,
+        ).fix_in_frame()
+        snow_line_u = Line(
+            snow_line.get_top() + LEFT * 0.06,
+            snow_line.get_top() + RIGHT * 0.06,
+        ).fix_in_frame()
+        snow_label = (
+            Text("snow", font=FONT)
+            .fix_in_frame()
+            .scale(0.5)
+            .next_to(snow_line, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(snow_line_d),
+                ShowCreation(snow_line),
+                ShowCreation(snow_line_u),
+                FadeIn(snow_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        rain_line = (
+            Line(
+                colorbar_frame.get_corner(UR),
+                colorbar_frame.get_corner(UR)
+                + colorbar_frame.get_height() * 0.3 * DOWN,
+            )
+            .fix_in_frame()
+            .shift(RIGHT * 0.6)
+        )
+        rain_line_d = Line(
+            rain_line.get_bottom() + LEFT * 0.06,
+            rain_line.get_bottom() + RIGHT * 0.06,
+        ).fix_in_frame()
+        rain_line_u = Line(
+            rain_line.get_top() + LEFT * 0.06,
+            rain_line.get_top() + RIGHT * 0.06,
+        ).fix_in_frame()
+        rain_label = (
+            Text("rain", font=FONT)
+            .fix_in_frame()
+            .scale(0.5)
+            .next_to(rain_line, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(rain_line_u),
+                ShowCreation(rain_line),
+                ShowCreation(rain_line_d),
+                FadeIn(rain_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        melting_line = (
+            Line(
+                colorbar_frame.get_edge_center(RIGHT)
+                + colorbar_frame.get_height() * 0.15 * UP,
+                colorbar_frame.get_edge_center(RIGHT)
+                + colorbar_frame.get_height() * 0.15 * DOWN,
+            )
+            .fix_in_frame()
+            .shift(RIGHT * 0.6)
+        )
+        melting_line_d = Line(
+            melting_line.get_bottom() + LEFT * 0.06,
+            melting_line.get_bottom() + RIGHT * 0.06,
+        ).fix_in_frame()
+        melting_line_u = Line(
+            melting_line.get_top() + LEFT * 0.06,
+            melting_line.get_top() + RIGHT * 0.06,
+        ).fix_in_frame()
+        melting_label = (
+            Text("melting", font=FONT)
+            .fix_in_frame()
+            .scale(0.5)
+            .next_to(melting_line, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                ShowCreation(melting_line_u),
+                ShowCreation(melting_line),
+                ShowCreation(melting_line_d),
+                FadeIn(melting_label),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        snow_exag = (
+            snow_layer.copy()
+            .set_stroke(color=YELLOW, opacity=1, width=DEFAULT_STROKE_WIDTH)
+            .set_fill(opacity=0)
+            .apply_depth_test()
+        )
+        melting_exag = (
+            melting_layer.copy()
+            .set_stroke(color=YELLOW, opacity=1, width=DEFAULT_STROKE_WIDTH)
+            .set_fill(opacity=0)
+            .apply_depth_test()
+        )
+        rain_exag = (
+            rain_layer.copy()
+            .set_stroke(color=YELLOW, opacity=1, width=DEFAULT_STROKE_WIDTH)
+            .set_fill(opacity=0)
+            .apply_depth_test()
+        )
+
+        self.play(ShowCreation(snow_exag, run_time=1.5))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(snow_exag, run_time=1.5),
+                ShowCreation(melting_exag, run_time=1.5),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(melting_exag, run_time=1.5),
+                ShowCreation(rain_exag, run_time=1.5),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.wait(0.5)
+
+        rain_mean_diameter = np.mean(rain_diameters)
+        rain_mean_width = 1.5
+        rain_gate_indices = trace_heights < melting_bottom
+        rain_box_depth = max(
+            1.2,
+            1.15 * trace_scale * np.max(density_values[rain_gate_indices]),
+        )
+        rain_box_x_min = diameter_to_x(rain_mean_diameter - rain_mean_width / 2)
+        rain_box_x_max = diameter_to_x(rain_mean_diameter + rain_mean_width / 2)
+        rain_box_z_min = 0.015
+        rain_box_z_max = rain_box_z_min + rain_box_depth
+        rain_mean_box = (
+            Prism(
+                width=rain_box_x_max - rain_box_x_min,
+                height=melting_bottom - rain_bottom,
+                depth=rain_box_depth,
+                color=GREEN,
+                opacity=0,
+            )
+            .move_to(
+                [
+                    diameter_to_x(rain_mean_diameter),
+                    (rain_bottom + melting_bottom) / 2,
+                    rain_box_z_min + rain_box_depth / 2,
+                ]
+            )
+            .shift(RIGHT * 1.5)
+            .apply_depth_test()
+        )
+        self.add(rain_mean_box)
+
+        self.play(
+            multi_anim(rain_mean_box, lag_ratio=0.3).set_opacity(0.2).shift(LEFT * 1.5),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        mu = (
+            Tex(r"\mu")
+            .fix_in_frame()
+            .scale(2)
+            .next_to(
+                self.frame.to_fixed_frame_point(rain_mean_box.get_corner(UL)),
+                UP,
+                LARGE_BUFF,
+            )
+            .shift(LEFT * 1.5)
+        )
+        mu_bez = CubicBezier(
+            self.frame.to_fixed_frame_point(rain_mean_box.get_corner(UL))
+            + UP * LARGE_BUFF * 0.8,
+            self.frame.to_fixed_frame_point(rain_mean_box.get_corner(UL))
+            + UP * LARGE_BUFF * 1.4,
+            mu.get_right() + [0.5, 0, 0],
+            mu.get_right() + [0.1, 0, 0],
+        ).fix_in_frame()
+
+        self.play(
+            LaggedStart(
+                ShowCreation(mu_bez),
+                GrowFromCenter(mu),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        hydrometeors.suspend_updating()
+        waterfall_traces.suspend_updating()
+
+        explicitly_faded_mobjects = [
+            colorbar_gradient,
+            colorbar_frame,
+            colorbar_ticks,
+            colorbar_label,
+            rain_line_u,
+            rain_line,
+            rain_line_d,
+            rain_label,
+            melting_line_u,
+            melting_line,
+            melting_line_d,
+            melting_label,
+            snow_line_u,
+            snow_line,
+            snow_line_d,
+            snow_label,
+            mu,
+            rain_mean_box,
+            mu_bez,
+        ]
+        explicitly_faded_ids = {id(mobject) for mobject in explicitly_faded_mobjects}
+        remaining_mobjects = [
+            mobject
+            for mobject in self.mobjects
+            if id(mobject) not in explicitly_faded_ids
+        ]
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(colorbar_gradient),
+                    Uncreate(colorbar_frame),
+                    FadeOut(colorbar_ticks),
+                    FadeOut(colorbar_label),
+                    Uncreate(rain_line_u),
+                    Uncreate(rain_line),
+                    Uncreate(rain_line_d),
+                    FadeOut(rain_label),
+                    Uncreate(melting_line_u),
+                    Uncreate(melting_line),
+                    Uncreate(melting_line_d),
+                    FadeOut(melting_label),
+                    Uncreate(snow_line_u),
+                    Uncreate(snow_line),
+                    Uncreate(snow_line_d),
+                    FadeOut(snow_label),
+                    FadeOut(mu),
+                    FadeOut(rain_mean_box),
+                    Uncreate(mu_bez),
+                    *[FadeOut(mobject) for mobject in remaining_mobjects],
+                ),
+                self.frame.animate(run_time=4).reorient(
+                    0, 0, 0, center=melting_layer.get_center(), height=40
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
         self.embed()
