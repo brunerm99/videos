@@ -100,6 +100,7 @@ __all__ = [
     "get_available_nexrad_products",
     "get_nexrad_product_ppi_data",
     "get_phase_eased_sine",
+    "index_labels",
     "linear",
     "multi_anim",
     "polar_to_cartesian",
