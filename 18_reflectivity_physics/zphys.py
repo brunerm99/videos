@@ -2,6 +2,7 @@
 
 import os
 import sys
+from pathlib import Path
 from random import random, seed, shuffle
 
 import numpy as np
@@ -46,6 +47,7 @@ from melp.props import (
     place_wsr88_on_terrain,
 )
 from melp.props import Dipole as DipoleAntenna
+from melp.props.ppi import field_to_rgba
 
 BACKGROUND_COLOR = "#183340"
 ICE = "#DBF1FD"
@@ -282,6 +284,46 @@ class IntroP2(InteractiveScene):
         self.embed()
 
 
+def get_olympex_rhi_cells():
+    path = Path(__file__).parent / "static" / "olympex_rhi_20151113_020003_az210.npz"
+    with np.load(path) as data:
+        ground = data["ground_edges_km"]
+        height = data["height_edges_km"]
+        edges = np.stack((ground, height), axis=-1)
+        corners = np.stack(
+            (edges[:-1, :-1], edges[:-1, 1:], edges[1:, 1:], edges[1:, :-1]),
+            axis=2,
+        )
+        values = data["reflectivity_dbz"]
+        valid = (
+            np.isfinite(values)
+            & data["valid_mask"]
+            & (corners[..., 0].min(axis=2) < 32.8)
+            & (corners[..., 0].max(axis=2) > 0)
+            & (corners[..., 1].min(axis=2) < 8)
+            & (corners[..., 1].max(axis=2) > 0)
+        )
+        ray_indices, gate_indices = np.where(valid)
+        corners = np.clip(corners[valid], [0, 0], [32.8, 8])
+        rgba = (
+            field_to_rgba(
+                values,
+                vmin=10,
+                vmax=50,
+                cmap_name="NWSRef",
+                fallback_cmap_name="NWSRef",
+            )[valid]
+            / 255
+        )
+        return {
+            "corners": corners,
+            "rgba": rgba,
+            "reflectivity_dbz": values[valid],
+            "elevation_deg": data["elevation_deg"][ray_indices],
+            "ranges_km": data["ranges_km"][gate_indices],
+        }
+
+
 class IntroP2v2(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
@@ -291,6 +333,7 @@ class IntroP2v2(InteractiveScene):
             .rescale_to_fit(fw(self, 0.3), 0)
             .move_to(self.frame)
         )
+
         self.play(rabbit_ears.shift(LEFT * fw(self)).animate.shift(RIGHT * fw(self)))
 
         self.wait(0.5)
@@ -319,7 +362,9 @@ class IntroP2v2(InteractiveScene):
             return updater
 
         rotation_speed = PI / 6
+
         self.add(dipole)
+
         dipole.add_updater(get_rotation_updater(rotation_speed, UP), call=False)
 
         ears_bez = CubicBezier(
@@ -361,7 +406,493 @@ class IntroP2v2(InteractiveScene):
             )
         )
 
-        # now the stuff on em waves
+        self.wait(5)
+
+        self.play(dipole.animate.shift(UP * fh(self)))
+
+        self.remove(dipole, rabbit_ears, raindrop)
+
+        self.wait(0.5)
+
+        radar = get_wsr88_model(height=fh(self), indexed_radome_panels=True)
+        azimuth = np.arctan2(radar.beam_direction[1], radar.beam_direction[0])
+        radar.rotate(-azimuth, axis=OUT, about_point=ORIGIN)
+        radar.shift(DOWN * fh(self, 2))
+        beam_origin = radar.beam_origin
+        radar.base_sections[-1].set_opacity(0).deactivate_depth_test()
+        radar.base_sections[-2].set_opacity(0).deactivate_depth_test()
+        radar.base_sections[-3].set_opacity(0).deactivate_depth_test()
+
+        self.add(radar)
+
+        panel_indices = list(np.arange(len(radar.upper_dome)))
+        panel_rng = np.random.default_rng(0)
+        panel_rng.shuffle(panel_indices)
+
+        panel_fade = LaggedStart(
+            *[radar.upper_dome[idx].animate.set_opacity(0) for idx in panel_indices],
+            lag_ratio=0.01,
+        )
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=4).reorient(
+                    0, 80, 0, center=radar.antenna.get_center(), height=8
+                ),
+                LaggedStart(
+                    panel_fade,
+                    radar.el @ (20 * DEG),
+                    radar.az @ (-30 * DEG),
+                    lag_ratio=0.5,
+                    run_time=2,
+                ),
+                lag_ratio=0.7,
+            )
+        )
+
+        self.wait(0.5)
+
+        radar.upper_dome.deactivate_depth_test()
+
+        self.wait(0.5)
+
+        beam = radar.get_beam(8 * DEG, 12).deactivate_depth_test()
+        arc_range = 6.5
+        bw_arc = beam.get_beamwidth_arc(arc_range, self.frame)
+
+        self.play(
+            LaggedStart(
+                ShowCreation(beam),
+                self.frame.animate.shift(RIGHT * 4 + OUT * 2),
+                lag_ratio=0.15,
+                run_time=2,
+            )
+        )
+
+        self.wait(0.5)
+
+        bw_label = (
+            Tex(r"\theta_{3 \text{dB}}")
+            .fix_in_frame()
+            .next_to(
+                self.frame.to_fixed_frame_point(bw_arc.get_center()),
+                RIGHT,
+                MED_SMALL_BUFF,
+            )
+        )
+
+        self.play(LaggedStart(ShowCreation(bw_arc), FadeIn(bw_label), lag_ratio=0.3))
+
+        self.wait(0.5)
+
+        rres = 1
+        gate_start = VT(-rres)
+        gate_opacity = VT(0.5)
+        gate_out_shift = VT(0)
+        gate = always_redraw(
+            lambda: beam.get_section(
+                max(0, ~gate_start),
+                max(0.01, ~gate_start + rres),
+                color=GATE_COLOR,
+                opacity=~gate_opacity,
+                shading=(0.08, 0.18, 0.12),
+                depth_test=False,
+                resolution=(36, 8),
+            ).shift(OUT * ~gate_out_shift)
+        )
+
+        self.add(gate)
+
+        self.play(
+            LaggedStart(
+                beam.animate.set_opacity(0.05),
+                gate_start @ (arc_range - rres),
+                lag_ratio=0.3,
+            )
+        )
+
+        rres_dim = DimensionLine(
+            gate,
+            direction=beam.get_direction(),
+            camera_frame=self.frame,
+            tick_length=0.2,
+            label=Tex(r"\Delta R").scale(0.7),
+        ).deactivate_depth_test()
+
+        self.play(rres_dim.get_creation_animation(label_anim=FadeIn))
+
+        self.wait(0.5)
+
+        vres_label = Tex(r"\Delta V").fix_in_frame().set_z_index(10)
+
+        def place_vres_label(m):
+            view = self.frame.get_view_matrix()
+            points = gate.get_points() @ view[:3, :3].T + view[:3, 3]
+            perspective = (
+                1
+                - points[:, 2]
+                * self.frame.get_scale()
+                / self.frame.get_focal_distance()
+            )
+            projected = points[:, :2] / perspective[:, None]
+            top = np.array(
+                [
+                    0.5 * (projected[:, 0].min() + projected[:, 0].max()),
+                    projected[:, 1].max(),
+                    0,
+                ]
+            )
+            m.next_to(top, UP, MED_SMALL_BUFF)
+
+        place_vres_label(vres_label)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    FadeOut(rres_dim), FadeOut(bw_arc), FadeOut(bw_label), lag_ratio=0.1
+                ),
+                FadeIn(vres_label, shift=UP),
+                lag_ratio=0.5,
+            )
+        )
+
+        vres_label.add_updater(place_vres_label)
+
+        self.wait(0.5)
+
+        # self.remove(beam_particles)
+        beam_particles = beam.get_section_particles(
+            arc_range - rres,
+            arc_range,
+            count=40,
+            radius=(0.02, 0.08),
+            seed=1,
+            max_radius_fraction=0.9,
+        )
+        # self.add(beam_particles)
+
+        self.play(ShowCreation(beam_particles))
+
+        self.wait(0.5)
+
+        pulse_length = 2 * rres
+        n_oscillations = 4
+        wavelength = pulse_length / n_oscillations
+        wave_speed = 0.5
+        pulse_range = VT(0)
+        beam_direction = beam.get_direction()
+        beam_origin = beam.get_origin()
+        particle_points = beam_particles.get_points().copy()
+        particle_radii = beam_particles.get_radii().ravel().copy()
+        particle_ranges = (particle_points - beam_origin) @ beam_direction
+        return_distances = np.linalg.norm(particle_points - beam_origin, axis=1)
+        particle_rgba = beam_particles.data["rgba"].copy()
+        highlight_rgba = np.array([*color_to_rgb(YELLOW), 1])
+
+        em_wave = beam.get_em_wave(
+            wavelength=wavelength,
+            n_oscillations=n_oscillations,
+            beamwidth=beam.beamwidth,
+            e_color=TX_COLOR,
+            h_color=BLUE_A,
+            stroke_width=3,
+        ).set_z_index(2)
+
+        scattered_waves = Group()
+        for point, radius, distance in zip(
+            particle_points, particle_radii, return_distances
+        ):
+            return_beam = Beam(
+                2 * DEG,
+                distance,
+                origin=point,
+                direction=beam_origin - point,
+                resolution=(8, 2),
+            )
+            scattered_wave = return_beam.get_em_wave(
+                wavelength=wavelength,
+                n_oscillations=n_oscillations,
+                beamwidth=2 * DEG,
+                amplitude=0.025 + 0.5 * radius,
+                e_color=RX_COLOR,
+                h_color=RED_A,
+                stroke_width=1.5,
+                stroke_opacity=0.65,
+            )
+            scattered_waves.add(scattered_wave)
+        scattered_waves.set_z_index(3)
+
+        def update_energy(m):
+            em_wave.range @= ~pulse_range
+            for wave, distance in zip(scattered_waves, particle_ranges):
+                wave.range @= ~pulse_range - distance
+            since_hit = ~pulse_range - particle_ranges
+            highlight = np.where(
+                since_hit >= 0, np.exp(-np.maximum(since_hit, 0) / 0.18), 0
+            )
+            beam_particles.set_rgba_array(
+                interpolate(particle_rgba, highlight_rgba, highlight[:, None])
+            )
+
+        pulse_range.add_updater(update_energy)
+
+        self.add(pulse_range, em_wave, scattered_waves)
+
+        camera_rotation = self.frame.get_inverse_camera_rotation_matrix()
+        energy_center = (
+            interpolate(radar.antenna.get_center(), gate.get_center(), 0.65)
+            + 0.5 * camera_rotation[0]
+            + 0.1 * camera_rotation[1]
+        )
+        pulse_end = (
+            max(beam.get_range(), (particle_ranges + return_distances).max())
+            + pulse_length
+            + 0.05
+        )
+        pulse_travel = pulse_range @ pulse_end
+        pulse_travel.set_anim_args(run_time=pulse_end / wave_speed, rate_func=linear)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=3.5)
+                .set_height(fh(self, 0.55))
+                .move_to(energy_center),
+                pulse_travel,
+                lag_ratio=0.65,
+            ),
+            (gate_opacity @ 0.18).set_anim_args(run_time=3.5),
+        )
+
+        pulse_range.clear_updaters()
+
+        self.remove(pulse_range, em_wave, scattered_waves)
+
+        beam_particles.set_rgba_array(particle_rgba)
+
+        self.wait(2)
+
+        rhi_cells = get_olympex_rhi_cells()
+        rhi_origin = beam.get_origin().copy()
+        rhi_up = radar.get_scan_up_direction()
+        rhi_horizontal = beam_direction - np.dot(beam_direction, rhi_up) * rhi_up
+        rhi_horizontal /= np.linalg.norm(rhi_horizontal)
+        rhi_normal = np.cross(rhi_horizontal, rhi_up)
+        rhi_basis = np.column_stack((rhi_horizontal, rhi_up, rhi_normal))
+        vertical_exaggeration = 2
+        rhi_corners = (
+            rhi_origin
+            + rhi_cells["corners"][..., 0, None] * rhi_horizontal
+            + vertical_exaggeration * rhi_cells["corners"][..., 1, None] * rhi_up
+        )
+        selected_cell = np.argmin(
+            ((rhi_cells["elevation_deg"] - ~radar.el / DEG) / 0.2) ** 2
+            + ((rhi_cells["ranges_km"] - (~gate_start + rres / 2)) / 0.125) ** 2
+        )
+        pixel_color = rgb_to_color(rhi_cells["rgba"][selected_cell, :3])
+        pixel = (
+            Polygon(
+                *rhi_corners[selected_cell],
+                fill_color=pixel_color,
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            .deactivate_depth_test()
+            .set_z_index(2)
+        )
+
+        gate.clear_updaters()
+        vres_label.clear_updaters()
+
+        self.play(
+            gate.animate.set_color(pixel_color).set_opacity(1).set_shading(0, 0, 0),
+            FadeOut(beam_particles),
+            FadeOut(vres_label),
+            run_time=2,
+        )
+
+        self.wait(0.75)
+
+        rhi_center = rhi_origin + 16.5 * rhi_horizontal + 7.5 * rhi_up
+        rhi_camera_azimuth = np.arctan2(rhi_horizontal[1], rhi_horizontal[0]) / DEG
+
+        self.play(
+            self.frame.animate.reorient(
+                rhi_camera_azimuth, 90, 0, center=rhi_center, height=23.6
+            ),
+            radar.animate.scale(0.08, about_point=rhi_origin),
+            FadeTransform(gate, pixel),
+            FadeOut(beam),
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        def get_rhi_label(text, point, font_size=24, rotation=0):
+            position = self.frame.to_fixed_frame_point(
+                rhi_origin + point[0] * rhi_horizontal + point[1] * rhi_up
+            )
+            return (
+                Text(text, font=FONT, font_size=font_size, fill_border_width=0)
+                .rotate(rotation)
+                .fix_in_frame()
+                .move_to(position)
+            )
+
+        rhi_axes = VGroup()
+        rhi_labels = VGroup()
+        for x in (0, 5, 10, 15, 20, 25, 30, 32.8):
+            rhi_axes.add(
+                Line(
+                    [x, 0, 0],
+                    [x, 16, 0],
+                    stroke_color=WHITE,
+                    stroke_width=1,
+                    stroke_opacity=0.12,
+                ),
+            )
+            rhi_labels.add(get_rhi_label(f"{x:g}", [x, -0.65]))
+        for z in (0, 2, 4, 6, 8):
+            rhi_axes.add(
+                Line(
+                    [0, 2 * z, 0],
+                    [32.8, 2 * z, 0],
+                    stroke_color=WHITE,
+                    stroke_width=1,
+                    stroke_opacity=0.12,
+                ),
+            )
+            rhi_labels.add(get_rhi_label(str(z), [-0.65, 2 * z]))
+        rhi_labels.add(
+            get_rhi_label("Ground distance from radar (km)", [16.4, -1.65], 28),
+            get_rhi_label("Height above radar (km)", [-1.6, 8], 28, PI / 2),
+            get_rhi_label(
+                "NPOL / OLYMPEX / 13 Nov 2015 02:00 UTC / az 210 deg",
+                [16.4, 17],
+                26,
+            ),
+        )
+        colorbar_rgba = (
+            field_to_rgba(
+                np.linspace(10, 50, 128)[:, None],
+                vmin=10,
+                vmax=50,
+                cmap_name="NWSRef",
+                fallback_cmap_name="NWSRef",
+            )[:, 0]
+            / 255
+        )
+        for index, rgba in enumerate(colorbar_rgba):
+            rhi_axes.add(
+                Rectangle(
+                    width=0.45,
+                    height=16 / 128 + 0.002,
+                    fill_color=rgb_to_color(rgba[:3]),
+                    fill_opacity=1,
+                    stroke_width=0,
+                ).move_to([34, (index + 0.5) * 16 / 128, 0])
+            )
+        for value in (10, 20, 30, 40, 50):
+            rhi_labels.add(get_rhi_label(str(value), [34.9, (value - 10) * 0.4]))
+        rhi_labels.add(get_rhi_label("dBZ", [34, 16.8], 26))
+        rhi_axes.apply_matrix(rhi_basis).shift(rhi_origin)
+        rhi_axes.deactivate_depth_test().set_z_index(3)
+        rhi_labels.set_z_index(5)
+
+        triangle_corners = [0, 1, 2, 0, 2, 3]
+        rhi_points = rhi_corners[:, triangle_corners].reshape(-1, 3)
+        rhi_rgba = np.repeat(rhi_cells["rgba"], 6, axis=0)
+        vertex_elevations = np.repeat(rhi_cells["elevation_deg"], 6)
+        rhi_image = (
+            TriangleMeshMobject(
+                rhi_points,
+                np.broadcast_to(rhi_normal, rhi_points.shape),
+                rhi_rgba,
+            )
+            .set_shading(0, 0, 0)
+            .deactivate_depth_test()
+            .set_z_index(1)
+        )
+        scan_elevation = VT(0)
+        scan_extent = VT(0)
+
+        def update_rhi(m):
+            rgba = rhi_rgba.copy()
+            rgba[:, 3] *= vertex_elevations <= ~scan_extent
+            m.set_rgba_array(rgba)
+
+        def get_scan_points():
+            ranges = np.linspace(0, np.hypot(32.8, 8), 256)
+            elevation = ~scan_elevation * DEG
+            earth_radius = 6371 * 4 / 3
+            heights = (
+                np.sqrt(
+                    earth_radius**2
+                    + ranges**2
+                    + 2 * earth_radius * ranges * np.sin(elevation)
+                )
+                - earth_radius
+            )
+            ground = earth_radius * np.arcsin(
+                ranges * np.cos(elevation) / (earth_radius + heights)
+            )
+            inside = (ground <= 32.8) & (heights <= 8)
+            end = np.flatnonzero(~inside)
+            stop = int(end[0]) if len(end) else len(ranges) - 1
+            ground, heights = ground[: stop + 1], heights[: stop + 1]
+            if stop > 0 and not inside[stop]:
+                alpha = min(
+                    (32.8 - ground[-2]) / max(ground[-1] - ground[-2], 1e-9),
+                    (8 - heights[-2]) / max(heights[-1] - heights[-2], 1e-9),
+                    1,
+                )
+                ground[-1] = interpolate(ground[-2], ground[-1], alpha)
+                heights[-1] = interpolate(heights[-2], heights[-1], alpha)
+            return (
+                rhi_origin
+                + ground[:, None] * rhi_horizontal
+                + vertical_exaggeration * heights[:, None] * rhi_up
+            )
+
+        def point_scanner(m):
+            radar.point_at(get_scan_points()[-1])
+
+        scan_line = always_redraw(
+            lambda: (
+                VMobject(fill_opacity=0)
+                .set_points_as_corners(get_scan_points())
+                .set_stroke(WHITE, 1.6, 0.75)
+                .deactivate_depth_test()
+                .set_z_index(4)
+            )
+        )
+        rhi_image.add_updater(update_rhi)
+        scan_elevation.add_updater(point_scanner)
+
+        self.add(rhi_image, scan_extent, scan_elevation)
+
+        self.play(FadeIn(rhi_axes), FadeIn(rhi_labels), FadeIn(scan_line), run_time=1.5)
+
+        self.play(
+            scan_elevation @ 45,
+            scan_extent @ 45,
+            run_time=12,
+            rate_func=linear,
+        )
+
+        self.remove(pixel)
+
+        scan_line.clear_updaters()
+
+        self.play(FadeOut(scan_line), run_time=0.75)
+
+        scan_elevation.clear_updaters()
+        rhi_image.clear_updaters()
+
+        self.remove(scan_elevation, scan_extent)
+
+        self.wait(0.5)
+
+        self.play(*[FadeOut(m) for m in self.mobjects])
 
         self.embed()
 
@@ -778,7 +1309,6 @@ class Dipole(InteractiveScene):
         nrads = 5
         circ_prog = VT(0)
         lag = 0.2
-        max_prog = 1 + nrads * lag
         router_rads_r = VGroup(
             [
                 Circle(stroke_color=TX_COLOR)
@@ -806,9 +1336,35 @@ class Dipole(InteractiveScene):
             ]
         )
 
-        self.add(router_rads_r, router_rads_l)
+        shoulder = self.frame.from_fixed_frame_point(
+            human.get_corner(UL)
+            + RIGHT * 0.46 * human.get_width()
+            + DOWN * 0.33 * human.get_height()
+        )
+        rad_dist = min(
+            get_norm(shoulder - rad.get_center())
+            for rad in [router_rads_r[0], router_rads_l[0]]
+        )
+        human_lag = 2 * rad_dist / fw(self, 1.5)
+        human_rads = VGroup(
+            [
+                Circle(stroke_color=RX_COLOR)
+                .set_z_index(-1)
+                .rotate(-100 * DEG, axis=RIGHT)
+                .move_to(shoulder)
+                .add_updater(
+                    get_rad_updater(
+                        lag=human_lag + idx * lag, max_width=fw(self, 1.5), fade=True
+                    )
+                )
+                for idx in range(nrads)
+            ]
+        )
 
-        self.play(circ_prog @ max_prog, run_time=8)
+        self.add(router_rads_r, router_rads_l, human_rads)
+
+        max_prog = 1 + nrads * lag + human_lag
+        self.play(circ_prog @ max_prog, run_time=4 * max_prog)
 
         self.wait(0.5)
 

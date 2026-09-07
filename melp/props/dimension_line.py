@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+from typing import Callable
+
 import numpy as np
 from manimlib import (
     MED_SMALL_BUFF,
-    ORIGIN,
     OUT,
     RIGHT,
-    GrowFromCenter,
     Group,
+    GrowFromCenter,
     LaggedStart,
     Line,
     Mobject,
@@ -42,8 +43,6 @@ def _nonnegative_finite(value, name):
 
 
 class DimensionLine(Group):
-    """A line with end ticks for showing one dimension of a mobject."""
-
     def __init__(
         self,
         mobject: Mobject,
@@ -56,15 +55,34 @@ class DimensionLine(Group):
         label_direction=None,
         label_buff=MED_SMALL_BUFF,
         line_config=None,
+        camera_frame=None,
         **kwargs,
     ):
         if not isinstance(mobject, Mobject):
             raise TypeError("mobject must be a Mobject")
 
         direction = normalize(_vector3(direction, "direction"))
+        camera_rotation = (
+            camera_frame.get_inverse_camera_rotation_matrix()
+            if camera_frame is not None
+            else None
+        )
         if placement is None:
-            placement = np.cross(direction, OUT)
+            if camera_rotation is None:
+                placement = np.cross(direction, OUT)
+                if get_norm(placement) < 1e-8:
+                    placement = np.cross(direction, RIGHT)
+            else:
+                placement = np.cross(camera_rotation[2], direction)
+                if get_norm(placement) < 1e-8:
+                    placement = camera_rotation[1]
+                if np.dot(placement, camera_rotation[1]) < 0:
+                    placement = -placement
         placement = normalize(_vector3(placement, "placement"))
+        placement = placement - np.dot(placement, direction) * direction
+        if get_norm(placement) < 1e-8:
+            raise ValueError("placement must not be parallel to direction")
+        placement = normalize(placement)
         buff = _nonnegative_finite(buff, "buff")
         tick_length = _nonnegative_finite(tick_length, "tick_length")
         label_buff = _nonnegative_finite(label_buff, "label_buff")
@@ -72,22 +90,16 @@ class DimensionLine(Group):
         line_config = dict(line_config or {})
         line_config.setdefault("buff", 0)
 
-        start = mobject.get_bounding_box_point(-direction)
-        end = mobject.get_bounding_box_point(direction)
-        if np.allclose(start, end):
+        center = mobject.get_center()
+        points = mobject.get_all_points() - center
+        distances = points @ direction
+        if len(distances) == 0 or np.isclose(distances.min(), distances.max()):
             raise ValueError("mobject has no extent along direction")
-
-        self.line = Line(start, end, **line_config).next_to(
-            mobject,
-            placement,
-            buff=buff,
-        )
-
-        line_direction = normalize(self.line.get_end() - self.line.get_start())
-        tick_direction = np.cross(OUT, line_direction)
-        if get_norm(tick_direction) == 0:
-            tick_direction = np.cross(RIGHT, line_direction)
-        tick_vector = 0.5 * tick_length * normalize(tick_direction)
+        offset = ((points @ placement).max() + buff) * placement
+        start = center + distances.min() * direction + offset
+        end = center + distances.max() * direction + offset
+        self.line = Line(start, end, **line_config)
+        tick_vector = 0.5 * tick_length * placement
 
         self.start_tick = Line(
             self.line.get_start() - tick_vector,
@@ -118,23 +130,37 @@ class DimensionLine(Group):
                 label_direction = normalize(
                     _vector3(label_direction, "label_direction")
                 )
-            self.label = label.next_to(
-                self.line,
-                label_direction,
-                buff=label_buff,
+            if camera_rotation is not None:
+                label.apply_matrix(camera_rotation.T, about_point=label.get_center())
+            line_center = self.line.get_center()
+            line_extent = (
+                (self.line.get_all_points() - line_center) @ label_direction
+            ).max()
+            label_extent = (
+                (label.get_all_points() - label.get_center()) @ label_direction
+            ).min()
+            self.label = label.move_to(
+                line_center
+                + (line_extent - label_extent + label_buff) * label_direction
             )
             members.append(self.label)
 
         super().__init__(*members, **kwargs)
 
-    def get_creation_animation(self, lag_ratio=0.2, **kwargs):
+    def get_creation_animation(
+        self,
+        lag_ratio=0.2,
+        label_anim: Callable | None = None,
+        **kwargs,
+    ):
         animations = [
             ShowCreation(self.start_tick),
             ShowCreation(self.line),
             ShowCreation(self.end_tick),
         ]
         if self.label is not None:
-            animations.append(GrowFromCenter(self.label))
+            label_anim = label_anim or GrowFromCenter
+            animations.append(label_anim(self.label))
         creation = LaggedStart(
             *animations,
             lag_ratio=lag_ratio,

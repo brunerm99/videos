@@ -126,8 +126,10 @@ class Beam(Cone):
         e_highlight_color=YELLOW,
         h_highlight_color=YELLOW,
         stroke_width=4,
+        stroke_opacity=1,
         stroke_width_highlight_mult=2.5,
         depth_test=False,
+        amplitude=None,
     ):
         wavelength = float(wavelength)
         beamwidth = float(beamwidth)
@@ -144,9 +146,17 @@ class Beam(Cone):
         ):
             raise ValueError("n_oscillations must be a positive integer")
         n_oscillations = int(numeric_n_oscillations)
+        if amplitude is not None:
+            amplitude = float(amplitude)
+            if not np.isfinite(amplitude) or amplitude < 0:
+                raise ValueError("amplitude must be nonnegative and finite")
 
-        e_field = VMobject().set_stroke(e_color, stroke_width)
-        h_field = VMobject().set_stroke(h_color, stroke_width)
+        e_field = VMobject(fill_opacity=0).set_stroke(
+            e_color, stroke_width, stroke_opacity
+        )
+        h_field = VMobject(fill_opacity=0).set_stroke(
+            h_color, stroke_width, stroke_opacity
+        )
         em_wave = Group(e_field, h_field)
         em_wave.e_field = e_field
         em_wave.h_field = h_field
@@ -164,18 +174,28 @@ class Beam(Cone):
         sample_count = 32 * n_oscillations + 1
 
         def update_wave(wave):
-            wave_range = np.clip(~wave.range, 0, self.get_range())
-            start_range = max(0, wave_range - pulse_length)
-            distances = np.linspace(start_range, wave_range, sample_count)
+            wave_range = max(0, ~wave.range)
+            start_range = np.clip(wave_range - pulse_length, 0, self.get_range())
+            end_range = min(wave_range, self.get_range())
+            if end_range <= start_range:
+                wave.e_field.clear_points()
+                wave.h_field.clear_points()
+                return
+            distances = np.linspace(start_range, end_range, sample_count)
             direction = self.get_direction()
             e_reference = UP if abs(np.dot(direction, UP)) < 0.9 else OUT
             e_direction = e_reference - np.dot(e_reference, direction) * direction
             e_direction /= np.linalg.norm(e_direction)
             h_direction = np.cross(direction, e_direction)
             phase = TAU * (distances - wave_range) / wavelength
-            amplitude = distances * np.tan(beamwidth / 2)
+            amplitudes = (
+                distances * np.tan(beamwidth / 2)
+                if amplitude is None
+                else amplitude
+                * np.sin(np.pi * (wave_range - distances) / pulse_length) ** 2
+            )
             centers = self.get_origin() + distances[:, None] * direction
-            oscillation = (amplitude * np.sin(phase))[:, None]
+            oscillation = (amplitudes * np.sin(phase))[:, None]
             wave.e_field.set_points_smoothly(centers + oscillation * e_direction)
             wave.h_field.set_points_smoothly(centers + oscillation * h_direction)
             wave.e_field.set_stroke(
@@ -307,6 +327,7 @@ class Beam(Cone):
         stop_range,
         count=180,
         *,
+        radius: float | tuple[float, float] = 0.04,
         max_radius_fraction=1.0,
         seed=None,
         **kwargs,
@@ -329,6 +350,20 @@ class Beam(Cone):
         max_radius_fraction = float(max_radius_fraction)
         if not np.isfinite(max_radius_fraction) or not 0 < max_radius_fraction <= 1:
             raise ValueError("max_radius_fraction must be in (0, 1]")
+
+        radius_bounds = np.asarray(radius, dtype=float)
+        if radius_bounds.ndim == 0:
+            radius_bounds = np.repeat(radius_bounds, 2)
+        if (
+            radius_bounds.shape != (2,)
+            or not np.isfinite(radius_bounds).all()
+            or not 0 <= radius_bounds[0] <= radius_bounds[1]
+        ):
+            raise ValueError(
+                "radius must be a nonnegative finite number or "
+                "a finite (min, max) range with 0 <= min <= max"
+            )
+        min_radius, max_radius = radius_bounds
 
         rng = np.random.default_rng(seed)
         origin = self.get_origin()
@@ -353,10 +388,12 @@ class Beam(Cone):
             * (boundary_points - base_center)
         )
 
-        kwargs.setdefault("radius", 0.04)
         kwargs.setdefault("color", self.get_color())
         kwargs.setdefault("glow_factor", 0.3)
-        return DotCloud(points, **kwargs)
+        particles = DotCloud(points, radius=min_radius, **kwargs)
+        if min_radius != max_radius:
+            particles.set_radii(rng.uniform(min_radius, max_radius, count))
+        return particles
 
     def contains_points(self, points, *, atol=1e-9):
         points = np.asarray(points, dtype=float)
