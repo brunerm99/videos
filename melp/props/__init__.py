@@ -1,5 +1,6 @@
 from .arrow import Arrow3D
 from .beam import Beam
+from .charge_pair import ChargePair
 from .cloud import Cloud
 from .dimension_line import DimensionLine
 from .dipole import Dipole
@@ -21,6 +22,7 @@ from .yagi import YAGI_MODEL_PATH, Yagi
 __all__ = [
     "Arrow3D",
     "Beam",
+    "ChargePair",
     "Cloud",
     "DimensionLine",
     "Dipole",

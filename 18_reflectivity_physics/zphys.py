@@ -19,11 +19,14 @@ load_dotenv()
 from melp import (
     VT,
     Arrow3D,
+    ChargePair,
     DimensionLine,
     GrowArrow,
     VideoMobject,
     ease_in_sine,
+    ease_out_back,
     ease_out_cubic,
+    ease_out_sine,
     fh,
     fw,
     get_nexrad_product_ppi_data,
@@ -59,6 +62,8 @@ BEAM_COLOR = BLUE
 GATE_COLOR = TEAL
 ACCENT_COLOR = YELLOW
 FONT = os.getenv("FONT", "Maple Mono CN")
+DIPOLE_CLOSEUP_HEIGHT = 2.0
+DIPOLE_HANDOFF_HEIGHT = 2.8
 
 
 class IntroP1(InteractiveScene):
@@ -763,8 +768,8 @@ class IntroP2v2(InteractiveScene):
             )
             rhi_labels.add(get_rhi_label(str(z), [-0.65, 2 * z]))
         rhi_labels.add(
-            get_rhi_label("Ground distance from radar (km)", [16.4, -1.65], 28),
-            get_rhi_label("Height above radar (km)", [-1.6, 8], 28, PI / 2),
+            get_rhi_label("Range (km)", [16.4, -1.65], 28),
+            get_rhi_label("Height (km)", [-1.6, 8], 28, PI / 2),
             get_rhi_label(
                 "NPOL / OLYMPEX / 13 Nov 2015 02:00 UTC / az 210 deg",
                 [16.4, 17],
@@ -1166,6 +1171,10 @@ class Rayleigh(InteractiveScene):
         self.embed()
 
 
+def get_dipole_handoff_frame():
+    return CameraFrame().reorient(0, 0, 0, center=ORIGIN, height=DIPOLE_HANDOFF_HEIGHT)
+
+
 class Dipole(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
@@ -1453,32 +1462,6 @@ class Dipole(InteractiveScene):
 
         self.wait(8)
 
-        rayleigh_label = (
-            Text("Rayleigh: ", font=FONT)
-            .fix_in_frame()
-            .rescale_to_fit(fw(self, 0.2), 0)
-            .next_to(
-                self.frame.to_fixed_frame_point(raindrop.get_bottom()),
-                DOWN,
-                LARGE_BUFF,
-            )
-        )
-        rayleigh_condition = (
-            Tex(r"D \ll \lambda")
-            .fix_in_frame()
-            .rescale_to_fit(rayleigh_label.get_height(), 1)
-            .next_to(rayleigh_label, RIGHT, MED_SMALL_BUFF)
-        )
-
-        self.play(
-            LaggedStart(
-                *[FadeIn(m) for m in [*rayleigh_label, *rayleigh_condition]],
-                lag_ratio=0.1,
-            )
-        )
-
-        self.wait(0.5)
-
         bez_d_center = Line(
             self.frame.to_fixed_frame_point(raindrop.get_right()) + [0.1, 0, 0],
             self.frame.to_fixed_frame_point(
@@ -1519,40 +1502,251 @@ class Dipole(InteractiveScene):
         self.wait(6)
 
         self.play(
-            FadeOut(rayleigh_condition),
             FadeOut(dipole_label),
-            FadeOut(rayleigh_label),
             FadeOut(bez_d_center),
+            FadeOut(dipole),
+            self.frame.animate.reorient(
+                0, 0, 0, center=raindrop.get_center(), height=6
+            ),
+            self.camera.light_source.animate.move_to(
+                raindrop.get_center() + self.camera.light_source_position
+            ),
+            run_time=2,
         )
+
+        self.clear()
+        raindrop = RainDrop().move_to(ORIGIN)
+        self.frame.move_to(ORIGIN)
+        self.camera.light_source.move_to(self.camera.light_source_position)
+        self.add(raindrop)
+
+        self.play(
+            self.frame.animate.become(get_dipole_handoff_frame()),
+            run_time=2.4,
+            rate_func=ease_in_sine,
+        )
+
+        self.embed()
+
+
+class DipoleP2(ThreeDScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+    default_frame_orientation = (0, 0)
+    always_depth_test = False
+    samples = 0
+
+    def construct(self):
+        raindrop = RainDrop().move_to(ORIGIN)
+        self.frame.become(get_dipole_handoff_frame())
+        self.add(raindrop)
+        self.wait(1 / self.camera.fps)
+
+        rng = np.random.default_rng(7)
+        pop_time = 0.28
+        pair_centers = []
+        for row, y in enumerate(np.linspace(-0.72, 0.72, 6)):
+            for x in np.linspace(-0.75, 0.75, 6):
+                x += 0.15 * (row % 2)
+                if x**2 + y**2 > 0.8**2:
+                    continue
+                offset = np.array([x, y, 0]) + rng.uniform(-0.01, 0.01, 3)
+                offset[2] = 0
+                pair_centers.append(
+                    raindrop.get_center()
+                    + offset * [raindrop.get_width() / 2, raindrop.get_height() / 2, 1]
+                )
+        rng.shuffle(pair_centers)
+
+        def get_charge_pair(center, angle):
+            return ChargePair(
+                center=center,
+                angle=angle,
+                radius=DIPOLE_CLOSEUP_HEIGHT * 0.0175,
+                separation=DIPOLE_CLOSEUP_HEIGHT * 0.065,
+                font=FONT,
+                negative_color=ICE,
+                symbol_color=BACKGROUND_COLOR,
+            )
+
+        charge_pairs = VGroup(
+            *[get_charge_pair(center, rng.uniform(0, TAU)) for center in pair_centers]
+        )
+
+        self.play(
+            self.frame.animate(run_time=0.6, rate_func=ease_out_sine).set_height(
+                DIPOLE_CLOSEUP_HEIGHT
+            ),
+            raindrop.animate.set_opacity(0.3),
+            LaggedStart(
+                *[
+                    GrowFromCenter(m, run_time=pop_time, rate_func=ease_out_back)
+                    for m in charge_pairs
+                ],
+                lag_ratio=0.08,
+            ),
+        )
+
+        self.add(charge_pairs)
+
+        drop_scale = VT(1)
+        base_width = raindrop.get_width()
+        base_count = len(charge_pairs)
+        drop_anchor = raindrop.get_center().copy()
+        drop_size = np.array([base_width, raindrop.get_height(), 1])
+
+        def get_pair_state(pair, offset, progress=1.0):
+            center = pair.get_center()
+            return {
+                "pair": pair,
+                "offset": offset,
+                "progress": progress,
+                "charge_offsets": np.array(
+                    [
+                        pair.positive.get_center() - center,
+                        pair.negative.get_center() - center,
+                    ]
+                ),
+                "points": [
+                    (m, m.get_points() - center)
+                    for m in pair.get_family()
+                    if m.has_points()
+                ],
+            }
+
+        pair_states = [
+            get_pair_state(m, (m.get_center() - raindrop.get_center()) / drop_size)
+            for m in charge_pairs
+        ]
+        pair_states.sort(key=lambda state: np.linalg.norm(state["offset"]))
+
+        def update_drop(m, dt):
+            scale = float(~m)
+            if not np.isfinite(scale) or scale < 0:
+                raise ValueError("drop_scale must be finite and nonnegative")
+            raindrop.set_width(base_width * max(scale, 1e-4), about_point=drop_anchor)
+            count = int(np.floor(base_count * scale**2 + 0.5))
+            center = raindrop.get_center()
+
+            while len(pair_states) < count:
+                angles = rng.uniform(0, TAU, 64)
+                radius = 0.4 * np.sqrt((len(pair_states) + 0.5) / base_count)
+                candidates = np.column_stack(
+                    (radius * np.cos(angles), radius * np.sin(angles), np.zeros(64))
+                )
+                offsets = np.array([state["offset"] for state in pair_states])
+                distances = np.linalg.norm(candidates[:, None] - offsets, axis=2)
+                offset = candidates[np.argmax(distances.min(axis=1))]
+                angles = rng.uniform(0, TAU, 32)
+                half_pairs = (
+                    DIPOLE_CLOSEUP_HEIGHT
+                    * 0.065
+                    / 2
+                    * np.column_stack((np.cos(angles), np.sin(angles), np.zeros(32)))
+                )
+                endpoints = (
+                    center
+                    + offset * drop_size
+                    + np.stack((-half_pairs, half_pairs), axis=1)
+                )
+                occupied = np.concatenate(
+                    [
+                        center + state["offset"] * drop_size + state["charge_offsets"]
+                        for state in pair_states
+                    ]
+                )
+                clearance = np.linalg.norm(endpoints[:, :, None] - occupied, axis=3)
+                angle = angles[np.argmax(clearance.min(axis=(1, 2)))]
+                pair = get_charge_pair(center + offset * drop_size, angle)
+                pair_states.append(get_pair_state(pair, offset, progress=0.0))
+
+            visible_pairs = []
+            for index, state in enumerate(pair_states):
+                pair = state["pair"]
+                direction = 1 if index < count else -1
+                progress = np.clip(state["progress"] + direction * dt / pop_time, 0, 1)
+                position = center + state["offset"] * drop_size
+                if progress != state["progress"]:
+                    for part, points in state["points"]:
+                        part.set_points(points * ease_out_back(progress) + position)
+                else:
+                    pair.move_to(position)
+                state["progress"] = progress
+                if progress > 0:
+                    visible_pairs.append(pair)
+            if charge_pairs.submobjects != visible_pairs:
+                charge_pairs.set_submobjects(visible_pairs)
+
+        drop_scale.add_updater(update_drop, call=False)
+        self.add(drop_scale)
+
+        self.wait(0.5)
+
+        sum_charge = Tex(r"\sum_{i=1}^{N}{q_i} = 0").next_to(
+            raindrop, LEFT, LARGE_BUFF * 1.5
+        )
+
+        new_group = Group(raindrop, sum_charge)
+
         self.play(
             LaggedStart(
-                LaggedStart(
-                    dipole.animate.shift(RIGHT * 2),
-                    self.frame.animate.shift(RIGHT * 5.5),
-                    lag_ratio=0,
+                self.frame.animate.move_to(new_group).rescale_to_fit(
+                    new_group.get_width() * 1.2, 0
                 ),
-                lag_ratio=0.4,
+                LaggedStart(*[FadeIn(m) for m in sum_charge], lag_ratio=0.1),
+                lag_ratio=0.3,
             )
         )
 
         self.wait(0.5)
 
-        er_eqn = (
-            Tex(r"E_{s} = \frac{k_0^2 \mathbf P V}{2 \pi \varepsilon_0 r} \sin{\theta}")
-            .fix_in_frame()
-            .rescale_to_fit(fw(self, 0.4), 0)
-            .next_to(
-                self.frame.to_fixed_frame_point(dipole.get_right()),
-                RIGHT,
-                LARGE_BUFF * 2,
+        tabletop = Rectangle(width=raindrop.get_width() * 1.7, height=0.16)
+        legs = VGroup(
+            *[
+                Rectangle(width=0.16, height=1)
+                .next_to(tabletop, DOWN, 0)
+                .align_to(tabletop, side)
+                .shift(-side * 0.12)
+                for side in [LEFT, RIGHT]
+            ]
+        )
+        table = (
+            VGroup(tabletop, legs)
+            .set_fill("#8B5A2B", opacity=1)
+            .set_stroke(width=0)
+            .next_to(raindrop, DOWN, MED_SMALL_BUFF)
+        )
+        table_group = Group(sum_charge, raindrop, table)
+
+        self.play(
+            LaggedStart(
+                self.frame.animate.move_to(table_group).rescale_to_fit(
+                    table_group.get_height() * 1.2, 1
+                ),
+                FadeIn(table, shift=UP),
+                lag_ratio=0.2,
             )
         )
+        self.wait(0.5)
 
-        self.play(LaggedStart(*[FadeIn(m) for m in er_eqn], lag_ratio=0.1))
+        self.play(
+            FadeOut(sum_charge),
+            FadeOut(table, shift=DOWN * 0.3),
+            self.frame.animate.move_to(raindrop).set_height(
+                raindrop.get_height() * 2.4
+            ),
+            run_time=1.5,
+        )
+        self.wait(0.5)
+
+        self.play(drop_scale @ 2, run_time=2)
 
         self.wait(0.5)
 
-        self.play(self.frame.animate.shift(RIGHT * 10), er_eqn.animate.shift(UP * 6))
+        self.play(drop_scale @ 0.7, run_time=2)
+
+        self.wait(0.5)
+
+        self.play(drop_scale @ 1, run_time=1)
 
         self.embed()
 
@@ -2373,7 +2567,7 @@ class BrightBandP1(InteractiveScene):
 
         self.wait(0.5)
         self.remove(raindrop)
-        self.play(sf.animate.shift(RIGHT * fw(self)))
+        self.play(sf.animate.shift(RIGHT * fw(self) * 10))
 
         # self.frame.to_fixed_frame_point(self.frame.get_top()),
         # self.frame.to_fixed_frame_point(self.frame.get_bottom()),
@@ -3348,6 +3542,24 @@ class BrightBandP2(InteractiveScene):
 
         self.wait(2)
 
+        vel_inc_label = Tex("v")
+        vel_inc_arrow = Arrow(UP, DOWN)
+        vel_inc = (
+            Group(vel_inc_label, vel_inc_arrow)
+            .arrange(DOWN, buff=MED_SMALL_BUFF)
+            .next_to(rain_layer, LEFT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(vel_inc_label),
+                GrowArrow(vel_inc_arrow),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
         z_inc = (
             Rectangle(
                 width=profile_axes[1].get_width() * 1.1,
@@ -3371,6 +3583,200 @@ class BrightBandP3(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
+        radar = get_wsr88_model(height=fh(self), indexed_radome_panels=True)
+        azimuth = np.arctan2(radar.beam_direction[1], radar.beam_direction[0])
+        radar.rotate(-azimuth, axis=OUT, about_point=ORIGIN)
+        radar.shift(DOWN * fh(self, 2))
+        beam_origin = radar.beam_origin
+        radar.base_sections[-1].set_opacity(0).deactivate_depth_test()
+        radar.base_sections[-2].set_opacity(0).deactivate_depth_test()
+        radar.base_sections[-3].set_opacity(0).deactivate_depth_test()
+
+        beam = radar.get_beam(8 * DEG, 12).deactivate_depth_test()
+        beam_direction = beam.get_direction()
+
+        rhi_cells = get_olympex_rhi_cells()
+        rhi_origin = beam.get_origin().copy()
+        rhi_up = radar.get_scan_up_direction()
+        rhi_horizontal = beam_direction - np.dot(beam_direction, rhi_up) * rhi_up
+        rhi_horizontal /= np.linalg.norm(rhi_horizontal)
+        rhi_normal = np.cross(rhi_horizontal, rhi_up)
+        rhi_basis = np.column_stack((rhi_horizontal, rhi_up, rhi_normal))
+        vertical_exaggeration = 2
+        rhi_corners = (
+            rhi_origin
+            + rhi_cells["corners"][..., 0, None] * rhi_horizontal
+            + vertical_exaggeration * rhi_cells["corners"][..., 1, None] * rhi_up
+        )
+
+        rhi_center = rhi_origin + 16.5 * rhi_horizontal + 7.5 * rhi_up
+        rhi_camera_azimuth = np.arctan2(rhi_horizontal[1], rhi_horizontal[0]) / DEG
+
+        self.play(
+            self.frame.animate.reorient(
+                rhi_camera_azimuth, 90, 0, center=rhi_center, height=23.6
+            ),
+            radar.animate.scale(0.08, about_point=rhi_origin),
+            run_time=6,
+        )
+
+        self.wait(0.5)
+
+        def get_rhi_label(text, point, font_size=24, rotation=0):
+            position = self.frame.to_fixed_frame_point(
+                rhi_origin + point[0] * rhi_horizontal + point[1] * rhi_up
+            )
+            return (
+                Text(text, font=FONT, font_size=font_size, fill_border_width=0)
+                .rotate(rotation)
+                .fix_in_frame()
+                .move_to(position)
+            )
+
+        rhi_axes = VGroup()
+        rhi_labels = VGroup()
+        for x in (0, 5, 10, 15, 20, 25, 30, 32.8):
+            rhi_axes.add(
+                Line(
+                    [x, 0, 0],
+                    [x, 16, 0],
+                    stroke_color=WHITE,
+                    stroke_width=1,
+                    stroke_opacity=0.12,
+                ),
+            )
+            rhi_labels.add(get_rhi_label(f"{x:g}", [x, -0.65]))
+        for z in (0, 2, 4, 6, 8):
+            rhi_axes.add(
+                Line(
+                    [0, 2 * z, 0],
+                    [32.8, 2 * z, 0],
+                    stroke_color=WHITE,
+                    stroke_width=1,
+                    stroke_opacity=0.12,
+                ),
+            )
+            rhi_labels.add(get_rhi_label(str(z), [-0.65, 2 * z]))
+        rhi_labels.add(
+            get_rhi_label("Range (km)", [16.4, -1.65], 28),
+            get_rhi_label("Height (km)", [-1.6, 8], 28, PI / 2),
+            get_rhi_label(
+                "NPOL / OLYMPEX / 13 Nov 2015 02:00 UTC / az 210 deg",
+                [16.4, 17],
+                26,
+            ),
+        )
+        colorbar_rgba = (
+            field_to_rgba(
+                np.linspace(10, 50, 128)[:, None],
+                vmin=10,
+                vmax=50,
+                cmap_name="NWSRef",
+                fallback_cmap_name="NWSRef",
+            )[:, 0]
+            / 255
+        )
+        for index, rgba in enumerate(colorbar_rgba):
+            rhi_axes.add(
+                Rectangle(
+                    width=0.45,
+                    height=16 / 128 + 0.002,
+                    fill_color=rgb_to_color(rgba[:3]),
+                    fill_opacity=1,
+                    stroke_width=0,
+                ).move_to([34, (index + 0.5) * 16 / 128, 0])
+            )
+        for value in (10, 20, 30, 40, 50):
+            rhi_labels.add(get_rhi_label(str(value), [34.9, (value - 10) * 0.4]))
+        rhi_labels.add(get_rhi_label("dBZ", [34, 16.8], 26))
+        rhi_axes.apply_matrix(rhi_basis).shift(rhi_origin)
+        rhi_axes.deactivate_depth_test().set_z_index(3)
+        rhi_labels.set_z_index(5)
+
+        triangle_corners = [0, 1, 2, 0, 2, 3]
+        rhi_points = rhi_corners[:, triangle_corners].reshape(-1, 3)
+        rhi_rgba = np.repeat(rhi_cells["rgba"], 6, axis=0)
+        vertex_elevations = np.repeat(rhi_cells["elevation_deg"], 6)
+        rhi_image = (
+            TriangleMeshMobject(
+                rhi_points,
+                np.broadcast_to(rhi_normal, rhi_points.shape),
+                rhi_rgba,
+            )
+            .set_shading(0, 0, 0)
+            .deactivate_depth_test()
+            .set_z_index(1)
+        )
+        scan_elevation = VT(0)
+        scan_extent = VT(0)
+
+        def update_rhi(m):
+            rgba = rhi_rgba.copy()
+            rgba[:, 3] *= vertex_elevations <= ~scan_extent
+            m.set_rgba_array(rgba)
+
+        def get_scan_points():
+            ranges = np.linspace(0, np.hypot(32.8, 8), 256)
+            elevation = ~scan_elevation * DEG
+            earth_radius = 6371 * 4 / 3
+            heights = (
+                np.sqrt(
+                    earth_radius**2
+                    + ranges**2
+                    + 2 * earth_radius * ranges * np.sin(elevation)
+                )
+                - earth_radius
+            )
+            ground = earth_radius * np.arcsin(
+                ranges * np.cos(elevation) / (earth_radius + heights)
+            )
+            inside = (ground <= 32.8) & (heights <= 8)
+            end = np.flatnonzero(~inside)
+            stop = int(end[0]) if len(end) else len(ranges) - 1
+            ground, heights = ground[: stop + 1], heights[: stop + 1]
+            if stop > 0 and not inside[stop]:
+                alpha = min(
+                    (32.8 - ground[-2]) / max(ground[-1] - ground[-2], 1e-9),
+                    (8 - heights[-2]) / max(heights[-1] - heights[-2], 1e-9),
+                    1,
+                )
+                ground[-1] = interpolate(ground[-2], ground[-1], alpha)
+                heights[-1] = interpolate(heights[-2], heights[-1], alpha)
+            return (
+                rhi_origin
+                + ground[:, None] * rhi_horizontal
+                + vertical_exaggeration * heights[:, None] * rhi_up
+            )
+
+        def point_scanner(m):
+            radar.point_at(get_scan_points()[-1])
+
+        scan_line = always_redraw(
+            lambda: (
+                VMobject(fill_opacity=0)
+                .set_points_as_corners(get_scan_points())
+                .set_stroke(WHITE, 1.6, 0.75)
+                .deactivate_depth_test()
+                .set_z_index(4)
+            )
+        )
+        rhi_image.add_updater(update_rhi)
+        scan_elevation.add_updater(point_scanner)
+
+        self.add(rhi_image, scan_extent, scan_elevation)
+
+        self.play(FadeIn(rhi_axes), FadeIn(rhi_labels), FadeIn(scan_line), run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(
+            scan_elevation @ 45,
+            scan_extent @ 45,
+            run_time=12,
+            rate_func=linear,
+        )
+
+        scan_line.clear_updaters()
         self.embed()
 
 
