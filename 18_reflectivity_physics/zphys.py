@@ -1829,6 +1829,12 @@ class DipoleP2(ThreeDScene):
             )
         )
 
+        self.wait(0.5)
+
+        all_regimes = Tex(r"\frac{D}{\lambda} = ")
+
+        self.play(self.frame.animate.shift(UP * fh(self)))
+
         self.embed()
 
 
