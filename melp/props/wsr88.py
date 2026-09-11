@@ -107,7 +107,7 @@ class WSR88Model(Group):
     def get_beam_direction(self):
         return self.get_feed_horn_direction()
 
-    def beam_location_to_point(self, range, az, el):
+    def coords_to_point(self, az, el, range):
         """Return a point at beam-relative azimuth and elevation offsets."""
         beam_range = float(range)
         az = float(az)
@@ -117,6 +117,42 @@ class WSR88Model(Group):
         if not np.isfinite(az) or not np.isfinite(el):
             raise ValueError("az and el must be finite")
 
+        direction, beam_left, beam_up = self._get_beam_basis()
+        point_direction = (
+            np.cos(el)
+            * (np.cos(az) * direction + np.sin(az) * beam_left)
+            + np.sin(el) * beam_up
+        )
+        return self.get_beam_origin() + beam_range * point_direction
+
+    def point_to_coords(self, point):
+        point = np.asarray(point, dtype=float)
+        if point.shape != (3,) or not np.all(np.isfinite(point)):
+            raise ValueError("point must contain three finite coordinates")
+
+        offset = point - self.get_beam_origin()
+        beam_range = float(np.linalg.norm(offset))
+        if beam_range == 0:
+            return 0.0, 0.0, 0.0
+
+        direction, beam_left, beam_up = self._get_beam_basis()
+        forward_component = np.dot(offset, direction)
+        left_component = np.dot(offset, beam_left)
+        up_component = np.dot(offset, beam_up)
+        az = np.arctan2(left_component, forward_component)
+        el = np.arctan2(
+            up_component,
+            np.hypot(forward_component, left_component),
+        )
+        return az, el, beam_range
+
+    def c2p(self, az, el, range):
+        return self.coords_to_point(az, el, range)
+
+    def p2c(self, point):
+        return self.point_to_coords(point)
+
+    def _get_beam_basis(self):
         direction = self.get_beam_direction()
         scan_up = self.get_scan_up_direction()
         beam_up = scan_up - np.dot(scan_up, direction) * direction
@@ -129,12 +165,7 @@ class WSR88Model(Group):
 
         beam_left = np.cross(beam_up, direction)
         beam_left /= np.linalg.norm(beam_left)
-        point_direction = (
-            np.cos(el)
-            * (np.cos(az) * direction + np.sin(az) * beam_left)
-            + np.sin(el) * beam_up
-        )
-        return self.get_beam_origin() + beam_range * point_direction
+        return direction, beam_left, beam_up
 
     def get_beam(self, beamwidth, range, **kwargs) -> Beam:
         return Beam(

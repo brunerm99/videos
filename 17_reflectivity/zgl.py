@@ -1007,7 +1007,7 @@ class WeatherRadarEqn(InteractiveScene):
 
         self.wait(0.5)
 
-        beam_point = self.radar.beam_location_to_point(
+        beam_point = self.radar.c2p(
             range=4,
             az=0,
             el=0,
@@ -1017,12 +1017,12 @@ class WeatherRadarEqn(InteractiveScene):
 
         self.wait(0.5)
 
-        rres_line_start = self.radar.beam_location_to_point(
+        rres_line_start = self.radar.c2p(
             range=1.5,
             az=0,
             el=6 * DEG,
         )
-        rres_line_end = self.radar.beam_location_to_point(
+        rres_line_end = self.radar.c2p(
             range=1.5 + ~rres,
             az=0,
             el=6 * DEG,
@@ -1123,12 +1123,12 @@ class WeatherRadarEqn(InteractiveScene):
         self.wait(0.5)
 
         theta_line = Line(
-            self.radar.beam_location_to_point(~vol_start + ~rres, el=4 * DEG, az=0),
-            self.radar.beam_location_to_point(~vol_start + ~rres, el=-4 * DEG, az=0),
+            self.radar.c2p(range=~vol_start + ~rres, el=4 * DEG, az=0),
+            self.radar.c2p(range=~vol_start + ~rres, el=-4 * DEG, az=0),
         )
         phi_line = Line(
-            self.radar.beam_location_to_point(~vol_start + ~rres, az=-4 * DEG, el=0),
-            self.radar.beam_location_to_point(~vol_start + ~rres, az=4 * DEG, el=0),
+            self.radar.c2p(range=~vol_start + ~rres, az=-4 * DEG, el=0),
+            self.radar.c2p(range=~vol_start + ~rres, az=4 * DEG, el=0),
         )
 
         # yes, I know these are backwards. I'm too far in and too tired to do it the right way
@@ -1203,7 +1203,7 @@ class WeatherRadarEqn(InteractiveScene):
         self.wait(0.5)
 
         self.cloud = Cloud(width=2.4).move_to(
-            self.radar.beam_location_to_point(3, az=0, el=0)
+            self.radar.c2p(range=3, az=0, el=0)
         )
 
         self.cloud.bind_beam_highlight(self.beam, outside_opacity=0.1, feather=0)
@@ -1322,8 +1322,8 @@ class WeatherRadarEqn(InteractiveScene):
                 Line(
                     water_callout.get_left(),
                     self.frame.to_fixed_frame_point(
-                        self.radar.beam_location_to_point(
-                            ~vol_start + ~rres, az=0, el=-4 * DEG
+                        self.radar.c2p(
+                            range=~vol_start + ~rres, az=0, el=-4 * DEG
                         )
                     ),
                     stroke_width=DEFAULT_STROKE_WIDTH * 3,
@@ -1338,7 +1338,7 @@ class WeatherRadarEqn(InteractiveScene):
                 Line(
                     water_callout.get_left(),
                     self.frame.to_fixed_frame_point(
-                        self.radar.beam_location_to_point(~vol_start, az=0, el=-4 * DEG)
+                        self.radar.c2p(range=~vol_start, az=0, el=-4 * DEG)
                     ),
                     stroke_width=DEFAULT_STROKE_WIDTH * 3,
                     color=BLUE,
@@ -1393,10 +1393,10 @@ class WeatherRadarEqn(InteractiveScene):
 
         r_line = Arrow(
             self.frame.to_fixed_frame_point(
-                self.radar.beam_location_to_point(0, az=0, el=0)
+                self.radar.c2p(range=0, az=0, el=0)
             ),
             self.frame.to_fixed_frame_point(
-                self.radar.beam_location_to_point(~vol_start + ~rres / 2, az=0, el=0)
+                self.radar.c2p(range=~vol_start + ~rres / 2, az=0, el=0)
             ),
             color=YELLOW,
             stroke_width=DEFAULT_STROKE_WIDTH * 3,
@@ -2512,7 +2512,7 @@ class PowerVsZP2(InteractiveScene):
 
         self.cloud = (
             Cloud(width=2.4)
-            .move_to(self.radar.beam_location_to_point(4, 0, 0))
+            .move_to(self.radar.c2p(0, 0, 4))
             .rotate(-PI / 3, axis=OUT)
             .shift(OUT)
         )
@@ -3030,11 +3030,11 @@ class PowerVsZP3(InteractiveScene):
         self.wait(0.5)
 
         self.west_cloud = Cloud(3).move_to(
-            self.west_radar.beam_location_to_point(3, 0, 0)
+            self.west_radar.c2p(0, 0, 3)
         )
         self.east_cloud = (
             Cloud(4)
-            .move_to(self.east_radar.beam_location_to_point(7, 0, 0))
+            .move_to(self.east_radar.c2p(0, 0, 7))
             .rotate(PI / 6, axis=OUT)
         )
 

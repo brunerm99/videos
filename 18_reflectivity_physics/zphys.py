@@ -395,7 +395,7 @@ class IntroP2v2(InteractiveScene):
             ),
         )
 
-        self.wait(0.5)
+        self.wait(2)
 
         self.play(
             LaggedStart(
@@ -411,7 +411,7 @@ class IntroP2v2(InteractiveScene):
             )
         )
 
-        self.wait(5)
+        self.wait(8)
 
         self.play(dipole.animate.shift(UP * fh(self)))
 
@@ -1825,15 +1825,479 @@ class DipoleP2(ThreeDScene):
                 GrowFromCenter(dw_ratio[5]),
                 GrowFromCenter(dw_ratio[6]),
                 GrowFromCenter(dw_ratio[7]),
+                ReplacementTransform(dllw[3], dw_ratio[8]),
                 lag_ratio=0.3,
             )
         )
 
         self.wait(0.5)
 
-        all_regimes = Tex(r"\frac{D}{\lambda} = ")
+        all_regimes = (
+            Tex(
+                r"\frac{D}{\lambda} \begin{cases}"
+                r"\lessapprox \frac{1}{10} \rightarrow \\ "
+                r"\approx 1 \rightarrow \\  "
+                r"\gg 1 \rightarrow"
+                r"\end{cases}"
+            )
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(ORIGIN)
+        )
+        rayleigh_label = (
+            Text("Rayleigh", font=FONT)
+            .fix_in_frame()
+            .next_to(all_regimes[13], RIGHT, MED_SMALL_BUFF)
+        )
+        mie_label = (
+            Text("Mie", font=FONT)
+            .fix_in_frame()
+            .next_to(all_regimes[16], RIGHT, MED_SMALL_BUFF)
+        )
+        optical_label = (
+            Text("Optical", font=FONT)
+            .fix_in_frame()
+            .next_to(all_regimes[19], RIGHT, MED_SMALL_BUFF)
+        )
+        regimes_group = (
+            Group(all_regimes, rayleigh_label, mie_label, optical_label).move_to(ORIGIN)
+            # .shift(UP * fh(self))
+        )
 
-        self.play(self.frame.animate.shift(UP * fh(self)))
+        self.play(
+            LaggedStart(
+                self.frame.animate.shift(UP * fh(self)),
+                ReplacementTransform(dw_ratio[:3], all_regimes[:3]),
+                ReplacementTransform(dw_ratio[3:9], all_regimes[8:14]),
+                ReplacementTransform(rayleigh, rayleigh_label),
+                LaggedStart(*[FadeIn(m) for m in all_regimes[3:8]], lag_ratio=0.1),
+                LaggedStart(*[FadeIn(m) for m in all_regimes[14:17]], lag_ratio=0.1),
+                Write(mie_label),
+                LaggedStart(*[FadeIn(m) for m in all_regimes[17:20]], lag_ratio=0.1),
+                Write(optical_label),
+                lag_ratio=0.3,
+            ),
+        )
+
+        self.wait(0.5)
+
+        nb_obs = (
+            VideoMobject("./static/nb_obs.mov", start=5, end=18)
+            .fix_in_frame()
+            .move_to(ORIGIN)
+            .shift(RIGHT * fw(self))
+        )
+
+        self.play(
+            Group(regimes_group, nb_obs)
+            .animate.scale(0.9)
+            .arrange(RIGHT, buff=MED_LARGE_BUFF)
+            .move_to(ORIGIN)
+        )
+
+        self.wait(1)
+
+        itd_arrow = (
+            Arrow(ORIGIN, DOWN * 2).fix_in_frame().next_to(nb_obs, DOWN, MED_SMALL_BUFF)
+        )
+        itd_label = (
+            Text("Description", font=FONT)
+            .fix_in_frame()
+            .next_to(itd_arrow, LEFT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(itd_arrow),
+                FadeIn(itd_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(4)
+
+        self.play(
+            FadeOut(all_regimes),
+            FadeOut(rayleigh_label),
+            FadeOut(mie_label),
+            FadeOut(optical_label),
+            FadeOut(nb_obs),
+            FadeOut(itd_arrow),
+            FadeOut(itd_label),
+        )
+        self.play(self.frame.animate.shift(DOWN * fh(self)))
+
+        self.wait(0.5)
+
+        self.remove(D_dim)
+        D_dim = always_redraw(
+            lambda: DimensionLine(
+                raindrop,
+                beam.get_direction(),
+                camera_frame=self.frame,
+                tick_length=0.2,
+                label=Tex(r"D"),
+            )
+        )
+        self.add(D_dim)
+
+        self.play(drop_scale @ 0.36, run_time=2)
+
+        self.wait(0.5)
+
+        overlap_opacity = VT(1)
+        overlap_thickness = VT(1)
+
+        def get_wave_overlap():
+            field = em_wave.e_field
+            overlap = VMobject()
+            if not field.has_points():
+                return overlap
+
+            direction = beam.get_direction()
+            origin = beam.get_origin()
+            drop_ranges = (raindrop.get_points() - origin) @ direction
+            wave_start = np.dot(field.get_start() - origin, direction)
+            wave_end = np.dot(field.get_end() - origin, direction)
+            if wave_end <= wave_start:
+                return overlap
+
+            start, end = np.clip(
+                (np.array([drop_ranges.min(), drop_ranges.max()]) - wave_start)
+                / (wave_end - wave_start),
+                0,
+                1,
+            )
+            if end <= start:
+                return overlap
+
+            return (
+                field.get_subcurve(start, end)
+                .set_stroke(
+                    YELLOW,
+                    width=~overlap_thickness * 6,
+                    opacity=~overlap_opacity * ~em_wave.e_opacity,
+                )
+                .deactivate_depth_test()
+            )
+
+        wave_overlap = always_redraw(get_wave_overlap)
+        self.add(wave_overlap)
+
+        _, _, raindrop_range = radar.p2c(raindrop.get_center())
+
+        d = beam.get_direction()
+        e_reference = UP if abs(np.dot(d, UP)) < 0.9 else OUT
+        e_direction = e_reference - np.dot(e_reference, d) * d
+        e_direction /= np.linalg.norm(e_direction)
+        normal = np.cross(d, e_direction)
+        camera_rotation = Rotation.from_matrix(
+            np.column_stack((d, e_direction, normal))
+        )
+
+        self.play(FadeOut(D_dim), FadeOut(wl_dim))
+
+        self.play(
+            LaggedStart(
+                em_wave.range.animate(run_time=1.5).set_value(
+                    raindrop_range + wl * 0.15
+                ),
+                em_wave.h_opacity.animate(run_time=1.5).set_value(0),
+                self.frame.animate.set_orientation(camera_rotation)
+                .move_to(raindrop.get_center())
+                .set_height(6),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(overlap_thickness.animate(run_time=1.5).set_value(2))
+
+        self.wait(0.5)
+
+        self.play(overlap_thickness.animate(run_time=1.5).set_value(1))
+
+        self.wait(0.5)
+
+        self.play(self.frame.animate.scale(0.6))
+
+        self.wait(0.5)
+
+        self.frame.save_state()
+        drop_opacity = raindrop.get_opacity()
+
+        center = raindrop.get_center()
+        radius = raindrop.get_width() / 2
+        prop_range = VT(em_wave.get_start("aer")[2] + 1e-3)
+        prop_opacity = VT(1)
+        prop_arrow = always_redraw(
+            lambda: Arrow3D(
+                em_wave.get_start(),
+                radar.c2p(0, 0, ~prop_range),
+                color=TX_COLOR,
+                shaft_radius=0.006,
+                tip_radius=0.025,
+                tip_length=0.07,
+                depth_test=False,
+                opacity=~prop_opacity,
+            )
+        )
+
+        slice_positions = np.linspace(-radius, radius, 8)
+        slice_basis = np.column_stack((e_direction, normal, d))
+        section_edges = Group()
+        for z in slice_positions[1:-1]:
+            slice_radius = np.sqrt(radius**2 - z**2)
+            edge = Circle(
+                radius=slice_radius,
+                fill_color=BLUE_B,
+                fill_opacity=0.035,
+                stroke_color=BLUE_B,
+                stroke_width=1.5,
+            )
+            edge.apply_matrix(slice_basis).shift(center + z * d)
+            section_edges.add(edge)
+
+        sections = Group()
+        for start, end in zip(slice_positions[:-1], slice_positions[1:]):
+            surface = ParametricSurface(
+                lambda u, v: (
+                    center
+                    + v * d
+                    + np.sqrt(max(0, radius**2 - v**2))
+                    * (np.cos(u) * e_direction + np.sin(u) * normal)
+                ),
+                u_range=(0, TAU),
+                v_range=(start, end),
+                resolution=(48, 8),
+                color=YELLOW,
+                opacity=0.3,
+                depth_test=False,
+            )
+            caps = Group()
+            for z in (start, end):
+                if abs(z) >= radius:
+                    continue
+                cap = Circle(
+                    radius=np.sqrt(radius**2 - z**2),
+                    fill_color=YELLOW,
+                    fill_opacity=0.18,
+                    stroke_color=YELLOW,
+                    stroke_width=2.5,
+                )
+                cap.apply_matrix(slice_basis).shift(center + z * d)
+                caps.add(cap)
+            sections.add(Group(surface, caps))
+
+        slice_rotation = Rotation.from_rotvec(-40 * DEG * e_direction) * camera_rotation
+
+        self.play(
+            raindrop.animate.set_opacity(0.15),
+            FadeOut(charge_pairs),
+            em_wave.e_opacity @ 0.1,
+            overlap_opacity @ 0,
+            self.frame.animate.set_orientation(slice_rotation)
+            .move_to(center)
+            .set_height(raindrop.get_height() * 2.3),
+            run_time=2,
+        )
+
+        raindrop.deactivate_depth_test()
+
+        self.play(FadeIn(section_edges))
+
+        self.add(prop_arrow)
+
+        self.play(
+            prop_range @ (raindrop_range + slice_positions[1]),
+            FadeIn(sections[0]),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        for z, previous_section, section in zip(
+            slice_positions[2:], sections[:-1], sections[1:]
+        ):
+            self.play(
+                prop_range @ (raindrop_range + z),
+                FadeOut(previous_section),
+                FadeIn(section),
+                run_time=0.8,
+            )
+
+            self.wait(0.4)
+
+        self.play(
+            LaggedStart(prop_range + 4, prop_opacity @ 0, lag_ratio=0.5),
+            self.frame.animate(run_time=1.5).set_orientation(
+                Rotation.from_rotvec(0 * e_direction) * camera_rotation
+            ),
+        )
+
+        self.wait(0.5)
+
+        slice_centers = (slice_positions[:-1] + slice_positions[1:]) / 2
+        slice_volumes = PI * (
+            radius**2 * np.diff(slice_positions) - np.diff(slice_positions**3) / 3
+        )
+        bar_values = slice_volumes / slice_volumes.max()
+
+        chart_base = center + e_direction * radius * 1.3
+        bar_width = np.diff(slice_positions)[0] * 0.85
+        bars = VGroup()
+        for z, value in zip(slice_centers, bar_values):
+            bar_height = radius * value
+            bar = Rectangle(
+                width=bar_width,
+                height=bar_height,
+                fill_color=TX_COLOR,
+                fill_opacity=0.9,
+                stroke_width=0,
+            )
+            bar.apply_matrix(camera_rotation.as_matrix()).move_to(
+                chart_base + z * d + e_direction * bar_height / 2
+            )
+            bars.add(bar)
+
+        chart_line = Line(
+            chart_base - radius * d,
+            chart_base + radius * d,
+            stroke_width=1.5,
+            stroke_opacity=0.5,
+        )
+        chart_label = Text("Relative amplitude", font=FONT).set_height(radius * 0.17)
+        chart_label.apply_matrix(camera_rotation.as_matrix()).move_to(
+            center + e_direction * radius * 2.95
+        )
+        chart_guides = VGroup(
+            *[
+                DashedLine(
+                    center + z * d + e_direction * np.sqrt(radius**2 - z**2),
+                    chart_base + z * d,
+                    dash_length=radius * 0.06,
+                    stroke_width=1,
+                    stroke_opacity=0.25,
+                )
+                for z in slice_positions
+            ]
+        )
+
+        self.play(
+            self.frame.animate.shift(e_direction * radius * 0.9).scale(1.1),
+            FadeOut(sections[-1]),
+            run_time=1.5,
+        )
+
+        self.play(
+            Write(chart_label),
+            ShowCreation(chart_line),
+            LaggedStart(*[ShowCreation(m) for m in chart_guides], lag_ratio=0.1),
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    GrowFromPoint(bar, chart_base + z * d)
+                    for z, bar in zip(slice_centers, bars)
+                ],
+                lag_ratio=0.2,
+            ),
+            run_time=2.5,
+        )
+
+        self.wait(2)
+
+        mean_value = bar_values.mean()
+
+        self.play(
+            *[
+                bar.animate.apply_matrix(
+                    np.eye(3)
+                    + (mean_value / value - 1) * np.outer(e_direction, e_direction),
+                    about_point=chart_base + z * d,
+                )
+                for z, value, bar in zip(slice_centers, bar_values, bars)
+            ],
+            run_time=2,
+        )
+
+        self.wait(2)
+
+        for m in charge_pairs:
+            m.scale(0.7)
+
+        self.play(
+            LaggedStart(
+                FadeOut(bars),
+                FadeOut(chart_label),
+                Uncreate(chart_line),
+                FadeOut(chart_guides),
+                FadeOut(section_edges),
+                lag_ratio=0.15,
+            ),
+            raindrop.animate.set_opacity(drop_opacity),
+            FadeIn(charge_pairs),
+            em_wave.e_opacity @ 1,
+            overlap_opacity @ 1,
+            self.frame.animate.restore(),
+            run_time=2,
+        )
+
+        self.remove(prop_arrow)
+
+        self.wait(2)
+
+        charge_response = VT(0)
+        center = raindrop.get_center()
+        drop_radius = (
+            0.98 * np.linalg.norm(raindrop.get_points() - center, axis=1).min()
+        )
+        charge_points = np.vstack(
+            [
+                charge.get_all_points() - center
+                for m in charge_pairs
+                for charge in [m.positive, m.negative]
+            ]
+        )
+        field_offsets = charge_points @ e_direction
+        transverse_offsets = charge_points - field_offsets[:, None] * e_direction
+        charge_travel = np.sqrt(
+            np.maximum(0, drop_radius**2 - np.sum(transverse_offsets**2, axis=1))
+        ) - np.abs(field_offsets)
+        charge_gain = min(
+            raindrop.get_height() * 0.16, 0.8 * max(0, charge_travel.min())
+        ) / (raindrop_range * np.tan(bw / 2))
+
+        def update_charge_pair(m):
+            center = raindrop.get_center()
+            sample_range = np.dot(center - beam.get_origin(), beam.get_direction())
+            field = em_wave.get_e_field_at_range(sample_range)
+            displacement = ~charge_response * charge_gain * field
+            m.positive.move_to(center + m.positive_rest_offset + displacement)
+            m.negative.move_to(center + m.negative_rest_offset - displacement)
+            m.connector.update(0)
+
+        for m in charge_pairs:
+            m.positive_rest_offset = m.positive.get_center() - raindrop.get_center()
+            m.negative_rest_offset = m.negative.get_center() - raindrop.get_center()
+            m.add_updater(update_charge_pair)
+
+        self.play(charge_response @ 1, run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(em_wave.pulse_length @ (10 * wl), run_time=1.5)
+
+        self.wait(0.5)
+
+        self.play(
+            em_wave.range @ (raindrop_range + ~em_wave.pulse_length),
+            run_time=8,
+        )
+
+        self.wait(2)
 
         self.embed()
 
@@ -1881,11 +2345,7 @@ class Charge(InteractiveScene):
 
         self.wait(0.5)
 
-        raindrop = (
-            RainDrop()
-            .scale(0.2)
-            .move_to(self.radar.beam_location_to_point(5, 0 * DEG, 0 * DEG))
-        )
+        raindrop = RainDrop().scale(0.2).move_to(self.radar.c2p(0 * DEG, 0 * DEG, 5))
 
         bw = 8 * DEG
         beam = self.radar.get_beam(bw, 10)
@@ -2015,17 +2475,15 @@ class Charge(InteractiveScene):
         wl_bez_l = CubicBezier(
             wl.get_left() + LEFT * 0.1,
             wl.get_left() + LEFT * 0.5,
-            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(4, 0, 0))
-            + DOWN * 1,
-            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(4, 0, 0)),
+            self.frame.to_fixed_frame_point(self.radar.c2p(0, 0, 4)) + DOWN * 1,
+            self.frame.to_fixed_frame_point(self.radar.c2p(0, 0, 4)),
             stroke_width=DEFAULT_STROKE_WIDTH * 3,
         ).fix_in_frame()
         wl_bez_r = CubicBezier(
             wl.get_right() + RIGHT * 0.1,
             wl.get_right() + RIGHT * 1,
-            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(6, 0, 0))
-            + DOWN * 2,
-            self.frame.to_fixed_frame_point(self.radar.beam_location_to_point(6, 0, 0)),
+            self.frame.to_fixed_frame_point(self.radar.c2p(0, 0, 6)) + DOWN * 2,
+            self.frame.to_fixed_frame_point(self.radar.c2p(0, 0, 6)),
             stroke_width=DEFAULT_STROKE_WIDTH * 3,
         ).fix_in_frame()
 

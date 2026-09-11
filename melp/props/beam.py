@@ -24,6 +24,73 @@ from ..animation_helpers import VT
 __all__ = ["Beam"]
 
 
+class EMWave(Group):
+    def __init__(
+        self, beam, pulse_length, e_field, h_field, *, wavelength, beamwidth, amplitude=None
+    ):
+        super().__init__(e_field, h_field)
+        self.beam = beam
+        self.pulse_length = VT(pulse_length)
+        self.e_field = e_field
+        self.h_field = h_field
+        self.wavelength = wavelength
+        self.beamwidth = beamwidth
+        self.amplitude = amplitude
+        self.range = VT(0)
+
+    def _get_range_bounds(self):
+        wave_range = max(0, ~self.range)
+        return np.clip(
+            [wave_range - ~self.pulse_length, wave_range],
+            0,
+            self.beam.get_range(),
+        )
+
+    def _format_endpoint(self, beam_range, coords):
+        if coords == "xyz":
+            return self.beam.get_origin() + beam_range * self.beam.get_direction()
+        if coords == "aer":
+            return 0.0, 0.0, float(beam_range)
+        raise ValueError("coords must be 'xyz' or 'aer'")
+
+    def get_start(self, coords="xyz"):
+        return self._format_endpoint(self._get_range_bounds()[0], coords)
+
+    def get_end(self, coords="xyz"):
+        return self._format_endpoint(self._get_range_bounds()[1], coords)
+
+    def _get_field_directions(self):
+        direction = self.beam.get_direction()
+        e_reference = UP if abs(np.dot(direction, UP)) < 0.9 else OUT
+        e_direction = e_reference - np.dot(e_reference, direction) * direction
+        e_direction /= np.linalg.norm(e_direction)
+        return direction, e_direction, np.cross(direction, e_direction)
+
+    def _get_field_values(self, distances):
+        distances = np.asarray(distances, dtype=float)
+        wave_range = max(0, ~self.range)
+        start, end = self._get_range_bounds()
+        phase = TAU * (distances - wave_range) / self.wavelength
+        amplitudes = (
+            distances * np.tan(self.beamwidth / 2)
+            if self.amplitude is None
+            else self.amplitude
+            * np.sin(np.pi * (wave_range - distances) / ~self.pulse_length) ** 2
+        )
+        return np.where(
+            (distances >= start) & (distances <= end) & (end > start),
+            amplitudes * np.sin(phase),
+            0.0,
+        )
+
+    def get_e_field_at_range(self, range):
+        distance = float(range)
+        if not np.isfinite(distance):
+            raise ValueError("range must be finite")
+        _, e_direction, _ = self._get_field_directions()
+        return self._get_field_values(distance) * e_direction
+
+
 class Beam(Cone):
     def __init__(
         self,
@@ -157,45 +224,48 @@ class Beam(Cone):
         h_field = VMobject(fill_opacity=0).set_stroke(
             h_color, stroke_width, stroke_opacity
         )
-        em_wave = Group(e_field, h_field)
-        em_wave.e_field = e_field
-        em_wave.h_field = h_field
-        em_wave.range = VT(0)
+        pulse_length = wavelength * n_oscillations
+        em_wave = EMWave(
+            self,
+            pulse_length,
+            e_field,
+            h_field,
+            wavelength=wavelength,
+            beamwidth=beamwidth,
+            amplitude=amplitude,
+        )
         em_wave.e_highlight = VT(0)
         em_wave.h_highlight = VT(0)
-        em_wave.add(em_wave.range)
+        em_wave.e_opacity = VT(stroke_opacity)
+        em_wave.h_opacity = VT(stroke_opacity)
+        em_wave.e_opacity.add_updater(
+            lambda m: e_field.set_stroke(opacity=~m)
+        )
+        em_wave.h_opacity.add_updater(
+            lambda m: h_field.set_stroke(opacity=~m)
+        )
+        em_wave.add(
+            em_wave.range, em_wave.pulse_length, em_wave.e_opacity, em_wave.h_opacity
+        )
 
         if depth_test:
             em_wave.apply_depth_test()
         else:
             em_wave.deactivate_depth_test()
 
-        pulse_length = wavelength * n_oscillations
-        sample_count = 32 * n_oscillations + 1
-
         def update_wave(wave):
-            wave_range = max(0, ~wave.range)
-            start_range = np.clip(wave_range - pulse_length, 0, self.get_range())
-            end_range = min(wave_range, self.get_range())
+            start_range, end_range = wave._get_range_bounds()
             if end_range <= start_range:
                 wave.e_field.clear_points()
                 wave.h_field.clear_points()
                 return
-            distances = np.linspace(start_range, end_range, sample_count)
-            direction = self.get_direction()
-            e_reference = UP if abs(np.dot(direction, UP)) < 0.9 else OUT
-            e_direction = e_reference - np.dot(e_reference, direction) * direction
-            e_direction /= np.linalg.norm(e_direction)
-            h_direction = np.cross(direction, e_direction)
-            phase = TAU * (distances - wave_range) / wavelength
-            amplitudes = (
-                distances * np.tan(beamwidth / 2)
-                if amplitude is None
-                else amplitude
-                * np.sin(np.pi * (wave_range - distances) / pulse_length) ** 2
+            sample_count = max(
+                3, int(np.ceil(32 * (end_range - start_range) / wave.wavelength)) + 1
             )
+            distances = np.linspace(start_range, end_range, sample_count)
+            direction, e_direction, h_direction = wave._get_field_directions()
             centers = self.get_origin() + distances[:, None] * direction
-            oscillation = (amplitudes * np.sin(phase))[:, None]
+            oscillation = wave._get_field_values(distances)[:, None]
             wave.e_field.set_points_smoothly(centers + oscillation * e_direction)
             wave.h_field.set_points_smoothly(centers + oscillation * h_direction)
             wave.e_field.set_stroke(
@@ -210,6 +280,9 @@ class Beam(Cone):
             )
 
         em_wave.range.add_updater(lambda _tracker: update_wave(em_wave), call=False)
+        em_wave.pulse_length.add_updater(
+            lambda _tracker: update_wave(em_wave), call=False
+        )
         update_wave(em_wave)
         return em_wave
 
