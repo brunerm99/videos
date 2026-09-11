@@ -1462,56 +1462,26 @@ class Dipole(InteractiveScene):
 
         self.wait(8)
 
-        bez_d_center = Line(
-            self.frame.to_fixed_frame_point(raindrop.get_right()) + [0.1, 0, 0],
-            self.frame.to_fixed_frame_point(
-                dipole.copy().set_y(raindrop.get_y()).get_left()
-            )
-            + [-0.1, 0, 0],
-            stroke_width=DEFAULT_STROKE_WIDTH * 2,
-        ).fix_in_frame()
-
         self.play(
             LaggedStart(
                 LaggedStart(
+                    yagi.animate(run_time=1).shift(UP * 5),
                     Uncreate(bez_u),
-                    yagi.animate(run_time=2).shift(UP * 5),
+                    dipole.animate(run_time=1).shift(DOWN * 5),
+                    Uncreate(bez_d),
                     lag_ratio=0,
                 ),
                 LaggedStart(
-                    ReplacementTransform(bez_d, bez_d_center),
-                    dipole.animate.set_y(raindrop.get_y()),
+                    self.frame.animate(run_time=1.5).reorient(
+                        0, 0, 0, center=raindrop.get_center(), height=6
+                    ),
+                    self.camera.light_source.animate(run_time=1.5).move_to(
+                        raindrop.get_center() + self.camera.light_source_position
+                    ),
                     lag_ratio=0,
-                    run_time=2,
                 ),
-                lag_ratio=0.2,
+                lag_ratio=0.3,
             )
-        )
-
-        dipole_label = (
-            Text("Dipole", font=FONT)
-            .fix_in_frame()
-            .rescale_to_fit(fw(self, 0.3), 0)
-            .next_to(
-                self.frame.to_fixed_frame_point(dipole.get_top()), UP, MED_LARGE_BUFF
-            )
-        )
-
-        self.play(Write(dipole_label))
-
-        self.wait(6)
-
-        self.play(
-            FadeOut(dipole_label),
-            FadeOut(bez_d_center),
-            FadeOut(dipole),
-            self.frame.animate.reorient(
-                0, 0, 0, center=raindrop.get_center(), height=6
-            ),
-            self.camera.light_source.animate.move_to(
-                raindrop.get_center() + self.camera.light_source_position
-            ),
-            run_time=2,
         )
 
         self.clear()
@@ -1740,13 +1710,124 @@ class DipoleP2(ThreeDScene):
 
         self.play(drop_scale @ 2, run_time=2)
 
-        self.wait(0.5)
-
         self.play(drop_scale @ 0.7, run_time=2)
 
+        self.play(drop_scale @ 1, run_time=1)
+
         self.wait(0.5)
 
-        self.play(drop_scale @ 1, run_time=1)
+        radar = get_wsr88_model(height=fh(self), indexed_radome_panels=True)
+        radar.rotate(-PI / 2, axis=RIGHT)
+        radar.shift(DOWN * radar.get_height() + UP * 3).set_z(raindrop.get_z()).shift(
+            LEFT * 6
+        )
+        radar.base_sections[-1].set_opacity(0).deactivate_depth_test()
+        radar.base_sections[-2].set_opacity(0).deactivate_depth_test()
+        radar.base_sections[-3].set_opacity(0).deactivate_depth_test()
+
+        self.add(radar)
+
+        radar.upper_dome.set_opacity(0).deactivate_depth_test()
+        radar.point_at(raindrop.get_center())
+
+        self.play(
+            self.frame.animate.reorient(
+                0, 0, 0, center=Group(raindrop, radar.upper_dome).get_center(), height=6
+            )
+        )
+
+        self.wait(0.5)
+
+        bw = 32 * DEG
+        wl = 4
+        beam = radar.get_beam(bw, 10)
+        em_wave = beam.get_em_wave(
+            wavelength=wl,
+            n_oscillations=1,
+            beamwidth=bw,
+            e_color=TX_COLOR,
+            h_color=BLUE_A,
+        )
+        self.add(em_wave)
+
+        self.play(em_wave.range @ (wl + 0.5), run_time=2)
+
+        self.wait(0.5)
+
+        wl_dim = DimensionLine(
+            em_wave,
+            beam.get_direction(),
+            camera_frame=self.frame,
+            tick_length=0.2,
+            label=Tex(r"\lambda"),
+        )
+
+        D_dim = DimensionLine(
+            raindrop,
+            beam.get_direction(),
+            camera_frame=self.frame,
+            tick_length=0.2,
+            label=Tex(r"D"),
+        )
+
+        self.play(
+            LaggedStart(
+                wl_dim.get_creation_animation(),
+                D_dim.get_creation_animation(),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        dllw = (
+            Tex(r"D \ll \lambda \rightarrow")
+            .fix_in_frame()
+            .scale(1.5)
+            .next_to(self.frame.get_top(), DOWN, MED_LARGE_BUFF)
+            .shift(LEFT + UP)
+        )
+        rayleigh = (
+            Text("Rayleigh", font=FONT)
+            .fix_in_frame()
+            .next_to(dllw, RIGHT, MED_SMALL_BUFF)
+            .set_y(dllw[-1].get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(D_dim.label, dllw[0], path_arc=PI / 3),
+                GrowFromCenter(dllw[1]),
+                TransformFromCopy(wl_dim.label, dllw[2], path_arc=PI / 3),
+                GrowFromCenter(dllw[3]),
+                Write(rayleigh),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        dw_ratio = (
+            Tex(r"\frac{D}{\lambda} \lessapprox \frac{1}{10} \rightarrow")
+            .fix_in_frame()
+            .scale(1.5)
+        )
+        dw_ratio.shift(dllw[-1].get_center() - dw_ratio[-1].get_center())
+
+        self.play(
+            LaggedStart(
+                FadeOut(dllw[1]),
+                ReplacementTransform(dllw[0], dw_ratio[0]),
+                ReplacementTransform(dllw[2], dw_ratio[2]),
+                GrowFromCenter(dw_ratio[1]),
+                GrowFromCenter(dw_ratio[3]),
+                GrowFromCenter(dw_ratio[4]),
+                GrowFromCenter(dw_ratio[5]),
+                GrowFromCenter(dw_ratio[6]),
+                GrowFromCenter(dw_ratio[7]),
+                lag_ratio=0.3,
+            )
+        )
 
         self.embed()
 
