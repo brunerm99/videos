@@ -13,8 +13,11 @@ from scipy.spatial.transform import Rotation
 from scipy.special import spherical_jn, spherical_yn
 
 sys.path.insert(0, "..")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 load_dotenv()
 
+
+from field_bending import charge_motion, trace_field_lines
 
 from melp import (
     VT,
@@ -2254,9 +2257,15 @@ class DipoleP2(ThreeDScene):
         drop_radius = (
             0.98 * np.linalg.norm(raindrop.get_points() - center, axis=1).min()
         )
+        for m in charge_pairs:
+            midpoint = (m.positive.get_center() + m.negative.get_center()) / 2
+            m.rest_offset = midpoint - center
+            m.rest_separation = (m.positive.get_center() - m.negative.get_center()) / 2
+            m.charge_radius = m.positive[0].get_width() / 2
+
         charge_points = np.vstack(
             [
-                charge.get_all_points() - center
+                charge.get_all_points() - charge.get_center() + m.rest_offset
                 for m in charge_pairs
                 for charge in [m.positive, m.negative]
             ]
@@ -2274,14 +2283,20 @@ class DipoleP2(ThreeDScene):
             center = raindrop.get_center()
             sample_range = np.dot(center - beam.get_origin(), beam.get_direction())
             field = em_wave.get_e_field_at_range(sample_range)
-            displacement = ~charge_response * charge_gain * field
-            m.positive.move_to(center + m.positive_rest_offset + displacement)
-            m.negative.move_to(center + m.negative_rest_offset - displacement)
+            separation = (
+                1 - ~charge_response
+            ) * m.rest_separation + ~charge_response * charge_gain * field
+            midpoint = center + m.rest_offset
+            m.positive.move_to(midpoint + separation)
+            m.negative.move_to(midpoint - separation)
+            symbol_opacity = np.clip(
+                2 * np.linalg.norm(separation) / m.charge_radius - 1, 0, 1
+            )
+            m.positive[1].set_opacity(symbol_opacity)
+            m.negative[1].set_opacity(symbol_opacity)
             m.connector.update(0)
 
         for m in charge_pairs:
-            m.positive_rest_offset = m.positive.get_center() - raindrop.get_center()
-            m.negative_rest_offset = m.negative.get_center() - raindrop.get_center()
             m.add_updater(update_charge_pair)
 
         self.play(charge_response @ 1, run_time=1.5)
@@ -2293,11 +2308,638 @@ class DipoleP2(ThreeDScene):
         self.wait(0.5)
 
         self.play(
-            em_wave.range @ (raindrop_range + ~em_wave.pulse_length),
+            em_wave.range @ (raindrop_range + ~em_wave.pulse_length * 0.99),
             run_time=8,
         )
 
+        self.wait(0.5)
+
+        self.frame.save_state()
+        self.camera.light_source.save_state()
+
+        dipole = (
+            DipoleAntenna()
+            .scale(0.6)
+            .apply_matrix(self.frame.get_orientation().as_matrix())
+            .move_to(self.frame)
+            .shift(DOWN * fh(self, 3))
+        )
+        self.add(dipole)
+
+        self.play(self.frame.animate.shift(DOWN * fh(self, 3)), run_time=1.5)
+
+        self.wait(0.5)
+
+        frame_rotation = self.frame.get_orientation().as_matrix()
+        dipole_tilt = Rotation.from_euler(
+            "xyz", [20, -25, -12], degrees=True
+        ).as_matrix()
+        dipole_rotation = frame_rotation @ dipole_tilt
+
+        self.play(
+            dipole.animate.apply_matrix(
+                frame_rotation @ dipole_tilt @ frame_rotation.T,
+                about_point=dipole.get_center(),
+            ),
+            self.frame.animate.set_focal_distance(fh(self, 8)),
+            self.camera.light_source.animate.move_to(
+                dipole.get_center() + self.camera.light_source_position
+            ),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        dipole_origin = (
+            dipole.left_arm.get_center() + dipole.right_arm.get_center()
+        ) / 2
+        dipole_axis, feed_axis, radiation_axis = dipole_rotation.T
+        dipole_length = np.ptp(dipole.arms.get_all_points() @ dipole_axis)
+        dipole_scale = dipole_length / dipole.length
+        feed_gap = dipole.feed_gap * dipole_scale
+        feed_length = dipole.feed_length * dipole_scale
+        wire_radius = dipole.radius * dipole_scale
+        antenna_time = VT(0)
+        antenna_frequency = 1
+        radiation_wavelength = 2 * dipole_length
+        radiation_speed = antenna_frequency * radiation_wavelength
+        radiation_start = dipole_length * 0.35
+        radiation_range = dipole_length * 2.7
+
+        def dipole_point(x=0, y=0, z=0):
+            return dipole_origin + x * dipole_axis + y * feed_axis + z * radiation_axis
+
+        def get_antenna_motion(time):
+            time = np.asarray(time, dtype=float)
+            ramp = np.clip(time, 0, 1)
+            envelope = 10 * ramp**3 - 15 * ramp**4 + 6 * ramp**5
+            envelope_speed = 30 * ramp**2 * (1 - ramp) ** 2
+            envelope_acceleration = 60 * ramp * (1 - ramp) * (1 - 2 * ramp)
+            omega = TAU * antenna_frequency
+            phase = omega * time
+            displacement = envelope * np.sin(phase)
+            velocity = envelope_speed * np.sin(phase) + omega * envelope * np.cos(phase)
+            acceleration = (
+                envelope_acceleration * np.sin(phase)
+                + 2 * omega * envelope_speed * np.cos(phase)
+                - omega**2 * envelope * np.sin(phase)
+            )
+            return displacement, velocity, acceleration
+
+        def get_radiated_field(distances):
+            _, _, acceleration = get_antenna_motion(
+                ~antenna_time - distances / radiation_speed
+            )
+            return (
+                -acceleration
+                / (TAU * antenna_frequency) ** 2
+                * dipole_length
+                * 0.55
+                * radiation_start
+                / distances
+            )
+
+        def get_voltage_profile():
+            displacement, _, _ = get_antenna_motion(~antenna_time)
+            profiles = VGroup()
+            if abs(displacement) < 1e-8:
+                return profiles
+            for side in [-1, 1]:
+                positions = side * np.linspace(feed_gap / 2, dipole_length / 2, 41)
+                voltages = (
+                    dipole_length
+                    * 0.25
+                    * displacement
+                    * np.sin(PI * positions / dipole_length)
+                )
+                points = [dipole_point(x, y) for x, y in zip(positions, voltages)]
+                profiles.add(
+                    Polygon(
+                        dipole_point(positions[0]),
+                        *points,
+                        dipole_point(positions[-1]),
+                        fill_color=RX_COLOR,
+                        fill_opacity=0.35,
+                        stroke_width=0,
+                    ).deactivate_depth_test()
+                )
+            return profiles
+
+        arrow_distances = np.arange(
+            radiation_start, radiation_range, radiation_wavelength / 12
+        )
+        field_arrow = Arrow(
+            ORIGIN,
+            RIGHT,
+            buff=0,
+            fill_color=TX_COLOR,
+            thickness=3,
+            tip_width_ratio=5,
+        )
+        arrow_points = field_arrow.get_points().copy()
+        radiation_curves = VGroup(
+            *[VMobject().set_stroke(TX_COLOR, 3.5) for _ in [-1, 1]]
+        )
+        radiation_arrows = VGroup(
+            *[VGroup(*[field_arrow.copy() for _ in arrow_distances]) for _ in [-1, 1]]
+        )
+        antenna_field = VGroup(
+            radiation_curves, radiation_arrows
+        ).deactivate_depth_test()
+
+        def update_antenna_field(m):
+            front = min(radiation_range, radiation_speed * ~m)
+            arrow_values = get_radiated_field(arrow_distances)
+            for side, curve, arrows in zip([-1, 1], radiation_curves, radiation_arrows):
+                if front > radiation_start + 1e-4:
+                    distances = np.linspace(radiation_start, front, 161)
+                    values = get_radiated_field(distances)
+                    curve.set_points_smoothly(
+                        dipole_origin
+                        + side * distances[:, None] * radiation_axis
+                        + values[:, None] * dipole_axis
+                    )
+                else:
+                    curve.clear_points()
+                for distance, value, m in zip(arrow_distances, arrow_values, arrows):
+                    m.set_points(
+                        dipole_point(z=side * distance)
+                        + arrow_points[:, 0, None] * value * dipole_axis
+                        + arrow_points[:, 1, None]
+                        * min(1, abs(value) / (dipole_length * 0.3))
+                        * radiation_axis
+                    )
+                    m.set_opacity(1 if abs(value) > 1e-5 else 0)
+
+        electron_positions = np.concatenate(
+            [
+                side
+                * np.linspace(
+                    feed_gap / 2 + dipole_length * 0.09,
+                    dipole_length * 0.44,
+                    5,
+                )
+                for side in [-1, 1]
+            ]
+        )
+        electron_surface = (
+            frame_rotation[:, 2]
+            - np.dot(frame_rotation[:, 2], dipole_axis) * dipole_axis
+        )
+        electron_surface *= wire_radius / np.linalg.norm(electron_surface)
+        electrons = VGroup(
+            *[
+                VGroup(
+                    Dot(radius=dipole_length * 0.01, fill_color=ICE),
+                    Text("-", font=FONT, fill_color=BACKGROUND_COLOR).set_width(
+                        dipole_length * 0.012
+                    ),
+                ).apply_matrix(frame_rotation)
+                for _ in electron_positions
+            ]
+        ).deactivate_depth_test()
+        charge_positions = np.concatenate(
+            [
+                side * np.linspace(dipole_length * 0.2, dipole_length * 0.47, 4)
+                for side in [-1, 1]
+            ]
+        )
+        antenna_charges = VGroup(
+            *[
+                VGroup(
+                    Text("+", font=FONT, fill_color=YELLOW),
+                    Text("-", font=FONT, fill_color=ICE),
+                )
+                .set_height(dipole_length * 0.045)
+                .apply_matrix(frame_rotation)
+                .move_to(dipole_point(x, wire_radius * 3))
+                for x in charge_positions
+            ]
+        ).deactivate_depth_test()
+
+        def update_antenna_charges(m):
+            displacement, _, _ = get_antenna_motion(~m)
+            for x, m in zip(electron_positions, electrons):
+                travel = dipole_length * 0.05 * np.cos(PI * x / dipole_length)
+                m.move_to(dipole_point(x - travel * displacement) + electron_surface)
+            for x, m in zip(charge_positions, antenna_charges):
+                charge = displacement * np.sin(PI * x / dipole_length)
+                m[0].set_opacity(max(0, charge))
+                m[1].set_opacity(max(0, -charge))
+
+        antenna_time.add_updater(update_antenna_charges)
+        antenna_time.add_updater(update_antenna_field)
+        voltage_profile = always_redraw(get_voltage_profile)
+        source_radius = dipole_length * 0.055
+        source_y = -feed_length - source_radius * 1.5
+        ac_source = VGroup(
+            Circle(radius=source_radius, stroke_color=ICE, stroke_width=2)
+            .apply_matrix(dipole_rotation)
+            .move_to(dipole_point(y=source_y)),
+            ParametricCurve(
+                lambda t: dipole_point(
+                    source_radius * 0.6 * t,
+                    source_y + source_radius * 0.3 * np.sin(PI * t),
+                ),
+                t_range=(-1, 1, 0.05),
+                stroke_color=ICE,
+                stroke_width=2,
+            ),
+            *[
+                VMobject()
+                .set_points_as_corners(
+                    [
+                        dipole_point(side * feed_gap / 2, -feed_length),
+                        dipole_point(side * source_radius, -feed_length),
+                        dipole_point(side * source_radius, source_y),
+                    ]
+                )
+                .set_stroke(ICE, 2)
+                for side in [-1, 1]
+            ],
+            Text("AC", font=FONT, fill_color=ICE)
+            .set_height(source_radius * 0.8)
+            .apply_matrix(frame_rotation)
+            .move_to(dipole_point(y=source_y - source_radius * 1.8)),
+        ).deactivate_depth_test()
+        radiation_guides = VGroup(
+            *[
+                DashedLine(
+                    dipole_point(z=side * dipole_length * 0.15),
+                    dipole_point(z=side * radiation_range),
+                    dash_length=0.12,
+                    stroke_color=ICE,
+                    stroke_width=1,
+                    stroke_opacity=0.25,
+                )
+                for side in [-1, 1]
+            ]
+        ).deactivate_depth_test()
+        voltage_label = Tex("V", fill_color=RX_COLOR).set_height(fh(self, 0.06))
+        voltage_label.apply_matrix(frame_rotation).move_to(
+            dipole_point(-dipole_length * 0.5, dipole_length * 0.34)
+        )
+        field_label = Text("Radiated E", font=FONT, fill_color=TX_COLOR)
+        field_label.set_height(fh(self, 0.04)).apply_matrix(frame_rotation).move_to(
+            self.frame.get_center() + frame_rotation @ np.array([1.75, -1.25, 0])
+        )
+        self.remove(dipole)
+        self.add(radiation_guides, antenna_field, voltage_profile, dipole)
+        self.add(antenna_charges, antenna_time)
+
+        self.play(
+            LaggedStart(
+                FadeIn(ac_source),
+                FadeIn(electrons),
+                Write(voltage_label),
+                Write(field_label),
+                lag_ratio=0.25,
+            ),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        self.play(antenna_time @ 11, run_time=12)
+
         self.wait(2)
+
+        self.remove(em_wave, wave_overlap)
+
+        self.play(
+            self.frame.animate.restore(),
+            self.camera.light_source.animate.restore(),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        field_rotation = self.frame.get_orientation().as_matrix()
+        field_up = field_rotation[:, 1]
+        pair = max(
+            charge_pairs,
+            key=lambda m: np.dot(m.positive.get_center(), field_up),
+        )
+        drop_scale.clear_updaters()
+        pair.clear_updaters()
+        charge = pair.positive
+        charge.save_state()
+        pair.remove(charge)
+        charge.set_z_index(2)
+        charge_target = charge.get_center() + field_up * fh(self)
+        self.add(charge)
+
+        self.play(
+            FadeOut(pair.connector),
+            charge.animate.move_to(charge_target).set_height(fh(self, 0.03)),
+            self.frame.animate.move_to(charge_target),
+            run_time=2,
+        )
+
+        self.wait(0.5)
+
+        field_time = VT(0)
+        field_opacity = VT(1)
+        field_anchor = charge
+        field_scale = fh(self) / 11
+        field_origin = charge_target - field_up * field_scale * charge_motion(0)[0]
+        field_extent = np.hypot(fw(self), fh(self)) / (2 * field_scale) + 1
+        field_radius = VT(3 * field_extent * field_scale)
+        field_cache = {"time": None, "curves": None}
+
+        def get_field_curve(index):
+            if field_cache["time"] != ~field_time:
+                field_cache["curves"] = trace_field_lines(~field_time, field_extent)
+                field_cache["time"] = ~field_time
+            points = field_cache["curves"][index] - UP * charge_motion(~field_time)[0]
+            distances = field_scale * np.linalg.norm(points, axis=1)
+            outside = np.flatnonzero(distances >= ~field_radius)
+            if len(outside):
+                end = outside[0]
+                points = points[: end + 1].copy()
+                points[-1] *= ~field_radius / distances[end]
+            return points
+
+        def get_charge_field_lines():
+            get_field_curve(0)
+            lines = VGroup()
+            count = len(field_cache["curves"])
+            for index in range(count):
+                highlighted = index in (count // 4, 3 * count // 4)
+                m = VMobject(
+                    stroke_color=YELLOW if highlighted else BLUE_B,
+                    stroke_width=3 if highlighted else 1.4,
+                    stroke_opacity=~field_opacity * (1 if highlighted else 0.65),
+                )
+                m.set_points_smoothly(
+                    field_anchor.get_center()
+                    + field_scale * get_field_curve(index)[::2] @ field_rotation.T
+                )
+                lines.add(m)
+            return lines.deactivate_depth_test()
+
+        charge.add_updater(
+            lambda m: m.move_to(
+                field_origin + field_up * field_scale * charge_motion(~field_time)[0]
+            )
+        )
+        charge_field_lines = always_redraw(get_charge_field_lines)
+        self.add(field_time, field_opacity, charge_field_lines, perp_stroke=False)
+
+        self.play(
+            ShowCreation(
+                charge_field_lines,
+                lag_ratio=0,
+                suspend_mobject_updating=True,
+            ),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        fwd_arrow = (
+            Arrow(ORIGIN, RIGHT * 3, fill_color=YELLOW).fix_in_frame().shift(RIGHT + UP)
+        )
+        fwd_label = (
+            Text("Forward", fill_color=YELLOW, font=FONT)
+            .fix_in_frame()
+            .next_to(fwd_arrow, UP, MED_SMALL_BUFF)
+        )
+
+        bwd_arrow = (
+            Arrow(ORIGIN, LEFT * 3, fill_color=YELLOW).fix_in_frame().shift(LEFT + UP)
+        )
+        bwd_label = (
+            Text("Backward", fill_color=YELLOW, font=FONT)
+            .fix_in_frame()
+            .next_to(bwd_arrow, UP, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                field_time.animate(run_time=15, rate_func=linear).set_value(15),
+                LaggedStart(
+                    LaggedStart(GrowArrow(fwd_arrow), FadeIn(fwd_label), lag_ratio=0),
+                    LaggedStart(GrowArrow(bwd_arrow), FadeIn(bwd_label), lag_ratio=0),
+                    lag_ratio=1,
+                ),
+                lag_ratio=0.25,
+            )
+        )
+
+        self.wait(0.5)
+
+        pattern_radius = fw(self, 0.38)
+        sine_pattern = (
+            ParametricCurve(
+                lambda theta: (
+                    field_origin
+                    + pattern_radius
+                    * abs(np.sin(theta))
+                    * (np.sin(theta) * field_rotation[:, 0] + np.cos(theta) * field_up)
+                ),
+                t_range=(0, TAU, 0.01),
+                stroke_color=ICE,
+                stroke_width=4,
+                fill_opacity=0,
+            )
+            .deactivate_depth_test()
+            .set_z_index(1)
+        )
+        self.add(sine_pattern, perp_stroke=False)
+
+        self.play(
+            ShowCreation(sine_pattern, run_time=2),
+            field_time.animate(run_time=6, rate_func=linear).increment_value(6),
+        )
+
+        self.play(
+            Uncreate(sine_pattern, run_time=2),
+            field_opacity.animate(run_time=2).set_value(0),
+            FadeOut(fwd_arrow),
+            FadeOut(fwd_label),
+            FadeOut(bwd_arrow),
+            FadeOut(bwd_label),
+            field_time.animate(run_time=2, rate_func=linear).increment_value(2),
+        )
+
+        self.remove(charge_field_lines, field_opacity)
+
+        charge.clear_updaters()
+
+        self.play(
+            charge.animate.restore(),
+            self.frame.animate.restore(),
+            run_time=2,
+        )
+
+        self.remove(charge)
+        pair.add(charge)
+        self.add(charge_pairs)
+
+        self.play(FadeIn(pair.connector), run_time=0.5)
+
+        self.wait(0.5)
+
+        field_anchor = raindrop
+        scatter_direction = unit(raindrop.get_center() - beam.get_origin())
+        field_up = unit(
+            e_direction - np.dot(e_direction, scatter_direction) * scatter_direction
+        )
+        field_rotation = np.column_stack(
+            (scatter_direction, field_up, np.cross(scatter_direction, field_up))
+        )
+        field_time @= 0
+        field_opacity @= 1
+        particle_separation = (
+            np.linalg.norm(pair.positive.get_center() - pair.negative.get_center())
+            / 2
+            * field_up
+        )
+        field_amplitude = charge_motion(0)[0]
+
+        def update_particle_pair(m):
+            midpoint = raindrop.get_center() + m.rest_offset
+            separation = (
+                particle_separation * charge_motion(~field_time)[0] / field_amplitude
+            )
+            m.positive.move_to(midpoint + separation)
+            m.negative.move_to(midpoint - separation)
+            symbol_opacity = np.clip(
+                2 * np.linalg.norm(separation) / m.charge_radius - 1, 0, 1
+            )
+            m.positive[1].set_opacity(symbol_opacity)
+            m.negative[1].set_opacity(symbol_opacity)
+            m.connector.set_points_as_corners(
+                [m.positive.get_center(), m.negative.get_center()]
+            )
+
+        for m in charge_pairs:
+            m.clear_updaters()
+            m.add_updater(update_particle_pair)
+
+        charge_field_lines.update(0)
+        self.add(
+            field_opacity, charge_field_lines, raindrop, charge_pairs, perp_stroke=False
+        )
+
+        self.play(
+            ShowCreation(
+                charge_field_lines,
+                lag_ratio=0,
+                suspend_mobject_updating=True,
+            ),
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(field_time.animate(run_time=9, rate_func=linear).increment_value(9))
+
+        plane_reveal = VT(0)
+        field_radius @= np.hypot(fw(self), fh(self)) / 2
+        plane_specs = [
+            (index, side)
+            for index in range(2, len(field_cache["curves"]) // 2, 2)
+            for side in (0, PI)
+        ]
+        field_planes = Group(
+            *[
+                Surface(
+                    resolution=(61, 25),
+                    color=YELLOW
+                    if index == len(field_cache["curves"]) // 4
+                    else BLUE_B,
+                    opacity=0,
+                    shading=(0.1, 0.1, 0.2),
+                    depth_test=False,
+                )
+                for index, _ in plane_specs
+            ]
+        )
+        plane_edges = VGroup(
+            *[
+                VGroup(
+                    *[
+                        VMobject(
+                            stroke_color=YELLOW
+                            if index == len(field_cache["curves"]) // 4
+                            else BLUE_B,
+                            stroke_width=1,
+                            stroke_opacity=0,
+                        )
+                        for _ in range(3)
+                    ]
+                )
+                for index, _ in plane_specs
+            ]
+        ).deactivate_depth_test()
+
+        def update_field_planes(m):
+            half_angle = max(~m, 1e-4) * PI / 2
+            for (index, side), plane, edge in zip(
+                plane_specs, field_planes, plane_edges
+            ):
+                curve = get_field_curve(index)
+                samples = np.linspace(0, len(curve) - 1, plane.resolution[0])
+                radial = np.interp(samples, np.arange(len(curve)), curve[:, 0])
+                height = np.interp(samples, np.arange(len(curve)), curve[:, 1])
+                angles = np.linspace(
+                    side - half_angle, side + half_angle, plane.resolution[1]
+                )
+                directions = (
+                    np.cos(angles)[:, None] * scatter_direction
+                    + np.sin(angles)[:, None] * field_rotation[:, 2]
+                )
+                points = raindrop.get_center() + field_scale * (
+                    radial[:, None, None] * directions[None, :, :]
+                    + height[:, None, None] * field_up
+                )
+                plane.set_points(points.reshape(-1, 3))
+                plane.data["du_point"][:] = (
+                    points + np.gradient(points, axis=0)
+                ).reshape(-1, 3)
+                plane.data["dv_point"][:] = (
+                    points + np.gradient(points, axis=1)
+                ).reshape(-1, 3)
+                plane.set_opacity(
+                    0.16 if index == len(field_cache["curves"]) // 4 else 0.08
+                )
+                plane.sort_faces_back_to_front(
+                    self.camera.get_location() - raindrop.get_center()
+                )
+                edge[0].set_points_smoothly(points[-1]).set_stroke(opacity=0.35 * ~m)
+                for boundary, column in zip(edge[1:], (0, -1)):
+                    boundary.set_points_smoothly(points[:, column]).set_stroke(
+                        opacity=0.65 * np.sin(PI * ~m)
+                    )
+
+        plane_reveal.add_updater(update_field_planes)
+        self.add(
+            plane_reveal,
+            field_radius,
+            field_planes,
+            plane_edges,
+            charge_field_lines,
+            raindrop,
+            charge_pairs,
+            perp_stroke=False,
+        )
+
+        self.play(
+            plane_reveal @ 1,
+            field_radius @ fh(self, 0.65),
+            self.frame.animate.set_height(fh(self, 1.7)).set_orientation(
+                Rotation.from_matrix(field_rotation)
+                * Rotation.from_euler("xy", [15, -30], degrees=True)
+            ),
+            field_time.animate(rate_func=linear).increment_value(3),
+            run_time=3,
+        )
+
+        self.play(field_time.animate(run_time=10, rate_func=linear).increment_value(10))
+
+        self.wait(0.5)
 
         self.embed()
 
@@ -3378,30 +4020,6 @@ class BrightBandP1p5(InteractiveScene):
 
         self.wait(0.5)
 
-        air_to_snow = CurvedArrow(
-            air_label.get_bottom() + DOWN * 0.1,
-            snow_label.get_bottom() + DOWN * 0.1,
-            angle=PI / 3,
-        )
-
-        self.play(
-            LaggedStart(
-                air_label.animate(
-                    rate_func=utils.rate_functions.there_and_back_with_pause,
-                    run_time=1.5,
-                )
-                .set_color(GREEN)
-                .scale(1.5),
-                GrowArrow(air_to_snow),
-                snow_label.animate(
-                    rate_func=utils.rate_functions.there_and_back_with_pause,
-                    run_time=1.5,
-                )
-                .set_color(GREEN)
-                .scale(1.5),
-                lag_ratio=0.4,
-            )
-        )
         self.play(
             snow_label.animate(run_time=0.5).set_color(WHITE),
         )
@@ -3420,7 +4038,6 @@ class BrightBandP1p5(InteractiveScene):
         self.play(
             LaggedStart(
                 LaggedStart(
-                    FadeOut(air_to_snow),
                     zmin @ 2.5,
                     zmax @ 3.5,
                     zhat_opacity @ 0,
@@ -3808,20 +4425,50 @@ class BrightBandP2(InteractiveScene):
 
             hydrometeors.add(Group(water_shell, snowflake, raindrop))
 
-        elapsed = [0.0]
+        clock_time = 5.5
+        clock_start = self.time
+        clock_speed = 1.0
+        clock_target = 1.0
+        clock_ramp_duration = 1.0
+
+        def particle_time():
+            time = max(self.time - clock_start, 0)
+            alpha = min(time / clock_ramp_duration, 1)
+            ramp_time = clock_ramp_duration * (
+                2.5 * alpha**4 - 3 * alpha**5 + alpha**6
+            ) + max(time - clock_ramp_duration, 0)
+            return (
+                clock_time
+                + clock_speed * time
+                + (clock_target - clock_speed) * ramp_time
+            )
+
+        def set_particle_speed(speed, duration):
+            nonlocal \
+                clock_time, \
+                clock_start, \
+                clock_speed, \
+                clock_target, \
+                clock_ramp_duration
+            clock_time = particle_time()
+            clock_start = self.time
+            clock_speed = clock_target
+            clock_target = speed
+            clock_ramp_duration = duration
+
+        previous_particle_time = [0.0]
         current_heights = np.zeros(particle_count)
         current_reflectivity = np.zeros(particle_count)
 
         scale_time = VT(1)
 
         def update_hydrometeors(group, dt):
-            dt_scale = dt * ~scale_time
-            elapsed[0] += dt_scale
+            time = particle_time()
+            dt_scale = time - previous_particle_time[0]
+            previous_particle_time[0] = time
 
             for index, particle in enumerate(group):
-                age = (
-                    elapsed[0] * cycle_rate[index] + age_offsets[index]
-                ) % cycle_duration
+                age = (time * cycle_rate[index] + age_offsets[index]) % cycle_duration
 
                 if age < snow_duration:
                     alpha = age / snow_duration
@@ -3849,7 +4496,7 @@ class BrightBandP2(InteractiveScene):
                     reflectivity = 1
 
                 x_position = particle_x[index] + drift_scale * 0.12 * np.sin(
-                    0.8 * elapsed[0] + drift_phase[index]
+                    0.8 * time + drift_phase[index]
                 )
                 particle.move_to([x_position, height, 0])
                 current_heights[index] = height
@@ -3880,9 +4527,12 @@ class BrightBandP2(InteractiveScene):
             VMobject().set_stroke(TOWER_LIGHT, 4),
         ).set_z_index(2)
         profile_initialized = [False]
+        previous_profile_time = [particle_time()]
 
         def update_profile(curves, dt):
-            dt_scale = dt * ~scale_time
+            time = particle_time()
+            dt_scale = time - previous_profile_time[0]
+            previous_profile_time[0] = time
             vertical_distance = (
                 profile_heights[:, None] - current_heights[None, :]
             ) / 0.14
@@ -3946,13 +4596,14 @@ class BrightBandP2(InteractiveScene):
             run_time=3,
         )
 
-        self.wait(5)
+        self.wait(1)
 
-        self.play(scale_time @ 0, run_time=3)
+        set_particle_speed(0, 1)
+        self.play(scale_time @ 0, run_time=1)
 
         self.wait(0.5)
 
-        idx = 28
+        idx = 46
         hdm = hydrometeors[idx]
         inner_structure = (
             RoundedRectangle(
@@ -4048,6 +4699,7 @@ class BrightBandP2(InteractiveScene):
             FadeOut(large_eps),
             FadeOut(large_v),
         )
+        set_particle_speed(1, 4 / 1.2)
         self.play(
             LaggedStart(
                 scale_time @ 1,
