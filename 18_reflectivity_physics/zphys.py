@@ -6,18 +6,15 @@ from pathlib import Path
 from random import random, seed, shuffle
 
 import numpy as np
-import pandas as pd
 from dotenv import load_dotenv
-from manimlib import *
-from scipy.spatial.transform import Rotation
-from scipy.special import spherical_jn, spherical_yn
 
 sys.path.insert(0, "..")
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 load_dotenv()
 
-
 from field_bending import charge_motion, trace_field_lines
+from manimlib import *
+from scipy.spatial.transform import Rotation
 
 from melp import (
     VT,
@@ -1566,6 +1563,11 @@ class DipoleP2(ThreeDScene):
         base_count = len(charge_pairs)
         drop_anchor = raindrop.get_center().copy()
         drop_size = np.array([base_width, raindrop.get_height(), 1])
+        raindrop.add_updater(
+            lambda m: m.set_width(
+                base_width * max(~drop_scale, 1e-4), about_point=drop_anchor
+            )
+        )
 
         def get_pair_state(pair, offset, progress=1.0):
             center = pair.get_center()
@@ -1596,7 +1598,6 @@ class DipoleP2(ThreeDScene):
             scale = float(~m)
             if not np.isfinite(scale) or scale < 0:
                 raise ValueError("drop_scale must be finite and nonnegative")
-            raindrop.set_width(base_width * max(scale, 1e-4), about_point=drop_anchor)
             count = int(np.floor(base_count * scale**2 + 0.5))
             center = raindrop.get_center()
 
@@ -2579,8 +2580,8 @@ class DipoleP2(ThreeDScene):
         voltage_label.apply_matrix(frame_rotation).move_to(
             dipole_point(-dipole_length * 0.5, dipole_length * 0.34)
         )
-        field_label = Text("Radiated E", font=FONT, fill_color=TX_COLOR)
-        field_label.set_height(fh(self, 0.04)).apply_matrix(frame_rotation).move_to(
+        field_label = Tex("E", fill_color=TX_COLOR).set_height(fh(self, 0.06))
+        field_label.apply_matrix(frame_rotation).move_to(
             self.frame.get_center() + frame_rotation @ np.array([1.75, -1.25, 0])
         )
         self.remove(dipole)
@@ -2591,8 +2592,8 @@ class DipoleP2(ThreeDScene):
             LaggedStart(
                 FadeIn(ac_source),
                 FadeIn(electrons),
-                Write(voltage_label),
-                Write(field_label),
+                FadeIn(voltage_label),
+                FadeIn(field_label),
                 lag_ratio=0.25,
             ),
             run_time=2,
@@ -2645,6 +2646,7 @@ class DipoleP2(ThreeDScene):
         field_origin = charge_target - field_up * field_scale * charge_motion(0)[0]
         field_extent = np.hypot(fw(self), fh(self)) / (2 * field_scale) + 1
         field_radius = VT(3 * field_extent * field_scale)
+        backscatter_range = VT(0)
         field_cache = {"time": None, "curves": None}
 
         def get_field_curve(index):
@@ -2652,6 +2654,21 @@ class DipoleP2(ThreeDScene):
                 field_cache["curves"] = trace_field_lines(~field_time, field_extent)
                 field_cache["time"] = ~field_time
             points = field_cache["curves"][index] - UP * charge_motion(~field_time)[0]
+            if index == 3 * len(field_cache["curves"]) // 4 and ~backscatter_range > 0:
+                distances = -field_scale * points[:, 0]
+                outside = np.flatnonzero(distances >= ~backscatter_range)
+                end = outside[0] if len(outside) else len(distances) - 1
+                points = points[: end + 1].copy()
+                if len(outside):
+                    alpha = (~backscatter_range - distances[end - 1]) / (
+                        distances[end] - distances[end - 1]
+                    )
+                    points[-1] = interpolate(points[-2], points[-1], alpha)
+                return_falloff = np.minimum(
+                    1, (~field_radius / (-field_scale * points[:, 0])) ** 2
+                )
+                points[:, 1] *= return_falloff
+                return points
             distances = field_scale * np.linalg.norm(points, axis=1)
             outside = np.flatnonzero(distances >= ~field_radius)
             if len(outside):
@@ -2940,6 +2957,486 @@ class DipoleP2(ThreeDScene):
         self.play(field_time.animate(run_time=10, rate_func=linear).increment_value(10))
 
         self.wait(0.5)
+
+        backscatter_index = 3 * len(field_cache["curves"]) // 4
+        backscatter_range @= -field_scale * get_field_curve(backscatter_index)[-1, 0]
+        field_extent = max(field_extent, 2 * raindrop_range / field_scale)
+        field_cache["time"] = None
+        backscatter_view = Group(radar.antenna, field_planes)
+        backscatter_height = 1.2 * max(
+            backscatter_view.get_height(),
+            backscatter_view.get_width() * fh(self) / fw(self),
+        )
+        self.add(backscatter_range)
+
+        self.play(
+            backscatter_range @ raindrop_range,
+            self.frame.animate.reorient(
+                0,
+                0,
+                0,
+                center=backscatter_view.get_center(),
+                height=backscatter_height,
+            ),
+            field_time.animate(rate_func=linear).increment_value(4),
+            run_time=4,
+        )
+
+        self.play(field_time.animate(run_time=12, rate_func=linear).increment_value(12))
+
+        self.play(field_opacity @ 0, plane_reveal @ 0, run_time=1.5)
+
+        self.remove(
+            plane_reveal,
+            field_radius,
+            field_planes,
+            plane_edges,
+            charge_field_lines,
+        )
+
+        self.wait(0.5)
+
+        vol_eqn = (
+            Tex(r"E_s \propto V = \frac{4}{3} \pi r^3 = \frac{1}{6} \pi D^3")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(ORIGIN)
+            .shift(LEFT * 3 + UP * 2.5)
+        )
+
+        self.play(
+            LaggedStart(
+                self.frame.animate(run_time=2)
+                .reorient(0, 0, 0, center=raindrop.get_center(), height=3)
+                .shift(UP * 0.3),
+                LaggedStart(*[GrowFromCenter(m) for m in vol_eqn], lag_ratio=0.1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        D_dim = always_redraw(
+            lambda: DimensionLine(
+                raindrop,
+                DOWN,
+                camera_frame=self.frame,
+                tick_length=0.1,
+            )
+        )
+        D_bez = always_redraw(
+            lambda: CubicBezier(
+                vol_eqn[-2].get_corner(DR) + [0.1, -0.1, 0],
+                vol_eqn[-2].get_corner(DR) + [1, -1, 0],
+                self.frame.to_fixed_frame_point(D_dim.get_top()) + [0, 1, 0],
+                self.frame.to_fixed_frame_point(D_dim.get_top()) + [0, 0.1, 0],
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            ).fix_in_frame()
+        )
+
+        self.play(
+            LaggedStart(
+                FadeIn(D_bez, suspend_mobject_updating=True),
+                FadeIn(D_dim, suspend_mobject_updating=True),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.add(D_dim, D_bez)
+
+        self.wait(0.5)
+
+        volume_scale = ~drop_scale
+        volume_count = len(charge_pairs)
+        volume_radius = (
+            0.95
+            * np.linalg.norm(
+                raindrop.get_points() - raindrop.get_center(), axis=1
+            ).min()
+        )
+        for m in charge_pairs:
+            m.clear_updaters()
+        charge_template = charge_pairs[0].copy()
+        charge_extent = np.linalg.norm(
+            charge_template.get_all_points() - charge_template.get_center(), axis=1
+        ).max()
+        volume_states = [
+            get_pair_state(m, m.get_center() - raindrop.get_center())
+            for m in charge_pairs
+        ]
+
+        def update_volume_charges(m):
+            scale = ~m / volume_scale
+            count = volume_count * scale**3
+            center = raindrop.get_center()
+            while len(volume_states) < int(np.ceil(count - 1e-6)):
+                pair_scale = ((len(volume_states) + 1) / volume_count) ** (1 / 3)
+                candidates = rng.normal(size=(64, 3))
+                candidates /= np.linalg.norm(candidates, axis=1, keepdims=True)
+                candidates *= rng.random((64, 1)) ** (1 / 3)
+                candidates *= volume_radius - 1.15 * charge_extent / pair_scale
+                offsets = np.array([state["offset"] for state in volume_states])
+                distances = np.linalg.norm(
+                    candidates[:, None, :2] - offsets[None, :, :2], axis=2
+                )
+                offset = candidates[np.argmax(distances.min(axis=1))]
+                pair = charge_template.copy()
+                volume_states.append(get_pair_state(pair, offset))
+
+            visible_pairs = []
+            for index, state in enumerate(volume_states):
+                progress = np.clip(count - index, 0, 1)
+                position = center + state["offset"] * scale
+                for part, points in state["points"]:
+                    part.set_points(points * ease_out_back(progress) + position)
+                if progress > 1e-6:
+                    visible_pairs.append(state["pair"])
+            if charge_pairs.submobjects != visible_pairs:
+                charge_pairs.set_submobjects(visible_pairs)
+
+        drop_scale.add_updater(update_volume_charges)
+
+        self.play(drop_scale * 2, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=utils.rate_functions.there_and_back)
+                    .set_color(YELLOW)
+                    .scale(1.3)
+                    for m in [*vol_eqn[5:11], *vol_eqn[12:]]
+                ],
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        pow_vol_eqn = (
+            Tex(
+                r"P \propto V^2 = \left(\frac{4}{3} \pi r^3\right)^2 = "
+                r"\left( \frac{1}{6} \pi D^3 \right)^2"
+            )
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(vol_eqn, LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(D_bez, suspend_mobject_updating=True),
+                vol_eqn[:2].animate.shift(DOWN).set_opacity(0.2),
+                GrowFromCenter(pow_vol_eqn[0]),
+                ReplacementTransform(vol_eqn[2], pow_vol_eqn[1]),
+                LaggedStart(
+                    ReplacementTransform(vol_eqn[3], pow_vol_eqn[2]),
+                    ReplacementTransform(vol_eqn[4], pow_vol_eqn[4]),
+                    ReplacementTransform(vol_eqn[5:11], pow_vol_eqn[6:12]),
+                    ReplacementTransform(vol_eqn[11], pow_vol_eqn[14]),
+                    ReplacementTransform(vol_eqn[12:], pow_vol_eqn[16:22]),
+                    lag_ratio=0,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.play(
+            LaggedStart(
+                *[
+                    GrowFromCenter(m)
+                    for m in [
+                        pow_vol_eqn[3],
+                        pow_vol_eqn[5],
+                        pow_vol_eqn[12],
+                        pow_vol_eqn[13],
+                        pow_vol_eqn[15],
+                        pow_vol_eqn[22],
+                        pow_vol_eqn[23],
+                    ]
+                ],
+                lag_ratio=0.15,
+            )
+        )
+
+        self.remove(vol_eqn)
+        self.add(vol_eqn[:2], pow_vol_eqn)
+
+        self.wait(0.5)
+
+        pow_vol_eqn_r = (
+            Tex(r"P \propto V^2 = \left(\frac{4}{3} \pi r^3\right)^2")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(pow_vol_eqn, LEFT)
+        )
+        pow_vol_eqn_2r = (
+            Tex(r"P \propto V^2 = \left(\frac{4}{3} \pi (2r)^3\right)^2")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(pow_vol_eqn, LEFT)
+        )
+        pow_vol_eqn_cubed = (
+            Tex(r"P \propto V^2 = \left(\frac{4}{3} \pi 2^3 r^3\right)^2")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(pow_vol_eqn, LEFT)
+        )
+        pow_vol_eqn_squared = (
+            Tex(r"P \propto V^2 = 2^{3 \cdot 2}\left(\frac{4}{3} \pi r^3\right)^2")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(pow_vol_eqn, LEFT)
+        )
+        pow_vol_eqn_six = (
+            Tex(r"P \propto V^2 = 2^6\left(\frac{4}{3} \pi r^3\right)^2")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(pow_vol_eqn, LEFT)
+        )
+        pow_vol_eqn_64 = (
+            Tex(r"P \propto V^2 = 64\left(\frac{4}{3} \pi r^3\right)^2")
+            .fix_in_frame()
+            .scale(1.5)
+            .move_to(pow_vol_eqn, LEFT)
+        )
+
+        self.play(
+            ReplacementTransform(pow_vol_eqn[:14], pow_vol_eqn_r[:14]),
+            LaggedStart(*[FadeOut(m) for m in pow_vol_eqn[14:]], lag_ratio=0.08),
+            FadeOut(D_dim, suspend_mobject_updating=True),
+        )
+
+        self.remove(pow_vol_eqn)
+        self.add(pow_vol_eqn_r)
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pow_vol_eqn_r[:10], pow_vol_eqn_2r[:10]),
+            ReplacementTransform(pow_vol_eqn_r[10], pow_vol_eqn_2r[12]),
+            ReplacementTransform(pow_vol_eqn_r[11:], pow_vol_eqn_2r[14:]),
+        )
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m) for m in pow_vol_eqn_2r[10:12]],
+                GrowFromCenter(pow_vol_eqn_2r[13]),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.remove(pow_vol_eqn_r)
+        self.add(pow_vol_eqn_2r)
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pow_vol_eqn_2r[:10], pow_vol_eqn_cubed[:10]),
+            FadeOut(pow_vol_eqn_2r[10]),
+            ReplacementTransform(pow_vol_eqn_2r[11], pow_vol_eqn_cubed[10]),
+            ReplacementTransform(pow_vol_eqn_2r[12], pow_vol_eqn_cubed[12]),
+            FadeOut(pow_vol_eqn_2r[13]),
+            TransformFromCopy(
+                pow_vol_eqn_2r[14], pow_vol_eqn_cubed[11], path_arc=PI / 3
+            ),
+            ReplacementTransform(pow_vol_eqn_2r[14:], pow_vol_eqn_cubed[13:]),
+            run_time=1.5,
+        )
+
+        self.remove(pow_vol_eqn_2r)
+        self.add(pow_vol_eqn_cubed)
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pow_vol_eqn_cubed[:5], pow_vol_eqn_squared[:5]),
+            ReplacementTransform(pow_vol_eqn_cubed[5:10], pow_vol_eqn_squared[9:14]),
+            ReplacementTransform(
+                pow_vol_eqn_cubed[10:12], pow_vol_eqn_squared[5:7], path_arc=PI
+            ),
+            GrowFromCenter(pow_vol_eqn_squared[7]),
+            TransformFromCopy(
+                pow_vol_eqn_cubed[15], pow_vol_eqn_squared[8], path_arc=PI / 3
+            ),
+            ReplacementTransform(pow_vol_eqn_cubed[12:], pow_vol_eqn_squared[14:]),
+            run_time=1.5,
+        )
+
+        self.remove(pow_vol_eqn_cubed)
+        self.add(pow_vol_eqn_squared)
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pow_vol_eqn_squared[:6], pow_vol_eqn_six[:6]),
+            ReplacementTransform(pow_vol_eqn_squared[6:9], pow_vol_eqn_six[6]),
+            ReplacementTransform(pow_vol_eqn_squared[9:], pow_vol_eqn_six[7:]),
+        )
+
+        self.remove(pow_vol_eqn_squared)
+        self.add(pow_vol_eqn_six)
+
+        self.wait(0.5)
+
+        self.play(
+            ReplacementTransform(pow_vol_eqn_six[:5], pow_vol_eqn_64[:5]),
+            ReplacementTransform(pow_vol_eqn_six[5:7], pow_vol_eqn_64[5:7]),
+            ReplacementTransform(pow_vol_eqn_six[7:], pow_vol_eqn_64[7:]),
+        )
+
+        self.remove(pow_vol_eqn_six)
+        self.add(pow_vol_eqn_64)
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(vol_eqn[:2]),
+                self.frame.animate.shift(UP * fh(self)),
+                pow_vol_eqn_64.animate.move_to(ORIGIN),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(*[FadeOut(m) for m in self.mobjects])
+
+        self.embed()
+
+
+class Plug(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+
+        description_arrow = Arrow(
+            self.frame.get_center() + DOWN * fh(self, 0.25),
+            self.frame.get_center() + DOWN * fh(self, 0.45),
+        )
+        description = Text("In the description", font=FONT).next_to(
+            description_arrow, UP, SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                Write(description, run_time=0.8),
+                GrowArrow(description_arrow),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        nb_slider = (
+            VideoMobject("./static/nb_slider.mov", start=8, end=18)
+            .rescale_to_fit(fw(self, 0.5), 0)
+            .next_to(description, UP, MED_LARGE_BUFF)
+        )
+
+        self.play(nb_slider.shift(UP * fh(self)).animate.shift(DOWN * fh(self)))
+
+        self.wait(2)
+
+        figures = Group()
+        for filename, title in [
+            (
+                "bohren_radiating_dipole.png",
+                "Absorption and Scattering\nof Light by Small Particles",
+            ),
+            (
+                "rauber_scattering_regimes.png",
+                "Radar Meteorology:\nA First Course",
+            ),
+            (
+                "chandra_scattering_patterns.png",
+                "Introduction to Dual Polarization\nWeather Radar",
+            ),
+            (
+                "chandra_melting_layer.png",
+                "Introduction to Dual Polarization\nWeather Radar",
+            ),
+        ]:
+            figure = ImageMobject(f"./static/plug_figures/{filename}")
+            figure.set_width(fw(self, 0.21))
+            if figure.get_height() > fh(self, 0.2):
+                figure.set_height(fh(self, 0.2))
+            source_title = Text(title, font=FONT, font_size=14)
+            if source_title.get_width() > fw(self, 0.21):
+                source_title.set_width(fw(self, 0.21))
+            source_title.next_to(figure, DOWN, SMALL_BUFF)
+            figures.add(Group(figure, source_title))
+
+        figures.arrange_in_grid(n_cols=2, buff=MED_SMALL_BUFF)
+        figures.set_x(fw(self, 0.245)).align_to(nb_slider, UP)
+
+        self.play(
+            nb_slider.animate(suspend_mobject_updating=False)
+            .set_width(fw(self, 0.46))
+            .set_x(-fw(self, 0.24)),
+            run_time=1.2,
+        )
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m, rate_func=ease_out_back) for m in figures],
+                lag_ratio=0.3,
+                run_time=2,
+            )
+        )
+
+        self.wait(4)
+
+        merch = Group(
+            *[
+                ImageMobject(f"../props/static/{filename}").set_height(fh(self, 0.48))
+                for filename in [
+                    "engineering_notebook_cover.png",
+                    "radar_equation_mug.webp",
+                    "phased_array_shirt_back.webp",
+                    "dual_pol_mug.webp",
+                ]
+            ]
+        ).arrange(RIGHT, buff=MED_SMALL_BUFF)
+        if merch.get_width() > fw(self, 0.94):
+            merch.set_width(fw(self, 0.94))
+        merch.next_to(description, UP, MED_LARGE_BUFF)
+
+        self.play(FadeOut(nb_slider), *[FadeOut(m) for m in figures])
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m, rate_func=ease_out_back) for m in merch],
+                lag_ratio=0.3,
+                run_time=2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            merch[0].animate.set_height(fh(self, 0.58)).move_to(UP * fh(self, 0.12)),
+            *[
+                m.animate.set_x(fw(self, x))
+                for m, x in zip(merch[1:], [-0.31, 0.395, 0.225])
+            ],
+            run_time=1.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[ShrinkToCenter(m) for m in merch],
+                FadeOut(description),
+                FadeOut(description_arrow),
+                lag_ratio=0.15,
+            )
+        )
 
         self.embed()
 
@@ -4712,32 +5209,7 @@ class BrightBandP2(InteractiveScene):
             run_time=4,
         )
 
-        self.wait(0.5)
-
-        es_propto = Tex(r"E_s \propto")
-        reflectivity_label = Text("Reflectivity", font=FONT)
-        profile_label_new = (
-            Group(es_propto, reflectivity_label)
-            .arrange(RIGHT, SMALL_BUFF)
-            .rescale_to_fit(profile_axes[1].get_width() * 1.8, 0)
-            .move_to(profile_label)
-        )
-
-        self.play(
-            LaggedStart(
-                ReplacementTransform(profile_label, profile_label_new[0][:2]),
-                LaggedStart(
-                    *[
-                        FadeIn(m)
-                        for m in [profile_label_new[0][2], *profile_label_new[1]]
-                    ],
-                    lag_ratio=0.1,
-                ),
-                lag_ratio=0.3,
-            )
-        )
-
-        self.wait(2)
+        self.wait(15)
 
         vel_inc_label = Tex("v")
         vel_inc_arrow = Arrow(UP, DOWN)
@@ -4755,21 +5227,7 @@ class BrightBandP2(InteractiveScene):
             ),
         )
 
-        self.wait(0.5)
-
-        z_inc = (
-            Rectangle(
-                width=profile_axes[1].get_width() * 1.1,
-                height=melting_layer.get_height() * 1.1,
-                stroke_color=GREEN,
-            )
-            .set_x(profile_axes[1].get_x())
-            .set_y(melting_layer.get_y())
-        )
-
-        self.play(ShowCreation(z_inc))
-
-        self.wait(5)
+        self.wait(14)
 
         self.play(self.frame.animate.shift(DOWN * fh(self, 2)))
 
@@ -4974,6 +5432,52 @@ class BrightBandP3(InteractiveScene):
         )
 
         scan_line.clear_updaters()
+
+        bright_band_box = (
+            Rectangle(
+                width=30.8,
+                height=0.7 * vertical_exaggeration,
+                stroke_color=BLACK,
+                stroke_width=3,
+                fill_opacity=0,
+            )
+            .move_to([17.4, 2.4 * vertical_exaggeration, 0])
+            .apply_matrix(rhi_basis)
+            .shift(rhi_origin)
+            .deactivate_depth_test()
+            .set_z_index(5)
+        )
+        bright_band_label = (
+            get_rhi_label(
+                "Melting layer / Bright band",
+                [17.4, 3.2 * vertical_exaggeration],
+                32,
+            )
+            .set_color(YELLOW)
+            .set_backstroke(BACKGROUND_COLOR, 6)
+            .set_z_index(6)
+        )
+
+        self.wait(0.5)
+
+        self.play(ShowCreation(bright_band_box), run_time=1.5)
+
+        self.wait(1)
+
+        self.play(FadeIn(bright_band_label, shift=UP * 0.15))
+
+        self.wait(0.5)
+
+        rhi_image.clear_updaters()
+        scan_elevation.clear_updaters()
+
+        for m in (rhi_labels, bright_band_label):
+            m.apply_function(self.frame.from_fixed_frame_point).unfix_from_frame()
+
+        self.play(self.frame.animate.shift(rhi_up * self.frame.get_height()))
+
+        self.wait(0.5)
+
         self.embed()
 
 
@@ -5493,7 +5997,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(5.55)
 
         def get_trace_highlight(trace, time_width=0.2):
             highlight = trace.copy().set_stroke(YELLOW, width=8, opacity=1)
@@ -5600,7 +6104,7 @@ class Dsd(InteractiveScene):
 
         # self.wait(10)
 
-        self.wait(0.5)
+        self.wait(4.15)
 
         self.play(
             colorbar_label.animate(rate_func=utils.rate_functions.there_and_back)
@@ -5643,7 +6147,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(1.2)
 
         rain_line = (
             Line(
@@ -5679,7 +6183,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(2.0)
 
         melting_line = (
             Line(
@@ -5716,7 +6220,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(9.5)
 
         snow_exag = (
             snow_layer.copy()
@@ -5739,7 +6243,7 @@ class Dsd(InteractiveScene):
 
         self.play(ShowCreation(snow_exag, run_time=1.5))
 
-        self.wait(0.5)
+        self.wait(5.5)
 
         self.play(
             LaggedStart(
@@ -5749,7 +6253,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(7.5)
 
         self.play(
             LaggedStart(
@@ -5759,7 +6263,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(1.5)
 
         self.wait(0.5)
 
@@ -5892,5 +6396,468 @@ class Dsd(InteractiveScene):
                 lag_ratio=0.4,
             )
         )
+
+        self.embed()
+
+
+class Lots(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        rhi_cells = get_olympex_rhi_cells()
+        rhi_origin = np.array([-6.2, -1.7, 0])
+        rhi_scale = np.array([0.2, 0.4, 1])
+
+        def rhi_point(range_km, height_km):
+            return rhi_origin + rhi_scale * [range_km, height_km, 0]
+
+        corners = np.pad(rhi_cells["corners"], ((0, 0), (0, 0), (0, 1)))
+        corners = rhi_origin + corners * rhi_scale
+        points = corners[:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
+        rhi_image = (
+            TriangleMeshMobject(
+                points,
+                np.broadcast_to(OUT, points.shape),
+                np.repeat(rhi_cells["rgba"], 6, axis=0),
+            )
+            .set_shading(0, 0, 0)
+            .deactivate_depth_test()
+        )
+        rhi_axes = VGroup()
+        rhi_labels = VGroup()
+        for x in (0, 10, 20, 30):
+            rhi_axes.add(Line(rhi_point(x, 0), rhi_point(x, 8)))
+            rhi_labels.add(
+                Text(str(x), font=FONT, font_size=16).next_to(
+                    rhi_point(x, 0), DOWN, SMALL_BUFF
+                )
+            )
+        for z in (0, 2, 4, 6, 8):
+            rhi_axes.add(Line(rhi_point(0, z), rhi_point(32.8, z)))
+            rhi_labels.add(
+                Text(str(z), font=FONT, font_size=16).next_to(
+                    rhi_point(0, z), LEFT, SMALL_BUFF
+                )
+            )
+        rhi_axes.set_stroke(WHITE, 1, 0.15)
+        rhi_labels.add(
+            Text("Range (km)", font=FONT, font_size=20).move_to([-2.92, -2.25, 0]),
+            Text("Height (km)", font=FONT, font_size=20)
+            .rotate(PI / 2)
+            .move_to([-6.85, -0.1, 0]),
+            Text("NPOL / OLYMPEX / 13 Nov 2015", font=FONT, font_size=16).move_to(
+                [-2.92, 1.92, 0]
+            ),
+        )
+        colorbar = VGroup()
+        colorbar_rgba = (
+            field_to_rgba(
+                np.linspace(10, 50, 128)[None, :],
+                vmin=10,
+                vmax=50,
+                cmap_name="NWSRef",
+                fallback_cmap_name="NWSRef",
+            )[0]
+            / 255
+        )
+        for index, rgba in enumerate(colorbar_rgba):
+            colorbar.add(
+                Rectangle(
+                    width=6.56 / 128 + 0.002,
+                    height=0.15,
+                    fill_color=rgb_to_color(rgba[:3]),
+                    fill_opacity=1,
+                    stroke_width=0,
+                ).move_to([-6.2 + (index + 0.5) * 6.56 / 128, -2.72, 0])
+            )
+        for value in (10, 20, 30, 40, 50):
+            colorbar.add(
+                Text(str(value), font=FONT, font_size=16).move_to(
+                    [-6.2 + (value - 10) * 6.56 / 40, -3.02, 0]
+                )
+            )
+        colorbar.add(Text("dBZ", font=FONT, font_size=18).move_to([-2.92, -3.4, 0]))
+        rhi_plot = Group(rhi_image, rhi_axes, rhi_labels, colorbar)
+        rhi_plot.shift(DOWN * fh(self))
+
+        self.play(rhi_plot.animate.shift(UP * fh(self)), run_time=2)
+
+        self.wait(0.5)
+
+        rng = np.random.default_rng(7)
+        diameters = np.linspace(0.05, 8, 400)
+        snow_density = diameters * np.exp(-diameters / 1.2)
+        rain_density = diameters**2 * np.exp(-diameters / 0.25)
+        wet_snow_density = diameters * np.exp(-diameters / 0.9)
+        snow_density /= np.trapezoid(snow_density, diameters)
+        rain_density /= np.trapezoid(rain_density, diameters)
+        wet_snow_density /= np.trapezoid(wet_snow_density, diameters)
+        melting_density = 0.7 * wet_snow_density + 0.3 * rain_density
+        permittivity_colors = get_color_map("coolwarm")
+        gate_centers = rhi_cells["corners"].mean(axis=1)
+        gate_callouts = []
+        snow_particles = VGroup()
+        melting_particles = VGroup()
+        rain_particles = VGroup()
+
+        for title, height, row_y, density, melt_fraction, particles in (
+            ("Snow / ice + air", 4.5, 2.3, snow_density, 0, snow_particles),
+            ("Melting / ice + water", 2.35, 0, melting_density, 0.5, melting_particles),
+            ("Rain / liquid water", 0.9, -2.3, rain_density, 1, rain_particles),
+        ):
+            gate_index = np.argmin(np.sum((gate_centers - [26, height]) ** 2, axis=1))
+            gate = Polygon(
+                *corners[gate_index],
+                stroke_color=YELLOW,
+                stroke_width=3,
+                fill_opacity=0,
+            ).set_z_index(4)
+            gate_ring = Circle(radius=0.12, color=YELLOW, stroke_width=2).move_to(gate)
+            population_box = Rectangle(
+                width=2.2,
+                height=1.25,
+                stroke_color=GREY_B,
+                stroke_width=1,
+                stroke_opacity=0.5,
+            ).move_to([2.65, row_y - 0.08, 0])
+            population_title = Text(title, font=FONT, font_size=22).move_to(
+                [4.05, row_y + 0.88, 0]
+            )
+            particle_diameters = np.sort(
+                rng.choice(diameters, 24, p=density / density.sum())
+            )[::-1]
+            particle_positions = []
+            for diameter in particle_diameters:
+                radius = 0.036 * diameter
+                for _ in range(300):
+                    position = np.array(
+                        [
+                            rng.uniform(-1.05 + radius, 1.05 - radius),
+                            rng.uniform(-0.575 + radius, 0.575 - radius),
+                            0,
+                        ]
+                    )
+                    if all(
+                        np.linalg.norm(position - point) > radius + other_radius + 0.035
+                        for point, other_radius in particle_positions
+                    ):
+                        break
+                particle_positions.append((position, radius))
+                water_fraction = melt_fraction
+                if melt_fraction == 0.5:
+                    rain_probability = np.interp(
+                        diameter, diameters, 0.3 * rain_density / melting_density
+                    )
+                    water_fraction = (
+                        1
+                        if rng.random() < rain_probability
+                        else np.clip(1 - diameter / 6 + rng.normal(0, 0.1), 0.15, 0.9)
+                    )
+                color = rgb_to_color(
+                    permittivity_colors(0.15 + 0.7 * water_fraction)[:3]
+                )
+                snowflake = VGroup(
+                    *[
+                        Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
+                        for angle in (0, PI / 3, 2 * PI / 3)
+                    ]
+                ).set_stroke(color, 1.5)
+                water = Circle(radius=radius).set_fill(color, 0.65).set_stroke(color, 1)
+                if water_fraction == 0:
+                    particle = snowflake
+                elif water_fraction == 1:
+                    particle = water.stretch(max(0.7, 1 - 0.06 * diameter), 1)
+                else:
+                    particle = VGroup(
+                        water.set_fill(color, 0.15 + 0.4 * water_fraction),
+                        snowflake.scale(1 - water_fraction),
+                    )
+                particles.add(particle.move_to(population_box.get_center() + position))
+
+            axes = VGroup(
+                Line([4.35, row_y - 0.65, 0], [6.55, row_y - 0.65, 0]),
+                Line([4.35, row_y - 0.65, 0], [4.35, row_y + 0.55, 0]),
+            ).set_stroke(GREY_B, 1.3)
+            size_labels = VGroup(
+                Text("Relative number", font=FONT, font_size=14).move_to(
+                    [5.45, row_y + 0.48, 0]
+                ),
+                Text("Diameter (mm)", font=FONT, font_size=16).move_to(
+                    [5.45, row_y - 1.06, 0]
+                ),
+                *[
+                    Text(str(diameter), font=FONT, font_size=14).move_to(
+                        [4.35 + diameter * 2.2 / 8, row_y - 0.82, 0]
+                    )
+                    for diameter in (0, 4, 8)
+                ],
+            )
+            curve = (
+                VMobject()
+                .set_points_as_corners(
+                    np.column_stack(
+                        (
+                            4.35 + diameters * 2.2 / 8,
+                            row_y - 0.65 + 0.92 * density / density.max(),
+                            np.zeros_like(diameters),
+                        )
+                    )
+                )
+                .set_stroke(
+                    rgb_to_color(permittivity_colors(0.15 + 0.7 * melt_fraction)[:3]), 3
+                )
+            )
+            bez = CubicBezier(
+                gate_ring.get_right(),
+                gate_ring.get_right() + RIGHT * 1.25,
+                population_box.get_left() + LEFT * 0.7,
+                population_box.get_left(),
+                stroke_color=YELLOW,
+                stroke_width=2,
+            ).set_z_index(3)
+            gate_callouts.append(
+                LaggedStart(
+                    AnimationGroup(ShowCreation(gate), ShowCreation(gate_ring)),
+                    ShowCreation(bez),
+                    AnimationGroup(FadeIn(population_box), FadeIn(population_title)),
+                    LaggedStart(
+                        *[GrowFromCenter(m) for m in particles], lag_ratio=0.05
+                    ),
+                    AnimationGroup(
+                        FadeIn(axes), FadeIn(size_labels), ShowCreation(curve)
+                    ),
+                    lag_ratio=0.25,
+                    run_time=3,
+                )
+            )
+
+        self.play(LaggedStart(*gate_callouts, lag_ratio=0.55))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=utils.rate_functions.there_and_back).shift(
+                        UP * 0.3
+                    )
+                    for m in [*snow_particles, *melting_particles, *rain_particles]
+                ],
+                lag_ratio=0.02,
+            )
+        )
+
+        self.wait(0.5)
+
+        selected_pixel_index = np.argmin(
+            np.sum((gate_centers - [26, 2.35]) ** 2, axis=1)
+        )
+        selected_pixel = Polygon(
+            *corners[selected_pixel_index],
+            fill_color=rgb_to_color(rhi_cells["rgba"][selected_pixel_index, :3]),
+            fill_opacity=1,
+            stroke_width=0,
+        ).set_z_index(5)
+        self.add(selected_pixel)
+
+        dim_animations = []
+        for m in self.get_mobject_family_members():
+            if m is self.frame or m is selected_pixel or not m.has_points():
+                continue
+            if isinstance(m, VMobject):
+                dim_animations.append(
+                    m.animate.set_fill(
+                        opacity=0.1 if m.get_fill_opacity() else 0, recurse=False
+                    ).set_stroke(
+                        opacity=0.1 if m.get_stroke_opacity() else 0, recurse=False
+                    )
+                )
+            else:
+                dim_animations.append(m.animate.set_opacity(0.1, recurse=False))
+
+        self.play(
+            self.frame.animate.move_to(selected_pixel).set_height(
+                selected_pixel.get_height() * 5
+            ),
+            *dim_animations,
+            run_time=3,
+        )
+
+        self.wait(0.5)
+
+        self.play(*[FadeOut(m) for m in self.mobjects])
+
+        self.embed()
+
+
+class Wrapup(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+
+    def construct(self):
+        python_logo = ImageMobject(
+            "../props/static/python-logo-only.png"
+        ).rescale_to_fit(fh(self, 0.4), 1)
+        nb_title = Text("dsd.py", font=FONT)
+        nb_group = Group(python_logo, nb_title).arrange(DOWN, buff=MED_LARGE_BUFF)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(python_logo),
+                Write(nb_title),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(python_logo), FadeOut(nb_title))
+
+        self.wait(0.5)
+
+        i_saved = (
+            Text("I saved these comments in my notes to keep me motivated", font=FONT)
+            .rescale_to_fit(fw(self, 0.8), 0)
+            .next_to(self.frame.get_bottom(), UP, MED_LARGE_BUFF)
+        )
+
+        brewery = Path("../../brewery")
+        comment_attachments = (
+            brewery / "Projects/YouTube/Channel and Business/attachments/nice-comments"
+        )
+        comment_paths = [
+            brewery / "Pasted image 20260512124704.png",
+            brewery / "Pasted image 20260512124838.png",
+            brewery / "Pasted image 20260513053732.png",
+            brewery / "Pasted image 20260515094127.png",
+            comment_attachments / "2026-09-13-01-overlordofnerds.png",
+            comment_attachments / "2026-09-13-02-arthurlondero7036.png",
+            comment_attachments / "2026-09-13-03-yitz2.png",
+            comment_attachments / "2026-09-13-04-krispvideos.png",
+            comment_attachments / "2026-09-13-05-bstanis1237.png",
+            comment_attachments / "2026-09-13-06-mabojq7ug.png",
+            comment_attachments / "2026-09-13-07-cubbyhoo.png",
+            comment_attachments / "2026-09-13-08-codertahsin.png",
+            comment_attachments / "2026-09-13-09-aposdfzxc23.png",
+            comment_attachments / "2026-09-13-10-neilrodricks8630.png",
+            comment_attachments / "2026-09-13-11-yetanotherpc.png",
+            comment_attachments / "2026-09-13-12-kingjamez80.png",
+            brewery / "Pasted image 20260907125638.png",
+            brewery / "Pasted image 20260831125413.png",
+        ]
+
+        comments = Group(
+            *[
+                ImageMobject(str(path)).rescale_to_fit(fw(self, 0.5), 0)
+                for path in comment_paths
+            ]
+        ).arrange(UP, buff=MED_SMALL_BUFF)
+        comments.next_to(self.frame.get_top(), UP, buff=0)
+
+        caption_background = Rectangle(
+            width=fw(self, 1),
+            height=i_saved.get_height() + 2 * MED_LARGE_BUFF,
+            stroke_width=0,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+        ).next_to(self.frame.get_bottom(), UP, buff=0)
+
+        scroll_speed = fh(self, 0.06)
+        scroll_distance = comments.get_height() + fh(self, 1) + 2 * MED_LARGE_BUFF
+
+        merch = Group(
+            *[
+                ImageMobject(f"../props/static/{filename}").rescale_to_fit(
+                    fh(self, 0.4), 1
+                )
+                for filename in [
+                    "engineering_notebook_cover.png",
+                    "phased_array_shirt_back.webp",
+                    "radar_equation_mug.webp",
+                    "dual_pol_mug.webp",
+                ]
+            ]
+        ).arrange_in_grid(n_cols=2, buff=MED_SMALL_BUFF)
+        merch.move_to(RIGHT * fw(self, 0.25) + UP * fh(self, 0.06))
+
+        member_names = [
+            "ZacJW",
+            "db-isJustARatio",
+            "misspeled",
+            "Florian Euchner",
+            "w1gx",
+            "alikarb0724",
+            "Mark Humes",
+            "Bob Van Valzah",
+            "Randy Gumabong",
+            "noleteman",
+            "ebkimaru",
+            "Caboose",
+            "Michael Shear",
+            "Rich",
+            "Russell Newman",
+            "DelAntenna",
+            "Soren Welling",
+        ]
+        members_header = (
+            VGroup(Text("Huge thanks", font=FONT), Text("to the Members!", font=FONT))
+            .arrange(DOWN, buff=MED_SMALL_BUFF)
+            .rescale_to_fit(fw(self, 0.35), 0)
+        )
+        members_header[1][-8:-1].set_fill(color=ORANGE)
+        members = VGroup(*[Text(name, font=FONT) for name in member_names]).arrange(
+            DOWN, buff=MED_SMALL_BUFF
+        )
+        members.rescale_to_fit(fh(self, 0.58), 1)
+        member_thanks = VGroup(members_header, members).arrange(
+            DOWN, buff=MED_LARGE_BUFF
+        )
+        member_thanks.move_to(RIGHT * fw(self, 0.25) + UP * fh(self, 0.06))
+
+        self.add(comments, caption_background)
+
+        scroll_start_time = self.time
+        scroll_start_y = comments.get_y()
+        comments.add_updater(
+            lambda m: m.set_y(
+                scroll_start_y - scroll_speed * (self.time - scroll_start_time)
+            )
+        )
+
+        self.play(Write(i_saved))
+
+        self.wait(6)
+
+        self.play(
+            comments.animate(suspend_mobject_updating=False).set_x(-fw(self, 0.22)),
+            i_saved.animate.rescale_to_fit(fw(self, 0.45), 0).set_x(-fw(self, 0.22)),
+            run_time=1.5,
+        )
+
+        self.play(
+            LaggedStart(
+                *[GrowFromCenter(m, rate_func=ease_out_back) for m in merch],
+                lag_ratio=0.3,
+                run_time=2,
+            )
+        )
+
+        self.wait(6)
+
+        self.play(
+            merch.animate.shift(
+                UP * (self.frame.get_top()[1] - merch.get_bottom()[1] + MED_LARGE_BUFF)
+            ),
+            run_time=1.5,
+        )
+        self.remove(merch)
+
+        self.play(Write(members_header))
+
+        self.play(Write(members), run_time=3)
+
+        self.wait(
+            max(0, scroll_distance / scroll_speed - (self.time - scroll_start_time))
+        )
+        comments.clear_updaters()
 
         self.embed()
