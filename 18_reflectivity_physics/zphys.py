@@ -2767,7 +2767,7 @@ class DipoleP2(ThreeDScene):
 
         self.play(
             ShowCreation(sine_pattern, run_time=2),
-            field_time.animate(run_time=6, rate_func=linear).increment_value(6),
+            field_time.animate(run_time=4.5, rate_func=linear).increment_value(4.5),
         )
 
         self.play(
@@ -6333,7 +6333,7 @@ class Dsd(InteractiveScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(1)
 
         hydrometeors.suspend_updating()
         waterfall_traces.suspend_updating()
@@ -6726,23 +6726,23 @@ class Wrapup(InteractiveScene):
         )
         comment_paths = [
             brewery / "Pasted image 20260512124704.png",
-            brewery / "Pasted image 20260512124838.png",
-            brewery / "Pasted image 20260513053732.png",
-            brewery / "Pasted image 20260515094127.png",
+            # brewery / "Pasted image 20260512124838.png",
+            # brewery / "Pasted image 20260513053732.png",
+            # brewery / "Pasted image 20260515094127.png",
             comment_attachments / "2026-09-13-01-overlordofnerds.png",
             comment_attachments / "2026-09-13-02-arthurlondero7036.png",
             comment_attachments / "2026-09-13-03-yitz2.png",
             comment_attachments / "2026-09-13-04-krispvideos.png",
-            comment_attachments / "2026-09-13-05-bstanis1237.png",
+            # comment_attachments / "2026-09-13-05-bstanis1237.png",
             comment_attachments / "2026-09-13-06-mabojq7ug.png",
             comment_attachments / "2026-09-13-07-cubbyhoo.png",
             comment_attachments / "2026-09-13-08-codertahsin.png",
             comment_attachments / "2026-09-13-09-aposdfzxc23.png",
-            comment_attachments / "2026-09-13-10-neilrodricks8630.png",
-            comment_attachments / "2026-09-13-11-yetanotherpc.png",
-            comment_attachments / "2026-09-13-12-kingjamez80.png",
-            brewery / "Pasted image 20260907125638.png",
-            brewery / "Pasted image 20260831125413.png",
+            # comment_attachments / "2026-09-13-10-neilrodricks8630.png",
+            # comment_attachments / "2026-09-13-11-yetanotherpc.png",
+            # comment_attachments / "2026-09-13-12-kingjamez80.png",
+            # brewery / "Pasted image 20260907125638.png",
+            # brewery / "Pasted image 20260831125413.png",
         ]
 
         comments = Group(
@@ -6833,20 +6833,28 @@ class Wrapup(InteractiveScene):
             run_time=1.5,
         )
 
+        website_title = (
+            Text("marshallbruner.com", font=FONT, fill_color=ORANGE)
+            .next_to(merch, DOWN)
+            .set_y(i_saved.get_y())
+        )
+
         self.play(
             LaggedStart(
                 *[GrowFromCenter(m, rate_func=ease_out_back) for m in merch],
+                Write(website_title),
                 lag_ratio=0.3,
                 run_time=2,
             )
         )
 
-        self.wait(6)
+        self.wait(4)
 
         self.play(
             merch.animate.shift(
                 UP * (self.frame.get_top()[1] - merch.get_bottom()[1] + MED_LARGE_BUFF)
             ),
+            FadeOut(website_title),
             run_time=1.5,
         )
         self.remove(merch)
