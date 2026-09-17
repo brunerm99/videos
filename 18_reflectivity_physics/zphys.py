@@ -2601,7 +2601,7 @@ class DipoleP2(ThreeDScene):
 
         self.wait(0.5)
 
-        self.play(antenna_time @ 11, run_time=12)
+        self.play(antenna_time @ 8, run_time=9)
 
         self.wait(2)
 
@@ -2732,9 +2732,11 @@ class DipoleP2(ThreeDScene):
             .next_to(bwd_arrow, UP, MED_SMALL_BUFF)
         )
 
+        self.play(field_time.animate(run_time=3.8, rate_func=linear).increment_value(3.8))
+
         self.play(
             LaggedStart(
-                field_time.animate(run_time=15, rate_func=linear).set_value(15),
+                field_time.animate(run_time=15, rate_func=linear).increment_value(15),
                 LaggedStart(
                     LaggedStart(GrowArrow(fwd_arrow), FadeIn(fwd_label), lag_ratio=0),
                     LaggedStart(GrowArrow(bwd_arrow), FadeIn(bwd_label), lag_ratio=0),
@@ -6694,6 +6696,8 @@ class Wrapup(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
+        wrapup_duration = 62
+
         python_logo = ImageMobject(
             "../props/static/python-logo-only.png"
         ).rescale_to_fit(fh(self, 0.4), 1)
@@ -6715,43 +6719,122 @@ class Wrapup(InteractiveScene):
         self.wait(0.5)
 
         i_saved = (
-            Text("I saved these comments in my notes to keep me motivated", font=FONT)
-            .rescale_to_fit(fw(self, 0.8), 0)
+            Text(
+                "I saved these comments in my notes\nto keep me motivated",
+                font=FONT,
+                font_size=26,
+                alignment="CENTER",
+            )
             .next_to(self.frame.get_bottom(), UP, MED_LARGE_BUFF)
         )
 
-        brewery = Path("../../brewery")
-        comment_attachments = (
-            brewery / "Projects/YouTube/Channel and Business/attachments/nice-comments"
-        )
-        comment_paths = [
-            brewery / "Pasted image 20260512124704.png",
-            # brewery / "Pasted image 20260512124838.png",
-            # brewery / "Pasted image 20260513053732.png",
-            # brewery / "Pasted image 20260515094127.png",
-            comment_attachments / "2026-09-13-01-overlordofnerds.png",
-            comment_attachments / "2026-09-13-02-arthurlondero7036.png",
-            comment_attachments / "2026-09-13-03-yitz2.png",
-            comment_attachments / "2026-09-13-04-krispvideos.png",
-            # comment_attachments / "2026-09-13-05-bstanis1237.png",
-            comment_attachments / "2026-09-13-06-mabojq7ug.png",
-            comment_attachments / "2026-09-13-07-cubbyhoo.png",
-            comment_attachments / "2026-09-13-08-codertahsin.png",
-            comment_attachments / "2026-09-13-09-aposdfzxc23.png",
-            # comment_attachments / "2026-09-13-10-neilrodricks8630.png",
-            # comment_attachments / "2026-09-13-11-yetanotherpc.png",
-            # comment_attachments / "2026-09-13-12-kingjamez80.png",
-            # brewery / "Pasted image 20260907125638.png",
-            # brewery / "Pasted image 20260831125413.png",
+        comment_excerpts = [
+            (
+                "@theluftwaffel",
+                "Your videos and their great visuals really helped and I'm doing "
+                "great now. Thanks again.",
+            ),
+            (
+                "@AlphaSteak58",
+                "Super clear explanations and amazing production value. "
+                "Thanks for what you do.",
+            ),
+            (
+                "@timwildauer5063",
+                "This is close to the fastest I've ever hit \"subscribe\" "
+                "after watching a video.",
+            ),
+            (
+                "@Deveyus",
+                "SOMEONE finally said the quiet part out loud. Thank you.",
+            ),
+            ("@reyariass", "The hero we needed"),
+            (
+                "@OverlordOfNerds",
+                "That moment after midnight when it all finally clicks and I feel "
+                "enlightened and fascinated at the same time...",
+            ),
+            (
+                "@arthurlondero7036",
+                "...your channel has been one of the most valuable finds of my year. "
+                "Thank you so much!!!",
+            ),
+            (
+                "@Yitz2",
+                "Please keep making these, these are honestly amazing.",
+            ),
+            (
+                "@KrisPvideos",
+                "Again a video which is a treasure for humanity.",
+            ),
+            (
+                "@bstanis1237",
+                "Please, keep going in this content, you don't know how much you aid us",
+            ),
+            (
+                "@mabo-jq7ug",
+                "...this is by far the best combination of teaching I have seen...",
+            ),
+            (
+                "@cubbyhoo",
+                "...these videos are an amazing resource for trying to learn "
+                "about this incredibly complex world.",
+            ),
+            (
+                "@Coder.tahsin",
+                "...luckily people like you exist who can make complex things "
+                "easy to understand for people like me...",
+            ),
+            (
+                "@aposdfzxc23",
+                "This is an incredibly well produced educational series on the topic "
+                "and you nailed the presentation.",
+            ),
+            (
+                "@neilrodricks8630",
+                "If not for your videos I would have given up studying radar...",
+            ),
+            (
+                "@yetanotherPC",
+                "Very intelligent and an incredible storyteller.",
+            ),
+            (
+                "@kingjamez80",
+                "Great video on why chirps are perfect for radar. "
+                "Keep it up, I'll watch anything you make.",
+            ),
+            (
+                "@anthonyecheverry9218",
+                "Out of the loop on next vid but would love a segment "
+                "about spurs and harmonics!",
+            ),
+            (
+                "@rfdspguru2",
+                "No matter what you choose I'm sure it will be great!",
+            ),
+            (
+                "@JonBrami",
+                "Btw I got my dream RF job last month and just wanted "
+                "to thank you for your content.",
+            ),
         ]
 
-        comments = Group(
+        comments = VGroup(
             *[
-                ImageMobject(str(path)).rescale_to_fit(fw(self, 0.5), 0)
-                for path in comment_paths
+                VGroup(
+                    Text(author, font=FONT, font_size=28, fill_color=ORANGE),
+                    Text(
+                        excerpt,
+                        font=FONT,
+                        font_size=36,
+                        alignment="LEFT",
+                        line_width=fw(self, 0.44),
+                    ),
+                ).arrange(DOWN, aligned_edge=LEFT, buff=MED_SMALL_BUFF)
+                for author, excerpt in comment_excerpts
             ]
-        ).arrange(UP, buff=MED_SMALL_BUFF)
-        comments.next_to(self.frame.get_top(), UP, buff=0)
+        ).arrange(DOWN, aligned_edge=LEFT, buff=MED_LARGE_BUFF)
+        comments.next_to(self.frame.get_bottom(), DOWN, buff=0)
 
         caption_background = Rectangle(
             width=fw(self, 1),
@@ -6761,8 +6844,9 @@ class Wrapup(InteractiveScene):
             fill_opacity=1,
         ).next_to(self.frame.get_bottom(), UP, buff=0)
 
-        scroll_speed = fh(self, 0.06)
-        scroll_distance = comments.get_height() + fh(self, 1) + 2 * MED_LARGE_BUFF
+        scroll_duration = wrapup_duration - self.time
+        scroll_distance = comments.get_height() + fh(self, 1) + MED_SMALL_BUFF
+        scroll_speed = scroll_distance / scroll_duration
 
         merch = Group(
             *[
@@ -6819,7 +6903,7 @@ class Wrapup(InteractiveScene):
         scroll_start_y = comments.get_y()
         comments.add_updater(
             lambda m: m.set_y(
-                scroll_start_y - scroll_speed * (self.time - scroll_start_time)
+                scroll_start_y + scroll_speed * (self.time - scroll_start_time)
             )
         )
 
@@ -6829,7 +6913,7 @@ class Wrapup(InteractiveScene):
 
         self.play(
             comments.animate(suspend_mobject_updating=False).set_x(-fw(self, 0.22)),
-            i_saved.animate.rescale_to_fit(fw(self, 0.45), 0).set_x(-fw(self, 0.22)),
+            i_saved.animate.set_x(-fw(self, 0.22)),
             run_time=1.5,
         )
 
@@ -6863,9 +6947,7 @@ class Wrapup(InteractiveScene):
 
         self.play(Write(members), run_time=3)
 
-        self.wait(
-            max(0, scroll_distance / scroll_speed - (self.time - scroll_start_time))
-        )
+        self.wait(max(0, wrapup_duration - self.time))
         comments.clear_updaters()
 
         self.embed()
