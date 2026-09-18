@@ -2732,7 +2732,9 @@ class DipoleP2(ThreeDScene):
             .next_to(bwd_arrow, UP, MED_SMALL_BUFF)
         )
 
-        self.play(field_time.animate(run_time=3.8, rate_func=linear).increment_value(3.8))
+        self.play(
+            field_time.animate(run_time=2.45, rate_func=linear).increment_value(2.45)
+        )
 
         self.play(
             LaggedStart(
@@ -2853,7 +2855,9 @@ class DipoleP2(ThreeDScene):
 
         self.wait(0.5)
 
-        self.play(field_time.animate(run_time=9, rate_func=linear).increment_value(9))
+        self.play(
+            field_time.animate(run_time=3.75, rate_func=linear).increment_value(3.75)
+        )
 
         plane_reveal = VT(0)
         field_radius @= np.hypot(fw(self), fh(self)) / 2
@@ -2956,7 +2960,9 @@ class DipoleP2(ThreeDScene):
             run_time=3,
         )
 
-        self.play(field_time.animate(run_time=10, rate_func=linear).increment_value(10))
+        self.play(
+            field_time.animate(run_time=3.65, rate_func=linear).increment_value(3.65)
+        )
 
         self.wait(0.5)
 
@@ -6696,7 +6702,7 @@ class Wrapup(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
 
     def construct(self):
-        wrapup_duration = 62
+        scroll_speed = 0.9
 
         python_logo = ImageMobject(
             "../props/static/python-logo-only.png"
@@ -6718,17 +6724,24 @@ class Wrapup(InteractiveScene):
 
         self.wait(0.5)
 
-        i_saved = (
-            Text(
-                "I saved these comments in my notes\nto keep me motivated",
-                font=FONT,
-                font_size=26,
-                alignment="CENTER",
-            )
-            .next_to(self.frame.get_bottom(), UP, MED_LARGE_BUFF)
-        )
+        i_saved = Text(
+            "I saved these comments in my notes\nto keep me motivated",
+            font=FONT,
+            font_size=26,
+            alignment="CENTER",
+        ).next_to(self.frame.get_bottom(), UP, MED_LARGE_BUFF)
 
         comment_excerpts = [
+            (
+                "@timwildauer5063",
+                'This is close to the fastest I\'ve ever hit "subscribe" '
+                "after watching a video.",
+            ),
+            (
+                "@JonBrami",
+                "Btw I got my dream RF job last month and just wanted "
+                "to thank you for your content.",
+            ),
             (
                 "@theluftwaffel",
                 "Your videos and their great visuals really helped and I'm doing "
@@ -6739,16 +6752,11 @@ class Wrapup(InteractiveScene):
                 "Super clear explanations and amazing production value. "
                 "Thanks for what you do.",
             ),
-            (
-                "@timwildauer5063",
-                "This is close to the fastest I've ever hit \"subscribe\" "
-                "after watching a video.",
-            ),
-            (
-                "@Deveyus",
-                "SOMEONE finally said the quiet part out loud. Thank you.",
-            ),
-            ("@reyariass", "The hero we needed"),
+            # (
+            #     "@Deveyus",
+            #     "SOMEONE finally said the quiet part out loud. Thank you.",
+            # ),
+            # ("@reyariass", "The hero we needed"),
             (
                 "@OverlordOfNerds",
                 "That moment after midnight when it all finally clicks and I feel "
@@ -6759,63 +6767,58 @@ class Wrapup(InteractiveScene):
                 "...your channel has been one of the most valuable finds of my year. "
                 "Thank you so much!!!",
             ),
-            (
-                "@Yitz2",
-                "Please keep making these, these are honestly amazing.",
-            ),
+            # (
+            #     "@Yitz2",
+            #     "Please keep making these, these are honestly amazing.",
+            # ),
             (
                 "@KrisPvideos",
                 "Again a video which is a treasure for humanity.",
             ),
-            (
-                "@bstanis1237",
-                "Please, keep going in this content, you don't know how much you aid us",
-            ),
-            (
-                "@mabo-jq7ug",
-                "...this is by far the best combination of teaching I have seen...",
-            ),
-            (
-                "@cubbyhoo",
-                "...these videos are an amazing resource for trying to learn "
-                "about this incredibly complex world.",
-            ),
-            (
-                "@Coder.tahsin",
-                "...luckily people like you exist who can make complex things "
-                "easy to understand for people like me...",
-            ),
-            (
-                "@aposdfzxc23",
-                "This is an incredibly well produced educational series on the topic "
-                "and you nailed the presentation.",
-            ),
+            # (
+            #     "@bstanis1237",
+            #     "Please, keep going in this content, you don't know how much you aid us",
+            # ),
+            # (
+            #     "@mabo-jq7ug",
+            #     "...this is by far the best combination of teaching I have seen...",
+            # ),
+            # (
+            #     "@cubbyhoo",
+            #     "...these videos are an amazing resource for trying to learn "
+            #     "about this incredibly complex world.",
+            # ),
+            # (
+            #     "@Coder.tahsin",
+            #     "...luckily people like you exist who can make complex things "
+            #     "easy to understand for people like me...",
+            # ),
+            # (
+            #     "@aposdfzxc23",
+            #     "This is an incredibly well produced educational series on the topic "
+            #     "and you nailed the presentation.",
+            # ),
             (
                 "@neilrodricks8630",
                 "If not for your videos I would have given up studying radar...",
             ),
-            (
-                "@yetanotherPC",
-                "Very intelligent and an incredible storyteller.",
-            ),
+            # (
+            #     "@yetanotherPC",
+            #     "Very intelligent and an incredible storyteller.",
+            # ),
             (
                 "@kingjamez80",
                 "Great video on why chirps are perfect for radar. "
                 "Keep it up, I'll watch anything you make.",
             ),
-            (
-                "@anthonyecheverry9218",
-                "Out of the loop on next vid but would love a segment "
-                "about spurs and harmonics!",
-            ),
+            # (
+            #     "@anthonyecheverry9218",
+            #     "Out of the loop on next vid but would love a segment "
+            #     "about spurs and harmonics!",
+            # ),
             (
                 "@rfdspguru2",
                 "No matter what you choose I'm sure it will be great!",
-            ),
-            (
-                "@JonBrami",
-                "Btw I got my dream RF job last month and just wanted "
-                "to thank you for your content.",
             ),
         ]
 
@@ -6844,9 +6847,8 @@ class Wrapup(InteractiveScene):
             fill_opacity=1,
         ).next_to(self.frame.get_bottom(), UP, buff=0)
 
-        scroll_duration = wrapup_duration - self.time
         scroll_distance = comments.get_height() + fh(self, 1) + MED_SMALL_BUFF
-        scroll_speed = scroll_distance / scroll_duration
+        scroll_duration = scroll_distance / scroll_speed
 
         merch = Group(
             *[
@@ -6947,7 +6949,7 @@ class Wrapup(InteractiveScene):
 
         self.play(Write(members), run_time=3)
 
-        self.wait(max(0, wrapup_duration - self.time))
+        self.wait(max(0, scroll_start_time + scroll_duration - self.time))
         comments.clear_updaters()
 
         self.embed()
