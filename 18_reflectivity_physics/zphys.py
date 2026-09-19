@@ -7439,7 +7439,7 @@ class Thumbnail3(InteractiveScene):
 
     def construct(self):
         zoom_pixel_heights = 6
-        dim_opacity = 0.15
+        dim_opacity = 0.35
         pixel_anchor = np.array([-fw(self, 0.25), 0, 0])
         drop_height = fh(self, 0.38)
         drop_center = np.array([fw(self, 0.25) - 0.25, 0.9, 0])
