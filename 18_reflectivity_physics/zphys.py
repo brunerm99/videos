@@ -7426,7 +7426,14 @@ class Thumbnail2(ThreeDScene):
             )
             charge_pairs.add(pair)
 
-        self.add(field_lines, raindrop, connectors, charge_pairs, perp_stroke=False)
+        # Title across the top; the dark outline keeps it legible over the field lines
+        title = Text("Raindrops are Antennas", font=FONT, weight=BOLD, fill_color=WHITE)
+        title.set_width(fw(self, 0.94)).to_edge(UP, buff=0.3)
+        title.set_stroke(BACKGROUND_COLOR, width=12, behind=True)
+
+        self.add(
+            field_lines, raindrop, connectors, charge_pairs, title, perp_stroke=False
+        )
 
         self.wait(0.5)
 
