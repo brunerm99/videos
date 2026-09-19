@@ -6876,7 +6876,7 @@ class Wrapup(InteractiveScene):
             "Bob Van Valzah",
             "Randy Gumabong",
             "noleteman",
-            "ebkimaru",
+            # "ebkimaru",
             "Caboose",
             "Michael Shear",
             "Rich",
@@ -6951,5 +6951,802 @@ class Wrapup(InteractiveScene):
 
         self.wait(max(0, scroll_start_time + scroll_duration - self.time))
         comments.clear_updaters()
+
+        self.embed()
+
+
+def get_thumbnail_rhi_pixels(
+    scene, zoom_pixel_heights, dim_opacity, pixel_anchor, highlight="pixel"
+):
+    """Zoomed OLYMPEX RHI cells with the melting-layer gate at full opacity.
+
+    Matches the end of Lots. Returns (rhi_image, highlight_mobject); cells past
+    the ragged right boundary are dropped whole rather than clipped.
+    highlight="pixel" lights the one gate and returns its Polygon;
+    highlight="column" lights every gate at that range and returns a VGroup
+    of outlines, one per contiguous run of valid gates.
+    """
+    rhi_cells = get_olympex_rhi_cells()
+    rhi_scale = np.array([0.2, 0.4, 1])
+    corners = np.pad(rhi_cells["corners"], ((0, 0), (0, 0), (0, 1))) * rhi_scale
+    gate_centers = rhi_cells["corners"].mean(axis=1)
+    selected = np.argmin(np.sum((gate_centers - [26, 2.35]) ** 2, axis=1))
+    pixel_height = np.ptp(corners[selected, :, 1])
+    zoom = fh(scene) / (zoom_pixel_heights * pixel_height)
+    corners = (corners - corners[selected].mean(axis=0)) * zoom + pixel_anchor
+    # Ragged right edge: whole cells only, dropped with rising probability
+    # across a band so the boundary reads as scattered pixels, not a cut.
+    edge_rng = np.random.default_rng(3)
+    cell_centers = corners.mean(axis=1)
+    edge_x = -0.8 - 0.6 * (2 * cell_centers[:, 1] / fh(scene)) ** 2
+    keep_probability = np.clip((edge_x - cell_centers[:, 0]) / 2.2 + 0.5, 0, 1)
+    keep_probability[corners[..., 0].max(axis=1) > 0.1] = 0
+    in_window = (
+        (edge_rng.random(len(corners)) < keep_probability)
+        & (corners[..., 0].max(axis=1) > -fw(scene, 0.5))
+        & (corners[..., 1].max(axis=1) > -fh(scene, 0.5))
+        & (corners[..., 1].min(axis=1) < fh(scene, 0.5))
+    )
+    in_window[selected] = True
+    if highlight == "column":
+        lit = in_window & np.isclose(
+            rhi_cells["ranges_km"], rhi_cells["ranges_km"][selected]
+        )
+    else:
+        lit = np.zeros(len(corners), dtype=bool)
+        lit[selected] = True
+    rgba = rhi_cells["rgba"].copy()
+    rgba[:, 3] = dim_opacity
+    rgba[lit, 3] = 1
+    points = corners[in_window][:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
+    rhi_image = (
+        TriangleMeshMobject(
+            points,
+            np.broadcast_to(OUT, points.shape),
+            np.repeat(rgba[in_window], 6, axis=0),
+        )
+        .set_shading(0, 0, 0)
+        .deactivate_depth_test()
+    )
+    if highlight != "column":
+        selected_pixel = Polygon(
+            *corners[selected],
+            fill_color=rgb_to_color(rhi_cells["rgba"][selected, :3]),
+            fill_opacity=1,
+            stroke_color=YELLOW,
+            stroke_width=6,
+        ).set_z_index(3)
+        return rhi_image, selected_pixel
+
+    # Outline each contiguous run of lit gates; adjacent cells share edges, so
+    # walk up the far-range side and back down the near-range side.
+    ray_order = np.unique(rhi_cells["elevation_deg"])
+    lit_indices = np.flatnonzero(lit)
+    lit_indices = lit_indices[np.argsort(rhi_cells["elevation_deg"][lit_indices])]
+    ray_indices = np.searchsorted(ray_order, rhi_cells["elevation_deg"][lit_indices])
+    outlines = VGroup()
+    run_start = 0
+    for k in range(1, len(lit_indices) + 1):
+        if k < len(lit_indices) and ray_indices[k] == ray_indices[k - 1] + 1:
+            continue
+        run = corners[lit_indices[run_start:k]]
+        outlines.add(
+            Polygon(
+                run[0, 0],
+                run[0, 1],
+                *run[:, 2],
+                *run[::-1][:, 3],
+                stroke_color=YELLOW,
+                stroke_width=6,
+                fill_opacity=0,
+            )
+        )
+        run_start = k
+    return rhi_image, outlines.set_z_index(3)
+
+
+class Thumbnail(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+    samples = 4
+
+    def construct(self):
+        zoom_pixel_heights = 6
+        dim_opacity = 0.15
+        pixel_anchor = np.array([-fw(self, 0.25), 0, 0])
+        row_scale = 1.75
+        box_center = np.array([0.2 + 1.1 * row_scale, fh(self, 0.26), 0])
+        dipole_center = np.array([fw(self, 0.25) - 0.45, -fh(self, 0.25), 0])
+        dipole_tilt_deg = [25, -40, -15]
+        dipole_time = 3.35
+
+        self.frame.set_focal_distance(fh(self, 6))
+
+        rhi_image, selected_pixel = get_thumbnail_rhi_pixels(
+            self, zoom_pixel_heights, dim_opacity, pixel_anchor
+        )
+
+        # Right top: melting-layer particle population + size distribution (from Lots)
+        rng = np.random.default_rng(7)
+        diameters = np.linspace(0.05, 8, 400)
+        rain_density = diameters**2 * np.exp(-diameters / 0.25)
+        wet_snow_density = diameters * np.exp(-diameters / 0.9)
+        rain_density /= np.trapezoid(rain_density, diameters)
+        wet_snow_density /= np.trapezoid(wet_snow_density, diameters)
+        melting_density = 0.7 * wet_snow_density + 0.3 * rain_density
+        permittivity_colors = get_color_map("coolwarm")
+        box_width = 2.2 * row_scale
+        box_height = 1.25 * row_scale
+        population_box = Rectangle(
+            width=box_width,
+            height=box_height,
+            stroke_color=GREY_B,
+            stroke_width=2,
+            stroke_opacity=0.5,
+        ).move_to(box_center)
+        particle_diameters = np.sort(
+            rng.choice(diameters, 24, p=melting_density / melting_density.sum())
+        )[::-1]
+        particle_positions = []
+        melting_particles = VGroup()
+        for diameter in particle_diameters:
+            radius = 0.036 * row_scale * diameter
+            for _ in range(300):
+                position = np.array(
+                    [
+                        rng.uniform(
+                            -box_width / 2 + radius + 0.05, box_width / 2 - radius - 0.05
+                        ),
+                        rng.uniform(
+                            -box_height / 2 + radius + 0.05,
+                            box_height / 2 - radius - 0.05,
+                        ),
+                        0,
+                    ]
+                )
+                if all(
+                    np.linalg.norm(position - point)
+                    > radius + other_radius + 0.035 * row_scale
+                    for point, other_radius in particle_positions
+                ):
+                    break
+            particle_positions.append((position, radius))
+            rain_probability = np.interp(
+                diameter, diameters, 0.3 * rain_density / melting_density
+            )
+            water_fraction = (
+                1
+                if rng.random() < rain_probability
+                else np.clip(1 - diameter / 6 + rng.normal(0, 0.1), 0.15, 0.9)
+            )
+            color = rgb_to_color(permittivity_colors(0.15 + 0.7 * water_fraction)[:3])
+            snowflake = VGroup(
+                *[
+                    Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
+                    for angle in (0, PI / 3, 2 * PI / 3)
+                ]
+            ).set_stroke(color, 2.5)
+            water = Circle(radius=radius).set_fill(color, 0.65).set_stroke(color, 2)
+            if water_fraction == 1:
+                particle = water.stretch(max(0.7, 1 - 0.06 * diameter), 1)
+            else:
+                particle = VGroup(
+                    water.set_fill(color, 0.15 + 0.4 * water_fraction),
+                    snowflake.scale(1 - water_fraction),
+                )
+            melting_particles.add(particle.move_to(box_center + position))
+
+        axes_origin = box_center + [box_width / 2 + 0.15 * row_scale, -0.65 * row_scale, 0]
+        axes_width = 1.55 * row_scale
+        axes_height = 1.2 * row_scale
+        dsd_axes = VGroup(
+            Line(axes_origin, axes_origin + RIGHT * axes_width),
+            Line(axes_origin, axes_origin + UP * axes_height),
+        ).set_stroke(GREY_B, 3)
+        dsd_curve = (
+            VMobject()
+            .set_points_as_corners(
+                axes_origin
+                + np.column_stack(
+                    (
+                        diameters * axes_width / 8,
+                        0.92 * row_scale * melting_density / melting_density.max(),
+                        np.zeros_like(diameters),
+                    )
+                )
+            )
+            .set_stroke(rgb_to_color(permittivity_colors(0.5)[:3]), 6)
+        )
+        callout = CubicBezier(
+            selected_pixel.get_right() + RIGHT * 0.1,
+            selected_pixel.get_right() + RIGHT * 1.6,
+            population_box.get_left() + LEFT * 1.2,
+            population_box.get_left() + LEFT * 0.1,
+            stroke_color=YELLOW,
+            stroke_width=4,
+        ).set_z_index(3)
+
+        # Right bottom: dipole with radiated field and voltage profile (from DipoleP2)
+        dipole = DipoleAntenna(radius=0.09).scale(0.92).move_to(dipole_center)
+        dipole_rotation = Rotation.from_euler(
+            "xyz", dipole_tilt_deg, degrees=True
+        ).as_matrix()
+        dipole.apply_matrix(dipole_rotation, about_point=dipole.get_center())
+        dipole.apply_depth_test()
+        self.camera.light_source.move_to(
+            dipole.get_center() + self.camera.light_source_position
+        )
+
+        dipole_origin = (
+            dipole.left_arm.get_center() + dipole.right_arm.get_center()
+        ) / 2
+        dipole_axis, feed_axis, radiation_axis = dipole_rotation.T
+        dipole_length = np.ptp(dipole.arms.get_all_points() @ dipole_axis)
+        feed_gap = dipole.feed_gap * dipole_length / dipole.length
+        antenna_time = VT(dipole_time)
+        antenna_frequency = 1
+        # Shorter than the physical 2 * dipole_length so two humps fit per side
+        radiation_wavelength = dipole_length
+        radiation_speed = antenna_frequency * radiation_wavelength
+        radiation_start = dipole_length * 0.35
+        radiation_range = dipole_length * 1.35
+
+        def dipole_point(x=0, y=0, z=0):
+            return dipole_origin + x * dipole_axis + y * feed_axis + z * radiation_axis
+
+        def get_antenna_motion(time):
+            time = np.asarray(time, dtype=float)
+            ramp = np.clip(time, 0, 1)
+            envelope = 10 * ramp**3 - 15 * ramp**4 + 6 * ramp**5
+            envelope_speed = 30 * ramp**2 * (1 - ramp) ** 2
+            envelope_acceleration = 60 * ramp * (1 - ramp) * (1 - 2 * ramp)
+            omega = TAU * antenna_frequency
+            phase = omega * time
+            displacement = envelope * np.sin(phase)
+            acceleration = (
+                envelope_acceleration * np.sin(phase)
+                + 2 * omega * envelope_speed * np.cos(phase)
+                - omega**2 * envelope * np.sin(phase)
+            )
+            return displacement, acceleration
+
+        def get_radiated_field(distances):
+            _, acceleration = get_antenna_motion(
+                ~antenna_time - distances / radiation_speed
+            )
+            return (
+                -acceleration
+                / (TAU * antenna_frequency) ** 2
+                * dipole_length
+                * 0.7
+                * (radiation_start / distances) ** 0.35
+            )
+
+        def get_voltage_profile():
+            displacement, _ = get_antenna_motion(~antenna_time)
+            profiles = VGroup()
+            if abs(displacement) < 1e-8:
+                return profiles
+            for side in [-1, 1]:
+                positions = side * np.linspace(feed_gap / 2, dipole_length / 2, 41)
+                voltages = (
+                    dipole_length
+                    * 0.25
+                    * displacement
+                    * np.sin(PI * positions / dipole_length)
+                )
+                points = [dipole_point(x, y) for x, y in zip(positions, voltages)]
+                profiles.add(
+                    Polygon(
+                        dipole_point(positions[0]),
+                        *points,
+                        dipole_point(positions[-1]),
+                        fill_color=RX_COLOR,
+                        fill_opacity=0.5,
+                        stroke_width=0,
+                    ).deactivate_depth_test()
+                )
+            return profiles
+
+        # Offset by half a step so no line lands on a zero crossing
+        line_distances = np.arange(
+            radiation_start + radiation_wavelength / 16,
+            radiation_range,
+            radiation_wavelength / 8,
+        )
+        radiation_curves = VGroup(
+            *[VMobject().set_stroke(TX_COLOR, 7) for _ in [-1, 1]]
+        )
+        radiation_lines = VGroup(
+            *[
+                VGroup(
+                    *[
+                        Line(ORIGIN, RIGHT).set_stroke(TX_COLOR, 4, 0.9)
+                        for _ in line_distances
+                    ]
+                )
+                for _ in [-1, 1]
+            ]
+        )
+        antenna_field = VGroup(radiation_lines, radiation_curves).deactivate_depth_test()
+
+        def update_antenna_field(m):
+            front = min(radiation_range, radiation_speed * ~m)
+            line_values = get_radiated_field(line_distances)
+            for side, curve, lines in zip([-1, 1], radiation_curves, radiation_lines):
+                if front > radiation_start + 1e-4:
+                    distances = np.linspace(radiation_start, front, 161)
+                    values = get_radiated_field(distances)
+                    curve.set_points_smoothly(
+                        dipole_origin
+                        + side * distances[:, None] * radiation_axis
+                        + values[:, None] * dipole_axis
+                    )
+                else:
+                    curve.clear_points()
+                for distance, value, line in zip(line_distances, line_values, lines):
+                    if abs(value) < 1e-5:
+                        line.set_stroke(opacity=0)
+                        continue
+                    base = dipole_point(z=side * distance)
+                    line.put_start_and_end_on(base, base + value * dipole_axis)
+                    line.set_stroke(opacity=0.9)
+
+        antenna_time.add_updater(update_antenna_field)
+        voltage_profile = always_redraw(get_voltage_profile)
+        radiation_guides = VGroup(
+            *[
+                DashedLine(
+                    dipole_point(z=side * dipole_length * 0.15),
+                    dipole_point(z=side * radiation_range),
+                    dash_length=0.12,
+                    stroke_color=ICE,
+                    stroke_width=1,
+                    stroke_opacity=0.25,
+                )
+                for side in [-1, 1]
+            ]
+        ).deactivate_depth_test()
+
+        self.add(rhi_image, selected_pixel, callout)
+        self.add(population_box, melting_particles, dsd_axes, dsd_curve)
+        self.add(radiation_guides, antenna_field, voltage_profile, dipole, antenna_time)
+
+        self.wait(0.5)
+
+        self.embed()
+
+
+def segment_distance(a1, b1, a2, b2):
+    """Shortest distance between 2D segments a1-b1 and a2-b2."""
+
+    def point_to_segment(point, a, b):
+        ab = b - a
+        t = np.clip(np.dot(point - a, ab) / max(np.dot(ab, ab), 1e-12), 0, 1)
+        return np.linalg.norm(point - (a + t * ab))
+
+    def orientation(p, q, r):
+        return np.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]))
+
+    if orientation(a1, b1, a2) != orientation(a1, b1, b2) and orientation(
+        a2, b2, a1
+    ) != orientation(a2, b2, b1):
+        return 0.0
+    return min(
+        point_to_segment(a1, a2, b2),
+        point_to_segment(b1, a2, b2),
+        point_to_segment(a2, a1, b1),
+        point_to_segment(b2, a1, b1),
+    )
+
+
+class Thumbnail2(ThreeDScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+    default_frame_orientation = (0, 0)
+    always_depth_test = False
+    samples = 4
+
+    def construct(self):
+        field_time = 9.0
+        drop_height = fh(self, 0.42)
+        drop_field_radius = 2.0
+        line_width = 12
+        highlight_width = 16
+        charge_radius = fh(self, 0.039)
+        charge_separation = fh(self, 0.1)
+        n_pairs = 5
+
+        # Field lines from the oscillating charge, thick enough to survive downscaling
+        field_scale = drop_height / 2 / drop_field_radius
+        field_extent = np.hypot(fw(self), fh(self)) / (2 * field_scale) + 1
+        curves = trace_field_lines(field_time, field_extent)[::2]
+        curves = curves - UP * charge_motion(field_time)[0]
+        count = len(curves)
+        field_lines = VGroup()
+        for index, points in enumerate(curves):
+            highlighted = index in (count // 4, 3 * count // 4)
+            line = VMobject(
+                stroke_color=YELLOW if highlighted else BLUE_B,
+                stroke_width=highlight_width if highlighted else line_width,
+                stroke_opacity=1 if highlighted else 0.85,
+            )
+            line.set_points_smoothly(field_scale * points[::2])
+            field_lines.add(line)
+        field_lines.deactivate_depth_test()
+
+        raindrop = RainDrop(opacity=0.92).set_height(drop_height).move_to(ORIGIN)
+
+        # Polarized charge pairs: same orientation and size, random non-overlapping spots
+        rng = np.random.default_rng(18)
+        drop_center = raindrop.get_center()
+        drop_radii = np.array([raindrop.get_width(), raindrop.get_height(), 1]) / 2
+        margin = 1 - (charge_radius / drop_radii[1]) - 0.04
+        clearance = 2 * charge_radius + 0.2 * charge_radius
+        placed_ends = []
+        for _ in range(n_pairs):
+            for _ in range(3000):
+                fraction = rng.uniform(-0.85, 0.85, 3)
+                fraction[2] = 0
+                center = drop_center + fraction * drop_radii
+                ends = [center + sign * charge_separation / 2 * UP for sign in (1, -1)]
+                if any(
+                    np.hypot(*((end - drop_center) / drop_radii)[:2]) > margin
+                    for end in ends
+                ):
+                    continue
+                if all(
+                    segment_distance(ends[0][:2], ends[1][:2], a[:2], b[:2]) > clearance
+                    for a, b in placed_ends
+                ):
+                    placed_ends.append(ends)
+                    break
+
+        charge_pairs = VGroup()
+        connectors = VGroup()
+        for top, bottom in placed_ends:
+            pair = ChargePair(
+                center=(top + bottom) / 2,
+                angle=PI / 2,
+                radius=charge_radius,
+                separation=charge_separation,
+                font=FONT,
+                negative_color=ICE,
+                symbol_color=BACKGROUND_COLOR,
+            )
+            # Strokes render above fills within one group, so the connector lives
+            # in its own layer under the dots and stops short of their centers
+            pair.remove(pair.connector)
+            connectors.add(
+                Line(
+                    top - UP * 0.8 * charge_radius,
+                    bottom + UP * 0.8 * charge_radius,
+                    stroke_color=WHITE,
+                    stroke_width=7,
+                    stroke_opacity=0.8,
+                ).deactivate_depth_test()
+            )
+            charge_pairs.add(pair)
+
+        self.add(field_lines, raindrop, connectors, charge_pairs, perp_stroke=False)
+
+        self.wait(0.5)
+
+        self.embed()
+
+
+class Thumbnail3(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+    samples = 4
+
+    def construct(self):
+        zoom_pixel_heights = 6
+        dim_opacity = 0.15
+        pixel_anchor = np.array([-fw(self, 0.25), 0, 0])
+        drop_height = fh(self, 0.38)
+        drop_center = np.array([fw(self, 0.25) - 0.25, 0.9, 0])
+        drop_field_radius = 2.0
+        field_time = 9.0
+        # Field lines fade out before they reach the pixel mosaic
+        fade_start_x = 0.6
+        fade_end_x = -0.8
+        line_width = 7
+        highlight_width = 10
+        side_line_width = 4
+        # Azimuthal planes of the field about the dipole axis (first one is the
+        # screen plane) and the tilt of the whole structure. [0] with no tilt is
+        # the flat 2D look; e.g. [0, 45, 135] with [22, 10, 0] gives 3D planes.
+        plane_azimuths_deg = [0]
+        structure_tilt_deg = [0, 0, 0]
+        # n_pairs = 1 puts one big +/- pair on the drop's poles (net dipole)
+        n_pairs = 5
+        charge_radius = drop_height * (0.13 if n_pairs == 1 else 0.085)
+        charge_separation = drop_height * (0.7 if n_pairs == 1 else 0.23)
+
+        self.frame.set_focal_distance(fh(self, 3))
+
+        rhi_image, selected_pixel = get_thumbnail_rhi_pixels(
+            self, zoom_pixel_heights, dim_opacity, pixel_anchor
+        )
+
+        # Right: one drop as a radiating antenna, field lines in 3D
+        field_scale = drop_height / 2 / drop_field_radius
+        field_extent = np.hypot(fw(self), fh(self)) / (2 * field_scale) + 1
+        curves = trace_field_lines(field_time, field_extent)
+        curves = curves - UP * charge_motion(field_time)[0]
+        count = len(curves)
+        structure_tilt = Rotation.from_euler(
+            "xyz", structure_tilt_deg, degrees=True
+        ).as_matrix()
+        field_lines = VGroup()
+        for plane_index, azimuth_deg in enumerate(plane_azimuths_deg):
+            plane_rotation = Rotation.from_euler("y", azimuth_deg, degrees=True).as_matrix()
+            for index in range(0, count, 2 if len(plane_azimuths_deg) == 1 else 4):
+                on_axis = index % (count // 2) == 0
+                if on_axis and plane_index > 0:
+                    continue
+                highlighted = plane_index == 0 and index in (count // 4, 3 * count // 4)
+                points = curves[index][::2] @ plane_rotation.T @ structure_tilt.T
+                points = drop_center + field_scale * points
+                # Start each line outside the drop's silhouette so nothing is drawn
+                # across its face
+                outside = np.flatnonzero(
+                    np.hypot(*(points[:, :2] - drop_center[:2]).T) > 0.53 * drop_height
+                )
+                if len(outside) < 4:
+                    continue
+                points = points[outside[0] :]
+                if highlighted:
+                    width = highlight_width
+                elif plane_index == 0:
+                    width = line_width
+                else:
+                    width = side_line_width
+                line = VMobject(
+                    stroke_color=ICE if highlighted else BLUE_B, stroke_width=width
+                )
+                line.set_points_smoothly(points)
+                line_points = line.get_points()
+                fade = np.clip(
+                    (line_points[:, 0] - fade_end_x) / (fade_start_x - fade_end_x), 0, 1
+                )
+                # Nearer lines brighter than the ones going into the screen
+                depth = np.tanh(line_points[:, 2] / fh(self, 0.25))
+                if highlighted:
+                    base = 1
+                elif plane_index == 0:
+                    base = 0.85
+                else:
+                    base = 0.4 + 0.25 * depth
+                line.set_stroke(opacity=list(base * fade))
+                field_lines.add(line)
+        field_lines.apply_depth_test()
+
+        raindrop = RainDrop(opacity=0.92).set_height(drop_height).move_to(drop_center)
+
+        drop_radii = np.array([raindrop.get_width(), raindrop.get_height(), 1]) / 2
+        # Fixed layouts (fractions of the drop radii) so every pair fits and reads
+        if n_pairs == 1:
+            pair_fractions = [(0, 0)]
+        else:
+            pair_fractions = [
+                (-0.28, 0.36),
+                (0.28, 0.36),
+                (-0.55, -0.36),
+                (0, -0.36),
+                (0.55, -0.36),
+            ]
+        placed_ends = []
+        for fx, fy in pair_fractions:
+            center = drop_center + np.array([fx, fy, 0]) * drop_radii
+            placed_ends.append(
+                [center + sign * charge_separation / 2 * UP for sign in (1, -1)]
+            )
+
+        charge_pairs = VGroup()
+        connectors = VGroup()
+        for top, bottom in placed_ends:
+            pair = ChargePair(
+                center=(top + bottom) / 2,
+                angle=PI / 2,
+                radius=charge_radius,
+                separation=charge_separation,
+                font=FONT,
+                negative_color=ICE,
+                symbol_color=BACKGROUND_COLOR,
+            )
+            pair.remove(pair.connector)
+            connectors.add(
+                Line(
+                    top - UP * 0.8 * charge_radius,
+                    bottom + UP * 0.8 * charge_radius,
+                    stroke_color=WHITE,
+                    stroke_width=4,
+                    stroke_opacity=0.8,
+                ).deactivate_depth_test()
+            )
+            charge_pairs.add(pair)
+
+        # Enter the drop below the highlighted field line so the two do not merge
+        callout_end = drop_center + (drop_radii[0] + 0.15) * np.array(
+            [-np.cos(35 * DEG), -np.sin(35 * DEG), 0]
+        )
+        callout = CubicBezier(
+            selected_pixel.get_right() + RIGHT * 0.1,
+            selected_pixel.get_right() + RIGHT * 2.0,
+            callout_end + LEFT * 1.5 + DOWN * 0.5,
+            callout_end,
+            stroke_color=YELLOW,
+            stroke_width=4,
+        ).set_z_index(3)
+
+        self.add(rhi_image, selected_pixel)
+        self.add(field_lines, raindrop, connectors, charge_pairs, callout)
+
+        self.wait(0.5)
+
+        self.embed()
+
+
+class Thumbnail4(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+    samples = 4
+
+    def construct(self):
+        zoom_pixel_heights = 8
+        dim_opacity = 0.15
+        pixel_anchor = np.array([-fw(self, 0.25), 0, 0])
+        plot_center = np.array([fw(self, 0.25) - 0.3, 0.2, 0])
+        plot_tilt_deg = 45
+        # Perspective enlarges the near edge, so the on-screen height ends up ~0.92
+        plot_height = fh(self, 0.91)
+        trace_width = 5
+        n_gates = 17
+        particles_per_gate = 3
+
+        self.frame.set_focal_distance(fh(self, 3))
+
+        rhi_image, column_outline = get_thumbnail_rhi_pixels(
+            self, zoom_pixel_heights, dim_opacity, pixel_anchor, highlight="column"
+        )
+
+        # Right: size distribution per gate stacked by height (Dsd waterfall look)
+        column_left, column_right = -1.95, 1.95
+        rain_bottom, melting_bottom, melting_top, snow_top = -3.0, -0.6, 0.6, 3.0
+        diameter_max = 8.0
+        trace_scale = 2.3
+        gate_edges = np.linspace(rain_bottom, snow_top, n_gates + 1)
+        gate_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
+        diameters = np.linspace(0.03, diameter_max, 181)
+        permittivity_colors = get_color_map("coolwarm")
+        snow_shape = diameters**2 * np.exp(-diameters / 1.3)
+        rain_shape = diameters**2 * np.exp(-diameters / 0.45)
+        snow_shape /= snow_shape.max()
+        rain_shape /= rain_shape.max()
+        rng = np.random.default_rng(11)
+
+        def diameter_to_x(diameter):
+            return column_left + diameter / diameter_max * (column_right - column_left)
+
+        def melt_fraction(height):
+            return float(
+                np.clip((melting_top - height) / (melting_top - melting_bottom), 0, 1)
+            )
+
+        def gate_color(fraction):
+            return rgb_to_color(permittivity_colors(0.1 + 0.8 * fraction)[:3])
+
+        column_width = column_right - column_left
+        layers = VGroup(
+            Rectangle(
+                width=column_width,
+                height=snow_top - melting_top,
+                stroke_width=0,
+                fill_color=TOWER_LIGHT,
+                fill_opacity=0.05,
+            ).move_to([0, (snow_top + melting_top) / 2, 0]),
+            Rectangle(
+                width=column_width,
+                height=melting_top - melting_bottom,
+                stroke_width=0,
+                fill_color=TEAL,
+                fill_opacity=0.18,
+            ).move_to([0, 0, 0]),
+            Rectangle(
+                width=column_width,
+                height=melting_bottom - rain_bottom,
+                stroke_width=0,
+                fill_color=BLUE_E,
+                fill_opacity=0.08,
+            ).move_to([0, (melting_bottom + rain_bottom) / 2, 0]),
+        )
+        melting_edges = VGroup(
+            *[
+                Line([column_left, height, 0], [column_right, height, 0])
+                for height in (melting_top, melting_bottom)
+            ]
+        ).set_stroke(TEAL, 3, opacity=0.7)
+        gate_items = []
+        for height in gate_heights:
+            fraction = melt_fraction(height)
+            density = (1 - fraction) * snow_shape + fraction * rain_shape
+            amplitude = 0.65 + 0.35 * (1 - fraction) + 0.8 * fraction * (1 - fraction)
+            amplitude *= rng.uniform(0.85, 1)
+            guide = Line(
+                [column_left, height, 0.01], [column_right, height, 0.01]
+            ).set_stroke(GREY_B, 1.5, opacity=0.35)
+            points = np.column_stack(
+                (
+                    diameter_to_x(diameters),
+                    np.full_like(diameters, height),
+                    0.015 + trace_scale * amplitude * density / density.max(),
+                )
+            )
+            trace = VMobject(
+                stroke_color=gate_color(fraction), stroke_width=trace_width
+            ).set_points_smoothly(points)
+            gate_particles = []
+            for diameter in rng.choice(
+                diameters, particles_per_gate, p=density / density.sum()
+            ):
+                radius = 0.05 + 0.025 * min(diameter, 5)
+                position = np.array(
+                    [
+                        diameter_to_x(diameter) + rng.uniform(-0.2, 0.2),
+                        height + rng.uniform(-0.1, 0.1),
+                        0.02,
+                    ]
+                )
+                snowflake = VGroup(
+                    *[
+                        Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
+                        for angle in (0, PI / 3, 2 * PI / 3)
+                    ]
+                ).set_stroke(ICE, 3)
+                if fraction == 0:
+                    particle = snowflake
+                elif fraction == 1:
+                    particle = (
+                        Circle(radius=0.8 * radius)
+                        .set_fill(BLUE_B, 0.9)
+                        .set_stroke(BLUE_B, 2)
+                    )
+                else:
+                    particle = VGroup(
+                        Circle(radius=radius)
+                        .set_fill(TOWER_LIGHT, 0.3)
+                        .set_stroke(TOWER_LIGHT, 2),
+                        snowflake.scale(0.6),
+                    )
+                gate_particles.append((position[1], particle.move_to(position)))
+            gate_items.append((height, guide, trace, gate_particles))
+
+        # Painter's order for the tilted view: far gates (top) first, near gates
+        # (bottom) last; within a gate, particles behind the trace go before it.
+        plot = VGroup(layers, melting_edges)
+        for height, guide, trace, gate_particles in reversed(gate_items):
+            gate_particles.sort(key=lambda item: -item[0])
+            behind = [m for y, m in gate_particles if y > height]
+            in_front = [m for y, m in gate_particles if y <= height]
+            plot.add(guide, *behind, trace, *in_front)
+        plot.apply_matrix(
+            Rotation.from_euler("x", -plot_tilt_deg, degrees=True).as_matrix()
+        )
+        plot.set_height(plot_height).move_to(plot_center)
+
+        callout_start = np.array([column_outline.get_right()[0] + 0.1, pixel_anchor[1], 0])
+        callout_end = (
+            melting_edges[0].get_start() + melting_edges[1].get_start()
+        ) / 2 + LEFT * 0.15
+        callout = CubicBezier(
+            callout_start,
+            callout_start + RIGHT * 2.0,
+            callout_end + LEFT * 1.5,
+            callout_end,
+            stroke_color=YELLOW,
+            stroke_width=4,
+        ).set_z_index(3)
+
+        self.add(rhi_image, column_outline, plot, callout)
+
+        self.wait(0.5)
 
         self.embed()
