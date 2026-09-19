@@ -7575,7 +7575,7 @@ class Thumbnail3(InteractiveScene):
             callout_end + LEFT * 1.5 + DOWN * 0.5,
             callout_end,
             stroke_color=YELLOW,
-            stroke_width=4,
+            stroke_width=9,
         ).set_z_index(3)
 
         self.add(rhi_image, selected_pixel)
