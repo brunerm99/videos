@@ -7586,6 +7586,135 @@ class Thumbnail3(InteractiveScene):
         self.embed()
 
 
+def get_thumbnail_dsd_plot(
+    n_gates, particles_per_gate, trace_width, lighten=0.0, seed=11
+):
+    """Untilted Dsd waterfall for the thumbnails: one size distribution per gate
+    stacked by height, snow on top, melting layer in the middle, rain below.
+    Returns (plot, melting_edges); the caller tilts and places the plot.
+    """
+    column_left, column_right = -1.95, 1.95
+    rain_bottom, melting_bottom, melting_top, snow_top = -3.0, -0.6, 0.6, 3.0
+    diameter_max = 8.0
+    trace_scale = 2.3
+    gate_edges = np.linspace(rain_bottom, snow_top, n_gates + 1)
+    gate_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
+    diameters = np.linspace(0.03, diameter_max, 181)
+    permittivity_colors = get_color_map("coolwarm")
+    snow_shape = diameters**2 * np.exp(-diameters / 1.3)
+    rain_shape = diameters**2 * np.exp(-diameters / 0.45)
+    snow_shape /= snow_shape.max()
+    rain_shape /= rain_shape.max()
+    rng = np.random.default_rng(seed)
+
+    def diameter_to_x(diameter):
+        return column_left + diameter / diameter_max * (column_right - column_left)
+
+    def melt_fraction(height):
+        return float(
+            np.clip((melting_top - height) / (melting_top - melting_bottom), 0, 1)
+        )
+
+    def gate_color(fraction):
+        rgb = np.array(permittivity_colors(0.1 + 0.8 * fraction)[:3])
+        # Lighten so the traces hold up at thumbnail size
+        return rgb_to_color(1 - (1 - lighten) * (1 - rgb))
+
+    column_width = column_right - column_left
+    layers = VGroup(
+        Rectangle(
+            width=column_width,
+            height=snow_top - melting_top,
+            stroke_width=0,
+            fill_color=TOWER_LIGHT,
+            fill_opacity=0.05,
+        ).move_to([0, (snow_top + melting_top) / 2, 0]),
+        Rectangle(
+            width=column_width,
+            height=melting_top - melting_bottom,
+            stroke_width=0,
+            fill_color=TEAL,
+            fill_opacity=0.18,
+        ).move_to([0, 0, 0]),
+        Rectangle(
+            width=column_width,
+            height=melting_bottom - rain_bottom,
+            stroke_width=0,
+            fill_color=BLUE_E,
+            fill_opacity=0.08,
+        ).move_to([0, (melting_bottom + rain_bottom) / 2, 0]),
+    )
+    melting_edges = VGroup(
+        *[
+            Line([column_left, height, 0], [column_right, height, 0])
+            for height in (melting_top, melting_bottom)
+        ]
+    ).set_stroke(TEAL, 3, opacity=0.7)
+    gate_items = []
+    for height in gate_heights:
+        fraction = melt_fraction(height)
+        density = (1 - fraction) * snow_shape + fraction * rain_shape
+        amplitude = 0.65 + 0.35 * (1 - fraction) + 0.8 * fraction * (1 - fraction)
+        amplitude *= rng.uniform(0.85, 1)
+        guide = Line(
+            [column_left, height, 0.01], [column_right, height, 0.01]
+        ).set_stroke(GREY_B, 1.5, opacity=0.35)
+        points = np.column_stack(
+            (
+                diameter_to_x(diameters),
+                np.full_like(diameters, height),
+                0.015 + trace_scale * amplitude * density / density.max(),
+            )
+        )
+        trace = VMobject(
+            stroke_color=gate_color(fraction), stroke_width=trace_width
+        ).set_points_smoothly(points)
+        gate_particles = []
+        for diameter in rng.choice(
+            diameters, particles_per_gate, p=density / density.sum()
+        ):
+            radius = 0.05 + 0.025 * min(diameter, 5)
+            position = np.array(
+                [
+                    diameter_to_x(diameter) + rng.uniform(-0.2, 0.2),
+                    height + rng.uniform(-0.1, 0.1),
+                    0.02,
+                ]
+            )
+            snowflake = VGroup(
+                *[
+                    Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
+                    for angle in (0, PI / 3, 2 * PI / 3)
+                ]
+            ).set_stroke(ICE, 3)
+            if fraction == 0:
+                particle = snowflake
+            elif fraction == 1:
+                particle = (
+                    Circle(radius=0.8 * radius)
+                    .set_fill(BLUE_B, 0.9)
+                    .set_stroke(BLUE_B, 2)
+                )
+            else:
+                particle = VGroup(
+                    Circle(radius=radius)
+                    .set_fill(TOWER_LIGHT, 0.3)
+                    .set_stroke(TOWER_LIGHT, 2),
+                    snowflake.scale(0.6),
+                )
+            gate_particles.append((position[1], particle.move_to(position)))
+        gate_items.append((height, guide, trace, gate_particles))
+
+    # Painter's order for the tilted view: far gates (top) first, near gates
+    # (bottom) last; within a gate, particles behind the trace go before it.
+    plot = VGroup(layers, melting_edges)
+    for height, guide, trace, gate_particles in reversed(gate_items):
+        gate_particles.sort(key=lambda item: -item[0])
+        behind = [m for y, m in gate_particles if y > height]
+        in_front = [m for y, m in gate_particles if y <= height]
+        plot.add(guide, *behind, trace, *in_front)
+    return plot, melting_edges
+
 class Thumbnail4(InteractiveScene):
     default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
     samples = 4
@@ -7598,7 +7727,7 @@ class Thumbnail4(InteractiveScene):
         plot_tilt_deg = 45
         # Perspective enlarges the near edge, so the on-screen height ends up ~0.92
         plot_height = fh(self, 0.91)
-        trace_width = 5
+        trace_width = 7
         n_gates = 17
         particles_per_gate = 3
 
@@ -7608,125 +7737,9 @@ class Thumbnail4(InteractiveScene):
             self, zoom_pixel_heights, dim_opacity, pixel_anchor, highlight="column"
         )
 
-        # Right: size distribution per gate stacked by height (Dsd waterfall look)
-        column_left, column_right = -1.95, 1.95
-        rain_bottom, melting_bottom, melting_top, snow_top = -3.0, -0.6, 0.6, 3.0
-        diameter_max = 8.0
-        trace_scale = 2.3
-        gate_edges = np.linspace(rain_bottom, snow_top, n_gates + 1)
-        gate_heights = (gate_edges[:-1] + gate_edges[1:]) / 2
-        diameters = np.linspace(0.03, diameter_max, 181)
-        permittivity_colors = get_color_map("coolwarm")
-        snow_shape = diameters**2 * np.exp(-diameters / 1.3)
-        rain_shape = diameters**2 * np.exp(-diameters / 0.45)
-        snow_shape /= snow_shape.max()
-        rain_shape /= rain_shape.max()
-        rng = np.random.default_rng(11)
-
-        def diameter_to_x(diameter):
-            return column_left + diameter / diameter_max * (column_right - column_left)
-
-        def melt_fraction(height):
-            return float(
-                np.clip((melting_top - height) / (melting_top - melting_bottom), 0, 1)
-            )
-
-        def gate_color(fraction):
-            return rgb_to_color(permittivity_colors(0.1 + 0.8 * fraction)[:3])
-
-        column_width = column_right - column_left
-        layers = VGroup(
-            Rectangle(
-                width=column_width,
-                height=snow_top - melting_top,
-                stroke_width=0,
-                fill_color=TOWER_LIGHT,
-                fill_opacity=0.05,
-            ).move_to([0, (snow_top + melting_top) / 2, 0]),
-            Rectangle(
-                width=column_width,
-                height=melting_top - melting_bottom,
-                stroke_width=0,
-                fill_color=TEAL,
-                fill_opacity=0.18,
-            ).move_to([0, 0, 0]),
-            Rectangle(
-                width=column_width,
-                height=melting_bottom - rain_bottom,
-                stroke_width=0,
-                fill_color=BLUE_E,
-                fill_opacity=0.08,
-            ).move_to([0, (melting_bottom + rain_bottom) / 2, 0]),
+        plot, melting_edges = get_thumbnail_dsd_plot(
+            n_gates, particles_per_gate, trace_width, lighten=0.3
         )
-        melting_edges = VGroup(
-            *[
-                Line([column_left, height, 0], [column_right, height, 0])
-                for height in (melting_top, melting_bottom)
-            ]
-        ).set_stroke(TEAL, 3, opacity=0.7)
-        gate_items = []
-        for height in gate_heights:
-            fraction = melt_fraction(height)
-            density = (1 - fraction) * snow_shape + fraction * rain_shape
-            amplitude = 0.65 + 0.35 * (1 - fraction) + 0.8 * fraction * (1 - fraction)
-            amplitude *= rng.uniform(0.85, 1)
-            guide = Line(
-                [column_left, height, 0.01], [column_right, height, 0.01]
-            ).set_stroke(GREY_B, 1.5, opacity=0.35)
-            points = np.column_stack(
-                (
-                    diameter_to_x(diameters),
-                    np.full_like(diameters, height),
-                    0.015 + trace_scale * amplitude * density / density.max(),
-                )
-            )
-            trace = VMobject(
-                stroke_color=gate_color(fraction), stroke_width=trace_width
-            ).set_points_smoothly(points)
-            gate_particles = []
-            for diameter in rng.choice(
-                diameters, particles_per_gate, p=density / density.sum()
-            ):
-                radius = 0.05 + 0.025 * min(diameter, 5)
-                position = np.array(
-                    [
-                        diameter_to_x(diameter) + rng.uniform(-0.2, 0.2),
-                        height + rng.uniform(-0.1, 0.1),
-                        0.02,
-                    ]
-                )
-                snowflake = VGroup(
-                    *[
-                        Line(-radius * RIGHT, radius * RIGHT).rotate(angle)
-                        for angle in (0, PI / 3, 2 * PI / 3)
-                    ]
-                ).set_stroke(ICE, 3)
-                if fraction == 0:
-                    particle = snowflake
-                elif fraction == 1:
-                    particle = (
-                        Circle(radius=0.8 * radius)
-                        .set_fill(BLUE_B, 0.9)
-                        .set_stroke(BLUE_B, 2)
-                    )
-                else:
-                    particle = VGroup(
-                        Circle(radius=radius)
-                        .set_fill(TOWER_LIGHT, 0.3)
-                        .set_stroke(TOWER_LIGHT, 2),
-                        snowflake.scale(0.6),
-                    )
-                gate_particles.append((position[1], particle.move_to(position)))
-            gate_items.append((height, guide, trace, gate_particles))
-
-        # Painter's order for the tilted view: far gates (top) first, near gates
-        # (bottom) last; within a gate, particles behind the trace go before it.
-        plot = VGroup(layers, melting_edges)
-        for height, guide, trace, gate_particles in reversed(gate_items):
-            gate_particles.sort(key=lambda item: -item[0])
-            behind = [m for y, m in gate_particles if y > height]
-            in_front = [m for y, m in gate_particles if y <= height]
-            plot.add(guide, *behind, trace, *in_front)
         plot.apply_matrix(
             Rotation.from_euler("x", -plot_tilt_deg, degrees=True).as_matrix()
         )
@@ -7746,6 +7759,106 @@ class Thumbnail4(InteractiveScene):
         ).set_z_index(3)
 
         self.add(rhi_image, column_outline, plot, callout)
+
+        self.wait(0.5)
+
+        self.embed()
+
+
+class Thumbnail5(InteractiveScene):
+    default_camera_config = {"background_color": BACKGROUND_COLOR, "fps": 60}
+    samples = 4
+
+    def construct(self):
+        # RHI crop (km) stretched onto the left half; bleeds past the frame edges
+        ground_range_km = (10, 32.8)
+        height_range_km = (0, 5.4)
+        band_height_km = 2.35
+        band_thickness_km = 0.7
+        outside_band_opacity = 0.85
+        rhi_left, rhi_right = -fw(self, 0.5) - 0.2, -0.6
+        rhi_bottom, rhi_top = -fh(self, 0.5) - 0.2, fh(self, 0.5) + 0.2
+        label_center = np.array([-fw(self, 0.27), fh(self, 0.3), 0])
+        plot_center = np.array([fw(self, 0.3), 0.1, 0])
+        plot_tilt_deg = 45
+        plot_height = fh(self, 0.9)
+        n_gates = 13
+        particles_per_gate = 3
+        trace_width = 9
+
+        self.frame.set_focal_distance(fh(self, 3))
+
+        rhi_cells = get_olympex_rhi_cells()
+        km_corners = rhi_cells["corners"]
+        x_scale = (rhi_right - rhi_left) / (ground_range_km[1] - ground_range_km[0])
+        y_scale = (rhi_top - rhi_bottom) / (height_range_km[1] - height_range_km[0])
+        corners = np.zeros((*km_corners.shape[:2], 3))
+        corners[..., 0] = rhi_left + (km_corners[..., 0] - ground_range_km[0]) * x_scale
+        corners[..., 1] = rhi_bottom + (km_corners[..., 1] - height_range_km[0]) * y_scale
+        in_window = (
+            (corners[..., 0].max(axis=1) > -fw(self, 0.5))
+            & (corners[..., 1].max(axis=1) > -fh(self, 0.5))
+            & (corners[..., 1].min(axis=1) < fh(self, 0.5))
+        )
+        cell_heights_km = km_corners[..., 1].mean(axis=1)
+        rgba = rhi_cells["rgba"].copy()
+        rgba[:, 3] = np.where(
+            np.abs(cell_heights_km - band_height_km) < band_thickness_km / 2,
+            1,
+            outside_band_opacity,
+        )
+        points = corners[in_window][:, [0, 1, 2, 0, 2, 3]].reshape(-1, 3)
+        rhi_image = (
+            TriangleMeshMobject(
+                points,
+                np.broadcast_to(OUT, points.shape),
+                np.repeat(rgba[in_window], 6, axis=0),
+            )
+            .set_shading(0, 0, 0)
+            .deactivate_depth_test()
+        )
+        band_y = rhi_bottom + (band_height_km - height_range_km[0]) * y_scale
+
+        label = Text("Bright band", font=FONT, weight="BOLD")
+        label.set_width(fw(self, 0.38)).move_to(label_center)
+        label.set_stroke(BACKGROUND_COLOR, 12, behind=True).set_z_index(4)
+        arrow = Arrow(
+            label.get_bottom() + DOWN * 0.3,
+            [label_center[0], band_y + 0.6, 0],
+            buff=0,
+            fill_color=WHITE,
+            thickness=12,
+            tip_width_ratio=3.5,
+        )
+        arrow.set_stroke(BACKGROUND_COLOR, 8, behind=True).set_z_index(4)
+
+        plot, melting_edges = get_thumbnail_dsd_plot(
+            n_gates, particles_per_gate, trace_width, lighten=0.15
+        )
+        plot.apply_matrix(
+            Rotation.from_euler("x", -plot_tilt_deg, degrees=True).as_matrix()
+        )
+        plot.set_height(plot_height).move_to(plot_center)
+
+        callout_start = np.array([rhi_right + 0.1, band_y, 0])
+        callout_end = (
+            melting_edges[0].get_start() + melting_edges[1].get_start()
+        ) / 2 + LEFT * 0.15
+        # Arc hopping from the band to the melting layer, arrowheads on both ends
+        callout_reach = 0.5 * (callout_end[0] - callout_start[0])
+        callout_lift = 0.4
+        callout = TipableVMobject(stroke_color=YELLOW, stroke_width=9)
+        callout.add_cubic_bezier_curve(
+            callout_start,
+            callout_start + RIGHT * callout_reach + UP * callout_lift,
+            callout_end + LEFT * callout_reach + UP * callout_lift,
+            callout_end,
+        )
+        for at_start in (False, True):
+            callout.add_tip(at_start=at_start, length=0.4, width=0.34)
+        callout.set_z_index(3)
+
+        self.add(rhi_image, label, arrow, plot, callout)
 
         self.wait(0.5)
 
