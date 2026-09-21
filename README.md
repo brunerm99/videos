@@ -148,3 +148,11 @@ Reflectivity is an extremely important concept for understanding weather radar d
 In this video, I'll explain how reflectivity is computed, why it's useful, and give you resources to further learn on your own!
 
 ![thumbnail](./17_reflectivity/static/thumbnail1.png)
+
+## [18 - What Happens When a Radar Wave Hits a Raindrop?](https://youtu.be/l0rjKM_bbM8)
+
+A radar image is made up of a ton of pixels. But what are the pixels made of? 
+
+In this video we'll go into some of the crazy physics that help us understand what's going on at a deeper level. 
+
+![thumbnail](./18_reflectivity_physics/videos/Thumbnail2.png)
