@@ -1,0 +1,10 @@
+camera:
+  resolution: "(1080, 1920)"
+  fps: 60
+resolution_options:
+  low: "(360, 640)"
+  med: "(720, 1280)"
+  high: "(1080, 1920)"
+  4k: "(2160, 3840)"
+window:
+  size: "(540, 960)"

@@ -258,6 +258,7 @@ class Steering(ThreeDScene):
         circular_scan_start = 10.65
         thumbnail_start = 16.25
         thumbnail_seconds = 0.6
+        end_pause_seconds = 1.8
 
         antenna_origin = DOWN * fh(self, 0.1)
         antenna_radius = fw(self, 0.22)
@@ -499,6 +500,10 @@ class Steering(ThreeDScene):
             rate_func=linear,
         )
 
-        self.wait(1.8)
+        self.play(
+            scan_progress @ (~scan_progress + end_pause_seconds / circular_scan_seconds),
+            run_time=end_pause_seconds,
+            rate_func=linear,
+        )
 
         self.embed()
