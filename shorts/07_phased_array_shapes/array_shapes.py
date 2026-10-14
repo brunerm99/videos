@@ -1,34 +1,20 @@
-import sys
-from pathlib import Path
-
 import numpy as np
-from manimlib import *
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from melp import VT, ease_out_back, fh, fw
+from manimgx import *
 
 BACKGROUND_COLOR = "#183340"
 ELEMENT_COLOR = "#f07828"
 AF_COLORS = ("#1e2c31", "#2d8fbf", "#3dbcac", "#f09050", "#f07828", "#fc6255")
+SKIP_ANIMATIONS_OVERRIDE = True
+
+config.background_color = BACKGROUND_COLOR
+config.pixel_width = 1080
+config.pixel_height = 1920
+config.frame_height = 8
+config.frame_rate = 60
 
 
-def frame_projection(camera):
-    refresh_uniforms = camera.refresh_uniforms
-    uniforms = camera.gpu.frame_uniforms if hasattr(camera, "gpu") else camera.uniforms
-
-    def update_projection():
-        refresh_uniforms()
-        frame = camera.frame
-        scale = frame.get_scale()
-        uniforms.update(
-            frame_rescale_factors=(
-                2 * scale / frame.get_width(),
-                2 * scale / frame.get_height(),
-                scale / frame.get_focal_distance(),
-            )
-        )
-
-    return update_projection
+def skip_animations(b):
+    return b and (not SKIP_ANIMATIONS_OVERRIDE)
 
 
 def array_factor_fields(directions, element_positions, aperture_weights):
@@ -45,61 +31,54 @@ def array_factor_surface(
     pattern_scale,
     pattern_origin,
 ):
-    pattern = ParametricSurface(
-        lambda theta, phi: np.array(
-            [
-                np.sin(theta) * np.cos(phi),
-                np.sin(theta) * np.sin(phi),
-                np.cos(theta),
-            ]
-        ),
-        u_range=(0, PI / 2),
-        v_range=(0, TAU),
-        resolution=surface_resolution,
-        shading=(0.18, 0.06, 0.25),
+    theta, phi = np.meshgrid(
+        np.linspace(0, PI / 2, surface_resolution[0]),
+        np.linspace(0, TAU, surface_resolution[1]),
+        indexing="ij",
     )
-    directions = pattern.get_points().copy()
+    directions = np.stack(
+        [np.sin(theta) * np.cos(phi), np.sin(theta) * np.sin(phi), np.cos(theta)],
+        axis=-1,
+    ).reshape(-1, 3)
+    indices = np.arange(len(directions)).reshape(surface_resolution)
+    a = indices[:-1, :-1].ravel()
+    b = indices[1:, :-1].ravel()
+    c = indices[1:, 1:].ravel()
+    d = indices[:-1, 1:].ravel()
+    triangles = np.stack([a, b, c, a, c, d], axis=-1).reshape(-1, 3)
+
+    # Sample each ring's field once; redraws only mix these cached fields.
     fields = array_factor_fields(directions, element_positions, aperture_weights)
     weight_sums = aperture_weights.sum(axis=1)
-    color_stops = np.array([color_to_rgb(color) for color in AF_COLORS])
+    color_stops = np.array([ManimColor(color).to_rgb() for color in AF_COLORS])
 
-    def update_pattern(mobject, aperture_mix, spin_angle=0):
+    def pattern_at(aperture_mix, spin_angle=0):
         field = np.einsum("s,sk->k", aperture_mix, fields)
         amplitude = np.abs(field) / max(aperture_mix @ weight_sums, 1e-12)
         af_db = 20 * np.log10(np.maximum(amplitude, 10 ** (af_floor_db / 20)))
         radial_scale = np.clip((af_db - af_floor_db) / -af_floor_db, 0, 1)
         points = directions * radial_scale[:, None]
         rotation = view_rotation @ rotation_matrix(spin_angle, OUT)
-        mobject.set_points(pattern_scale * (points @ rotation.T) + pattern_origin)
-
-        if "du_point" in mobject.data_dtype.names:
-            point_grid = mobject.get_points().reshape((*surface_resolution, 3))
-            tangent_u, tangent_v = np.gradient(point_grid, axis=(0, 1))
-            tangent_v[0] = tangent_v[1]
-            mobject.data["du_point"][:] = (point_grid + 1e-4 * tangent_u).reshape(-1, 3)
-            mobject.data["dv_point"][:] = (point_grid + 1e-4 * tangent_v).reshape(-1, 3)
+        points = pattern_scale * (points @ rotation.T) + pattern_origin
 
         scaled_colors = radial_scale * (len(color_stops) - 1)
         indices = np.minimum(scaled_colors.astype(int), len(color_stops) - 2)
         blend = (scaled_colors - indices)[:, None]
         rgb = color_stops[indices] * (1 - blend) + color_stops[indices + 1] * blend
-        mobject.set_rgba_array(np.column_stack([rgb, np.ones(len(rgb))]))
+        return MeshMobject(
+            points,
+            triangles,
+            vertex_colors=np.column_stack([rgb, np.ones(len(rgb))]),
+            shade_in_3d=True,
+        )
 
-    update_pattern(pattern, np.ones(len(aperture_weights)))
-    return pattern, update_pattern
+    return pattern_at
 
 
 class ArrayShapes(ThreeDScene):
-    default_camera_config = {
-        "background_color": BACKGROUND_COLOR,
-        "resolution": (1080, 1920),
-        "fps": 60,
-    }
-
     def construct(self):
-        self.frame.reorient(0, 0)
-        self.frame.set_width(4.5).set_height(8, stretch=True)
-        self.camera.refresh_uniforms = frame_projection(self.camera)
+        self.next_section("Square aperture", skip_animations=skip_animations(False))
+        self.set_camera_orientation(phi=0, theta=-90 * DEGREES)
 
         array_size = 17
         spacing_wavelengths = 0.5
@@ -158,7 +137,8 @@ class ArrayShapes(ThreeDScene):
                 for x, y in coordinates
             ]
         )
-        elements.fix_in_frame()
+
+        self.camera.add_fixed_in_frame_mobjects(elements)
 
         af_floor_db = -40
         surface_resolution = (129, 257)
@@ -167,7 +147,7 @@ class ArrayShapes(ThreeDScene):
         )
         pattern_scale = fw(self, 0.43)
         pattern_origin = UP * fh(self, 0.225)
-        af, update_af = array_factor_surface(
+        pattern_at = array_factor_surface(
             element_positions,
             field_weights,
             af_floor_db,
@@ -176,9 +156,10 @@ class ArrayShapes(ThreeDScene):
             pattern_scale,
             pattern_origin,
         )
+        af = pattern_at(aperture_at())
 
         self.play(
-            ShowCreation(af),
+            Create(af),
             LaggedStart(
                 *[
                     GrowFromCenter(element, rate_func=ease_out_back)
@@ -189,37 +170,39 @@ class ArrayShapes(ThreeDScene):
             run_time=1,
         )
 
-        element_centers = np.array([element.get_center() for element in elements])
-        element_points = np.array([element.get_points().copy() for element in elements])
-        element_points -= element_centers[:, None, :]
+        element_templates = elements.copy()
 
-        def update_elements(mobject):
+        def elements_at():
             weights = aperture_at() @ field_weights
-            for index, (element, weight) in enumerate(zip(mobject, weights)):
+            current_elements = element_templates.copy()
+            for element, weight in zip(current_elements, weights):
                 scale = max(weight * (1 + 0.85 * np.sin(PI * weight)), 0.001)
-                element.set_points(element_centers[index] + scale * element_points[index])
+                element.scale(scale)
                 element.set_opacity(float(weight))
+            return current_elements
 
-        elements.add_updater(update_elements)
-        self.add(elements)
+        self.remove(*elements, af)
+        elements = always_redraw(elements_at)
+        self.add_fixed_in_frame_mobjects(elements)
         spin_start = self.time
         spin_seconds = 36
-        af.add_updater(
-            lambda mobject: update_af(
-                mobject,
+        af = always_redraw(
+            lambda: pattern_at(
                 aperture_at(),
                 TAU * (self.time - spin_start) / spin_seconds,
             )
         )
+        self.add(af)
 
         self.wait(3)
 
-        for group in transition_groups:
+        for name, group in zip(
+            ("Circular aperture", "Hexagonal aperture"), transition_groups
+        ):
+            self.next_section(name, skip_animations=skip_animations(False))
             self.play(
                 LaggedStart(*[tracker @ 0 for tracker in group], lag_ratio=0.65),
                 run_time=2.2,
             )
 
             self.wait(3)
-
-        self.embed()
