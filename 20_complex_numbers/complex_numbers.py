@@ -1,7 +1,5 @@
 import numpy as np
-
 from manimlib import *
-
 
 BACKGROUND_COLOR = "#183340"
 GROUND_COLOR = GREY_B
@@ -90,9 +88,7 @@ class SpringOscillation(InteractiveScene):
         box.set_y(ground_y + box.get_height() / 2)
 
         spring_anchor = np.array([wall_x, box.get_y(), 0])
-        spring = always_redraw(
-            lambda: get_spring(spring_anchor, box.get_left())
-        )
+        spring = always_redraw(lambda: get_spring(spring_anchor, box.get_left()))
 
         self.add(ground_hatching, wall_hatching, ground, wall, spring, box)
         self.wait(0.4)
