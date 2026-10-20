@@ -551,6 +551,7 @@ def _capacitor_simulation(scene, plot_window=12):
         history=history,
         plot=plot,
         circuit=circuit,
+        cap=circuit[1],
         trace=get_trace,
         place_dot=place_dot,
     )
@@ -564,6 +565,9 @@ class Charging(MovingCameraScene):
         sim = _capacitor_simulation(self, plot_window)
         amplitude, frequency = sim.amplitude, sim.frequency
         plot, circuit = sim.plot, sim.circuit
+        cap = self.cap = sim.cap
+        top_plate = self.top_plate = cap.top_plate
+        bottom_plate = self.bottom_plate = cap.bottom_plate
         voltage_axes, _, v_label, _ = plot
         self.voltage_axes = voltage_axes
 
@@ -572,39 +576,82 @@ class Charging(MovingCameraScene):
         self.next_section("Uncharged", skip_animations=skip_animations(False))
         self.wait(1)
 
-        electron_line = SquigglyLine(
-            circuit[-1][3].get_left() + LEFT * 1.5,
-            circuit[-1][3].get_left() + LEFT * 0.2,
-            color=BLUE,
-        ).add_tip(
-            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
-            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
-        )
-        electron_label = (
-            Text("electrons", font=FONT)
-            .set_color(BLUE)
-            .scale(0.4)
-            .next_to(electron_line, LEFT, SMALL_BUFF)
-        )
-
-        self.play(GrowArrow(electron_line), FadeIn(electron_label))
-
-        self.wait(1)
-
-        self.play(FadeOut(electron_label, electron_line))
-
         self.wait(0.5)
 
         self.next_section("Apply DC", skip_animations=skip_animations(False))
         self.play(amplitude @ 5, run_time=1)
         self.wait(0.4)
 
+        self.wait(0.5)
+
+        poscharge_line = SquigglyLine(
+            top_plate.get_left() + LEFT * 1.5 + UP,
+            top_plate.get_left() + RIGHT * 0.2 + UP * 0.2,
+            amplitude=0.1,
+            color=RED,
+            seed=1,
+            wavelength=1,
+        ).add_tip(
+            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+        )
+        poscharge_label = (
+            Paragraph("positive", "charge", font=FONT)
+            .set_color(RED)
+            .scale(0.4)
+            .next_to(poscharge_line.get_start(), LEFT, SMALL_BUFF)
+        )
+
+        negcharge_line = SquigglyLine(
+            bottom_plate.get_left() + LEFT * 1.5 + DOWN,
+            bottom_plate.get_left() + RIGHT * 0.2 + DOWN * 0.3,
+            color=BLUE,
+            amplitude=0.1,
+            seed=2,
+            wavelength=1,
+        ).add_tip(
+            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+        )
+        negcharge_label = (
+            Paragraph("negative", "charge", font=FONT)
+            .set_color(BLUE)
+            .scale(0.4)
+            .next_to(negcharge_line.get_start(), LEFT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Write(poscharge_label),
+                    GrowArrow(poscharge_line),
+                    lag_ratio=0.2,
+                ),
+                LaggedStart(
+                    Write(negcharge_label),
+                    GrowArrow(negcharge_line),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
         self.next_section("Hold DC", skip_animations=skip_animations(False))
+        self.wait(1)
+        self.play(
+            FadeOut(
+                negcharge_line,
+                negcharge_label,
+                poscharge_line,
+                poscharge_label,
+            ),
+            run_time=1,
+        )
         self.wait(2)
 
         self.next_section("Apply AC", skip_animations=skip_animations(False))
 
-        i_arrow = Arrow(UP * 2, DOWN * 2, color=BLUE).next_to(circuit[1], LEFT)
+        i_arrow = Arrow(UP * 2, DOWN * 2, color=BLUE).next_to(cap, LEFT)
         i_label = (
             MathTex(r"I_{C}(t)")
             .set_color(BLUE)
@@ -641,7 +688,7 @@ class Charging(MovingCameraScene):
 
         self.next_section("Equation", skip_animations=skip_animations(False))
 
-        cap_label = circuit[1][-1]
+        cap_label = cap[-1]
         propto = (
             MathTex("I_C(t)", r"\propto", r"\frac{d V_C(t) }{dt}")
             .scale(1.4)
@@ -673,6 +720,30 @@ class Charging(MovingCameraScene):
                     lag_ratio=0.1,
                 ),
                 lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                propto[2][0]
+                .animate(rate_func=there_and_back)
+                .set_color(GREEN)
+                .scale(1.5),
+                propto[2][8]
+                .animate(rate_func=there_and_back)
+                .set_color(GREEN)
+                .scale(1.5),
+                propto[2][6]
+                .animate(rate_func=there_and_back)
+                .set_color(GREEN)
+                .scale(1.5),
+                propto[2][7]
+                .animate(rate_func=there_and_back)
+                .set_color(GREEN)
+                .scale(1.5),
+                lag_ratio=0.15,
             )
         )
 
@@ -720,15 +791,80 @@ class Charging(MovingCameraScene):
 
         self.wait(0.5)
 
-        np.savez(
-            CAPACITOR_STATE_PATH,
-            amplitude=~amplitude,
-            frequency=~frequency,
-            phase=~sim.phase,
-            time=~sim.time,
-            voltage_scale=~sim.voltage_scale,
-            history=np.array(sim.history),
+        cap_label = Text("Capacitor:", font=FONT).next_to(
+            self.camera.frame.copy().shift(DOWN * fh(self)).get_left(),
+            RIGHT,
+            MED_LARGE_BUFF,
         )
+        self.add(cap_label)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                equation.animate.move_to(
+                    self.camera.frame.copy().shift(DOWN * fh(self))
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        res_current = (
+            MathTex(r"I_{R}(t) = \frac{V_{R}(t)}{R}")
+            .scale(1.4)
+            .move_to(equation, LEFT)
+            .shift(DOWN * fh(self, 0.2))
+        )
+        res_current[0][:5].set_color(BLUE)
+        res_current[0][6:11].set_color(YELLOW)
+        res_label = (
+            Text("Resistor:", font=FONT)
+            .move_to(cap_label, LEFT)
+            .set_y(res_current.get_y())
+        )
+
+        self.play(
+            LaggedStart(
+                Group(cap_label, equation).animate.shift(UP * fh(self, 0.2)),
+                Group(res_label, res_current)
+                .shift(DOWN * fh(self))
+                .animate.shift(UP * fh(self)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            Group(res_label, res_current).animate.shift(DOWN * fh(self)),
+            cap_label.animate.shift(LEFT * fw(self)),
+            equation.animate.move_to(self.camera.frame),
+        )
+
+        self.wait(1)
+
+        # np.savez(
+        #     CAPACITOR_STATE_PATH,
+        #     amplitude=~amplitude,
+        #     frequency=~frequency,
+        #     phase=~sim.phase,
+        #     time=~sim.time,
+        #     voltage_scale=~sim.voltage_scale,
+        #     history=np.array(sim.history),
+        # )
+
+
+class CapacitorEquationV2(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+
+        equation = MathTex("I_C(t)", "=", r"C \frac{d V_C(t) }{dt}").scale(1.4)
+        equation[0].set_color(BLUE)
+        equation[2][2:7].set_color(YELLOW)
+        self.add(equation)
+
+        self.wait(0.5)
 
 
 class CapacitorEquation(MovingCameraScene):
