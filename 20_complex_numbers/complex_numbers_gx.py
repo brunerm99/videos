@@ -7,6 +7,7 @@ import numpy as np
 from dotenv import load_dotenv
 from manimgx import *
 from manimgx import Capacitor as Cap
+from scipy.signal import lsim
 
 load_dotenv(pathlib.Path(__file__).resolve().parents[1] / ".env")
 FONT = "Maple Mono"
@@ -317,11 +318,13 @@ class LumpedComponents(MovingCameraScene):
         self.wait(0.5)
 
 
-def _capacitor_diagram(scene, capacitor_voltage, voltage_scale, plot_window=12):
+def _capacitor_diagram(
+    scene, capacitor_voltage, voltage_scale, plot_window=12, y_range=None
+):
     wire_color = "#D6EEF7"
     axes = Axes(
         x_range=[0, plot_window, 2],
-        y_range=[-1.2, 1.2, 0.5],
+        y_range=y_range if y_range is not None else [-1.2, 1.2, 0.5],
         x_length=fw(scene, 0.53),
         y_length=fh(scene, 0.60),
         axis_config={
@@ -458,7 +461,7 @@ def _capacitor_diagram(scene, capacitor_voltage, voltage_scale, plot_window=12):
     return plot, circuit
 
 
-def _capacitor_simulation(scene, plot_window=12):
+def _capacitor_simulation(scene, plot_window=12, y_range=None):
     amplitude = VT(0)
     frequency = VT(0)
     phase = VT(0)
@@ -502,7 +505,7 @@ def _capacitor_simulation(scene, plot_window=12):
     )
 
     plot, circuit = _capacitor_diagram(
-        scene, capacitor_voltage, voltage_scale, plot_window
+        scene, capacitor_voltage, voltage_scale, plot_window, y_range
     )
     voltage_axes, voltage_dot, v_label = plot
     axes_width = voltage_axes.width
@@ -524,7 +527,7 @@ def _capacitor_simulation(scene, plot_window=12):
             samples = np.repeat(samples, 2, axis=0)
         return axes.plot_line_graph(
             samples[:, 0] - start,
-            gain * samples[:, 1] / ~voltage_scale,
+            gain * samples[:, 1] / (~voltage_scale if y_range is None else 1),
             add_vertex_dots=False,
             line_color=color,
             stroke_width=4 * axes.width / axes_width,
@@ -532,7 +535,10 @@ def _capacitor_simulation(scene, plot_window=12):
 
     def place_dot(dot, axes, gain=1):
         return dot.scale_to_fit_width(0.18 * axes.width / axes_width).move_to(
-            axes.c2p(min(~time, plot_window), gain * ~source_voltage / ~voltage_scale)
+            axes.c2p(
+                min(~time, plot_window),
+                gain * ~source_voltage / (~voltage_scale if y_range is None else 1),
+            )
         )
 
     voltage_plot = always_redraw(lambda: get_trace(voltage_axes))
@@ -859,12 +865,1471 @@ class CapacitorEquationV2(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
-        equation = MathTex("I_C(t)", "=", r"C \frac{d V_C(t) }{dt}").scale(1.4)
-        equation[0].set_color(BLUE)
-        equation[2][2:7].set_color(YELLOW)
+        equation = MathTex(r"I_C(t) = C \frac{d V_C(t) }{dt}").scale(1.4)
+        equation[0][:5].set_color(BLUE)
+        equation[0][8:13].set_color(YELLOW)
         self.add(equation)
 
         self.wait(0.5)
+
+        v_eqn = (
+            MathTex(r"V_0 \cos{(2 \pi f t)}")
+            .scale(1.4)
+            .set_color(YELLOW)
+            .next_to(equation, UP, LARGE_BUFF)
+            .shift(RIGHT * fw(self, 0.15))
+        )
+        v_line = SquigglyLine(
+            equation[0][8:13].get_top() + UP * 0.1,
+            v_eqn.get_bottom() + DOWN * 0.1,
+            color=YELLOW,
+            amplitude=0.2,
+            seed=1,
+        ).add_tip(
+            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(v_line),
+                GrowFromCenter(v_eqn[0][:2]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            GrowFromCenter(v_eqn[0][2:6]),
+            GrowFromCenter(v_eqn[0][-1]),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(v_eqn[0][6]),
+                GrowFromCenter(v_eqn[0][7]),
+                GrowFromCenter(v_eqn[0][8]),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(GrowFromCenter(v_eqn[0][9]))
+
+        self.wait(0.5)
+
+        vw_eqn = (
+            MathTex(r"V_0 \cos{(\omega t)}").scale(1.4).set_color(YELLOW).move_to(v_eqn)
+        )
+        for c in vw_eqn[0]:
+            c.save_state()
+        vw_eqn[0][:6].move_to(v_eqn[0][:6])
+        vw_eqn[0][-2:].move_to(v_eqn[0][-2:])
+
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(v_eqn[0][6:-2], rate_func=ease_in_back, run_time=0.3),
+                GrowFromCenter(vw_eqn[0][6], rate_func=ease_out_back, run_time=0.3),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.remove(v_eqn, *v_eqn[0])
+        self.add(*vw_eqn[0])
+        #
+        self.play(*[c.animate.restore() for c in vw_eqn[0]])
+
+        self.wait(0.5)
+
+        i_eqn = (
+            MathTex(r"I_C(t) = C \frac{d V_0 \cos{(\omega t)} }{dt}")
+            .scale(1.4)
+            .move_to(equation)
+        )
+        i_eqn[0][:5].set_color(BLUE)
+        i_eqn[0][8:17].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(equation[0][:8], i_eqn[0][:8]),
+                ReplacementTransform(equation[0][13:], i_eqn[0][17:]),
+                FadeOut(v_line),
+                ShrinkToCenter(equation[0][8:13]),
+                ReplacementTransform(vw_eqn[0], i_eqn[0][8:17]),
+                self.camera.frame.animate.move_to(i_eqn),
+                lag_ratio=0.25,
+            )
+        )
+        self.remove(equation, *equation, vw_eqn, *vw_eqn, i_eqn, *i_eqn)
+        self.add(i_eqn)
+
+        self.wait(0.5)
+
+        i_ddt1_eqn = (
+            MathTex(r"I_C(t) = - \omega C V_0 \sin{(\omega t)}")
+            .scale(1.4)
+            .move_to(i_eqn)
+        )
+        i_ddt1_eqn[0][:5].set_color(BLUE)
+        i_ddt1_eqn[0][9:18].set_color(YELLOW)
+
+        self.next_section("Take the derivative", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(i_eqn[0][:6], i_ddt1_eqn[0][:6]),
+                    ReplacementTransform(i_eqn[0][6], i_ddt1_eqn[0][8]),
+                    ReplacementTransform(i_eqn[0][8:10], i_ddt1_eqn[0][9:11]),
+                    ReplacementTransform(i_eqn[0][13:17], i_ddt1_eqn[0][14:18]),
+                    i_eqn[0][10:13].animate.move_to(i_ddt1_eqn[0][11:14]),
+                    FadeOut(
+                        VGroup(i_eqn[0][7], *i_eqn[0][17:]),
+                        shift=DOWN * 0.15,
+                    ),
+                    run_time=0.8,
+                ),
+                Succession(
+                    TransformFromCopy(
+                        i_eqn[0][14],
+                        i_ddt1_eqn[0][7],
+                        path_arc=-PI / 2,
+                        introducer=True,
+                        run_time=1.2,
+                    ),
+                    AnimationGroup(
+                        ReplacementTransform(i_eqn[0][10:13], i_ddt1_eqn[0][11:14]),
+                        GrowFromCenter(i_ddt1_eqn[0][6]),
+                        lag_ratio=0.15,
+                        run_time=0.9,
+                    ),
+                ),
+                lag_ratio=0.25,
+            )
+        )
+        self.remove(i_eqn, *i_eqn, i_ddt1_eqn, *i_ddt1_eqn)
+        self.add(i_ddt1_eqn)
+        self.wait(1)
+
+        plot_window = 12
+        sim = _capacitor_simulation(self, plot_window, y_range=[-6, 6, 2])
+        sim.time_scale @= 0
+        if CAPACITOR_STATE_PATH.exists():
+            with np.load(CAPACITOR_STATE_PATH) as state:
+                for name in (
+                    "amplitude",
+                    "frequency",
+                    "phase",
+                    "time",
+                    "voltage_scale",
+                ):
+                    getattr(sim, name).set_value(float(state[name]))
+                history = [tuple(sample) for sample in state["history"]]
+        else:
+            sim.amplitude @= 5
+            sim.frequency @= 0.25
+            sim.time @= plot_window
+            sim.phase @= (TAU * ~sim.frequency * plot_window) % TAU
+            times = np.arange(0, plot_window + 1 / 60, 1 / 60)
+            history = list(
+                zip(times, ~sim.amplitude * np.cos(TAU * ~sim.frequency * times))
+            )
+        sim.history.clear()
+        sim.history.extend(history)
+        sim.source_voltage @= history[-1][1]
+        sim.capacitor_voltage @= history[-1][1]
+
+        plot, circuit = sim.plot, sim.circuit
+        voltage_axes, _, v_label, _ = plot
+        self.voltage_axes = voltage_axes
+        cap = self.cap = sim.cap
+        self.top_plate, self.bottom_plate = cap.top_plate, cap.bottom_plate
+
+        return_height = fh(self)
+        axes_height = voltage_axes.height
+        voltage_axes.stretch(0.6, 1).shift(UP * axes_height / 3)
+        Group(plot, circuit).shift(UP * return_height)
+        equation_target = i_ddt1_eqn.copy().next_to(voltage_axes, DOWN, LARGE_BUFF)
+        plot.update(0)
+        circuit.update(0)
+
+        i_arrow = Arrow(UP * 2, DOWN * 2, color=BLUE).next_to(cap, LEFT)
+        i_label = (
+            MathTex(r"I_C(t)", color=BLUE)
+            .scale(0.8)
+            .next_to(i_arrow, LEFT, SMALL_BUFF * 0.1)
+        )
+        current_opacity = VT(0)
+        capacitance = self.capacitance = VT(0.25)  # F
+        axes_width = voltage_axes.width
+
+        def current_samples():
+            samples = np.array(sim.history)
+            if len(samples) < 2:
+                return samples[:, 0], np.zeros(len(samples))
+            slope = np.gradient(
+                samples[:, 1], samples[:, 0], edge_order=min(2, len(samples) - 1)
+            )
+            return samples[:, 0], ~capacitance * slope
+
+        def current_curve():
+            times, values = current_samples()
+            start = max(0, ~sim.time - plot_window)
+            if times[0] < start:
+                values[0] = np.interp(start, times, values)
+                times[0] = start
+            return voltage_axes.plot_line_graph(
+                times - start,
+                values,
+                add_vertex_dots=False,
+                line_color=BLUE,
+                stroke_width=4 * voltage_axes.width / axes_width,
+            ).set_stroke(opacity=~current_opacity)
+
+        current_trace = always_redraw(current_curve).set_z_index(2)
+        current_dot = Dot(radius=0.09, color=BLUE).set_z_index(6)
+
+        def place_current_dot(mob):
+            _, values = current_samples()
+            mob.scale_to_fit_width(0.18 * voltage_axes.width / axes_width).move_to(
+                voltage_axes.c2p(min(~sim.time, plot_window), values[-1])
+            ).set_opacity(~current_opacity)
+
+        current_dot.add_updater(place_current_dot, call_updater=True)
+        vi_label = (
+            MathTex(r"V_C(t),\, I_C(t)")
+            .scale(0.8)
+            .rotate(PI / 2)
+            .next_to(voltage_axes, LEFT, MED_SMALL_BUFF)
+        )
+        vi_label[0][:5].set_color(YELLOW)
+        vi_label[0][6:].set_color(BLUE)
+        self.current_trace, self.current_dot = current_trace, current_dot
+        self.add(
+            plot,
+            circuit,
+            i_arrow,
+            i_label,
+            current_opacity,
+            capacitance,
+            current_trace,
+            current_dot,
+        )
+
+        self.next_section(
+            "Return to the capacitor", skip_animations=skip_animations(False)
+        )
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(UP * return_height),
+                i_ddt1_eqn.animate.move_to(equation_target),
+                lag_ratio=0.15,
+            ),
+            run_time=2,
+        )
+        v_label.clear_updaters()
+        self.play(
+            LaggedStart(
+                ReplacementTransform(v_label[0], vi_label[0][:5]),
+                GrowFromCenter(vi_label[0][5]),
+                TransformFromCopy(
+                    i_ddt1_eqn[0][:5],
+                    vi_label[0][6:],
+                    path_arc=-PI / 3,
+                    introducer=True,
+                ),
+                current_opacity.animate(run_time=2).set_value(1),
+                lag_ratio=0.2,
+            ),
+        )
+        self.remove(v_label, *v_label, vi_label, *vi_label)
+        plot.remove(v_label)
+        self.add(vi_label)
+        vi_label.add_updater(
+            lambda mob: mob.next_to(voltage_axes, LEFT, MED_SMALL_BUFF)
+        )
+        self.play(sim.time_scale @ 1, run_time=0.5)
+        self.wait(8)
+
+        self.next_section("Expand the circuit", skip_animations=skip_animations(False))
+        sim.time_scale @= 0
+        for mob in (plot, circuit, current_trace, current_dot, vi_label):
+            mob.clear_updaters()
+
+        source, _, ground, wires, electrons = circuit
+        top_wire, bottom_wire = wires
+        plate_charges, cap_label = cap[2:]
+        self.remove(circuit)
+        self.add(source, top_wire, bottom_wire, cap, ground, electrons)
+
+        self.play(
+            LaggedStart(
+                FadeOut(plot, current_trace, current_dot, vi_label, run_time=0.6),
+                FadeOut(i_ddt1_eqn, i_arrow, i_label, run_time=0.5),
+                FadeOut(plate_charges, electrons, run_time=0.45),
+                lag_ratio=0.3,
+            )
+        )
+        cap.remove(plate_charges)
+
+        wire_color = "#D6EEF7"
+        wire_style = dict(color=wire_color, stroke_width=4)
+        center = self.camera.frame.get_center()
+        unit = fh(self, 0.125)
+        input_point = center + unit * np.array([-6.4, 0.6, 0])
+        node1 = center + unit * np.array([-3.2, 0.6, 0])
+        node2 = center + unit * np.array([0, 0.6, 0])
+        output_node = center + unit * np.array([5.5, 0, 0])
+        output_point = center + unit * np.array([6.4, 0, 0])
+
+        cap_target = Cap(
+            plate_width=fw(self, 0.068),
+            plate_thickness=fh(self, 0.006),
+            gap=fh(self, 0.035),
+            stroke_color=wire_color,
+        ).move_to(center + DOWN * unit)
+        c2_label = (
+            MathTex("C_2", color=wire_color)
+            .scale(0.8)
+            .next_to(cap_target, LEFT, MED_LARGE_BUFF)
+        )
+        source_target = source.copy()
+        source_target[0].move_to(input_point)
+        source_target[1].scale(0.9).next_to(source_target[0], UP, MED_LARGE_BUFF)
+        ground_target = ground.copy().scale(0.75).move_to(center + DOWN * 2.35 * unit)
+        top_wire_target = VMobject(**wire_style).set_points_as_corners(
+            [cap_target.p2, node2, source_target[0].get_right()]
+        )
+        bottom_wire_target = Line(
+            ground_target[0].get_center(), cap_target.p1, **wire_style
+        )
+
+        self.play(
+            self.camera.frame.animate(run_time=1.6)
+            .scale(1.18)
+            .move_to(center + UP * 0.4 * unit),
+            AnimationGroup(
+                Transform(cap.top_plate, cap_target.top_plate),
+                Transform(cap.bottom_plate, cap_target.bottom_plate),
+                ReplacementTransform(cap_label, c2_label),
+                Transform(source, source_target),
+                Transform(ground, ground_target),
+                Transform(top_wire, top_wire_target),
+                Transform(bottom_wire, bottom_wire_target),
+                run_time=1.4,
+            ),
+        )
+        cap.remove(cap_label).add(c2_label)
+        self.add(cap)
+        self.wait(0.175)
+
+        r1 = (
+            Resistor(
+                length=1.25 * unit,
+                amplitude=0.12 * unit,
+                include_ports=True,
+                **wire_style,
+            )
+            .rotate(-PI / 2)
+            .move_to(center + unit * np.array([-4.8, 0.6, 0]))
+        )
+        r2 = r1.copy().move_to(center + unit * np.array([-1.6, 0.6, 0]))
+        r1_label = (
+            MathTex("R_1", color=wire_color).scale(0.8).next_to(r1, UP, MED_LARGE_BUFF)
+        )
+        r2_label = (
+            MathTex("R_2", color=wire_color).scale(0.8).next_to(r2, UP, MED_LARGE_BUFF)
+        )
+        input_wire = Line(source[0].get_right(), r1.p1, **wire_style)
+        middle_wire = Line(r1.p2, r2.p1, **wire_style)
+        right_wire = Line(r2.p2, node2, **wire_style)
+        cap_wire = Line(node2, cap.p2, **wire_style)
+        r1_wire = Line(r1.p1, r1.p2, **wire_style)
+        r2_wire = Line(r2.p1, r2.p2, **wire_style)
+        self.remove(top_wire)
+        self.add(input_wire, r1_wire, middle_wire, r2_wire, right_wire, cap_wire)
+
+        self.next_section("Add the resistors", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    ReplacementTransform(r1_wire, r1, run_time=0.7),
+                    FadeIn(r1_label, shift=UP * 0.15 * unit, run_time=0.35),
+                    lag_ratio=0.6,
+                ),
+                LaggedStart(
+                    ReplacementTransform(r2_wire, r2, run_time=0.7),
+                    FadeIn(r2_label, shift=UP * 0.15 * unit, run_time=0.35),
+                    lag_ratio=0.6,
+                ),
+                lag_ratio=0.55,
+            )
+        )
+        self.wait(0.175)
+
+        amp = Polygon(
+            center + unit * np.array([2.3, 1.4, 0]),
+            center + unit * np.array([2.3, -1.4, 0]),
+            center + unit * np.array([4.6, 0, 0]),
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            **wire_style,
+        )
+        plus = (
+            Text("+", font=FONT, color=RED)
+            .scale(0.65)
+            .move_to(center + unit * np.array([2.65, 0.6, 0]))
+        )
+        minus = (
+            Text("-", font=FONT, color=BLUE)
+            .scale(0.65)
+            .move_to(center + unit * np.array([2.65, -0.6, 0]))
+        )
+        amp_input = Line(node2, center + unit * np.array([2.3, 0.6, 0]), **wire_style)
+        output_port = source[0].copy().move_to(output_point)
+        output_wire = Line(
+            center + RIGHT * 4.6 * unit, output_port.get_left(), **wire_style
+        )
+        output_label = (
+            MathTex("V_{out}(t)", color=YELLOW)
+            .scale(0.9)
+            .next_to(output_port, UP, MED_LARGE_BUFF)
+        )
+        node1_dot = Dot(node1, radius=0.06 * unit, color=wire_color)
+        node2_dot = Dot(node2, radius=0.06 * unit, color=wire_color)
+        output_dot = Dot(output_node, radius=0.06 * unit, color=wire_color)
+
+        self.next_section("Add the op amp", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Create(amp_input, run_time=0.45),
+                    GrowFromCenter(node2_dot, run_time=0.25),
+                ),
+                LaggedStart(
+                    Create(amp, run_time=0.7),
+                    FadeIn(plus, minus, run_time=0.3),
+                    lag_ratio=0.65,
+                ),
+                LaggedStart(
+                    Create(output_wire, run_time=0.5),
+                    GrowFromCenter(output_port, run_time=0.25),
+                    FadeIn(output_label, run_time=0.35),
+                    lag_ratio=0.6,
+                ),
+                lag_ratio=0.65,
+            )
+        )
+        self.wait(0.175)
+
+        follower_wire = VMobject(**wire_style).set_points_as_corners(
+            [
+                center + unit * np.array([2.3, -0.6, 0]),
+                center + unit * np.array([1.55, -0.6, 0]),
+                center + unit * np.array([1.55, -1.95, 0]),
+                center + unit * np.array([5.5, -1.95, 0]),
+                output_node,
+            ]
+        )
+        c1 = (
+            cap_target.copy()
+            .rotate(-PI / 2)
+            .move_to(center + unit * np.array([0, 2.7, 0]))
+        )
+        c1_label = (
+            MathTex("C_1", color=wire_color).scale(0.8).next_to(c1, UP, MED_LARGE_BUFF)
+        )
+        c1_left_wire = VMobject(**wire_style).set_points_as_corners(
+            [node1, node1 + UP * 2.1 * unit, c1.p1]
+        )
+        c1_right_wire = VMobject(**wire_style).set_points_as_corners(
+            [c1.p2, center + unit * np.array([5.5, 2.7, 0]), output_node]
+        )
+
+        self.next_section(
+            "Complete the Sallen-Key filter", skip_animations=skip_animations(False)
+        )
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    Create(follower_wire, run_time=0.8),
+                    GrowFromCenter(output_dot, run_time=0.225),
+                    lag_ratio=0.8,
+                ),
+                Succession(
+                    AnimationGroup(
+                        GrowFromCenter(node1_dot, run_time=0.225),
+                        Create(c1_left_wire, run_time=0.55),
+                    ),
+                    LaggedStart(
+                        GrowFromCenter(c1, run_time=0.4),
+                        FadeIn(c1_label, run_time=0.3),
+                        Create(c1_right_wire, run_time=0.75),
+                        lag_ratio=0.5,
+                    ),
+                ),
+                lag_ratio=0.75,
+            )
+        )
+        self.wait(1)
+
+        phi1 = (
+            MathTex(r"\phi_1")
+            .set_color(YELLOW)
+            .scale(1.4)
+            .next_to(node1_dot, DOWN, MED_SMALL_BUFF)
+        )
+        phi2 = (
+            MathTex(r"\phi_2")
+            .set_color(YELLOW)
+            .scale(1.4)
+            .next_to(node2_dot, UP, MED_SMALL_BUFF)
+        )
+        phi3 = (
+            MathTex(r"\phi_3")
+            .set_color(YELLOW)
+            .scale(1.4)
+            .next_to(output_dot, DL, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    node1_dot.animate.scale(1.7).set_color(YELLOW).set_z_index(10),
+                    FadeIn(phi1, shift=DOWN * 0.5),
+                    lag_ratio=0.2,
+                ),
+                LaggedStart(
+                    node2_dot.animate.scale(1.7).set_color(YELLOW).set_z_index(10),
+                    FadeIn(phi2, shift=UP * 0.5),
+                    lag_ratio=0.2,
+                ),
+                LaggedStart(
+                    output_dot.animate.scale(1.7).set_color(YELLOW).set_z_index(10),
+                    FadeIn(phi3, shift=DL * 0.5),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        sin1 = MathTex(r"\sin{(\omega t + \phi_1)}")
+        sin1[0][-3:-1].set_color(YELLOW)
+        sin2 = MathTex(r"\sin{(\omega t + \phi_2)}")
+        sin2[0][-3:-1].set_color(YELLOW)
+        sin3 = MathTex(r"\sin{(\omega t + \phi_3)}")
+        sin3[0][-3:-1].set_color(YELLOW)
+        sins = (
+            Group(sin1, sin2, sin3)
+            .arrange(RIGHT, LARGE_BUFF)
+            .scale(1.4)
+            .move_to(self.camera.frame.get_bottom())
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale(1.1).shift(DOWN * 1),
+                LaggedStart(
+                    *[FadeIn(m) for m in sin1[0][:-3]],
+                    TransformFromCopy(phi1[0], sin1[0][-3:-1], introducer=True),
+                    FadeIn(sin1[0][-1]),
+                    lag_ratio=0.1,
+                ),
+                LaggedStart(
+                    *[FadeIn(m) for m in sin2[0][:-3]],
+                    TransformFromCopy(phi2[0], sin2[0][-3:-1], introducer=True),
+                    FadeIn(sin2[0][-1]),
+                    lag_ratio=0.1,
+                ),
+                LaggedStart(
+                    *[FadeIn(m) for m in sin3[0][:-3]],
+                    TransformFromCopy(phi3[0], sin3[0][-3:-1], introducer=True),
+                    FadeIn(sin3[0][-1]),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        content = Group(
+            source,
+            cap,
+            ground,
+            bottom_wire,
+            input_wire,
+            middle_wire,
+            right_wire,
+            cap_wire,
+            r1,
+            r2,
+            r1_label,
+            r2_label,
+            amp,
+            plus,
+            minus,
+            amp_input,
+            output_port,
+            output_wire,
+            output_label,
+            follower_wire,
+            c1,
+            c1_label,
+            c1_left_wire,
+            c1_right_wire,
+            phi1,
+            phi2,
+            phi3,
+            sins,
+            node1_dot,
+            node2_dot,
+            output_dot,
+        ).set_z_index(4)
+        self.clear()
+        self.add(content)
+
+        w, h = fw(self), fh(self)
+        screen_center = self.camera.frame.get_center()
+        title_h = h * 0.095
+        glass_center = screen_center + UP * title_h / 2
+        glass_w, glass_h = w + h * 0.12, h * 1.21
+        glass_radius = h * 0.035
+
+        def bow(points):
+            p = np.array(points) - glass_center
+            x, y = p[..., 0] / (glass_w / 2), p[..., 1] / (glass_h / 2)
+            p[..., 0] *= 1 - 0.035 * y * y
+            p[..., 1] *= 1 - 0.035 * x * x
+            return p + glass_center
+
+        glass = (
+            RoundedRectangle(
+                width=glass_w,
+                height=glass_h,
+                corner_radius=glass_radius,
+                fill_color="#10262E",
+                fill_opacity=1,
+                stroke_color="#263A3D",
+                stroke_width=3,
+            )
+            .move_to(glass_center)
+            .set_z_index(-5)
+        )
+        window_rim = (
+            Rectangle(
+                width=w + h * 0.028,
+                height=h + title_h + h * 0.028,
+                fill_color="#9DAEA7",
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            .move_to(glass_center)
+            .set_z_index(-2)
+        )
+        client = (
+            Rectangle(
+                width=w,
+                height=h,
+                fill_color=BACKGROUND_COLOR,
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            .move_to(screen_center)
+            .set_z_index(-1)
+        )
+        title_bar = (
+            Rectangle(
+                width=w,
+                height=title_h,
+                fill_color="#BDC9C0",
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            .next_to(client, UP, buff=0)
+            .set_z_index(2)
+        )
+        computing = (
+            Text(
+                "Computing...",
+                font=FONT,
+                color=BACKGROUND_COLOR,
+                typst_preamble='#set text(features: ("calt": 0, "liga": 0))',
+            )
+            .scale_to_fit_height(title_h * 0.53)
+            .move_to(title_bar)
+            .align_to(title_bar, LEFT)
+            .shift(RIGHT * title_h * 0.45)
+            .set_z_index(5)
+        )
+        computing[-2:].set_opacity(0)
+        buttons = (
+            VGroup(
+                *[
+                    Rectangle(
+                        width=title_h * 0.63,
+                        height=title_h * 0.63,
+                        fill_color="#D7DED4",
+                        fill_opacity=1,
+                        stroke_color="#4A6566",
+                        stroke_width=1.4,
+                    )
+                    for _ in range(2)
+                ]
+            )
+            .arrange(RIGHT, buff=title_h * 0.16)
+            .move_to(title_bar)
+            .align_to(title_bar, RIGHT)
+            .shift(LEFT * title_h * 0.22)
+            .set_z_index(5)
+        )
+        minimize = (
+            Line(LEFT, RIGHT, color="#244449", stroke_width=1.5)
+            .scale_to_fit_width(title_h * 0.32)
+            .move_to(buttons[0])
+            .shift(DOWN * title_h * 0.12)
+            .set_z_index(6)
+        )
+        close = (
+            VGroup(
+                Line(UL, DR, color="#244449", stroke_width=1.5),
+                Line(DL, UR, color="#244449", stroke_width=1.5),
+            )
+            .scale_to_fit_width(title_h * 0.29)
+            .move_to(buttons[1])
+            .set_z_index(6)
+        )
+        screen = Group(
+            glass,
+            window_rim,
+            client,
+            title_bar,
+            computing,
+            buttons,
+            minimize,
+            close,
+            content,
+        )
+        crt_start = self.time
+        crt_time = VT(0).add_updater(lambda mob: mob.set_value(self.time - crt_start))
+        crt_opacity = VT(0)
+        crt_bend = VT(0)
+
+        def update_computing(mob):
+            count = 1 + int(~crt_time / 0.5) % 3
+            for index, dot in enumerate(mob[-3:]):
+                dot.set_opacity(float(index < count))
+
+        computing.add_updater(update_computing, call_updater=True)
+
+        def screen_row(y):
+            dy = max(0, abs(y) - glass_h / 2 + glass_radius)
+            extent = (
+                glass_w / 2 - glass_radius + np.sqrt(max(0, glass_radius**2 - dy**2))
+            )
+            bend = 0.035 * ~crt_bend
+            x = extent * (1 - bend * (y / (glass_h / 2)) ** 2)
+            q = bend * (extent / (glass_w / 2)) ** 2
+            return glass_center + np.array(
+                [
+                    [-x, y * (1 - q), 0],
+                    [-x / 3, y * (1 + q / 3), 0],
+                    [x / 3, y * (1 + q / 3), 0],
+                    [x, y * (1 - q), 0],
+                ]
+            )
+
+        scan_count = int(np.ceil(glass_h / (h * 0.007)))
+        scan_spacing = glass_h / scan_count
+        scanlines = VGroup(
+            *[
+                VMobject(stroke_color="#020D14", stroke_width=0.8)
+                for _ in range(scan_count)
+            ]
+        ).set_z_index(41)
+
+        def update_scanlines(mob):
+            offset = ~crt_time * scan_spacing * 0.65
+            for index, line in enumerate(mob):
+                y = (index * scan_spacing - offset) % glass_h - glass_h / 2
+                edge = min(1, (glass_h / 2 - abs(y)) / (h * 0.012))
+                line.set_points(screen_row(y)).set_stroke(
+                    opacity=0.24 * ~crt_opacity * edge
+                )
+
+        scanlines.add_updater(update_scanlines, call_updater=True)
+        band_offsets = np.linspace(-h * 0.08, h * 0.08, 24)
+        band_height = band_offsets[1] - band_offsets[0]
+        rolling_band = VGroup(
+            *[
+                VMobject(fill_color="#D6EFE3", fill_opacity=0, stroke_width=0)
+                for _ in band_offsets
+            ]
+        ).set_z_index(40)
+
+        def update_band(mob):
+            top = glass_h / 2 + h * 0.08
+            band_y = top - ((top - h * 0.14 + ~crt_time * h * 0.12) % (2 * top))
+            for strip, offset in zip(mob, band_offsets):
+                y = band_y + offset
+                if abs(y) >= glass_h / 2:
+                    strip.set_fill(opacity=0)
+                    continue
+                upper = screen_row(min(y + band_height / 2, glass_h / 2))
+                lower = screen_row(max(y - band_height / 2, -glass_h / 2))[::-1]
+                strip.set_points(
+                    np.vstack(
+                        (
+                            upper,
+                            np.linspace(upper[-1], lower[0], 4),
+                            lower,
+                            np.linspace(lower[-1], upper[0], 4),
+                        )
+                    )
+                ).set_fill(
+                    opacity=0.045
+                    * ~crt_opacity
+                    * np.exp(-4 * (offset / (h * 0.08)) ** 2)
+                )
+
+        rolling_band.add_updater(update_band, call_updater=True)
+        self.add(crt_time, crt_opacity, crt_bend, screen, rolling_band, scanlines)
+        self.next_section("Computing window", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(glass_h * 1.13).move_to(
+                    glass_center
+                ),
+                AnimationGroup(
+                    screen.animate(suspend_mobject_updating=False).apply_function(bow),
+                    crt_bend @ 1,
+                ),
+                lag_ratio=0.1,
+            ),
+            crt_opacity @ 1,
+            run_time=2.2,
+        )
+        self.next_section("Computing", skip_animations=skip_animations(False))
+        self.play(
+            *[
+                dot.animate.set_color(wire_color)
+                for dot in (node1_dot, node2_dot, output_dot)
+            ],
+            run_time=0.25,
+        )
+        self.wait(5.75)
+
+        mouse_x = VT(screen_center[0] + w * 0.55)
+        mouse_y = VT(node2[1] - h * 0.08)
+        mouse_size = VT(1)
+        mouse_vertices = (
+            h
+            * 0.065
+            * np.array(
+                [
+                    [0, 0, 0],
+                    [0, -1, 0],
+                    [0.25, -0.75, 0],
+                    [0.49, -1.22, 0],
+                    [0.70, -1.12, 0],
+                    [0.46, -0.66, 0],
+                    [0.83, -0.66, 0],
+                ]
+            )
+        )
+
+        def mouse_pointer():
+            points = mouse_vertices * ~mouse_size + np.array([~mouse_x, ~mouse_y, 0])
+            edge = screen_center[0] + w / 2
+            clipped = []
+            for start, end in zip(points, np.roll(points, -1, axis=0)):
+                if start[0] <= edge:
+                    clipped.append(start)
+                if (start[0] <= edge) != (end[0] <= edge):
+                    clipped.append(
+                        start + (end - start) * (edge - start[0]) / (end[0] - start[0])
+                    )
+            return (
+                Polygon(
+                    *(clipped if len(clipped) >= 3 else points),
+                    fill_color="#F4F4E9",
+                    fill_opacity=1,
+                    stroke_color="#071318",
+                    stroke_width=2.5,
+                )
+                .set_opacity(float(len(clipped) >= 3))
+                .apply_function(bow)
+                .set_z_index(30)
+            )
+
+        mouse = always_redraw(mouse_pointer).set_z_index(30)
+        self.add(mouse_x, mouse_y, mouse_size, mouse)
+        self.next_section(
+            "Select capacitor node", skip_animations=skip_animations(False)
+        )
+        self.play(
+            mouse_x @ node2[0],
+            mouse_y @ node2[1],
+            run_time=1.35,
+            rate_func=ease_in_out_cubic,
+        )
+        self.wait(0.2)
+        click_ring = (
+            Circle(radius=h * 0.023, color=YELLOW, stroke_width=2.5)
+            .move_to(node2)
+            .apply_function(bow)
+            .set_z_index(26)
+        )
+        self.add(click_ring)
+        self.play(
+            mouse_size @ 0.88,
+            node2_dot.animate.set_color(YELLOW),
+            run_time=0.12,
+        )
+        self.play(
+            mouse_size @ 1,
+            click_ring.animate.scale(2.1).set_stroke(opacity=0),
+            run_time=0.25,
+        )
+        self.remove(click_ring)
+        self.wait(0.15)
+
+        probe_w, probe_h = w * 0.72, h * 0.55
+        probe_center = screen_center + RIGHT * w * 0.09 + DOWN * h * 0.18
+        probe_title_h = title_h * 0.68
+        probe_rim = (
+            Rectangle(
+                width=probe_w,
+                height=probe_h,
+                fill_color="#9DAEA7",
+                fill_opacity=1,
+                stroke_color="#071318",
+                stroke_width=3,
+            )
+            .move_to(probe_center)
+            .set_z_index(20)
+        )
+        probe_body = (
+            Rectangle(
+                width=probe_w - h * 0.035,
+                height=probe_h - probe_title_h - h * 0.035,
+                fill_color="#102C38",
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            .move_to(probe_center + DOWN * probe_title_h / 2)
+            .set_z_index(21)
+        )
+        probe_title_bar = (
+            Rectangle(
+                width=probe_body.width,
+                height=probe_title_h,
+                fill_color="#BDC9C0",
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            .next_to(probe_body, UP, buff=0)
+            .set_z_index(21)
+        )
+        probe_title = (
+            Text("Voltage probe - C2", font=FONT, color=BACKGROUND_COLOR)
+            .scale_to_fit_height(probe_title_h * 0.51)
+            .move_to(probe_title_bar)
+            .align_to(probe_title_bar, LEFT)
+            .shift(RIGHT * probe_title_h * 0.35)
+            .set_z_index(22)
+        )
+        probe_close_box = (
+            Rectangle(
+                width=probe_title_h * 0.68,
+                height=probe_title_h * 0.68,
+                fill_color="#D7DED4",
+                fill_opacity=1,
+                stroke_color="#4A6566",
+                stroke_width=1.2,
+            )
+            .move_to(probe_title_bar)
+            .align_to(probe_title_bar, RIGHT)
+            .shift(LEFT * probe_title_h * 0.18)
+            .set_z_index(22)
+        )
+        probe_close = (
+            VGroup(
+                Line(UL, DR, color="#244449", stroke_width=1.3),
+                Line(DL, UR, color="#244449", stroke_width=1.3),
+            )
+            .scale_to_fit_width(probe_title_h * 0.32)
+            .move_to(probe_close_box)
+            .set_z_index(22)
+        )
+        probe_shell = Group(
+            probe_rim,
+            probe_body,
+            probe_title_bar,
+            probe_title,
+            probe_close_box,
+            probe_close,
+        ).apply_function(bow)
+
+        probe_duration = 12
+        probe_axes = Axes(
+            x_range=[0, probe_duration, 2],
+            y_range=[-6, 6, 1],
+            x_length=probe_w * 0.85,
+            y_length=probe_h * 0.51,
+            axis_config={
+                "include_ticks": False,
+                "color": "#91ABA9",
+                "stroke_width": 1.2,
+            },
+            tips=False,
+        ).move_to(probe_center + RIGHT * h * 0.015 + DOWN * h * 0.035)
+        probe_grid = VGroup(
+            *[
+                Line(
+                    probe_axes.c2p(t, -6),
+                    probe_axes.c2p(t, 6),
+                    color="#91ABA9",
+                    stroke_width=0.8,
+                    stroke_opacity=0.22,
+                )
+                for t in range(0, probe_duration + 1, 2)
+            ],
+            *[
+                Line(
+                    probe_axes.c2p(0, value),
+                    probe_axes.c2p(probe_duration, value),
+                    color="#91ABA9",
+                    stroke_width=0.8,
+                    stroke_opacity=0.22,
+                )
+                for value in (-5, 5)
+            ],
+        )
+        probe_ticks = VGroup(
+            *[
+                Text(str(t), font=FONT, font_size=20, color="#BDC9C0").next_to(
+                    probe_axes.c2p(t, -6), DOWN, buff=h * 0.012
+                )
+                for t in range(0, probe_duration + 1, 2)
+            ],
+            *[
+                Text(str(value), font=FONT, font_size=20, color="#BDC9C0").next_to(
+                    probe_axes.c2p(0, value), LEFT, buff=h * 0.015
+                )
+                for value in (-5, 0, 5)
+            ],
+        )
+        probe_units = VGroup(
+            MathTex("V", color="#BDC9C0")
+            .scale_to_fit_height(h * 0.026)
+            .next_to(probe_axes.c2p(0, 6), UL, buff=h * 0.012),
+            MathTex("t", color="#BDC9C0")
+            .scale_to_fit_height(h * 0.026)
+            .next_to(probe_axes, DOWN, buff=h * 0.035),
+        )
+        probe_legend = VGroup(
+            VGroup(
+                Line(LEFT, RIGHT, color=YELLOW, stroke_width=3).scale_to_fit_width(
+                    h * 0.065
+                ),
+                MathTex(r"V_{in}(t)", color=YELLOW).scale_to_fit_height(h * 0.035),
+            ).arrange(RIGHT, buff=h * 0.018),
+            VGroup(
+                Line(LEFT, RIGHT, color=BLUE, stroke_width=3).scale_to_fit_width(
+                    h * 0.065
+                ),
+                MathTex(r"V_{C_2}(t)", color=BLUE).scale_to_fit_height(h * 0.035),
+            ).arrange(RIGHT, buff=h * 0.018),
+        )
+        probe_legend.arrange(RIGHT, buff=h * 0.10).move_to(
+            probe_center + UP * (probe_h / 2 - probe_title_h - h * 0.06)
+        )
+        probe_origin = probe_axes.c2p(0, 0)
+        probe_x_unit = probe_axes.c2p(1, 0) - probe_origin
+        probe_y_unit = probe_axes.c2p(0, 1) - probe_origin
+
+        def voltage_point(t, voltage):
+            return bow(probe_origin + t * probe_x_unit + voltage * probe_y_unit)
+
+        r1_value = r2_value = 10e3  # ohm
+        c1_value, c2_value = 330e-6, 22e-6  # F
+        probe_amplitude, probe_frequency = ~sim.amplitude, ~sim.frequency
+        probe_times = np.linspace(0, probe_duration, 721)
+        probe_input = probe_amplitude * np.cos(TAU * probe_frequency * probe_times)
+        _, probe_voltage, _ = lsim(
+            (
+                [1],
+                [
+                    r1_value * r2_value * c1_value * c2_value,
+                    c2_value * (r1_value + r2_value),
+                    1,
+                ],
+            ),
+            U=probe_input,
+            T=probe_times,
+            X0=0,
+        )
+        input_curve = VMobject(color=YELLOW, stroke_width=3).set_points_smoothly(
+            bow(probe_axes.c2p(probe_times, probe_input).T)
+        )
+        node_curve = VMobject(color=BLUE, stroke_width=3).set_points_smoothly(
+            bow(probe_axes.c2p(probe_times, probe_voltage).T)
+        )
+        probe_plot = (
+            Group(probe_grid, probe_axes, probe_ticks, probe_units, probe_legend)
+            .apply_function(bow)
+            .set_z_index(23)
+        )
+
+        self.next_section("Open voltage probe", skip_animations=skip_animations(False))
+        self.play(
+            GrowFromPoint(probe_shell, node2_dot.get_center(), run_time=0.55),
+            run_time=0.55,
+            rate_func=ease_out_cubic,
+        )
+        self.play(
+            FadeIn(probe_plot),
+            run_time=0.4,
+        )
+        probe_time = VT(0)
+        input_trace = always_redraw(
+            lambda: (
+                input_curve.copy()
+                .pointwise_become_partial(input_curve, 0, ~probe_time / probe_duration)
+                .set_z_index(24)
+            )
+        )
+        node_trace = always_redraw(
+            lambda: (
+                node_curve.copy()
+                .pointwise_become_partial(node_curve, 0, ~probe_time / probe_duration)
+                .set_z_index(24)
+            )
+        )
+        input_probe_dot = always_redraw(
+            lambda: Dot(
+                voltage_point(
+                    ~probe_time,
+                    probe_amplitude * np.cos(TAU * probe_frequency * ~probe_time),
+                ),
+                radius=h * 0.006,
+                color=YELLOW,
+            ).set_z_index(25)
+        )
+        node_probe_dot = always_redraw(
+            lambda: Dot(
+                voltage_point(
+                    ~probe_time,
+                    np.interp(~probe_time, probe_times, probe_voltage),
+                ),
+                radius=h * 0.006,
+                color=BLUE,
+            ).set_z_index(25)
+        )
+        sample_step = 0.5
+        sample_times = np.arange(0, probe_duration + sample_step / 2, sample_step)
+        sample_input = np.interp(sample_times, probe_times, probe_input)
+        sample_voltage = np.interp(sample_times, probe_times, probe_voltage)
+        samples = VGroup()
+        for t, input_value, node_value in zip(
+            sample_times, sample_input, sample_voltage
+        ):
+            sample = VGroup()
+            zero = probe_origin + t * probe_x_unit
+            for value, color in ((input_value, YELLOW), (node_value, BLUE)):
+                stem = (
+                    Line(
+                        zero,
+                        zero + value * probe_y_unit,
+                        color=color,
+                        stroke_width=1.3,
+                        stroke_opacity=0.6,
+                    )
+                    .apply_function(bow)
+                    .set_z_index(23.5)
+                )
+                dot = Dot(
+                    voltage_point(t, value), radius=h * 0.005, color=color
+                ).set_z_index(25)
+                sample.add(stem, dot)
+            samples.add(sample)
+
+        self.add(probe_time, input_trace, node_trace, input_probe_dot, node_probe_dot)
+        self.next_section("Plot node voltage", skip_animations=skip_animations(False))
+        probe_run_time = 3.6
+        self.play(
+            probe_time.animate(run_time=probe_run_time, rate_func=linear).set_value(
+                probe_duration
+            ),
+            LaggedStart(
+                *[
+                    GrowFromPoint(
+                        sample,
+                        voltage_point(t, 0),
+                        run_time=sample_step * probe_run_time / probe_duration,
+                        rate_func=ease_out_cubic,
+                    )
+                    for t, sample in zip(sample_times, samples)
+                ],
+                lag_ratio=1,
+            ),
+        )
+        self.wait(2)
+
+        settled_start = 7
+        view_start = VT(0)
+        selection_end = VT(settled_start)
+        selection_opacity = VT(0)
+        drag_start = probe_origin + settled_start * probe_x_unit + 1.5 * probe_y_unit
+        drag_end = probe_origin + probe_duration * probe_x_unit + 1.5 * probe_y_unit
+
+        def selected_region():
+            scale = probe_duration / (probe_duration - ~view_start)
+            left = probe_origin + (settled_start - ~view_start) * scale * probe_x_unit
+            right = probe_origin + (~selection_end - ~view_start) * scale * probe_x_unit
+            return (
+                VGroup(
+                    Polygon(
+                        left - 6 * probe_y_unit,
+                        right - 6 * probe_y_unit,
+                        right + 6 * probe_y_unit,
+                        left + 6 * probe_y_unit,
+                        fill_color=BLUE,
+                        fill_opacity=0.18 * ~selection_opacity,
+                        stroke_width=0,
+                    ),
+                    *[
+                        Line(
+                            point - 6 * probe_y_unit,
+                            point + 6 * probe_y_unit,
+                            color=BLUE,
+                            stroke_width=1.8,
+                            stroke_opacity=~selection_opacity,
+                        )
+                        for point in (left, right)
+                    ],
+                )
+                .apply_function(bow)
+                .set_z_index(26)
+            )
+
+        selection = always_redraw(selected_region)
+        self.add(selection_end, selection_opacity, selection)
+        self.next_section(
+            "Select settled interval", skip_animations=skip_animations(False)
+        )
+        self.play(
+            mouse_x @ drag_start[0],
+            mouse_y @ drag_start[1],
+            run_time=1.0,
+            rate_func=ease_in_out_cubic,
+        )
+        self.wait(0.2)
+        self.play(mouse_size @ 0.88, selection_opacity @ 1, run_time=0.12)
+        self.play(
+            mouse_x @ drag_end[0],
+            selection_end @ probe_duration,
+            run_time=1.6,
+            rate_func=linear,
+        )
+        self.play(mouse_size @ 1, run_time=0.12)
+        self.wait(0.35)
+
+        tick_times = sorted(
+            set(range(0, probe_duration + 1, 2))
+            | set(range(settled_start, probe_duration + 1))
+        )
+        tick_templates = [
+            Text(str(t), font=FONT, font_size=20, color="#BDC9C0") for t in tick_times
+        ]
+        zoom_ticks = VGroup(*[label.copy() for label in tick_templates]).set_z_index(23)
+        zoom_grid = VGroup(*[Line(UP, DOWN) for _ in tick_times]).set_z_index(23)
+
+        def view_point(t, voltage):
+            x = (t - ~view_start) * probe_duration / (probe_duration - ~view_start)
+            return probe_origin + x * probe_x_unit + voltage * probe_y_unit
+
+        def update_probe_view(_):
+            times = np.linspace(~view_start, probe_duration, len(probe_times))
+            x = np.linspace(0, probe_duration, len(probe_times))
+            for trace, values in (
+                (input_trace, probe_amplitude * np.cos(TAU * probe_frequency * times)),
+                (node_trace, np.interp(times, probe_times, probe_voltage)),
+            ):
+                trace.set_points_smoothly(
+                    bow(
+                        probe_origin
+                        + x[:, None] * probe_x_unit
+                        + values[:, None] * probe_y_unit
+                    )
+                )
+            for t, template, label, line in zip(
+                tick_times, tick_templates, zoom_ticks, zoom_grid
+            ):
+                opacity = 1 if t % 2 == 0 else ~view_start / settled_start
+                if t < ~view_start:
+                    label.set_opacity(0)
+                    line.set_opacity(0)
+                    continue
+                label.become(
+                    template.copy()
+                    .next_to(view_point(t, -6), DOWN, buff=h * 0.012)
+                    .apply_function(bow)
+                    .set_opacity(opacity)
+                    .set_z_index(23)
+                )
+                line.become(
+                    Line(
+                        view_point(t, -6),
+                        view_point(t, 6),
+                        color="#91ABA9",
+                        stroke_width=0.8,
+                        stroke_opacity=0.22 * opacity,
+                    )
+                    .apply_function(bow)
+                    .set_z_index(23)
+                )
+            for t, input_value, node_value, sample in zip(
+                sample_times, sample_input, sample_voltage, samples
+            ):
+                if t < ~view_start:
+                    sample.set_opacity(0)
+                    continue
+                for index, value, color in (
+                    (0, input_value, YELLOW),
+                    (2, node_value, BLUE),
+                ):
+                    sample[index].become(
+                        Line(
+                            view_point(t, 0),
+                            view_point(t, value),
+                            color=color,
+                            stroke_width=1.3,
+                            stroke_opacity=0.6,
+                        )
+                        .apply_function(bow)
+                        .set_z_index(23.5)
+                    )
+                    sample[index + 1].move_to(bow(view_point(t, value)))
+
+        for mob in (input_trace, node_trace, input_probe_dot, node_probe_dot):
+            mob.clear_updaters()
+        probe_ticks.remove(*probe_ticks[: probe_duration // 2 + 1])
+        probe_grid.remove(*probe_grid[: probe_duration // 2 + 1])
+        zoom_content = Group(input_trace, node_trace, samples, zoom_ticks, zoom_grid)
+        update_probe_view(zoom_content)
+        self.add(view_start, zoom_content)
+        self.next_section(
+            "Fit selected interval", skip_animations=skip_animations(False)
+        )
+        self.play(
+            view_start @ settled_start,
+            UpdateFromFunc(zoom_content, update_probe_view),
+            run_time=1.3,
+            rate_func=ease_in_out_cubic,
+        )
+        self.play(selection_opacity @ 0, run_time=0.3)
+        self.remove(selection, selection_end, selection_opacity)
+        probe_axes.x_range = [settled_start, probe_duration, 1]
+        probe_axes.x_axis.x_range = np.array(probe_axes.x_range, dtype=float)
+        probe_axes.x_axis.x_min, probe_axes.x_axis.x_max, probe_axes.x_axis.x_step = (
+            probe_axes.x_range
+        )
+        probe_axes.x_axis.unit_size = probe_axes.x_axis.get_unit_size()
+        self.wait(2)
+
+        z = (
+            MathTex(r"z = a + jb")
+            .scale(2)
+            .move_to(self.camera.frame)
+            .shift(LEFT * fw(self))
+        )
+        self.add(z)
+
+        self.play(self.camera.frame.animate.shift(LEFT * fw(self)))
+
+        self.wait(0.5)
+
+        human = (
+            ImageMobject("../props/static/human_outline_white.png")
+            .scale_to_fit_height(fh(self, 0.6))
+            .next_to(z, DOWN, fh(self, 0.14))
+            .shift(LEFT * fw(self, 0.25))
+        )
+        camera_target = (
+            self.camera.frame.copy().scale(1.2).set_y(Group(z, human).get_y())
+        )
+
+        mouse.clear_updaters()
+        crt = Group(
+            screen,
+            probe_shell,
+            probe_plot,
+            zoom_content,
+            input_probe_dot,
+            node_probe_dot,
+            mouse,
+        )
+        crt_center, crt_height = glass.get_center(), glass.height
+        original_screen_row = screen_row
+
+        def screen_row(y):
+            return (
+                original_screen_row(y) - crt_center
+            ) * glass.height / crt_height + glass.get_center()
+
+        crt_target = (
+            crt.copy()
+            .scale_to_fit_height(human.height)
+            .move_to(human)
+            .set_x(2 * z.get_x() - human.get_x())
+        )
+        crt.scale_to_fit_width(crt_target.width).move_to(crt_target).set_x(
+            camera_target.get_right()[0] + crt_target.width / 2 + LARGE_BUFF
+        )
+        self.add(crt)
+
+        human_bez = CubicBezier(
+            z.get_bottom() + [0, -0.1, 0],
+            z.get_bottom() + [0, -1.5, 0],
+            human.get_top() + [0, 1.5, 0],
+            human.get_top() + [0, 0.1, 0],
+            stroke_width=3,
+        )
+        screen_bez = CubicBezier(
+            z.get_bottom() + [0, -0.1, 0],
+            z.get_bottom() + [0, -1.5, 0],
+            crt_target.get_top() + [0, 1.5, 0],
+            crt_target.get_top() + [0, 0.1, 0],
+            stroke_width=3,
+        )
+
+        self.next_section("Human and computer", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=1.5).become(camera_target),
+                z.animate.scale(1.5).move_to(z, DOWN),
+                Create(human_bez),
+                human.shift(DOWN * fh(self)).animate.shift(UP * fh(self)),
+                Create(screen_bez),
+                crt.animate(run_time=1.5, suspend_mobject_updating=False).move_to(
+                    crt_target
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        self.wait(2)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)))
+
+
+class Impedance(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
 
 
 class CapacitorEquation(MovingCameraScene):
