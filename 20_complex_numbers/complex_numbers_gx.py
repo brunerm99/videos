@@ -1,5 +1,4 @@
 # complex_numbers_gx.py
-import os
 import pathlib
 from collections import deque
 from types import SimpleNamespace
@@ -10,7 +9,7 @@ from manimgx import *
 from manimgx import Capacitor as Cap
 
 load_dotenv(pathlib.Path(__file__).resolve().parents[1] / ".env")
-FONT = os.getenv("FONT", "").replace("Maple Mono CN", "Maple Mono")
+FONT = "Maple Mono"
 BACKGROUND_COLOR = "#183340"
 CAPACITOR_STATE_PATH = pathlib.Path(__file__).with_name("capacitor_state.npz")
 SKIP_ANIMATIONS_OVERRIDE = True
@@ -20,7 +19,7 @@ def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
 
 
-class CapacitorIntro(MovingCameraScene):
+class LumpedComponents(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
         opening_frame = self.camera.frame.copy()
@@ -135,6 +134,32 @@ class CapacitorIntro(MovingCameraScene):
 
         self.wait(0.5)
 
+        text_options = dict(
+            font=FONT,
+            typst_preamble='#set text(features: ("calt": 0))',
+        )
+        vpp = Text("++", **text_options).move_to(v_label, LEFT)
+        ipp = Text("++", **text_options).next_to(i_label, RIGHT, SMALL_BUFF)
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    GrowFromCenter(ipp[0]),
+                    GrowFromCenter(ipp[1]),
+                    lag_ratio=0.2,
+                ),
+                LaggedStart(
+                    v_label.animate.next_to(vpp, LEFT, SMALL_BUFF),
+                    GrowFromCenter(vpp[0]),
+                    GrowFromCenter(vpp[1]),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
         ohms = (
             MathTex("V_R = I_R R")
             .scale(1.5)
@@ -150,6 +175,7 @@ class CapacitorIntro(MovingCameraScene):
 
         self.play(
             LaggedStart(
+                FadeOut(vpp, ipp),
                 Group(res, vn, vp, i_arrow).animate.shift(UP * fh(self, 0.15)),
                 ReplacementTransform(v_label[0], ohms[0][:2], path_arc=PI / 6),
                 GrowFromCenter(ohms[0][2]),
@@ -203,12 +229,6 @@ class CapacitorIntro(MovingCameraScene):
             LaggedStart(
                 Group(ind, ind_label).animate.shift(RIGHT * fw(self)),
                 self.camera.frame.animate.move_to(Group(cap, cap_label)),
-                LaggedStart(
-                    GrowFromCenter(vcp),
-                    GrowFromCenter(vcn),
-                    GrowFromCenter(vc_label),
-                    lag_ratio=0.2,
-                ),
                 lag_ratio=0.3,
             )
         )
@@ -236,9 +256,22 @@ class CapacitorIntro(MovingCameraScene):
         )
 
         self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                GrowFromCenter(vcp),
+                GrowFromCenter(vcn),
+                GrowFromCenter(vc_label),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
         self.next_section("Capacitor circuit", skip_animations=skip_animations(False))
 
         source, target_cap, ground, wires, electrons = circuit
+        plot_vc = plot[2][0][:2]
+        plot_rest = VGroup(*plot[:2], plot[2][0][2:])
         self.remove(
             res,
             res_label,
@@ -262,9 +295,11 @@ class CapacitorIntro(MovingCameraScene):
                 ReplacementTransform(cap_label, target_cap[-1], path_arc=PI / 2),
                 run_time=2,
             ),
-            FadeOut(VGroup(vcp, vcn, vc_label, ic_arrow, ic_label), run_time=0.6),
-            Succession(Wait(1.2), FadeIn(plot, run_time=0.8)),
+            FadeOut(VGroup(vcp, vcn, ic_arrow, ic_label), run_time=0.6),
+            ReplacementTransform(vc_label[0], plot_vc, run_time=2),
+            Succession(Wait(1.2), FadeIn(plot_rest, run_time=0.8)),
         )
+
         self.play(
             LaggedStart(
                 AnimationGroup(
@@ -521,7 +556,7 @@ def _capacitor_simulation(scene, plot_window=12):
     )
 
 
-class Capacitor(MovingCameraScene):
+class Charging(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
