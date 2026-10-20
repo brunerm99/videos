@@ -2331,6 +2331,169 @@ class Impedance(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
+        cap_relation = MathTex(r"V_C \sim I_C").scale(2)
+        cap_relation[0][:2].set_color(YELLOW)
+        cap_relation[0][3:5].set_color(BLUE)
+        res_relation = MathTex(r"V_R = I_R R").scale(2).shift(DOWN * fh(self))
+        res_relation[0][:2].set_color(YELLOW)
+        res_relation[0][3:5].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                *[PopIn(m) for m in cap_relation[0]],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(Group(cap_relation, res_relation).animate.arrange(DOWN, LARGE_BUFF))
+
+        self.wait(0.5)
+
+        cap_ohms = MathTex(r"V_C = I_C ?").scale(2).move_to(cap_relation)
+        cap_ohms[0][:2].set_color(YELLOW)
+        cap_ohms[0][3:5].set_color(BLUE)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(cap_relation[0][:2], cap_ohms[0][:2]),
+                FadeOut(cap_relation[0][2], shift=UP / 2, run_time=0.5),
+                FadeIn(cap_ohms[0][2], shift=UP / 2, run_time=0.5),
+                ReplacementTransform(cap_relation[0][3:5], cap_ohms[0][3:5]),
+                GrowFromCenter(cap_ohms[0][-1]),
+                lag_ratio=0.1,
+            )
+        )
+
+        self.wait(0.5)
+
+        cap_ohms_z = MathTex(r"V_C = I_C Z").scale(2).move_to(cap_ohms)
+        cap_ohms_z[0][:2].set_color(YELLOW)
+        cap_ohms_z[0][3:5].set_color(BLUE)
+
+        r_arrow = Arrow(
+            res_relation.get_right() + [0, 0, 0],
+            cap_ohms_z.get_right() + [-0.2, 0.1, 0],
+            path_arc=PI,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(r_arrow),
+                LaggedStart(
+                    ReplacementTransform(cap_ohms[0][:-1], cap_ohms_z[0][:-1]),
+                    FadeOut(cap_ohms[0][-1], shift=UP / 2, run_time=0.5),
+                    FadeIn(cap_ohms_z[0][-1], shift=UP / 2, run_time=0.5),
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        curr_z = MathTex(r"I_C = \frac{V_C}{Z}").scale(2).move_to(cap_ohms_z)
+        curr_z[0][:2].set_color(BLUE)
+        curr_z[0][3:5].set_color(YELLOW)
+
+        ohms_time = (
+            MathTex(r"I_C(t) = C \frac{d V_C(t) }{dt}")
+            .scale(2)
+            .next_to(curr_z, UL, LARGE_BUFF * 1.4)
+            .shift(RIGHT * 2.5)
+        )
+        ohms_time[0][:5].set_color(BLUE)
+        ohms_time[0][8:13].set_color(YELLOW)
+
+        # self.add(ohms_time)
+
+        arrow_start = ohms_time.get_right() + RIGHT * 0.3
+        arrow_end = curr_z.get_left() + LEFT * 0.25 + UP * 0.1
+        arrow_mid = (arrow_start + arrow_end) / 2 + LEFT * 0.4 + UP * 0.25
+        impedance_arrow = TipableVMobject(
+            color=GREEN, stroke_width=3, tip_corner_radius=0.02
+        )
+        impedance_arrow.start_new_path(arrow_start)
+        impedance_arrow.add_cubic_bezier_curve_to(
+            arrow_start + RIGHT * 3.1,
+            arrow_mid + RIGHT * 2.25 + UP * 0.4,
+            arrow_mid,
+        )
+        impedance_arrow.add_cubic_bezier_curve_to(
+            arrow_mid + LEFT * 2.25 + DOWN * 0.4,
+            arrow_end + LEFT * 3.5,
+            arrow_end,
+        )
+        impedance_arrow.add_tip(tip_length=0.2, tip_width=0.2)
+
+        self.play(
+            FadeOut(r_arrow),
+            res_relation.animate.shift(DOWN * fh(self)),
+            self.camera.frame.animate(run_time=2).move_to(Group(curr_z, ohms_time)),
+            LaggedStart(
+                ReplacementTransform(cap_ohms_z[0][5], curr_z[0][5]),
+                ReplacementTransform(
+                    cap_ohms_z[0][3:5], curr_z[0][:2], path_arc=-PI / 2
+                ),
+                ReplacementTransform(
+                    cap_ohms_z[0][:2], curr_z[0][3:5], path_arc=-PI / 2
+                ),
+                ReplacementTransform(cap_ohms_z[0][2], curr_z[0][2]),
+                Create(curr_z[0][6]),
+                LaggedStart(*[FadeIn(m) for m in ohms_time[0]], lag_ratio=0.08),
+                GrowArrow(impedance_arrow, run_time=1.5),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        x = (
+            MathTex(r"x")
+            .scale(3)
+            .next_to(self.camera.frame.get_corner(DL), UR, LARGE_BUFF * 2.7)
+        )
+
+        xsin = MathTex(r"x V_C(t)").scale(2).move_to(self.camera.frame.get_bottom())
+        xsin[0][1:].set_color(YELLOW)
+
+        xsin_dt = MathTex(r"x V_C(t) = \frac{d V_C(t)}{dt}").scale(2).move_to(xsin)
+        xsin_dt[0][1:6].set_color(YELLOW)
+        xsin_dt[0][8:13].set_color(YELLOW)
+
+        self.play(GrowFromCenter(x))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(x[0], xsin[0][0], introducer=True),
+                TransformFromCopy(ohms_time[0][8:13], xsin[0][1:], introducer=True),
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(xsin, ohms_time, curr_z).height * 1.2
+                ).move_to(Group(xsin, ohms_time, curr_z)),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(xsin[0], xsin_dt[0][:6], introducer=True),
+                GrowFromCenter(xsin_dt[0][6]),
+                TransformFromCopy(ohms_time[0][7:], xsin_dt[0][7:], introducer=True),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+        self.wait(2)
+
 
 class CapacitorEquation(MovingCameraScene):
     def construct(self):
