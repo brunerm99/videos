@@ -1,5 +1,6 @@
 # complex_numbers_gx.py
 import pathlib
+import textwrap
 from collections import deque
 from types import SimpleNamespace
 
@@ -18,6 +19,121 @@ SKIP_ANIMATIONS_OVERRIDE = True
 
 def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
+
+
+class CommentIntro(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+        comments = [
+            (
+                "@MindlessUser",
+                "PLEASE do the video about complex numbers! Your videos are amazing!!!",
+                (-0.32, 0.05),
+            ),
+            (
+                "@victorscarpes",
+                "Please make a video on complex numbers.",
+                (0.32, 0.21),
+            ),
+            (
+                "@odhinnsrunes",
+                "...Yes, I'd be interested in a video on complex numbers...",
+                (0.00, 0.04),
+            ),
+            (
+                "@jagdish_atm_science",
+                "...Please upload a detailed video on the complex [number] application...",
+                (-0.32, -0.26),
+            ),
+            (
+                "@ellisbender5839",
+                "I would appreciate a video on imaginary numbers and their "
+                "application in this video. Pt2??",
+                (0.32, -0.15),
+            ),
+            (
+                "@PremKumar-u2c5x",
+                "Video on Complex Numbers pls",
+                (-0.32, 0.30),
+            ),
+            (
+                "@wangbing-f5s",
+                "...I look forward to your future work on the application "
+                "of complex numbers in RF engineering...",
+                (0.00, -0.31),
+            ),
+            (
+                "@-ion",
+                "...Another video covering it with complex numbers would be "
+                "a good addition.",
+                (0.00, 0.32),
+            ),
+        ]
+        bubbles = VGroup()
+        for index, (author, comment, (x, y)) in enumerate(comments):
+            handle = Text(author, font=FONT, font_size=20, color=BLUE)
+            quote = Text(
+                textwrap.fill(comment, width=26),
+                font=FONT,
+                font_size=24,
+                line_spacing=0.2,
+                color="#D6EEF7",
+            )
+            content = VGroup(handle, quote).arrange(
+                DOWN, aligned_edge=LEFT, buff=fh(self, 0.018)
+            )
+            if content.width > fw(self, 0.26):
+                content.scale_to_fit_width(fw(self, 0.26))
+
+            body = RoundedRectangle(
+                width=content.width + fw(self, 0.033),
+                height=content.height + fh(self, 0.06),
+                corner_radius=fh(self, 0.035),
+                fill_color="#244957",
+                fill_opacity=1,
+                stroke_width=0,
+            )
+            tail_base = body.get_bottom() + LEFT * body.width * 0.25
+            tail = Polygon(
+                tail_base + UP * fh(self, 0.015),
+                tail_base + DOWN * fh(self, 0.035) + LEFT * fw(self, 0.008),
+                tail_base + RIGHT * fw(self, 0.026) + UP * fh(self, 0.015),
+                fill_color="#244957",
+                fill_opacity=1,
+                stroke_width=0,
+            ).round_corners(fh(self, 0.008))
+            content.move_to(body)
+            bubble = VGroup(body, tail, content).move_to(
+                RIGHT * fw(self, x) + UP * fh(self, y)
+            )
+            direction = UP + RIGHT * (0.07 if index % 2 else -0.07)
+            always_shift(bubble, direction, rate=fh(self, 0.05 + 0.003 * (index % 3)))
+            bubbles.add(bubble)
+
+        bubbles.shift(DOWN)
+
+        self.next_section("Comment bubbles", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                *[
+                    PopIn(bubble, rate_func=ease_out_back, run_time=0.5)
+                    for bubble in bubbles
+                ],
+                lag_ratio=0.3,
+            )
+        )
+        self.next_section("Floating comments", skip_animations=skip_animations(False))
+        self.wait(2)
+
+        self.play(
+            LaggedStart(
+                *[
+                    PopOut(bubble, rate_func=ease_out_back, run_time=0.5)
+                    for bubble in bubbles
+                ],
+                lag_ratio=0.3,
+            )
+        )
 
 
 class LumpedComponents(MovingCameraScene):
@@ -2502,7 +2618,7 @@ class Impedance(MovingCameraScene):
         self.wait(2)
 
 
-class DerivToComplex(MovingCameraScene):
+class ShiftProblem(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
@@ -2643,6 +2759,10 @@ class DerivToComplex(MovingCameraScene):
                 lag_ratio=0.3,
             ),
         )
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
 
 
 class CapacitorEquation(MovingCameraScene):
