@@ -2490,9 +2490,159 @@ class Impedance(MovingCameraScene):
 
         self.wait(0.5)
 
-        self.play(FadeOut(*self.mobjects))
+        self.remove(res_relation)
+
+        self.play(
+            xsin_dt[0][7:]
+            .animate.scale_to_fit_width(fw(self, 0.2))
+            .move_to(self.camera.frame.copy().shift(DOWN * fh(self))),
+            self.camera.frame.animate.shift(DOWN * fh(self)),
+        )
 
         self.wait(2)
+
+
+class DerivToComplex(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+
+        dv = MathTex(r"\frac{d V_C(t)}{dt}").scale_to_fit_width(fw(self, 0.2))
+        dv[0][1:6].set_color(YELLOW)
+
+        self.add(dv)
+
+        self.wait(0.5)
+
+        dv_full = MathTex(r"\frac{d V_0 \cos{(\omega t)}  }{dt}").scale(2)
+        dv_full[0][1:10].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(dv[0][0], dv_full[0][0]),
+                FadeOut(dv[0][1:6]),
+                ReplacementTransform(dv[0][6:], dv_full[0][10:]),
+                GrowFromCenter(dv_full[0][1:10]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        dv_solve = (
+            MathTex(
+                r"\frac{d V_0 \cos{(\omega t)}  }{dt}"
+                r"= - \omega V_0 \sin{(\omega t)}"
+            )
+            .scale(2)
+            .move_to(dv_full)
+        )
+        dv_solve[0][1:10].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                ReplacementTransform(dv_full[0][:13], dv_solve[0][:13]),
+                LaggedStart(*[PopIn(m) for m in dv_solve[0][13:]], lag_ratio=0.2),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        omega_arrow = Arrow(
+            dv_solve[0][7].get_bottom() + [0, -0.1, 0],
+            dv_solve[0][15].get_bottom() + [0, -0.1, 0],
+            path_arc=PI,
+            color=GREEN,
+        )
+
+        self.play(GrowArrow(omega_arrow))
+
+        self.wait(0.5)
+
+        cos_arrow_1 = Arrow(
+            dv_solve[0][3:6].get_top() + [0, -0.1, 0],
+            dv_solve[0][14].get_top() + [0, 0, 0],
+            path_arc=-PI * 0.7,
+            color=GREEN,
+        )
+        cos_arrow_2 = Arrow(
+            dv_solve[0][3:6].get_top() + [0, -0.1, 0],
+            dv_solve[0][18:21].get_top() + [0, 0, 0],
+            path_arc=-PI * 0.6,
+            color=GREEN,
+        )
+
+        self.play(
+            LaggedStart(
+                FadeOut(omega_arrow),
+                GrowArrow(cos_arrow_1),
+                GrowArrow(cos_arrow_2),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(cos_arrow_1, cos_arrow_2),
+                dv_solve[0][15]
+                .animate(rate_func=there_and_back_with_pause, run_time=2)
+                .shift(UP * 0.3)
+                .scale(1.2)
+                .set_color(GREEN),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_shift = (
+            MathTex(r"\cos{(\omega t + 90^\circ)} = - \sin{(\omega t)}")
+            .scale(2)
+            .next_to(self.camera.frame.get_top(), DOWN, LARGE_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    dv_solve[0][3:9],
+                    phase_shift[0][:6],
+                    path_arc=-PI / 4,
+                    introducer=True,
+                ),
+                TransformFromCopy(
+                    dv_solve[0][9], phase_shift[0][10], path_arc=PI / 4, introducer=True
+                ),
+                TransformFromCopy(dv_solve[0][13], phase_shift[0][11], introducer=True),
+                TransformFromCopy(dv_solve[0][14], phase_shift[0][12], introducer=True),
+                TransformFromCopy(
+                    dv_solve[0][18:], phase_shift[0][13:], introducer=True
+                ),
+                dv_solve.animate.set_opacity(0.2).shift(DOWN * 2),
+                lag_ratio=0.3,
+            ),
+        )
+        self.play(
+            LaggedStart(
+                *[PopIn(m) for m in phase_shift[0][6:10]],
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[
+                    m.animate(rate_func=there_and_back, run_time=0.4)
+                    .scale(1.2)
+                    .set_color(GREEN)
+                    for m in phase_shift[0][6:10]
+                ],
+                lag_ratio=0.3,
+            ),
+        )
 
 
 class CapacitorEquation(MovingCameraScene):
