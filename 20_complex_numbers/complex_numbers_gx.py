@@ -2,6 +2,7 @@
 import pathlib
 import textwrap
 from collections import deque
+from functools import partial
 from types import SimpleNamespace
 
 import numpy as np
@@ -2763,6 +2764,490 @@ class ShiftProblem(MovingCameraScene):
         self.wait(0.5)
 
         self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+
+class TwoPoints(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+
+        max_time = 1
+        capacitance = 1
+        omega = TAU
+        current_peak = capacitance * omega
+        x = VT(0)
+
+        def window_start():
+            return max(0, ~x - max_time / 2)
+
+        def plot_point(plot_axes, t, value):
+            return plot_axes.c2p(t - window_start(), value)
+
+        def voltage(t, phi0=0):
+            return np.sin(omega * t + phi0)
+
+        def current(t, phi0=0):
+            return current_peak * np.cos(omega * t + phi0)
+
+        wire_color = "#D6EEF7"
+        axis_config = {
+            "color": wire_color,
+            "stroke_width": 2,
+            "include_numbers": False,
+        }
+        axes = Axes(
+            x_range=[0, max_time, 0.5],
+            y_range=[-1, 1, 0.5],
+            x_length=fw(self, 0.7),
+            y_length=fh(self, 0.35),
+            axis_config=axis_config,
+            x_axis_config={"include_ticks": False},
+            tips=False,
+        ).shift(UP * fh(self, 0.19))
+        current_axes = Axes(
+            x_range=[0, max_time, 0.5],
+            y_range=[-current_peak, current_peak, current_peak / 2],
+            x_length=fw(self, 0.7),
+            y_length=fh(self, 0.35),
+            axis_config=axis_config,
+            x_axis_config={"include_ticks": False},
+            tips=False,
+        ).shift(DOWN * fh(self, 0.23))
+        voltage_label = (
+            MathTex(r"V_C(t)", color=YELLOW)
+            .scale(0.7)
+            .rotate(PI / 2)
+            .next_to(axes.y_axis, LEFT, fw(self, 0.055))
+        )
+        current_label = (
+            MathTex(r"I_C(t)", color=BLUE)
+            .scale(0.7)
+            .rotate(PI / 2)
+            .next_to(current_axes.y_axis, LEFT, fw(self, 0.055))
+        )
+        self.add(axes, current_axes, voltage_label, current_label)
+
+        def time_ticks():
+            start = window_start()
+            times = np.arange(np.ceil(start / 0.5) * 0.5, start + max_time + 1e-8, 0.5)
+            return VGroup(
+                *[
+                    Line(
+                        plot_point(plot_axes, t, 0) + DOWN * 0.1,
+                        plot_point(plot_axes, t, 0) + UP * 0.1,
+                        color=wire_color,
+                        stroke_width=2,
+                    )
+                    for plot_axes in (axes, current_axes)
+                    for t in times
+                    if t > start + 1e-8
+                ]
+            )
+
+        self.add(always_redraw(time_ticks))
+
+        def visible_curve(plot_axes, function, color, opacity=1):
+            start = window_start()
+            return plot_axes.plot(
+                lambda t: function(t + start),
+                x_range=[0, max_time, 1 / 200],
+                color=color,
+                stroke_opacity=opacity,
+            )
+
+        v_min = VT(0)
+        v_max = VT(max_time * 2)
+        voltage_background = always_redraw(
+            lambda: visible_curve(axes, voltage, YELLOW).set_stroke(opacity=0.2)
+        )
+
+        def selected_voltage():
+            offset = window_start()
+            start = np.clip((~v_min - offset) / max_time, 0, 1)
+            stop = np.clip((~v_max - offset) / max_time, start, 1)
+            curve = visible_curve(axes, voltage, YELLOW)
+            return curve.pointwise_become_partial(curve, start, stop).set_z_index(1)
+
+        v_plot = always_redraw(selected_voltage)
+        self.add(voltage_background, v_plot)
+
+        self.play(self.camera.frame.shift(DOWN * fh(self)).animate.shift(UP * fh(self)))
+
+        voltage_point_rad_scale = VT(1)
+        current_point_rad_scale = VT(1)
+        current_point_180deg_rad_scale = VT(1)
+
+        current_point = always_redraw(
+            lambda: Dot(
+                plot_point(current_axes, ~x, current(~x)),
+                radius=fh(self, 0.012) * ~current_point_rad_scale,
+                color=BLUE,
+            ).set_z_index(3)
+        )
+
+        def drawn_current():
+            curve = visible_curve(current_axes, current, BLUE)
+            stop = np.clip((~x - window_start()) / max_time, 0, 1)
+            return curve.pointwise_become_partial(curve, 0, stop).set_z_index(2)
+
+        current_trace = always_redraw(drawn_current)
+        point_link = always_redraw(
+            lambda: DashedLine(
+                plot_point(axes, ~x, voltage(~x)),
+                plot_point(current_axes, ~x, current(~x)),
+                color=BLUE,
+                stroke_width=2,
+                stroke_opacity=0.6,
+                dash_length=fh(self, 0.012),
+            ).set_z_index(1)
+        )
+
+        slope_line_opacity = VT(1)
+
+        def slope_line():
+            slope = omega * np.cos(omega * ~x)
+            point = plot_point(axes, ~x, voltage(~x))
+            return (
+                Line(
+                    point,
+                    plot_point(axes, ~x + 1, voltage(~x) + slope),
+                    color=BLUE,
+                    stroke_width=5,
+                    stroke_opacity=~slope_line_opacity,
+                )
+                .set_length(fw(self, 0.13))
+                .move_to(point)
+                .set_z_index(2)
+            )
+
+        current_slope = always_redraw(slope_line)
+        self.next_section("Voltage slope", skip_animations=skip_animations(False))
+        self.play(
+            FadeIn(
+                current_slope,
+                # voltage_point,
+                current_point,
+                point_link,
+            ),
+            run_time=0.5,
+        )
+        self.add(current_trace)
+
+        self.wait(0.5)
+
+        self.play(x @ (max_time), run_time=6, rate_func=linear)
+
+        self.wait(0.5)
+
+        voltage_point = always_redraw(
+            lambda: Dot(
+                plot_point(axes, ~x, voltage(~x)),
+                radius=fh(self, 0.012) * ~voltage_point_rad_scale,
+                color=YELLOW,
+            ).set_z_index(3)
+        )
+
+        self.play(
+            LaggedStart(
+                slope_line_opacity.animate(run_time=1.5).set_value(0),
+                LaggedStart(
+                    AnimationGroup(
+                        v_min @ (~x - 0.005),
+                        v_max @ (~x + 0.005),
+                        run_time=2,
+                    ),
+                    PopIn(voltage_point),
+                    lag_ratio=0.9,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        option1_label = (
+            Text("Option 1", font=FONT)
+            .scale(0.6)
+            .next_to(current_point, RIGHT, LARGE_BUFF * 1.5)
+        )
+        option1_line = SquigglyLine(
+            current_point.get_right() + [0.1, 0, 0],
+            option1_label.get_left() + [-0.1, 0, 0],
+            seed=1,
+            amplitude=0.1,
+        ).add_tip(
+            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(option1_line),
+                FadeIn(option1_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        current_180deg_opacity = VT(1)
+
+        def drawn_current_180deg():
+            curve = visible_curve(
+                current_axes,
+                partial(current, phi0=PI),
+                BLUE,
+                opacity=~current_180deg_opacity,
+            )
+            stop = np.clip((~x - window_start()) / max_time, 0, 1)
+            return curve.pointwise_become_partial(curve, 0, stop).set_z_index(2)
+
+        current_180deg = always_redraw(drawn_current_180deg)
+
+        current_point_180deg = always_redraw(
+            lambda: Dot(
+                plot_point(current_axes, ~x, current(~x, phi0=PI)),
+                radius=fh(self, 0.012) * ~current_point_180deg_rad_scale,
+                color=BLUE,
+                fill_opacity=~current_180deg_opacity,
+                stroke_opacity=~current_180deg_opacity,
+            ).set_z_index(3)
+        )
+
+        option2_label = (
+            Text("Option 2", font=FONT)
+            .scale(0.6)
+            .next_to(current_point_180deg, RIGHT, LARGE_BUFF * 1.5)
+        )
+        option2_line = SquigglyLine(
+            current_point_180deg.get_right() + [0.1, 0, 0],
+            option2_label.get_left() + [-0.1, 0.08, 0],
+            seed=2,
+            amplitude=0.1,
+        ).add_tip(
+            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                Create(current_180deg),
+                PopIn(current_point_180deg),
+                LaggedStart(
+                    GrowArrow(option2_line),
+                    FadeIn(option2_label),
+                    lag_ratio=0.3,
+                ),
+                lag_ratio=0.6,
+            )
+        )
+
+        self.wait(0.5)
+
+        v_min @= ~x - 0.6
+        v_max @= ~x - 0.5
+
+        self.play(v_min @ (~x + 0.8), v_max @ (~x + 0.8), run_time=2)
+
+        self.wait(0.5)
+
+        voltage_background_180deg = always_redraw(
+            lambda: visible_curve(axes, partial(voltage, phi0=PI), YELLOW).set_stroke(
+                opacity=0.2
+            )
+        )
+
+        self.play(Create(voltage_background_180deg))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                Uncreate(voltage_background_180deg),
+                FadeOut(option1_line),
+                FadeOut(option1_label),
+                FadeOut(option2_line),
+                FadeOut(option2_label),
+                lag_ratio=0.2,
+            ),
+            run_time=1.3,
+        )
+
+        self.wait(0.5)
+
+        self.play(x + 0.125, run_time=2)
+
+        self.wait(0.5)
+
+        plus = Text("+", font=FONT).next_to(current_point, RIGHT, MED_SMALL_BUFF)
+        minus = Text("-", font=FONT).next_to(
+            current_point_180deg, RIGHT, MED_SMALL_BUFF
+        )
+
+        self.play(
+            LaggedStart(
+                PopIn(plus),
+                PopIn(minus),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(plus),
+                FadeOut(minus),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            voltage_point_rad_scale.animate(
+                rate_func=there_and_back_with_pause, run_time=1.5
+            ).set_value(2)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                current_point_rad_scale.animate(rate_func=there_and_back).set_value(2),
+                current_point_180deg_rad_scale.animate(
+                    rate_func=there_and_back
+                ).set_value(2),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(
+            "Quarter-cycle lookback", skip_animations=skip_animations(False)
+        )
+
+        lookback_angle = VT(0)
+
+        def lookback_time():
+            return ~x - ~lookback_angle * DEGREES / omega
+
+        lookback_point = always_redraw(
+            lambda: Dot(
+                plot_point(axes, lookback_time(), voltage(lookback_time())),
+                radius=fh(self, 0.012),
+                color=GREEN,
+            ).set_z_index(4)
+        )
+        lookback_arrow = always_redraw(
+            lambda: Arrow(
+                plot_point(axes, ~x, voltage(~x)),
+                plot_point(axes, lookback_time(), voltage(~x)),
+                buff=0,
+                thickness=2,
+                tip_corner_radius=0.02,
+                color=GREEN,
+            ).set_z_index(2)
+        )
+        lookback_guide = always_redraw(
+            lambda: DashedLine(
+                plot_point(axes, lookback_time(), voltage(~x)),
+                plot_point(axes, lookback_time(), voltage(lookback_time())),
+                color=GREEN,
+                stroke_width=2,
+                dash_length=fh(self, 0.012),
+            ).set_z_index(2)
+        )
+        lookback_label = always_redraw(
+            lambda: (
+                DecimalNumber(
+                    ~lookback_angle,
+                    num_decimal_places=0,
+                    unit=r"^\circ",
+                    color=GREEN,
+                )
+                .scale(0.6)
+                .next_to(lookback_arrow, UP, MED_SMALL_BUFF)
+                .set_z_index(4)
+            )
+        )
+
+        self.add(lookback_arrow, lookback_guide)
+
+        self.play(
+            FadeIn(lookback_point, lookback_label),
+            current_180deg_opacity @ 0.2,
+            run_time=0.5,
+        )
+
+        self.wait(0.5)
+
+        self.play(lookback_angle @ 90, run_time=3)
+
+        self.wait(0.5)
+
+        self.play(x @ 0.5, run_time=3)
+
+        self.wait(0.5)
+
+        readout_y = axes.get_top()[1] + fh(self, 0.095)
+        vt0_anchor = [axes.c2p(max_time * 0.96, 0)[0], readout_y, 0]
+        vtback_anchor = [axes.c2p(max_time * 0.46, 0)[0], readout_y, 0]
+
+        def voltage_value(t):
+            value = f"{voltage(t):z.2f}"
+            return value if value.startswith("-") else r"\phantom{-}" + value
+
+        vt0 = always_redraw(
+            lambda: (
+                MathTex(rf"V_C(t_0) = {voltage_value(~x)} \text{{ V}}")
+                .scale(0.7)
+                .set_color(YELLOW)
+                .move_to(vt0_anchor, aligned_edge=RIGHT)
+            )
+        )
+        vtback = always_redraw(
+            lambda: (
+                MathTex(
+                    rf"V_C(t_0 - {~lookback_angle:.0f}^\circ) = "
+                    rf"{voltage_value(lookback_time())} \text{{ V}}"
+                )
+                .scale(0.7)
+                .set_color(YELLOW)
+                .move_to(vtback_anchor, aligned_edge=RIGHT)
+            )
+        )
+        vt0_key = Dot(radius=fh(self, 0.009), color=YELLOW).next_to(
+            vt0, LEFT, MED_SMALL_BUFF
+        )
+        vtback_key = Dot(radius=fh(self, 0.009), color=GREEN).next_to(
+            vtback, LEFT, MED_SMALL_BUFF
+        )
+
+        self.play(
+            PopIn(vt0_key),
+            LaggedStart(*[PopIn(m) for m in vt0[0]], lag_ratio=0.1),
+        )
+        self.remove(*vt0[0])
+        self.add(vt0)
+
+        self.wait(0.5)
+
+        self.play(
+            PopIn(vtback_key),
+            LaggedStart(*[PopIn(m) for m in vtback[0]], lag_ratio=0.1),
+        )
+        self.remove(*vtback[0])
+        self.add(vtback)
+
+        self.wait(0.5)
+
+        self.play(x + 0.5, run_time=4)
+
+        self.wait(0.5)
+
+        self.remove(v_plot)
+
+        self.play(x + 1, run_time=10)
 
 
 class CapacitorEquation(MovingCameraScene):
