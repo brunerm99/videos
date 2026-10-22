@@ -1,7 +1,9 @@
 # complex_numbers_gx.py
 import pathlib
+import pickle
 import textwrap
 from collections import deque
+from copy import deepcopy
 from functools import partial
 from types import SimpleNamespace
 
@@ -2777,14 +2779,19 @@ class TwoPoints(MovingCameraScene):
         x = VT(0)
         follow_time = VT(1)
         fixed_window_start = VT(0)
+        wrap_time = False
 
         def window_start():
-            return ~follow_time * max(0, ~x - max_time / 2) + (1 - ~follow_time) * max(
-                ~fixed_window_start, ~x - max_time / 2
+            return (
+                ~follow_time * max(0, ~x - max_time / 2)
+                + (1 - ~follow_time) * ~fixed_window_start
             )
 
         def plot_point(plot_axes, t, value):
-            return plot_axes.c2p(t - window_start(), value)
+            plot_time = t - window_start()
+            if wrap_time:
+                plot_time %= TAU / omega
+            return plot_axes.c2p(plot_time, value)
 
         def voltage(t, phi0=0):
             return np.sin(omega * t + phi0)
@@ -2941,6 +2948,23 @@ class TwoPoints(MovingCameraScene):
         self.wait(0.5)
 
         self.play(x @ (max_time), run_time=6, rate_func=linear)
+
+        self.wait(0.5)
+
+        angle = current_slope.get_angle()
+        midpoint = current_slope.get_midpoint()
+
+        slope_direction = Arrow(
+            midpoint,
+            midpoint + 2 * (RIGHT * np.cos(angle) + UP * np.sin(angle)),
+            buff=0,
+        ).set_z_index(10)
+
+        self.play(GrowArrow(slope_direction))
+
+        self.wait(0.5)
+
+        self.play(FadeOut(slope_direction))
 
         self.wait(0.5)
 
@@ -3226,7 +3250,7 @@ class TwoPoints(MovingCameraScene):
                     rf"{voltage_value(lookback_time())} \text{{ V}}"
                 )
                 .scale(0.7)
-                .set_color(YELLOW)
+                .set_color(GREEN)
                 .move_to(vtback_anchor, aligned_edge=RIGHT)
             )
         )
@@ -3286,6 +3310,30 @@ class TwoPoints(MovingCameraScene):
             "Voltage coordinate pair", skip_animations=skip_animations(False)
         )
 
+        vt0.clear_updaters()
+        vtback.clear_updaters()
+        self.remove(vt0, vtback)
+        # Sign changes can leave duplicate padding glyphs in always_redraw.
+        vt0 = (
+            MathTex(rf"V_C(t_0) = {voltage_value(~x)} \text{{ V}}")
+            .scale(0.7)
+            .set_color(YELLOW)
+            .move_to(vt0_anchor, aligned_edge=RIGHT)
+        )
+        vtback = (
+            MathTex(
+                rf"V_C(t_0 - {~lookback_angle:.0f}^\circ) = "
+                rf"{voltage_value(lookback_time())} \text{{ V}}"
+            )
+            .scale(0.7)
+            .set_color(GREEN)
+            .move_to(vtback_anchor, aligned_edge=RIGHT)
+        )
+        now_readout = vt0[0][:6]
+        lagged_readout = vtback[0][:10]
+        readout_values = VGroup(vt0[0][6:], vtback[0][10:])
+        self.add(now_readout, lagged_readout, readout_values)
+
         self.play(
             FadeOut(
                 current_axes,
@@ -3298,8 +3346,7 @@ class TwoPoints(MovingCameraScene):
                 time_tick_marks,
                 lookback_guide,
                 voltage_label,
-                vt0,
-                vtback,
+                readout_values,
                 vt0_key,
                 vtback_key,
             ),
@@ -3354,7 +3401,6 @@ class TwoPoints(MovingCameraScene):
         now_label = (
             MathTex(r"V_C(t_0)", color=YELLOW)
             .scale(0.8)
-            .rotate(PI / 2)
             .next_to(now_axes, LEFT, MED_LARGE_BUFF)
         )
         lagged_label = (
@@ -3365,10 +3411,7 @@ class TwoPoints(MovingCameraScene):
         circle = Circle(
             radius=radius, color=WHITE, stroke_width=2, stroke_opacity=0.2
         ).move_to(circle_center)
-        radius_label = MathTex(r"V_0").scale(0.65).next_to(circle, UP, MED_LARGE_BUFF)
-        layout = VGroup(
-            circle_axes, now_axes, lagged_axes, now_label, lagged_label, radius_label
-        )
+        layout = VGroup(circle_axes, now_axes, lagged_axes, now_label, lagged_label)
         layout_center = layout.get_center().copy()
         layout_height = layout.height * 1.15
 
@@ -3391,6 +3434,11 @@ class TwoPoints(MovingCameraScene):
 
         circle_start = (np.ceil((omega * ~x - PI / 2) / TAU) * TAU + PI / 2) / omega
         fixed_window_start @= circle_start
+        label_detour = LEFT * fw(self, 0.32) + UP * fh(self, 0.12)
+
+        def now_label_path(start, end, alpha):
+            return interpolate(start, end, alpha) + np.sin(PI * alpha) * label_detour
+
         self.play(
             LaggedStart(
                 AnimationGroup(
@@ -3401,31 +3449,31 @@ class TwoPoints(MovingCameraScene):
                     self.camera.frame.animate.scale_to_fit_height(
                         layout_height
                     ).move_to(layout_center),
+                    *[
+                        ReplacementTransform(source, target)
+                        for source, target in zip(lagged_readout, lagged_label[0])
+                    ],
+                    *[
+                        ReplacementTransform(source, target, path_func=now_label_path)
+                        for source, target in zip(now_readout, now_label[0])
+                    ],
                     run_time=3.5,
                 ),
-                LaggedStart(
-                    FadeIn(circle_axes, circle, radius_label),
-                    FadeIn(lagged_label),
-                    FadeIn(now_label),
-                    lag_ratio=0.2,
-                    run_time=1,
-                ),
+                FadeIn(circle_axes, circle, run_time=1),
                 lag_ratio=0.8,
             ),
         )
+        self.remove(now_readout, lagged_readout, *now_label[0], *lagged_label[0])
+        self.add(now_label, lagged_label)
+        wrap_time = True
 
         def coordinate_pair(t):
             return circle_axes.c2p(voltage(t), voltage(t - ~lagged_shift))
 
         pair_point = always_redraw(
             lambda: Dot(
-                coordinate_pair(~x), radius=fh(self, 0.013), color=WHITE
+                coordinate_pair(~x), radius=fh(self, 0.013), color=ORANGE
             ).set_z_index(5)
-        )
-        radius_line = always_redraw(
-            lambda: Line(
-                circle_center, coordinate_pair(~x), color=WHITE, stroke_width=2
-            )
         )
         projections = always_redraw(
             lambda: VGroup(
@@ -3448,7 +3496,7 @@ class TwoPoints(MovingCameraScene):
         self.play(
             LaggedStart(
                 Create(projections),
-                AnimationGroup(Create(radius_line), PopIn(pair_point)),
+                PopIn(pair_point),
                 lag_ratio=0.3,
             ),
             run_time=0.8,
@@ -3458,14 +3506,1783 @@ class TwoPoints(MovingCameraScene):
             lambda: ParametricFunction(
                 coordinate_pair,
                 t_range=[circle_start, max(circle_start + 1e-6, ~x), 1 / 200],
-                color=WHITE,
+                color=ORANGE,
                 stroke_width=3,
             ).set_z_index(2)
         )
         self.add(circle_trace)
+
         self.next_section("Trace the circle", skip_animations=skip_animations(False))
-        self.play(x + TAU / omega, run_time=8, rate_func=linear)
+
+        v0_radius_line = Arrow(circle_axes.c2p(0, 0), circle_axes.c2p(0, 1), buff=0)
+        v0_radius_label = MathTex("V_0").next_to(v0_radius_line, RIGHT, SMALL_BUFF)
+
+        final_phase = 2 * TAU + PI / 3
+        self.play(
+            LaggedStart(
+                x.animate(
+                    run_time=6 * final_phase / PI, rate_func=linear
+                ).increment_value(final_phase / omega),
+                Succession(
+                    AnimationGroup(GrowArrow(v0_radius_line), FadeIn(v0_radius_label)),
+                    Wait(2),
+                    AnimationGroup(FadeOut(v0_radius_line), FadeOut(v0_radius_label)),
+                ),
+                lag_ratio=0.15,
+            )
+        )
+
         self.wait(0.5)
+
+        coords = MathTex(r"x_0,y_0").next_to(pair_point, UP, MED_SMALL_BUFF)
+        coords[0][:2].set_color(YELLOW)
+        coords[0][3:].set_color(GREEN)
+
+        self.camera.frame.save_state()
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(circle_axes, coords).height * 1.2
+                ).move_to(Group(circle_axes, coords)),
+                LaggedStart(*[PopIn(m) for m in coords[0]], lag_ratio=0.25),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        real_axis_arrow = Arrow(
+            circle_axes.c2p(0, 0),
+            circle_axes.c2p(1, 0),
+            buff=0,
+            color=YELLOW,
+        )
+        real_axis_label = (
+            MathTex(r"\Re")
+            .set_color(YELLOW)
+            .next_to(real_axis_arrow, DOWN, SMALL_BUFF)
+            .shift(LEFT * real_axis_arrow.get_width() * 0.3)
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(real_axis_arrow),
+                PopIn(real_axis_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        real_axes_box = SurroundingRectangle(
+            now_axes, buff=SMALL_BUFF, color=YELLOW
+        ).set_z_index(11)
+
+        real_label = (
+            MathTex(r"\Re \{ \tilde V_C \}", color=YELLOW)
+            .scale(0.8)
+            .move_to(now_label, RIGHT)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(circle_axes, coords, now_axes).height * 1.2
+                ).move_to(Group(circle_axes, coords, now_axes)),
+                Create(real_axes_box),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                ShrinkToCenter(now_label[0][5]),
+                ShrinkToCenter(now_label[0][4]),
+                ShrinkToCenter(now_label[0][3]),
+                ShrinkToCenter(now_label[0][2]),
+                AnimationGroup(
+                    ReplacementTransform(now_label[0][0], real_label[0][2]),
+                    ReplacementTransform(now_label[0][1], real_label[0][4]),
+                ),
+                PopIn(real_label[0][5]),
+                PopIn(real_label[0][3]),
+                PopIn(real_label[0][0]),
+                PopIn(real_label[0][1]),
+                # PopIn(real_label[0][1]),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        imag_axis_arrow = Arrow(
+            circle_axes.c2p(0, 0),
+            circle_axes.c2p(0, 1),
+            buff=0,
+            color=GREEN,
+        )
+        imag_axis_label = (
+            MathTex(r"\Im").set_color(GREEN).next_to(imag_axis_arrow, LEFT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Uncreate(real_axes_box),
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(circle_axes, coords).height * 1.2
+                ).move_to(Group(circle_axes, coords)),
+                GrowArrow(imag_axis_arrow),
+                PopIn(imag_axis_label),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        imag_axes_box = SurroundingRectangle(
+            lagged_axes, buff=SMALL_BUFF, color=GREEN
+        ).set_z_index(11)
+
+        imag_label = (
+            MathTex(r"\Im \{ \tilde V_C \}", color=GREEN)
+            .scale(0.8)
+            .move_to(lagged_label, RIGHT)
+        )
+
+        # self.add(imag_label, index_labels(imag_label[0]), index_labels(lagged_label[0]))
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_width(
+                    Group(circle_axes, coords, lagged_axes).width * 1.1
+                ).move_to(Group(circle_axes, coords, lagged_axes)),
+                Create(imag_axes_box),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                *[ShrinkToCenter(m) for m in lagged_label[0][2:10]],
+                AnimationGroup(
+                    ReplacementTransform(lagged_label[0][0], imag_label[0][2]),
+                    ReplacementTransform(lagged_label[0][1], imag_label[0][4]),
+                ),
+                PopIn(imag_label[0][5]),
+                PopIn(imag_label[0][3]),
+                PopIn(imag_label[0][0]),
+                PopIn(imag_label[0][1]),
+                lag_ratio=0.2,
+            ),
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(circle_axes, coords).height * 1.3
+                ).move_to(Group(circle_axes, coords)),
+                Uncreate(imag_axes_box),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        complex_coords = MathTex(r"x_0 + j y_0").move_to(coords)
+        complex_coords[0][:2].set_color(YELLOW)
+        complex_coords[0][4:].set_color(GREEN)
+
+        self.play(
+            LaggedStart(
+                FadeOut(coords[0][2]),
+                ReplacementTransform(coords[0][:2], complex_coords[0][:2]),
+                ReplacementTransform(coords[0][3:], complex_coords[0][4:]),
+                PopIn(complex_coords[0][2]),
+                PopIn(complex_coords[0][3]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        angle_line = always_redraw(
+            lambda: Line(circle_axes.c2p(0, 0), pair_point.get_center(), color=ORANGE)
+        )
+
+        self.play(
+            LaggedStart(
+                LaggedStart(
+                    FadeOut(imag_axis_arrow),
+                    FadeOut(real_axis_arrow),
+                    FadeOut(imag_axis_label),
+                    FadeOut(real_axis_label),
+                    lag_ratio=0.07,
+                ),
+                Create(angle_line),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_arc = always_redraw(
+            lambda: Arc(
+                radius=angle_line.get_length() * 0.25,
+                start_angle=0,
+                angle=((~x - circle_start) * omega) % TAU,
+                arc_center=circle_axes.c2p(0, 0),
+            ).set_z_index(-1)
+        )
+
+        def position_phase_phi(mob):
+            midpoint = phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            mob.move_to(midpoint + outward * (mob.height / 2 + SMALL_BUFF))
+
+        phase_phi = MathTex(r"\phi").scale(1).set_z_index(3)
+        phase_phi.add_updater(position_phase_phi, call_updater=True)
+
+        self.play(Create(phase_arc), PopIn(phase_phi))
+
+        self.wait(0.5)
+
+        phase_real_line = always_redraw(
+            lambda: DashedLine(
+                plot_point(now_axes, ~x, -1),
+                plot_point(now_axes, ~x, 1),
+                color=WHITE,
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+            )
+        )
+        phase_real_phi = MathTex(r"\phi").add_updater(
+            lambda mob: mob.next_to(phase_real_line, RIGHT, MED_SMALL_BUFF),
+            call_updater=True,
+        )
+
+        phase_phi_arrow = always_redraw(
+            lambda: Arrow(
+                phase_phi.get_right(),
+                phase_real_phi.get_top(),
+                path_arc=-PI / 3,
+                buff=SMALL_BUFF,
+            ).set_z_index(15)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.scale_to_fit_height(
+                    Group(circle_axes, coords, now_axes).height * 1.2
+                ).move_to(Group(circle_axes, coords, now_axes)),
+                GrowArrow(phase_phi_arrow),
+                FadeIn(phase_real_line),
+                FadeIn(phase_real_phi),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        phase_real_value = always_redraw(
+            lambda: MathTex(
+                rf"= {((~x - circle_start) * omega % TAU) / DEGREES:.0f}^\circ"
+            ).next_to(phase_real_phi, RIGHT, SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(*[PopIn(glyph) for glyph in phase_real_value[0]], lag_ratio=0.1)
+        )
+
+        self.remove(*phase_real_value[0])
+
+        self.add(phase_real_value)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(phase_phi_arrow))
+
+        self.wait(0.5)
+
+        self.next_section(
+            "Current leads voltage", skip_animations=skip_animations(False)
+        )
+
+        leading_phase = VT(0)
+
+        def leading_time():
+            return ~x + ~leading_phase * DEGREES / omega
+
+        leading_line = always_redraw(
+            lambda: Line(
+                circle_axes.c2p(0, 0),
+                coordinate_pair(leading_time()),
+                color=ORANGE,
+                stroke_opacity=0.6,
+            ).set_z_index(2)
+        )
+        leading_point = always_redraw(
+            lambda: (
+                Dot(
+                    coordinate_pair(leading_time()),
+                    radius=pair_point.width / 2,
+                    color=ORANGE,
+                )
+                .set_opacity(0.6)
+                .set_z_index(4)
+            )
+        )
+        leading_real_point = always_redraw(
+            lambda: (
+                Dot(
+                    plot_point(now_axes, leading_time(), voltage(leading_time())),
+                    radius=voltage_point.width / 2,
+                    color=YELLOW,
+                )
+                .set_opacity(0.6)
+                .set_z_index(4)
+            )
+        )
+        leading_imag_point = always_redraw(
+            lambda: (
+                Dot(
+                    plot_point(
+                        lagged_axes,
+                        leading_time(),
+                        voltage(leading_time() - ~lagged_shift),
+                    ),
+                    radius=lookback_point.width / 2,
+                    color=GREEN,
+                )
+                .set_opacity(0.6)
+                .set_z_index(4)
+            )
+        )
+        leading_projections = always_redraw(
+            lambda: (
+                VGroup(
+                    DashedLine(
+                        leading_point.get_center(),
+                        leading_real_point.get_center(),
+                        color=YELLOW,
+                        stroke_width=2,
+                        dash_length=fh(self, 0.012),
+                    ),
+                    DashedLine(
+                        leading_point.get_center(),
+                        leading_imag_point.get_center(),
+                        color=GREEN,
+                        stroke_width=2,
+                        dash_length=fh(self, 0.012),
+                    ),
+                )
+                .set_stroke(opacity=0.4 * np.clip((~leading_phase - 15) / 15, 0, 1))
+                .set_z_index(1)
+            )
+        )
+        leading_phase_arc = always_redraw(
+            lambda: Arc(
+                radius=angle_line.get_length() * 0.6,
+                start_angle=angle_line.get_angle(),
+                angle=~leading_phase * DEGREES,
+                arc_center=circle_axes.c2p(0, 0),
+                stroke_opacity=0.7,
+            ).set_z_index(3)
+        )
+
+        def leading_phase_label():
+            label = MathTex(rf"+{~leading_phase:.0f}^\circ").scale(0.7)
+            midpoint = leading_phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            return label.move_to(
+                midpoint + outward * (label.height / 2 + SMALL_BUFF)
+            ).set_z_index(5)
+
+        leading_phase_value = always_redraw(leading_phase_label)
+
+        self.add(
+            leading_line,
+            leading_point,
+            leading_real_point,
+            leading_imag_point,
+            leading_projections,
+            leading_phase_arc,
+        )
+        self.play(
+            LaggedStart(
+                PopIn(leading_phase_value),
+                leading_phase.animate(run_time=3).set_value(90),
+                lag_ratio=0.3,
+            )
+        )
+        self.wait(0.5)
+
+        phase_current_line = always_redraw(
+            lambda: DashedLine(
+                plot_point(now_axes, leading_time(), -1),
+                plot_point(now_axes, leading_time(), 1),
+                color=WHITE,
+                stroke_opacity=0.6,
+                dash_length=DEFAULT_DASH_LENGTH * 2,
+            ).set_z_index(1)
+        )
+        phase_current_phi = always_redraw(
+            lambda: MathTex(
+                r"\phi_{\text{current}} = "
+                rf"{((leading_time() - circle_start) * omega % TAU) / DEGREES:.0f}^\circ"
+            ).next_to(phase_current_line, RIGHT, MED_SMALL_BUFF)
+        )
+
+        self.play(
+            LaggedStart(
+                Create(phase_current_line),
+                LaggedStart(
+                    *[PopIn(glyph) for glyph in phase_current_phi[0]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+        self.remove(*phase_current_phi[0])
+        self.add(phase_current_phi)
+
+        self.wait(0.5)
+
+        self.next_section(
+            "Ohm's law needs rotation", skip_animations=skip_animations(False)
+        )
+
+        ohms_res = MathTex(r"I_R = \frac{V_R}{R}").scale(1.5)
+        ohms_cap = MathTex(r"I_C = \frac{V_C}{Z}").scale(1.5)
+        for equation in (ohms_res, ohms_cap):
+            equation[0][:2].set_color(BLUE)
+            equation[0][3:5].set_color(YELLOW)
+
+        phase_plots = Group(
+            circle_axes,
+            now_axes,
+            lagged_axes,
+            complex_coords,
+            real_label,
+            imag_label,
+            phase_real_phi,
+            phase_real_value,
+            phase_current_phi,
+            leading_phase_value,
+        )
+        ohms_equations = (
+            VGroup(ohms_res, ohms_cap)
+            .arrange(DOWN, buff=fh(self, 0.11))
+            .next_to(phase_plots, LEFT, fw(self, 0.055))
+        )
+        ohms_arrow = Arrow(
+            ohms_res.get_bottom(),
+            ohms_cap.get_top(),
+            buff=MED_SMALL_BUFF,
+            stroke_width=3,
+        )
+
+        phase_arrow_start = leading_phase_value.get_left() + LEFT * SMALL_BUFF
+        phase_arrow_end = ohms_cap[0][5].get_right() + RIGHT * MED_SMALL_BUFF
+        phase_impedance_arrow = TipableVMobject(
+            color=ORANGE, stroke_width=3, tip_corner_radius=0.02
+        ).set_z_index(6)
+        phase_impedance_arrow.start_new_path(phase_arrow_start)
+        phase_impedance_arrow.add_cubic_bezier_curve_to(
+            phase_arrow_start + LEFT * fw(self, 0.15),
+            phase_arrow_end + RIGHT * fw(self, 0.1),
+            phase_arrow_end,
+        )
+        phase_impedance_arrow.add_tip(tip_length=0.2, tip_width=0.2)
+
+        ohms_layout = Group(phase_plots, ohms_equations, phase_impedance_arrow)
+        ohms_frame_height = 1.15 * max(
+            ohms_layout.height,
+            ohms_layout.width * self.camera.frame.height / self.camera.frame.width,
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=1.5)
+                .scale_to_fit_height(ohms_frame_height)
+                .move_to(ohms_layout),
+                LaggedStart(*[PopIn(glyph) for glyph in ohms_res[0]], lag_ratio=0.1),
+                lag_ratio=0.25,
+            )
+        )
+        self.remove(*ohms_res[0])
+        self.add(ohms_res)
+
+        self.play(
+            LaggedStart(
+                GrowArrow(ohms_arrow, run_time=0.7),
+                LaggedStart(
+                    *[
+                        TransformFromCopy(source, target, introducer=True)
+                        for source, target in zip(ohms_res[0], ohms_cap[0])
+                    ],
+                    lag_ratio=0.08,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+        self.remove(*ohms_cap[0])
+        self.add(ohms_cap)
+
+        self.wait(0.3)
+        self.play(
+            GrowArrow(phase_impedance_arrow),
+            ohms_cap[0][5].animate.set_color(ORANGE),
+            run_time=1.5,
+        )
+        self.wait(0.5)
+
+        waveform_opacity = VT(1)
+        for mob in (
+            axes,
+            lagged_axes,
+            voltage_background,
+            lagged_voltage,
+        ):
+            mob.add_updater(lambda mob: mob.set_stroke(opacity=~waveform_opacity))
+        for mob in (
+            voltage_point,
+            lookback_point,
+            *real_label[0],
+            *imag_label[0],
+        ):
+            mob.add_updater(lambda mob: mob.set_opacity(~waveform_opacity))
+        for mob in (leading_real_point, leading_imag_point):
+            mob.add_updater(lambda mob: mob.set_opacity(0.6 * ~waveform_opacity))
+
+        circle_view = Group(circle_axes, complex_coords)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(
+                        phase_impedance_arrow,
+                        ohms_res,
+                        ohms_cap,
+                        ohms_arrow,
+                        projections,
+                        leading_projections,
+                        phase_real_line,
+                        phase_real_phi,
+                        phase_real_value,
+                        phase_current_line,
+                        phase_current_phi,
+                    ),
+                    waveform_opacity @ 0.2,
+                    run_time=0.8,
+                ),
+                self.camera.frame.animate(run_time=1.8)
+                .scale_to_fit_height(circle_view.height * 1.2)
+                .move_to(circle_view),
+                lag_ratio=0.15,
+            )
+        )
+
+        self.wait(0.5)
+
+        cut_state = deepcopy(
+            {
+                "mobjects": self.mobjects,
+                "camera_center": self.camera.frame.get_center(),
+                "camera_height": self.camera.frame.height,
+                "x": ~x,
+                "omega": omega,
+                "circle_start": circle_start,
+                "lagged_shift": ~lagged_shift,
+                "circle_axes": circle_axes,
+                "now_axes": now_axes,
+                "lagged_axes": lagged_axes,
+                "coords": coords,
+                "complex_coords": complex_coords,
+                "angle_line": angle_line,
+                "pair_point": pair_point,
+                "leading_line": leading_line,
+                "leading_point": leading_point,
+                "leading_real_point": leading_real_point,
+                "leading_imag_point": leading_imag_point,
+                "leading_phase_arc": leading_phase_arc,
+                "leading_phase_value": leading_phase_value,
+                "leading_phase": ~leading_phase,
+            }
+        )
+        for mob in Group(*cut_state["mobjects"]).get_family():
+            mob.clear_updaters(recursive=False)
+            if isinstance(mob, ParametricFunction):
+                mob.function = None
+                mob.underlying_function = None
+        cut_path = pathlib.Path(__file__).with_name(".cache") / "two_points_cut.pkl"
+        cut_path.parent.mkdir(exist_ok=True)
+        cut_path.write_bytes(pickle.dumps(cut_state))
+
+
+class TwoPointsP2(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+        cut_path = pathlib.Path(__file__).with_name(".cache") / "two_points_cut.pkl"
+        if not cut_path.exists():
+            raise FileNotFoundError("Render TwoPoints once to create its ending state.")
+        state = pickle.loads(cut_path.read_bytes())
+        self.camera.frame.scale_to_fit_height(state["camera_height"]).move_to(
+            state["camera_center"]
+        )
+        self.add(*state["mobjects"])
+        x = VT(state["x"])
+        omega = state["omega"]
+        circle_start = state["circle_start"]
+        lagged_shift = state["lagged_shift"]
+        circle_axes = state["circle_axes"]
+        now_axes = state["now_axes"]
+        lagged_axes = state["lagged_axes"]
+        coords = state["coords"]
+        complex_coords = state["complex_coords"]
+        angle_line = state["angle_line"]
+        pair_point = state["pair_point"]
+        leading_line = state["leading_line"]
+        leading_point = state["leading_point"]
+        leading_real_point = state["leading_real_point"]
+        leading_imag_point = state["leading_imag_point"]
+        leading_phase_arc = state["leading_phase_arc"]
+        leading_phase_value = state["leading_phase_value"]
+        leading_phase = VT(state["leading_phase"])
+
+        def voltage(t):
+            return np.sin(omega * t)
+
+        def coordinate_pair(t):
+            return circle_axes.c2p(voltage(t), voltage(t - lagged_shift))
+
+        def plot_point(plot_axes, t, value):
+            return plot_axes.c2p((t - circle_start) % (TAU / omega), value)
+
+        def leading_time():
+            return ~x + ~leading_phase * DEGREES / omega
+
+        leading_line.add_updater(
+            lambda mob: mob.put_start_and_end_on(
+                circle_axes.c2p(0, 0), coordinate_pair(leading_time())
+            )
+        )
+        leading_point.add_updater(
+            lambda mob: mob.move_to(coordinate_pair(leading_time()))
+        )
+        leading_real_point.add_updater(
+            lambda mob: mob.move_to(
+                plot_point(now_axes, leading_time(), voltage(leading_time()))
+            )
+        )
+        leading_imag_point.add_updater(
+            lambda mob: mob.move_to(
+                plot_point(
+                    lagged_axes, leading_time(), voltage(leading_time() - lagged_shift)
+                )
+            )
+        )
+        leading_phase_arc.add_updater(
+            lambda mob: mob.become(
+                Arc(
+                    radius=angle_line.get_length() * 0.6,
+                    start_angle=angle_line.get_angle(),
+                    angle=~leading_phase * DEGREES,
+                    arc_center=circle_axes.c2p(0, 0),
+                    stroke_opacity=0.7,
+                ).set_z_index(3)
+            )
+        )
+
+        self.next_section("Can multiplication rotate?", skip_animations=False)
+        self.wait(0.5)
+
+        def get_phase_shift_times_label():
+            label = MathTex(r"\times ?").scale(0.7)
+            midpoint = leading_phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            return label.move_to(
+                midpoint + outward * (label.height / 2 + SMALL_BUFF)
+            ).set_z_index(5)
+
+        phase_shift_times_label = always_redraw(get_phase_shift_times_label)
+
+        leading_phase_value.clear_updaters()
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ShrinkToCenter(leading_phase_value, remover=True),
+                    PopIn(phase_shift_times_label),
+                ),
+                leading_phase.animate(
+                    rate_func=lambda t: np.sin(TAU * ease_in_out_sine(t)),
+                    run_time=6,
+                ).increment_value(45),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+        self.next_section(
+            "Voltage at 60 degrees", skip_animations=skip_animations(False)
+        )
+
+        self.remove(coords, *coords, complex_coords, *complex_coords)
+        self.add(complex_coords)
+        phase_shift_times_label.clear_updaters()
+        self.play(
+            leading_phase.animate(rate_func=ease_in_out_sine).set_value(0),
+            ShrinkToCenter(phase_shift_times_label, remover=True),
+            run_time=1.6,
+        )
+
+        trig_coords = (
+            MathTex(r"V_0\cos(60^\circ) + j V_0\sin(60^\circ)")
+            .scale(0.8)
+            .next_to(pair_point, UP, MED_SMALL_BUFF)
+        )
+        trig_coords[0][:10].set_color(YELLOW)
+        trig_coords[0][12:].set_color(GREEN)
+        trig_view = Group(circle_axes, trig_coords)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                trig_view.height * 1.2
+            ).move_to(trig_view),
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(complex_coords[0][:2], trig_coords[0][:2]),
+                    ReplacementTransform(complex_coords[0][2:4], trig_coords[0][10:12]),
+                    ReplacementTransform(complex_coords[0][4:], trig_coords[0][12:14]),
+                ),
+                LaggedStart(
+                    *[PopIn(glyph) for glyph in trig_coords[0][2:10]],
+                    *[PopIn(glyph) for glyph in trig_coords[0][14:]],
+                    lag_ratio=0.05,
+                ),
+                lag_ratio=0.35,
+                run_time=1.4,
+            ),
+        )
+        self.remove(complex_coords, *complex_coords, *trig_coords[0])
+        self.add(trig_coords)
+        self.wait(0.5)
+
+        evaluated_coords = (
+            MathTex(r"\frac{V_0}{2} + j\frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .next_to(pair_point, UP, MED_SMALL_BUFF)
+        )
+        evaluated_coords[0][:4].set_color(YELLOW)
+        evaluated_coords[0][6:].set_color(GREEN)
+        evaluated_view = Group(circle_axes, evaluated_coords)
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                evaluated_view.height * 1.2
+            ).move_to(evaluated_view),
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(trig_coords[0][:2], evaluated_coords[0][:2]),
+                    ReplacementTransform(
+                        trig_coords[0][10:12], evaluated_coords[0][4:6]
+                    ),
+                    ReplacementTransform(
+                        trig_coords[0][12:14], evaluated_coords[0][6:8]
+                    ),
+                    FadeOut(trig_coords[0][2:10], trig_coords[0][14:]),
+                ),
+                LaggedStart(
+                    *[PopIn(evaluated_coords[0][i]) for i in (2, 3, 8, 9, 10, 11, 12)],
+                    lag_ratio=0.08,
+                ),
+                lag_ratio=0.4,
+                run_time=1.4,
+            ),
+        )
+        self.remove(trig_coords, *trig_coords, *evaluated_coords[0])
+        self.add(evaluated_coords)
+        complex_coords = evaluated_coords
+        self.wait(0.5)
+        self.next_section(
+            "Multiplying by minus one", skip_animations=skip_animations(False)
+        )
+
+        shifted_coords = complex_coords.copy().set_opacity(0.6)
+        original_coords_target = complex_coords.copy().next_to(
+            shifted_coords, UP, MED_SMALL_BUFF
+        )
+        shifted_coords_end = shifted_coords.copy().next_to(
+            coordinate_pair(~x + PI / omega),
+            DOWN,
+            MED_SMALL_BUFF + leading_point.width / 2,
+        )
+        negative_view = Group(
+            circle_axes, original_coords_target, shifted_coords, shifted_coords_end
+        )
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    Transform(complex_coords, original_coords_target),
+                    self.camera.frame.animate.scale_to_fit_height(
+                        negative_view.height * 1.2
+                    ).move_to(negative_view),
+                    run_time=1.6,
+                ),
+                TransformFromCopy(
+                    complex_coords, shifted_coords, introducer=True, run_time=0.9
+                ),
+                lag_ratio=0.5,
+            )
+        )
+        self.wait(0.5)
+
+        multiplied_coords = (
+            MathTex(r"-1\left(\frac{V_0}{2} + j\frac{V_0\sqrt{3}}{2}\right)")
+            .scale(0.7)
+            .move_to(shifted_coords)
+            .set_opacity(0.6)
+        )
+        multiplied_coords[0][3:7].set_color(YELLOW)
+        multiplied_coords[0][9:16].set_color(GREEN)
+        self.play(
+            LaggedStart(
+                ReplacementTransform(
+                    shifted_coords[0], multiplied_coords[0][3:16], run_time=0.7
+                ),
+                AnimationGroup(
+                    PopIn(multiplied_coords[0][2]),
+                    PopIn(multiplied_coords[0][16]),
+                ),
+                LaggedStart(
+                    *[PopIn(glyph) for glyph in multiplied_coords[0][:2]],
+                    lag_ratio=0.15,
+                ),
+                lag_ratio=0.8,
+            )
+        )
+        self.remove(shifted_coords, *shifted_coords, *multiplied_coords[0])
+        self.add(multiplied_coords)
+        self.wait(0.5)
+
+        negated_coords = (
+            MathTex(r"-\frac{V_0}{2} - j\frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .move_to(multiplied_coords)
+            .set_opacity(0.6)
+        )
+        negated_coords[0][1:5].set_color(YELLOW)
+        negated_coords[0][7:].set_color(GREEN)
+
+        def position_phase_multiplier(mob):
+            midpoint = leading_phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            offset = (
+                abs(outward[0]) * mob.width / 2
+                + abs(outward[1]) * mob.height / 2
+                + SMALL_BUFF / 2
+            )
+            mob.move_to(midpoint + outward * offset)
+
+        phase_multiplier = MathTex(r"\times -1").scale(0.5).set_z_index(5)
+        position_phase_multiplier(phase_multiplier)
+
+        leading_phase_color = VT(0)
+
+        def negative_phase_label():
+            label = (
+                MathTex(rf"+{~leading_phase:.0f}^\circ")
+                .scale(0.7)
+                .set_color(interpolate_color(WHITE, RED, ~leading_phase_color))
+            )
+            midpoint = leading_phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            inset = (
+                abs(outward[0]) * label.width / 2
+                + abs(outward[1]) * label.height / 2
+                + SMALL_BUFF
+            )
+            return (
+                label.move_to(midpoint - outward * inset)
+                .set_opacity(np.clip((~leading_phase - 20) / 25, 0, 1))
+                .set_z_index(5)
+            )
+
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(
+                        multiplied_coords[0][3:7], negated_coords[0][1:5]
+                    ),
+                    ReplacementTransform(
+                        multiplied_coords[0][8:16], negated_coords[0][6:14]
+                    ),
+                    FadeOut(
+                        multiplied_coords[0][2],
+                        multiplied_coords[0][7],
+                        multiplied_coords[0][16],
+                    ),
+                ),
+                TransformFromCopy(
+                    multiplied_coords[0][0], negated_coords[0][0], introducer=True
+                ),
+                TransformFromCopy(
+                    multiplied_coords[0][0], negated_coords[0][5], introducer=True
+                ),
+                AnimationGroup(
+                    ReplacementTransform(
+                        multiplied_coords[0][:2], phase_multiplier[0][1:]
+                    ),
+                    PopIn(phase_multiplier[0][0]),
+                ),
+                lag_ratio=0.2,
+                run_time=1.5,
+            ),
+        )
+        self.remove(multiplied_coords, *multiplied_coords, *negated_coords[0])
+        self.remove(*phase_multiplier[0])
+        self.add(negated_coords, phase_multiplier)
+        phase_multiplier.add_updater(position_phase_multiplier)
+
+        def follow_shifted_point(mob):
+            radial_adjustment = (angle_line.get_angle() - PI / 2) * ease_in_out_sine(
+                np.clip(~leading_phase / 180, 0, 1)
+            )
+            direction = rotate_vector(UP, ~leading_phase * DEGREES + radial_adjustment)
+            gap = leading_point.width / 2 + MED_SMALL_BUFF
+            offset = np.array([mob.width / 2 + gap, mob.height / 2 + gap, 0])
+            mob.move_to(leading_point.get_center() + direction * offset)
+
+        negated_coords.add_updater(follow_shifted_point, call_updater=True)
+        leading_phase_value = always_redraw(negative_phase_label)
+        self.add(leading_phase_value)
+        original_coords_end = complex_coords.copy().next_to(
+            pair_point, UP, MED_SMALL_BUFF
+        )
+        negated_coords_end = negated_coords.copy().clear_updaters()
+        end_direction = unit(coordinate_pair(~x + PI / omega) - circle_axes.c2p(0, 0))
+        end_gap = leading_point.width / 2 + MED_SMALL_BUFF
+        negated_coords_end.move_to(
+            coordinate_pair(~x + PI / omega)
+            + end_direction
+            * np.array(
+                [
+                    negated_coords.width / 2 + end_gap,
+                    negated_coords.height / 2 + end_gap,
+                    0,
+                ]
+            )
+        )
+        rotation_view = Group(circle_axes, original_coords_end, negated_coords_end)
+        self.play(
+            LaggedStart(
+                leading_phase.animate(run_time=3, rate_func=ease_in_out_sine).set_value(
+                    180
+                ),
+                AnimationGroup(
+                    Transform(complex_coords, original_coords_end),
+                    self.camera.frame.animate.scale_to_fit_height(
+                        rotation_view.height * 1.2
+                    ).move_to(rotation_view),
+                    run_time=1.4,
+                ),
+                lag_ratio=0.35,
+            )
+        )
+
+        self.wait(0.5)
+
+        neg1_shift_mult = MathTex(r"\times -1")
+        neg1_shift_phase = MathTex(r"+180^\circ")
+        neg1_shift_arrow = Arrow(LEFT * 0.5, RIGHT)
+        neg1_shift = (
+            Group(neg1_shift_mult, neg1_shift_arrow, neg1_shift_phase)
+            .arrange(RIGHT, SMALL_BUFF)
+            .scale(0.7)
+            .next_to(circle_axes, LEFT, LARGE_BUFF)
+            .shift(UP * 2)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    phase_multiplier[0], neg1_shift_mult[0], path_arc=PI / 3
+                ),
+                GrowArrow(neg1_shift_arrow),
+                TransformFromCopy(
+                    leading_phase_value[0],
+                    neg1_shift_phase[0],
+                    introducer=True,
+                    path_arc=PI / 3,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        want90 = (
+            Group(Text("want", font=FONT).scale(0.7), MathTex(r"90^\circ"))
+            .arrange(RIGHT, MED_SMALL_BUFF, aligned_edge=DOWN)
+            .next_to(circle_axes, LEFT, LARGE_BUFF)
+            .shift(DOWN * 0.5)
+        )
+
+        want90_arrow = Arrow(
+            leading_phase_value.get_corner(DL),
+            want90.get_right(),
+            buff=SMALL_BUFF,
+            path_arc=-PI / 3,
+        )
+
+        self.play(
+            LaggedStart(
+                leading_phase_color @ 1,
+                GrowArrow(want90_arrow),
+                FadeIn(want90),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(want90_arrow, want90), leading_phase_color @ 0)
+
+        self.next_section("Two quarter turns", skip_animations=skip_animations(False))
+        negated_coords.clear_updaters()
+        phase_multiplier.clear_updaters()
+        self.play(
+            LaggedStart(
+                FadeOut(negated_coords, phase_multiplier, run_time=0.5),
+                leading_phase.animate(
+                    run_time=1.8, rate_func=ease_in_out_sine
+                ).set_value(0),
+                lag_ratio=0.3,
+            )
+        )
+        self.wait(0.3)
+
+        quarter_multiplier = MathTex(r"\times ?").scale(0.5).set_z_index(5)
+        quarter_multiplier.add_updater(position_phase_multiplier)
+        quarter_multiplier.add_updater(
+            lambda mob: mob.set_opacity(np.clip((~leading_phase - 20) / 25, 0, 1)),
+            call_updater=True,
+        )
+        self.add(quarter_multiplier)
+        self.play(
+            leading_phase.animate(run_time=2, rate_func=ease_in_out_sine).set_value(90)
+        )
+        self.wait(0.5)
+
+        second_phase = VT(0)
+
+        def second_time():
+            return leading_time() + ~second_phase * DEGREES / omega
+
+        second_line = leading_line.copy().clear_updaters()
+        second_point = leading_point.copy().clear_updaters()
+        second_line.add_updater(
+            lambda mob: mob.put_start_and_end_on(
+                circle_axes.c2p(0, 0), coordinate_pair(second_time())
+            )
+        )
+        second_point.add_updater(
+            lambda mob: mob.move_to(coordinate_pair(second_time()))
+        )
+        second_real_point = leading_real_point.copy().clear_updaters()
+        second_imag_point = leading_imag_point.copy().clear_updaters()
+        second_real_point.add_updater(
+            lambda mob: mob.move_to(
+                plot_point(now_axes, second_time(), voltage(second_time()))
+            )
+        )
+        second_imag_point.add_updater(
+            lambda mob: mob.move_to(
+                plot_point(
+                    lagged_axes, second_time(), voltage(second_time() - lagged_shift)
+                )
+            )
+        )
+        second_phase_arc = always_redraw(
+            lambda: Arc(
+                radius=angle_line.get_length() * 0.6,
+                start_angle=angle_line.get_angle() + ~leading_phase * DEGREES,
+                angle=~second_phase * DEGREES,
+                arc_center=circle_axes.c2p(0, 0),
+                stroke_opacity=0.7,
+            ).set_z_index(3)
+        )
+
+        def second_phase_label():
+            label = MathTex(rf"+{~second_phase:.0f}^\circ").scale(0.7)
+            midpoint = second_phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            inset = (
+                abs(outward[0]) * label.width / 2
+                + abs(outward[1]) * label.height / 2
+                + SMALL_BUFF
+            )
+            return (
+                label.move_to(midpoint - outward * inset)
+                .set_opacity(np.clip((~second_phase - 20) / 25, 0, 1))
+                .set_z_index(5)
+            )
+
+        second_phase_value = always_redraw(second_phase_label)
+        second_multiplier = quarter_multiplier.copy().clear_updaters()
+
+        def position_second_multiplier(mob):
+            midpoint = second_phase_arc.get_midpoint()
+            outward = unit(midpoint - circle_axes.c2p(0, 0))
+            offset = (
+                abs(outward[0]) * mob.width / 2
+                + abs(outward[1]) * mob.height / 2
+                + SMALL_BUFF / 2
+            )
+            mob.move_to(midpoint + outward * offset)
+            mob.set_opacity(np.clip((~second_phase - 20) / 25, 0, 1))
+
+        second_multiplier.add_updater(position_second_multiplier, call_updater=True)
+        self.add(
+            second_line,
+            second_point,
+            second_real_point,
+            second_imag_point,
+            second_phase_arc,
+            second_phase_value,
+            second_multiplier,
+        )
+        self.play(
+            second_phase.animate(run_time=2, rate_func=ease_in_out_sine).set_value(90)
+        )
+
+        self.wait(0.5)
+
+        qmark_shift_mult = MathTex(r"\times ? \times ?")
+        qmark_shift_phase = MathTex(r"+90^\circ + 90^\circ")
+        qmark_shift_arrow = Arrow(LEFT * 0.5, RIGHT)
+        qmark_shift = (
+            Group(qmark_shift_mult, qmark_shift_arrow, qmark_shift_phase)
+            .arrange(RIGHT, SMALL_BUFF)
+            .scale(0.7)
+            .next_to(neg1_shift, DOWN, LARGE_BUFF, aligned_edge=LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    quarter_multiplier[0],
+                    qmark_shift_mult[0][:2],
+                    path_arc=PI / 3,
+                    introducer=True,
+                ),
+                TransformFromCopy(
+                    second_multiplier[0],
+                    qmark_shift_mult[0][2:4],
+                    path_arc=PI / 3,
+                    introducer=True,
+                ),
+                GrowArrow(qmark_shift_arrow),
+                TransformFromCopy(
+                    leading_phase_value[0],
+                    qmark_shift_phase[0][:4],
+                    introducer=True,
+                    path_arc=PI / 3,
+                ),
+                TransformFromCopy(
+                    second_phase_value[0],
+                    qmark_shift_phase[0][4:],
+                    introducer=True,
+                    path_arc=PI / 3,
+                ),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        qmark_sq = MathTex(r"?^2 = -1")
+        qmark = MathTex(r"\Rightarrow ? = \sqrt{-1}")
+        qmark_j = MathTex(r"\Rightarrow ? = j")
+        qmark_group = (
+            Group(qmark_sq, qmark, qmark_j)
+            .arrange(DOWN, MED_SMALL_BUFF, aligned_edge=LEFT)
+            .next_to(qmark_shift, DOWN, LARGE_BUFF, aligned_edge=LEFT)
+        )
+
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    qmark_shift_mult[0][1], qmark_sq[0][0], introducer=True
+                ),
+                TransformFromCopy(
+                    qmark_shift_mult[0][3], qmark_sq[0][1], introducer=True
+                ),
+                PopIn(qmark_sq[0][2]),
+                TransformFromCopy(
+                    neg1_shift_mult[0][1:], qmark_sq[0][3:], introducer=True
+                ),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(LaggedStart(*[PopIn(m) for m in qmark[0]], lag_ratio=0.15))
+
+        self.wait(0.5)
+
+        j_box = SurroundingRectangle(qmark_j, buff=SMALL_BUFF, color=GREEN)
+
+        self.play(
+            LaggedStart(*[PopIn(m) for m in qmark_j[0]], Create(j_box), lag_ratio=0.15)
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(qmark),
+                FadeOut(qmark_sq),
+                FadeOut(qmark_shift),
+                FadeOut(neg1_shift),
+                Group(qmark_j, j_box).animate.set_y(circle_axes.c2p(0, 0)[1]),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.next_section(
+            "Return to the original point", skip_animations=skip_animations(False)
+        )
+        self.play(second_phase @ 0, run_time=1.4, rate_func=ease_in_out_sine)
+        self.remove(
+            second_line,
+            second_point,
+            second_real_point,
+            second_imag_point,
+            second_phase_arc,
+            second_phase_value,
+            second_multiplier,
+        )
+        self.play(leading_phase @ 0, run_time=1.4, rate_func=ease_in_out_sine)
+        self.remove(quarter_multiplier, leading_phase_value)
+        leading_phase_value = always_redraw(negative_phase_label)
+        second_phase_value = always_redraw(second_phase_label)
+        self.add(leading_phase_value)
+        self.wait(0.5)
+
+        work_center = circle_axes.c2p(0, 0) + LEFT * fw(self, 0.43)
+        working_coords = complex_coords.copy().move_to(work_center)
+        identity_target = qmark_j.copy().next_to(working_coords, UP, LARGE_BUFF)
+        identity_box_target = SurroundingRectangle(
+            identity_target, buff=SMALL_BUFF, color=GREEN
+        )
+        first_coords = (
+            MathTex(r"-\frac{V_0\sqrt{3}}{2} + j\frac{V_0}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        first_coords[0][:8].set_color(YELLOW)
+        first_coords[0][10:].set_color(GREEN)
+        first_coords_end = first_coords.copy().next_to(
+            coordinate_pair(~x + PI / 2 / omega),
+            UP,
+            MED_SMALL_BUFF + leading_point.height / 2,
+            aligned_edge=RIGHT,
+        )
+        second_coords = (
+            MathTex(r"-\frac{V_0}{2} - j\frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        second_coords[0][:5].set_color(YELLOW)
+        second_coords[0][7:].set_color(GREEN)
+        second_coords_end = second_coords.copy().next_to(
+            coordinate_pair(~x + PI / omega),
+            DOWN,
+            MED_SMALL_BUFF + second_point.height / 2,
+        )
+        second_coords_end.shift(LEFT * (second_coords_end.get_right()[0] + SMALL_BUFF))
+        algebra_view = Group(
+            circle_axes,
+            complex_coords,
+            identity_box_target,
+            working_coords,
+            first_coords_end,
+            second_coords_end,
+        )
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(
+                max(algebra_view.height * 1.15, algebra_view.width * 9 / 16 * 1.15)
+            ).move_to(algebra_view),
+            Transform(qmark_j, identity_target),
+            Transform(j_box, identity_box_target),
+            run_time=1.2,
+        )
+
+        self.next_section(
+            "Multiply the original coordinates by j",
+            skip_animations=skip_animations(False),
+        )
+        self.play(TransformFromCopy(complex_coords, working_coords), run_time=1)
+        j_product = (
+            MathTex(r"j\left(\frac{V_0}{2} + j\frac{V_0\sqrt{3}}{2}\right)")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        j_product[0][0].set_color(ORANGE)
+        j_product[0][2:6].set_color(YELLOW)
+        j_product[0][8:15].set_color(GREEN)
+        self.play(
+            LaggedStart(
+                ReplacementTransform(working_coords[0], j_product[0][2:15]),
+                AnimationGroup(
+                    GrowFromCenter(j_product[0][1]), GrowFromCenter(j_product[0][15])
+                ),
+                TransformFromCopy(qmark_j[0][-1], j_product[0][0], introducer=True),
+                lag_ratio=0.2,
+                run_time=1.2,
+            )
+        )
+        self.remove(working_coords, *working_coords, *j_product[0])
+        self.add(j_product)
+        self.wait(0.5)
+
+        self.next_section(
+            "Distribute j to both terms", skip_animations=skip_animations(False)
+        )
+        distributed = (
+            MathTex(r"j\frac{V_0}{2} + j\cdot j\frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        distributed[0][0].set_color(ORANGE)
+        distributed[0][1:5].set_color(GREEN)
+        distributed[0][6].set_color(ORANGE)
+        distributed[0][9:].set_color(GREEN)
+        outer_j = j_product[0][0]
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(j_product[0][2:6], distributed[0][1:5]),
+                    ReplacementTransform(j_product[0][6], distributed[0][5]),
+                    ReplacementTransform(j_product[0][7:15], distributed[0][8:]),
+                    FadeOut(j_product[0][1], j_product[0][15]),
+                ),
+                TransformFromCopy(
+                    outer_j,
+                    distributed[0][0],
+                    path_arc=-PI / 3,
+                    introducer=True,
+                ),
+                AnimationGroup(
+                    ReplacementTransform(
+                        outer_j,
+                        distributed[0][6],
+                        path_arc=-PI / 3,
+                    ),
+                    GrowFromCenter(distributed[0][7]),
+                ),
+                lag_ratio=0.3,
+                run_time=1.6,
+            )
+        )
+        self.remove(j_product, *j_product, outer_j, *distributed[0])
+        self.add(distributed)
+        self.wait(0.5)
+
+        self.next_section(
+            "The imaginary j becomes j squared", skip_animations=skip_animations(False)
+        )
+        squared = (
+            MathTex(r"j\frac{V_0}{2} + j^2\frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        squared[0][0].set_color(ORANGE)
+        squared[0][1:5].set_color(GREEN)
+        squared[0][6:8].set_color(ORANGE)
+        squared[0][8:].set_color(GREEN)
+        self.play(
+            ReplacementTransform(distributed[0][:7], squared[0][:7]),
+            ReplacementTransform(distributed[0][8], squared[0][7], path_arc=PI / 3),
+            ReplacementTransform(distributed[0][9:], squared[0][8:]),
+            FadeOut(distributed[0][7]),
+            run_time=0.8,
+        )
+        self.remove(distributed, *distributed, *squared[0])
+        self.add(squared)
+        self.wait(0.5)
+
+        self.next_section(
+            "j squared is minus one", skip_animations=skip_animations(False)
+        )
+        j_identity = MathTex(r"j^2 = -1").scale(0.8).move_to(qmark_j)
+        j_identity[0][:2].set_color(ORANGE)
+        self.play(
+            TransformFromCopy(squared[0][6:8], j_identity[0][:2]),
+            ReplacementTransform(qmark_j[0][2], j_identity[0][2]),
+            FadeOut(qmark_j[0][:2], qmark_j[0][3]),
+            GrowFromCenter(j_identity[0][3:]),
+            Transform(
+                j_box, SurroundingRectangle(j_identity, buff=SMALL_BUFF, color=GREEN)
+            ),
+            run_time=0.8,
+        )
+        self.remove(qmark_j, *qmark_j, *j_identity[0])
+        self.add(j_identity)
+        negative_product = (
+            MathTex(r"j\frac{V_0}{2} + (-1)\frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        negative_product[0][1:5].set_color(GREEN)
+        negative_product[0][6:].set_color(YELLOW)
+        self.play(
+            ReplacementTransform(squared[0][:6], negative_product[0][:6]),
+            FadeOut(squared[0][6:8]),
+            TransformFromCopy(j_identity[0][3:], negative_product[0][7:9]),
+            GrowFromCenter(negative_product[0][6]),
+            GrowFromCenter(negative_product[0][9]),
+            ReplacementTransform(squared[0][8:], negative_product[0][10:]),
+            run_time=1,
+        )
+        self.remove(squared, *squared, *negative_product[0])
+        self.add(negative_product)
+        self.wait(0.5)
+
+        simplified = (
+            MathTex(r"j\frac{V_0}{2} - \frac{V_0\sqrt{3}}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        simplified[0][1:5].set_color(GREEN)
+        simplified[0][5:].set_color(YELLOW)
+        self.play(
+            ReplacementTransform(negative_product[0][:5], simplified[0][:5]),
+            ReplacementTransform(negative_product[0][7], simplified[0][5]),
+            ReplacementTransform(negative_product[0][10:], simplified[0][6:]),
+            FadeOut(negative_product[0][5:7], negative_product[0][8:10]),
+            run_time=0.8,
+        )
+        self.remove(negative_product, *negative_product, *simplified[0])
+        self.add(simplified)
+        self.wait(0.5)
+
+        self.next_section("Real part first", skip_animations=skip_animations(False))
+        self.play(
+            ReplacementTransform(simplified[0][5:], first_coords[0][:8], path_arc=-PI),
+            ReplacementTransform(simplified[0][:5], first_coords[0][9:], path_arc=-PI),
+            GrowFromCenter(first_coords[0][8]),
+            run_time=1.2,
+        )
+        self.remove(simplified, *simplified, *first_coords[0])
+        self.add(first_coords)
+        self.wait(0.5)
+
+        self.next_section(
+            "j rotates the point by 90 degrees", skip_animations=skip_animations(False)
+        )
+        first_point_coords = first_coords_end.copy()
+        quarter_multiplier = MathTex(r"\times j").scale(0.5).set_z_index(5)
+        quarter_multiplier.add_updater(position_phase_multiplier)
+        quarter_multiplier.add_updater(
+            lambda mob: mob.set_opacity(np.clip((~leading_phase - 20) / 25, 0, 1)),
+            call_updater=True,
+        )
+        self.add(quarter_multiplier)
+        self.play(
+            leading_phase @ 90,
+            TransformFromCopy(first_coords, first_point_coords, path_arc=-PI / 6),
+            run_time=2,
+            rate_func=ease_in_out_sine,
+        )
+        self.wait(0.8)
+
+        self.next_section("Multiply by j again", skip_animations=skip_animations(False))
+        second_product = (
+            MathTex(r"j\left(-\frac{V_0\sqrt{3}}{2} + j\frac{V_0}{2}\right)")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        second_product[0][0].set_color(ORANGE)
+        second_product[0][2:10].set_color(YELLOW)
+        second_product[0][12:16].set_color(GREEN)
+        self.play(
+            LaggedStart(
+                ReplacementTransform(first_coords[0], second_product[0][2:16]),
+                AnimationGroup(
+                    GrowFromCenter(second_product[0][1]),
+                    GrowFromCenter(second_product[0][16]),
+                ),
+                TransformFromCopy(
+                    j_identity[0][0], second_product[0][0], introducer=True
+                ),
+                lag_ratio=0.2,
+                run_time=1.2,
+            )
+        )
+        self.remove(first_coords, *first_coords, *second_product[0])
+        self.add(second_product)
+        self.wait(0.5)
+
+        self.next_section(
+            "Distribute the second j", skip_animations=skip_animations(False)
+        )
+        second_distributed = (
+            MathTex(r"-j\frac{V_0\sqrt{3}}{2} + j\cdot j\frac{V_0}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        second_distributed[0][0].set_color(GREEN)
+        second_distributed[0][1].set_color(ORANGE)
+        second_distributed[0][2:9].set_color(GREEN)
+        second_distributed[0][10].set_color(ORANGE)
+        second_distributed[0][13:].set_color(GREEN)
+        outer_j = second_product[0][0]
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(
+                        second_product[0][2], second_distributed[0][0]
+                    ),
+                    ReplacementTransform(
+                        second_product[0][3:10], second_distributed[0][2:9]
+                    ),
+                    ReplacementTransform(
+                        second_product[0][10], second_distributed[0][9]
+                    ),
+                    ReplacementTransform(
+                        second_product[0][11:16], second_distributed[0][12:]
+                    ),
+                    FadeOut(second_product[0][1], second_product[0][16]),
+                ),
+                TransformFromCopy(
+                    outer_j,
+                    second_distributed[0][1],
+                    path_arc=-PI / 3,
+                    introducer=True,
+                ),
+                AnimationGroup(
+                    ReplacementTransform(
+                        outer_j,
+                        second_distributed[0][10],
+                        path_arc=-PI / 3,
+                    ),
+                    GrowFromCenter(second_distributed[0][11]),
+                ),
+                lag_ratio=0.3,
+                run_time=1.6,
+            )
+        )
+        self.remove(second_product, *second_product, outer_j, *second_distributed[0])
+        self.add(second_distributed)
+        self.wait(0.5)
+
+        self.next_section("Square the second j", skip_animations=skip_animations(False))
+        second_squared = (
+            MathTex(r"-j\frac{V_0\sqrt{3}}{2} + j^2\frac{V_0}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        second_squared[0][0].set_color(GREEN)
+        second_squared[0][2:9].set_color(GREEN)
+        second_squared[0][10:12].set_color(ORANGE)
+        second_squared[0][12:].set_color(GREEN)
+        self.play(
+            ReplacementTransform(second_distributed[0][:11], second_squared[0][:11]),
+            ReplacementTransform(
+                second_distributed[0][12], second_squared[0][11], path_arc=PI / 3
+            ),
+            ReplacementTransform(second_distributed[0][13:], second_squared[0][12:]),
+            FadeOut(second_distributed[0][11]),
+            run_time=0.8,
+        )
+        self.remove(second_distributed, *second_distributed, *second_squared[0])
+        self.add(second_squared)
+        self.wait(0.5)
+
+        self.next_section(
+            "The second j squared makes a negative real term",
+            skip_animations=skip_animations(False),
+        )
+        second_negative = (
+            MathTex(r"-j\frac{V_0\sqrt{3}}{2} + (-1)\frac{V_0}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        second_negative[0][0].set_color(GREEN)
+        second_negative[0][2:9].set_color(GREEN)
+        second_negative[0][10:].set_color(YELLOW)
+        self.play(
+            ReplacementTransform(second_squared[0][:10], second_negative[0][:10]),
+            FadeOut(second_squared[0][10:12]),
+            TransformFromCopy(j_identity[0][3:], second_negative[0][11:13]),
+            GrowFromCenter(second_negative[0][10]),
+            GrowFromCenter(second_negative[0][13]),
+            ReplacementTransform(second_squared[0][12:], second_negative[0][14:]),
+            run_time=1,
+        )
+        self.remove(second_squared, *second_squared, *second_negative[0])
+        self.add(second_negative)
+        self.wait(0.5)
+        second_simplified = (
+            MathTex(r"-j\frac{V_0\sqrt{3}}{2} - \frac{V_0}{2}")
+            .scale(0.7)
+            .move_to(work_center)
+        )
+        second_simplified[0][0].set_color(GREEN)
+        second_simplified[0][2:9].set_color(GREEN)
+        second_simplified[0][9:].set_color(YELLOW)
+        self.play(
+            ReplacementTransform(second_negative[0][:9], second_simplified[0][:9]),
+            ReplacementTransform(second_negative[0][11], second_simplified[0][9]),
+            ReplacementTransform(second_negative[0][14:], second_simplified[0][10:]),
+            FadeOut(second_negative[0][9:11], second_negative[0][12:14]),
+            run_time=0.8,
+        )
+        self.remove(second_negative, *second_negative, *second_simplified[0])
+        self.add(second_simplified)
+        self.wait(0.5)
+
+        self.next_section(
+            "The coordinates after two multiplications",
+            skip_animations=skip_animations(False),
+        )
+        self.play(
+            ReplacementTransform(
+                second_simplified[0][9:], second_coords[0][:5], path_arc=-PI
+            ),
+            ReplacementTransform(
+                second_simplified[0][:9], second_coords[0][5:], path_arc=-PI
+            ),
+            run_time=1.2,
+        )
+        self.remove(second_simplified, *second_simplified, *second_coords[0])
+        self.add(second_coords)
+        self.wait(0.5)
+
+        self.next_section(
+            "A second quarter turn reaches 180 degrees",
+            skip_animations=skip_animations(False),
+        )
+        second_point_coords = second_coords_end.copy()
+        second_multiplier = MathTex(r"\times j").scale(0.5).set_z_index(5)
+        second_multiplier.add_updater(position_second_multiplier, call_updater=True)
+        self.add(
+            second_line,
+            second_point,
+            second_real_point,
+            second_imag_point,
+            second_phase_arc,
+            second_phase_value,
+            second_multiplier,
+        )
+        self.play(
+            second_phase @ 90,
+            TransformFromCopy(second_coords, second_point_coords, path_arc=PI / 6),
+            run_time=2,
+            rate_func=ease_in_out_sine,
+        )
+        self.wait(0.5)
+
+        total_shift = (
+            MathTex(r"90^\circ + 90^\circ = 180^\circ")
+            .scale(0.6)
+            .next_to(second_coords, DOWN, LARGE_BUFF)
+        )
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    leading_phase_value[0][1:], total_shift[0][:3], introducer=True
+                ),
+                TransformFromCopy(
+                    second_phase_value[0], total_shift[0][3:7], introducer=True
+                ),
+                GrowFromCenter(total_shift[0][7:]),
+                lag_ratio=0.2,
+                run_time=1.2,
+            )
+        )
+        self.remove(*total_shift[0])
+
+        self.add(total_shift)
+
+        self.wait(1)
+
+        dvdt = MathTex(r"\frac{d V(t)}{dt}")
+        dvdt[0][1:5].set_color(YELLOW)
+        dvdt_arrow = Arrow(LEFT, RIGHT)
+        jw = MathTex(r"j \omega \tilde V")
+        jw[0][2:].set_color(YELLOW)
+        dvdt_group = (
+            Group(dvdt, dvdt_arrow, jw)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .move_to(self.camera.frame)
+            .shift(UP * fh(self))
+        )
+        dvdt.save_state()
+        self.add(dvdt.set_x(self.camera.frame.get_x()))
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                dvdt.animate.restore(),
+                GrowArrow(dvdt_arrow),
+                lag_ratio=0.5,
+            )
+        )
+
+        self.wait(0.5)
+
+        complex_arrow = Arrow(
+            dvdt[0][1:5].get_top(),
+            jw[0][2:].get_top(),
+            buff=SMALL_BUFF,
+            path_arc=-PI / 2,
+            color=YELLOW,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(complex_arrow),
+                PopIn(jw[0][2:]),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                FadeOut(complex_arrow),
+                LaggedStart(
+                    PopIn(jw[0][0]),
+                    PopIn(jw[0][1]),
+                    lag_ratio=0.15,
+                ),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
+
+
+class CapExample(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+
+        cap = Cap(include_ports=True).scale(1.5)
+
+        self.play()
 
 
 class CapacitorEquation(MovingCameraScene):
