@@ -2775,9 +2775,13 @@ class TwoPoints(MovingCameraScene):
         omega = TAU
         current_peak = capacitance * omega
         x = VT(0)
+        follow_time = VT(1)
+        fixed_window_start = VT(0)
 
         def window_start():
-            return max(0, ~x - max_time / 2)
+            return ~follow_time * max(0, ~x - max_time / 2) + (1 - ~follow_time) * max(
+                ~fixed_window_start, ~x - max_time / 2
+            )
 
         def plot_point(plot_axes, t, value):
             return plot_axes.c2p(t - window_start(), value)
@@ -2843,7 +2847,8 @@ class TwoPoints(MovingCameraScene):
                 ]
             )
 
-        self.add(always_redraw(time_ticks))
+        time_tick_marks = always_redraw(time_ticks)
+        self.add(time_tick_marks)
 
         def visible_curve(plot_axes, function, color, opacity=1):
             start = window_start()
@@ -2856,8 +2861,9 @@ class TwoPoints(MovingCameraScene):
 
         v_min = VT(0)
         v_max = VT(max_time * 2)
+        voltage_opacity = VT(0.2)
         voltage_background = always_redraw(
-            lambda: visible_curve(axes, voltage, YELLOW).set_stroke(opacity=0.2)
+            lambda: visible_curve(axes, voltage, YELLOW, opacity=~voltage_opacity)
         )
 
         def selected_voltage():
@@ -3127,13 +3133,19 @@ class TwoPoints(MovingCameraScene):
         )
 
         lookback_angle = VT(0)
+        lagged_shift = VT(0)
+        lagged_axes = axes
 
         def lookback_time():
             return ~x - ~lookback_angle * DEGREES / omega
 
         lookback_point = always_redraw(
             lambda: Dot(
-                plot_point(axes, lookback_time(), voltage(lookback_time())),
+                plot_point(
+                    lagged_axes,
+                    lookback_time() + ~lagged_shift,
+                    voltage(lookback_time()),
+                ),
                 radius=fh(self, 0.012),
                 color=GREEN,
             ).set_z_index(4)
@@ -3141,7 +3153,7 @@ class TwoPoints(MovingCameraScene):
         lookback_arrow = always_redraw(
             lambda: Arrow(
                 plot_point(axes, ~x, voltage(~x)),
-                plot_point(axes, lookback_time(), voltage(~x)),
+                plot_point(axes, lookback_time() + ~lagged_shift, voltage(~x)),
                 buff=0,
                 thickness=2,
                 tip_corner_radius=0.02,
@@ -3150,8 +3162,10 @@ class TwoPoints(MovingCameraScene):
         )
         lookback_guide = always_redraw(
             lambda: DashedLine(
-                plot_point(axes, lookback_time(), voltage(~x)),
-                plot_point(axes, lookback_time(), voltage(lookback_time())),
+                plot_point(axes, lookback_time() + ~lagged_shift, voltage(~x)),
+                plot_point(
+                    axes, lookback_time() + ~lagged_shift, voltage(lookback_time())
+                ),
                 color=GREEN,
                 stroke_width=2,
                 dash_length=fh(self, 0.012),
@@ -3248,6 +3262,210 @@ class TwoPoints(MovingCameraScene):
         self.remove(v_plot)
 
         self.play(x + 1, run_time=10)
+
+        self.wait(0.5)
+        self.next_section("Lagged voltage", skip_animations=skip_animations(False))
+
+        lagged_voltage = always_redraw(
+            lambda: visible_curve(
+                lagged_axes, lambda t: voltage(t - ~lagged_shift), GREEN
+            ).set_z_index(1)
+        )
+
+        self.play(voltage_opacity @ 1, run_time=0.8)
+        self.wait(0.3)
+        self.play(
+            FadeIn(lagged_voltage),
+            FadeOut(lookback_arrow, lookback_label),
+            run_time=0.6,
+        )
+        self.play(lagged_shift @ (~lookback_angle * DEGREES / omega), run_time=3)
+        self.wait(0.5)
+
+        self.next_section(
+            "Voltage coordinate pair", skip_animations=skip_animations(False)
+        )
+
+        self.play(
+            FadeOut(
+                current_axes,
+                current_label,
+                current_trace,
+                current_180deg,
+                current_point,
+                current_point_180deg,
+                point_link,
+                time_tick_marks,
+                lookback_guide,
+                voltage_label,
+                vt0,
+                vtback,
+                vt0_key,
+                vtback_key,
+            ),
+            run_time=0.5,
+        )
+        self.remove(current_slope)
+
+        source_axes = axes.copy()
+        source_origin = source_axes.c2p(0, 0)
+        source_center = source_axes.c2p(max_time / 2, 0)
+        source_time_length = np.linalg.norm(
+            source_axes.c2p(max_time, 0) - source_origin
+        )
+        source_voltage_length = np.linalg.norm(
+            source_axes.c2p(0, 1) - source_axes.c2p(0, -1)
+        )
+        radius = fh(self, 0.2)
+        time_axis_length = fh(self, 0.7)
+        circle_center = self.camera.frame.get_center() + UP * fh(self, 2)
+
+        circle_axes = Axes(
+            x_range=[-1, 1, 1],
+            y_range=[-1, 1, 1],
+            x_length=2 * radius,
+            y_length=2 * radius,
+            axis_config={**axis_config, "stroke_opacity": 0.4},
+            tips=False,
+        )
+        circle_axes.shift(circle_center - circle_axes.c2p(0, 0))
+        lagged_axes = Axes(
+            x_range=[0, max_time, 0.5],
+            y_range=[-1, 1, 0.5],
+            x_length=time_axis_length,
+            y_length=2 * radius,
+            axis_config=axis_config,
+            x_axis_config={"include_ticks": False},
+            tips=False,
+        )
+        lagged_axes.shift(circle_axes.c2p(1, 0) - lagged_axes.c2p(0, 0))
+        now_axes = Axes(
+            x_range=[0, max_time, 0.5],
+            y_range=[-1, 1, 0.5],
+            x_length=time_axis_length,
+            y_length=2 * radius,
+            axis_config=axis_config,
+            x_axis_config={"include_ticks": False},
+            tips=False,
+        ).rotate(-PI / 2)
+        now_axes.shift(circle_axes.c2p(0, -1) - now_axes.c2p(0, 0))
+        now_center = now_axes.c2p(max_time / 2, 0)
+
+        now_label = (
+            MathTex(r"V_C(t_0)", color=YELLOW)
+            .scale(0.8)
+            .rotate(PI / 2)
+            .next_to(now_axes, LEFT, MED_LARGE_BUFF)
+        )
+        lagged_label = (
+            MathTex(r"V_C(t_0 - 90^\circ)", color=GREEN)
+            .scale(0.8)
+            .next_to(lagged_axes, UP, MED_LARGE_BUFF)
+        )
+        circle = Circle(
+            radius=radius, color=WHITE, stroke_width=2, stroke_opacity=0.2
+        ).move_to(circle_center)
+        radius_label = MathTex(r"V_0").scale(0.65).next_to(circle, UP, MED_LARGE_BUFF)
+        layout = VGroup(
+            circle_axes, now_axes, lagged_axes, now_label, lagged_label, radius_label
+        )
+        layout_center = layout.get_center().copy()
+        layout_height = layout.height * 1.15
+
+        def separate_voltage_axes(mob, alpha):
+            pose = source_axes.copy()
+            pose.stretch(
+                interpolate(1, time_axis_length / source_time_length, alpha),
+                0,
+                about_point=source_center,
+            )
+            pose.stretch(
+                interpolate(1, 2 * radius / source_voltage_length, alpha),
+                1,
+                about_point=source_center,
+            )
+            pose.rotate(-alpha * PI / 2, about_point=source_center)
+            pose.shift(alpha * (now_center - source_center))
+            mob.x_axis.become(pose.x_axis)
+            mob.y_axis.become(pose.y_axis)
+
+        circle_start = (np.ceil((omega * ~x - PI / 2) / TAU) * TAU + PI / 2) / omega
+        fixed_window_start @= circle_start
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    TransformFromCopy(source_axes, lagged_axes, introducer=True),
+                    UpdateFromAlphaFunc(axes, separate_voltage_axes),
+                    x @ circle_start,
+                    follow_time @ 0,
+                    self.camera.frame.animate.scale_to_fit_height(
+                        layout_height
+                    ).move_to(layout_center),
+                    run_time=3.5,
+                ),
+                LaggedStart(
+                    FadeIn(circle_axes, circle, radius_label),
+                    FadeIn(lagged_label),
+                    FadeIn(now_label),
+                    lag_ratio=0.2,
+                    run_time=1,
+                ),
+                lag_ratio=0.8,
+            ),
+        )
+
+        def coordinate_pair(t):
+            return circle_axes.c2p(voltage(t), voltage(t - ~lagged_shift))
+
+        pair_point = always_redraw(
+            lambda: Dot(
+                coordinate_pair(~x), radius=fh(self, 0.013), color=WHITE
+            ).set_z_index(5)
+        )
+        radius_line = always_redraw(
+            lambda: Line(
+                circle_center, coordinate_pair(~x), color=WHITE, stroke_width=2
+            )
+        )
+        projections = always_redraw(
+            lambda: VGroup(
+                DashedLine(
+                    voltage_point.get_center(),
+                    coordinate_pair(~x),
+                    color=YELLOW,
+                    stroke_width=2,
+                    dash_length=fh(self, 0.012),
+                ),
+                DashedLine(
+                    lookback_point.get_center(),
+                    coordinate_pair(~x),
+                    color=GREEN,
+                    stroke_width=2,
+                    dash_length=fh(self, 0.012),
+                ),
+            ).set_z_index(1)
+        )
+        self.play(
+            LaggedStart(
+                Create(projections),
+                AnimationGroup(Create(radius_line), PopIn(pair_point)),
+                lag_ratio=0.3,
+            ),
+            run_time=0.8,
+        )
+
+        circle_trace = always_redraw(
+            lambda: ParametricFunction(
+                coordinate_pair,
+                t_range=[circle_start, max(circle_start + 1e-6, ~x), 1 / 200],
+                color=WHITE,
+                stroke_width=3,
+            ).set_z_index(2)
+        )
+        self.add(circle_trace)
+        self.next_section("Trace the circle", skip_animations=skip_animations(False))
+        self.play(x + TAU / omega, run_time=8, rate_func=linear)
+        self.wait(0.5)
 
 
 class CapacitorEquation(MovingCameraScene):
