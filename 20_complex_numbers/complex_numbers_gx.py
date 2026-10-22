@@ -5280,9 +5280,731 @@ class CapExample(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
 
-        cap = Cap(include_ports=True).scale(1.5)
+        cap = (
+            Cap(include_ports=True)
+            .scale(1.5)
+            .next_to(self.camera.frame.get_left(), RIGHT, LARGE_BUFF)
+        )
 
-        self.play()
+        current = MathTex(r"I_C(t) = C \frac{d V_C(t)}{dt}")
+        current[0][:5].set_color(BLUE)
+        current[0][8:13].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                cap.shift(LEFT * fw(self)).animate.shift(RIGHT * fw(self)),
+                LaggedStart(*[PopIn(m) for m in current[0]], lag_ratio=0.15),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        sinusoid_callout = (
+            Text("sinusoid", font=FONT)
+            .next_to(current[0][8:13], UP, LARGE_BUFF)
+            .shift(RIGHT * 3)
+        )
+        sinusoid_arrow = SquigglyLine(
+            current[0][8:13].get_corner(UR) + [0, 0.1, 0],
+            sinusoid_callout.get_corner(DL) + [-0.1, 0.1, 0],
+            amplitude=0.1,
+            seed=3,
+        ).add_tip(
+            tip_length=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+            tip_width=DEFAULT_ARROW_TIP_LENGTH * 0.5,
+        )
+
+        self.play(
+            LaggedStart(
+                GrowArrow(sinusoid_arrow),
+                PopIn(sinusoid_callout),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        complex_current = MathTex(r"\tilde I_C = j \omega C \tilde V_C").next_to(
+            current, DOWN, SMALL_BUFF
+        )
+        complex_current[0][:3].set_color(BLUE)
+        complex_current[0][7:].set_color(YELLOW)
+
+        self.play(
+            LaggedStart(
+                FadeOut(sinusoid_arrow, sinusoid_callout),
+                current.animate.shift(UP * fh(self, 0.25)),
+                lag_ratio=0.3,
+            )
+        )
+
+        arrow_start = current.get_right() + RIGHT * MED_SMALL_BUFF
+        arrow_end = complex_current.get_left() + LEFT * MED_SMALL_BUFF
+        arrow_mid = (arrow_start + arrow_end) / 2 + UP * 0.1
+        current_arrow = TipableVMobject(
+            color=GREEN, stroke_width=3, tip_corner_radius=0.02
+        )
+        current_arrow.start_new_path(arrow_start)
+        current_arrow.add_cubic_bezier_curve_to(
+            arrow_start + RIGHT * 3.1 + DOWN * 0.8,
+            arrow_mid + RIGHT * 3.5 + UP * 0.15,
+            arrow_mid,
+        )
+        current_arrow.add_cubic_bezier_curve_to(
+            arrow_mid + LEFT * 3.5 + DOWN * 0.15,
+            arrow_end + LEFT * 3.5,
+            arrow_end,
+        )
+        current_arrow.add_tip(tip_length=0.2, tip_width=0.2)
+
+        self.next_section(
+            "Derivative to complex current", skip_animations=skip_animations(False)
+        )
+        self.play(
+            LaggedStart(
+                GrowArrow(current_arrow, run_time=1.5),
+                LaggedStart(*[PopIn(m) for m in complex_current[0]], lag_ratio=0.15),
+                lag_ratio=0.7,
+            )
+        )
+        self.wait(0.5)
+
+        self.next_section(
+            "Write the complex voltage", skip_animations=skip_animations(False)
+        )
+        voltage = (
+            MathTex(r"\tilde V_C = V_0\cos(\omega t) + j V_0\sin(\omega t)")
+            .scale(0.9)
+            .move_to(DOWN * fh(self, 0.2))
+        )
+        voltage[0][:3].set_color(YELLOW)
+        voltage[0][4:13].set_color(YELLOW)
+        voltage[0][15:].set_color(GREEN)
+        self.play(FadeOut(cap, current_arrow), complex_current.animate.move_to(ORIGIN))
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    complex_current[0][7:], voltage[0][:3], introducer=True
+                ),
+                LaggedStart(
+                    *[PopIn(glyph) for glyph in voltage[0][3:]], lag_ratio=0.06
+                ),
+                lag_ratio=0.3,
+                run_time=1.4,
+            )
+        )
+        self.remove(*voltage[0])
+        self.add(voltage)
+        self.wait(0.5)
+
+        self.next_section(
+            "Substitute the voltage", skip_animations=skip_animations(False)
+        )
+        expanded = MathTex(
+            r"\tilde I_C = j\omega C\left(V_0\cos(\omega t)+j V_0\sin(\omega t)\right)"
+        ).scale(0.95)
+        expanded[0][:3].set_color(BLUE)
+        expanded[0][4:7].set_color(ORANGE)
+        expanded[0][8:17].set_color(YELLOW)
+        expanded[0][19:28].set_color(GREEN)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(complex_current[0][:7], expanded[0][:7]),
+                    FadeOut(complex_current[0][7:]),
+                    GrowFromCenter(expanded[0][7]),
+                    GrowFromCenter(expanded[0][28]),
+                ),
+                TransformFromCopy(voltage[0][4:], expanded[0][8:28], introducer=True),
+                lag_ratio=0.25,
+                run_time=1.3,
+            )
+        )
+        self.remove(complex_current, *complex_current, *expanded[0])
+        self.add(expanded)
+        self.wait(0.5)
+
+        self.next_section(
+            "Distribute j omega C", skip_animations=skip_animations(False)
+        )
+        distributed = MathTex(
+            r"\tilde I_C = j\omega C V_0\cos(\omega t) + j\cdot j\omega C V_0\sin(\omega t)"
+        ).scale(0.95)
+        distributed[0][:3].set_color(BLUE)
+        distributed[0][4].set_color(ORANGE)
+        distributed[0][5:16].set_color(GREEN)
+        distributed[0][17].set_color(ORANGE)
+        distributed[0][20:].set_color(GREEN)
+        factor = expanded[0][4:7]
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(expanded[0][:4], distributed[0][:4]),
+                    ReplacementTransform(expanded[0][8:17], distributed[0][7:16]),
+                    ReplacementTransform(expanded[0][17], distributed[0][16]),
+                    ReplacementTransform(expanded[0][18], distributed[0][19]),
+                    ReplacementTransform(expanded[0][19:28], distributed[0][22:]),
+                    FadeOut(expanded[0][7], expanded[0][28], voltage),
+                ),
+                TransformFromCopy(
+                    factor, distributed[0][4:7], path_arc=-PI / 3, introducer=True
+                ),
+                AnimationGroup(
+                    ReplacementTransform(
+                        factor[0], distributed[0][17], path_arc=-PI / 3
+                    ),
+                    ReplacementTransform(
+                        factor[1:], distributed[0][20:22], path_arc=-PI / 3
+                    ),
+                    GrowFromCenter(distributed[0][18]),
+                ),
+                lag_ratio=0.3,
+                run_time=1.6,
+            )
+        )
+        self.remove(expanded, *expanded, factor, *factor, *distributed[0])
+        self.add(distributed)
+        self.wait(0.5)
+
+        self.next_section(
+            "Combine the two j factors", skip_animations=skip_animations(False)
+        )
+        squared = MathTex(
+            r"\tilde I_C = j\omega C V_0\cos(\omega t) + j^2\omega C V_0\sin(\omega t)"
+        ).scale(0.95)
+        squared[0][:3].set_color(BLUE)
+        squared[0][5:16].set_color(GREEN)
+        squared[0][17:19].set_color(ORANGE)
+        squared[0][19:].set_color(GREEN)
+        self.play(
+            ReplacementTransform(distributed[0][:18], squared[0][:18]),
+            ReplacementTransform(distributed[0][19], squared[0][18], path_arc=PI / 3),
+            ReplacementTransform(distributed[0][20:], squared[0][19:]),
+            FadeOut(distributed[0][18]),
+            run_time=0.8,
+        )
+        self.remove(distributed, *distributed, *squared[0])
+        self.add(squared)
+        self.wait(0.5)
+
+        self.next_section(
+            "j squared makes the sine term negative",
+            skip_animations=skip_animations(False),
+        )
+        j_identity = MathTex(r"j^2=-1").scale(0.8).next_to(squared, UP, MED_LARGE_BUFF)
+        j_identity[0][:2].set_color(ORANGE)
+        self.play(
+            TransformFromCopy(squared[0][17:19], j_identity[0][:2]),
+            GrowFromCenter(j_identity[0][2:]),
+            run_time=0.8,
+        )
+        self.remove(*j_identity[0])
+        self.add(j_identity)
+        negative = MathTex(
+            r"\tilde I_C = j\omega C V_0\cos(\omega t) - \omega C V_0\sin(\omega t)"
+        ).scale(0.95)
+        negative[0][:3].set_color(BLUE)
+        negative[0][5:16].set_color(GREEN)
+        negative[0][16:].set_color(BLUE)
+        self.play(
+            ReplacementTransform(squared[0][:16], negative[0][:16]),
+            ReplacementTransform(squared[0][19:], negative[0][17:]),
+            FadeOut(squared[0][16:19]),
+            TransformFromCopy(j_identity[0][3], negative[0][16]),
+            run_time=1,
+        )
+        self.remove(squared, *squared, *negative[0])
+        self.add(negative)
+        self.wait(0.5)
+
+        self.next_section(
+            "Real current followed by imaginary current",
+            skip_animations=skip_animations(False),
+        )
+        result = MathTex(
+            r"\tilde I_C = -\omega C V_0\sin(\omega t) + j\omega C V_0\cos(\omega t)"
+        ).scale(0.95)
+        result[0][:3].set_color(BLUE)
+        result[0][4:16].set_color(BLUE)
+        result[0][18:].set_color(GREEN)
+        self.play(FadeOut(j_identity), run_time=0.3)
+        self.play(
+            ReplacementTransform(negative[0][:4], result[0][:4]),
+            ReplacementTransform(negative[0][16:], result[0][4:16], path_arc=-PI / 2),
+            ReplacementTransform(negative[0][4:16], result[0][17:], path_arc=-PI / 2),
+            GrowFromCenter(result[0][16]),
+            run_time=1.3,
+        )
+        self.remove(negative, *negative, *result[0])
+        self.add(result)
+        self.wait(0.5)
+
+        self.next_section(
+            "Check against the time derivative", skip_animations=skip_animations(False)
+        )
+        time_substitution = MathTex(r"I_C(t)=C\frac{d V_0\cos(\omega t)}{dt}").move_to(
+            current
+        )
+        time_substitution[0][:5].set_color(BLUE)
+        time_substitution[0][8:17].set_color(YELLOW)
+        self.play(
+            ReplacementTransform(current[0][:8], time_substitution[0][:8]),
+            ReplacementTransform(current[0][13:], time_substitution[0][17:]),
+            FadeOut(current[0][8:13]),
+            TransformFromCopy(result[0][20:], time_substitution[0][8:17]),
+            run_time=1.1,
+        )
+        self.remove(current, *current, *time_substitution[0])
+        self.add(time_substitution)
+        self.wait(0.5)
+        physical_current = MathTex(r"I_C(t)=-\omega C V_0\sin(\omega t)").move_to(
+            current
+        )
+        physical_current[0][:5].set_color(BLUE)
+        physical_current[0][6:].set_color(BLUE)
+        self.play(
+            LaggedStart(
+                TransformFromCopy(
+                    time_substitution[0][14],
+                    physical_current[0][7],
+                    path_arc=PI / 3,
+                    introducer=True,
+                ),
+                AnimationGroup(
+                    ReplacementTransform(
+                        time_substitution[0][:6], physical_current[0][:6]
+                    ),
+                    ReplacementTransform(
+                        time_substitution[0][6], physical_current[0][8]
+                    ),
+                    ReplacementTransform(
+                        time_substitution[0][8:10], physical_current[0][9:11]
+                    ),
+                    ReplacementTransform(
+                        time_substitution[0][10:13], physical_current[0][11:14]
+                    ),
+                    ReplacementTransform(
+                        time_substitution[0][13:17], physical_current[0][14:]
+                    ),
+                    FadeOut(time_substitution[0][7], time_substitution[0][17:]),
+                    GrowFromCenter(physical_current[0][6]),
+                ),
+                lag_ratio=0.2,
+                run_time=1.2,
+            )
+        )
+        self.remove(time_substitution, *time_substitution, *physical_current[0])
+        self.add(physical_current)
+        real_box = SurroundingRectangle(result[0][4:16], color=BLUE, buff=SMALL_BUFF)
+        derivative_box = SurroundingRectangle(
+            physical_current[0][6:], color=BLUE, buff=SMALL_BUFF
+        )
+        self.play(Create(real_box), Create(derivative_box), run_time=0.7)
+        self.wait(0.8)
+
+        self.next_section(
+            "The real part is the physical current",
+            skip_animations=skip_animations(False),
+        )
+        real_brace = Brace(result[0][4:16], DOWN, color=BLUE, buff=MED_SMALL_BUFF)
+        real_label = (
+            MathTex(r"I_C(t)", color=BLUE)
+            .scale(0.8)
+            .next_to(real_brace, DOWN, SMALL_BUFF)
+        )
+        real_caption = Text(
+            "physical current", font=FONT, font_size=24, color=BLUE
+        ).next_to(real_label, DOWN, MED_SMALL_BUFF)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    FadeOut(real_box, derivative_box), GrowFromCenter(real_brace)
+                ),
+                TransformFromCopy(
+                    physical_current[0][:5], real_label[0], introducer=True
+                ),
+                FadeIn(real_caption),
+                lag_ratio=0.2,
+                run_time=1.1,
+            )
+        )
+        self.remove(*real_label[0])
+        self.add(real_label)
+        self.wait(0.5)
+
+        self.next_section(
+            "The imaginary part is a quarter cycle earlier",
+            skip_animations=skip_animations(False),
+        )
+        imag_brace = Brace(result[0][18:], DOWN, color=GREEN, buff=MED_SMALL_BUFF)
+        imag_label = (
+            MathTex(r"I_C\left(t-\frac{T}{4}\right)", color=GREEN)
+            .scale(0.8)
+            .next_to(imag_brace, DOWN, SMALL_BUFF)
+        )
+        period = (
+            MathTex(r"T=\frac{2\pi}{\omega}")
+            .scale(0.7)
+            .next_to(imag_label, DOWN, MED_LARGE_BUFF)
+        )
+        self.play(
+            LaggedStart(
+                GrowFromCenter(imag_brace),
+                AnimationGroup(
+                    TransformFromCopy(
+                        real_label[0][:4], imag_label[0][:4], introducer=True
+                    ),
+                    TransformFromCopy(
+                        real_label[0][4], imag_label[0][8], introducer=True
+                    ),
+                    GrowFromCenter(imag_label[0][4:8]),
+                ),
+                FadeIn(period),
+                lag_ratio=0.2,
+                run_time=1.4,
+            )
+        )
+        self.remove(*imag_label[0])
+        self.add(imag_label)
+        self.wait(1)
+
+        self.next_section(
+            "Rearrange the complex current law", skip_animations=skip_animations(False)
+        )
+        compact = MathTex(r"\tilde I_C=j\omega C\tilde V_C").scale(1.3)
+        compact[0][:3].set_color(BLUE)
+        compact[0][7:].set_color(YELLOW)
+        resistor_law = MathTex(r"V=IR").scale(1.2).move_to(UP * fh(self, 0.28))
+        resistor_law[0][0].set_color(YELLOW)
+        resistor_law[0][2].set_color(BLUE)
+        resistor_law[0][3].set_color(RED)
+        self.play(
+            FadeOut(
+                result,
+                physical_current,
+                real_brace,
+                real_label,
+                real_caption,
+                imag_brace,
+                imag_label,
+                period,
+            ),
+            run_time=0.7,
+        )
+        self.play(
+            FadeIn(compact),
+            LaggedStart(*[PopIn(glyph) for glyph in resistor_law[0]], lag_ratio=0.15),
+        )
+        self.wait(0.5)
+
+        self.next_section(
+            "Voltage equals current times a constant",
+            skip_animations=skip_animations(False),
+        )
+        factored = MathTex(r"\tilde V_C=\tilde I_C\frac{1}{j\omega C}").scale(1.3)
+        factored[0][:3].set_color(YELLOW)
+        factored[0][4:7].set_color(BLUE)
+        factored[0][7:].set_color(GREEN)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(compact[0][7:], factored[0][:3], path_arc=PI),
+                    ReplacementTransform(compact[0][3], factored[0][3]),
+                    ReplacementTransform(compact[0][:3], factored[0][4:7], path_arc=PI),
+                    ReplacementTransform(compact[0][4:7], factored[0][8:11]),
+                ),
+                AnimationGroup(
+                    GrowFromCenter(factored[0][7]),
+                    GrowFromCenter(factored[0][11]),
+                ),
+                lag_ratio=0.6,
+                run_time=1.2,
+            )
+        )
+        self.remove(compact, *compact, *factored[0])
+        self.add(factored)
+        self.wait(0.5)
+
+        self.next_section("Name the impedance", skip_animations=skip_animations(False))
+        impedance_brace = Brace(factored[0][7:], DOWN, color=GREEN, buff=MED_SMALL_BUFF)
+        impedance_label = MathTex("Z", color=GREEN).next_to(
+            impedance_brace, DOWN, SMALL_BUFF
+        )
+        self.play(
+            LaggedStart(
+                GrowFromCenter(impedance_brace),
+                GrowFromCenter(impedance_label),
+                lag_ratio=0.2,
+            )
+        )
+        self.wait(0.5)
+        impedance = (
+            MathTex(r"Z=\frac{1}{j\omega C}", color=GREEN)
+            .scale(0.95)
+            .move_to(DOWN * fh(self, 0.33))
+        )
+        self.play(
+            TransformFromCopy(impedance_label[0], impedance[0][:1], path_arc=-PI / 3),
+            GrowFromCenter(impedance[0][1]),
+            TransformFromCopy(factored[0][7:], impedance[0][2:], path_arc=PI),
+            run_time=1,
+        )
+        self.remove(*impedance[0])
+        self.add(impedance)
+        self.wait(0.5)
+
+        self.next_section(
+            "Ohms law with impedance", skip_animations=skip_animations(False)
+        )
+        ohms_law = MathTex(r"\tilde V_C=\tilde I_C Z").scale(1.8)
+        ohms_law[0][:3].set_color(YELLOW)
+        ohms_law[0][4:7].set_color(BLUE)
+        ohms_law[0][7].set_color(GREEN)
+        self.play(FadeOut(factored[0][7:], impedance_brace), run_time=0.3)
+        self.play(
+            ReplacementTransform(factored[0][:7], ohms_law[0][:7]),
+            ReplacementTransform(
+                impedance_label[0][0], ohms_law[0][7], path_arc=PI / 3
+            ),
+            run_time=0.9,
+        )
+        self.remove(
+            factored, *factored, impedance_label, *impedance_label, *ohms_law[0]
+        )
+        self.add(ohms_law)
+        self.wait(1)
+
+        self.next_section(
+            "Return to the Sallen-Key circuit", skip_animations=skip_animations(False)
+        )
+        wire_color = "#D6EEF7"
+        wire_style = dict(color=wire_color, stroke_width=4)
+        unit = fh(self, 0.11)
+        center = DOWN * fh(self, 0.08)
+        node1 = center + unit * np.array([-3.2, 0.6, 0])
+        node2 = center + unit * np.array([0, 0.6, 0])
+        output_node = center + RIGHT * 5.5 * unit
+
+        input_port = Circle(
+            radius=0.10 * unit,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            **wire_style,
+        ).move_to(center + unit * np.array([-6.4, 0.6, 0]))
+        output_port = input_port.copy().move_to(center + RIGHT * 6.4 * unit)
+        input_label = (
+            MathTex(r"\tilde V_{in}", color=YELLOW)
+            .scale(0.8)
+            .next_to(input_port, UP, MED_LARGE_BUFF)
+        )
+        output_label = (
+            MathTex(r"\tilde V_{out}", color=YELLOW)
+            .scale(0.8)
+            .next_to(output_port, UP, MED_LARGE_BUFF)
+        )
+        r1 = (
+            Resistor(
+                length=1.25 * unit,
+                amplitude=0.12 * unit,
+                include_ports=True,
+                **wire_style,
+            )
+            .rotate(-PI / 2)
+            .move_to(center + unit * np.array([-4.8, 0.6, 0]))
+        )
+        r2 = r1.copy().move_to(center + unit * np.array([-1.6, 0.6, 0]))
+        c2 = Cap(
+            plate_width=fw(self, 0.068) * unit,
+            plate_thickness=fh(self, 0.006) * unit,
+            gap=fh(self, 0.035) * unit,
+            stroke_color=wire_color,
+        ).move_to(center + DOWN * unit)
+        c1 = c2.copy().rotate(-PI / 2).move_to(center + UP * 2.7 * unit)
+        ground = (
+            VGroup(
+                *[
+                    Line(width / 2 * LEFT, width / 2 * RIGHT, **wire_style)
+                    for width in (0.6 * unit, 0.375 * unit, 0.15 * unit)
+                ]
+            )
+            .arrange(DOWN, buff=0.105 * unit)
+            .move_to(center + DOWN * 2.35 * unit)
+        )
+        amp = Polygon(
+            center + unit * np.array([2.3, 1.4, 0]),
+            center + unit * np.array([2.3, -1.4, 0]),
+            center + RIGHT * 4.6 * unit,
+            fill_color=BACKGROUND_COLOR,
+            fill_opacity=1,
+            **wire_style,
+        )
+        plus = (
+            Text("+", font=FONT, color=RED)
+            .scale(0.65 * unit)
+            .move_to(center + unit * np.array([2.65, 0.6, 0]))
+        )
+        minus = (
+            Text("-", font=FONT, color=BLUE)
+            .scale(0.65 * unit)
+            .move_to(center + unit * np.array([2.65, -0.6, 0]))
+        )
+        wires = VGroup(
+            Line(input_port.get_right(), r1.p1, **wire_style),
+            Line(r1.p2, r2.p1, **wire_style),
+            Line(r2.p2, node2, **wire_style),
+            Line(node2, c2.p2, **wire_style),
+            Line(ground[0].get_center(), c2.p1, **wire_style),
+            Line(node2, center + unit * np.array([2.3, 0.6, 0]), **wire_style),
+            Line(center + RIGHT * 4.6 * unit, output_port.get_left(), **wire_style),
+            VMobject(**wire_style).set_points_as_corners(
+                [node1, node1 + UP * 2.1 * unit, c1.p1]
+            ),
+            VMobject(**wire_style).set_points_as_corners(
+                [c1.p2, center + unit * np.array([5.5, 2.7, 0]), output_node]
+            ),
+            VMobject(**wire_style).set_points_as_corners(
+                [
+                    center + unit * np.array([2.3, -0.6, 0]),
+                    center + unit * np.array([1.55, -0.6, 0]),
+                    center + unit * np.array([1.55, -1.95, 0]),
+                    center + unit * np.array([5.5, -1.95, 0]),
+                    output_node,
+                ]
+            ),
+        )
+        nodes = VGroup(
+            *[
+                Dot(point, radius=0.06 * unit, color=wire_color)
+                for point in (node1, node2, output_node)
+            ]
+        )
+        circuit = VGroup(
+            wires,
+            ground,
+            input_port,
+            output_port,
+            r1,
+            r2,
+            c1,
+            c2,
+            amp,
+            plus,
+            minus,
+            nodes,
+        )
+        r1_label = MathTex("R_1", color=wire_color).scale(0.75).next_to(r1, UP, 0.3)
+        r2_label = MathTex("R_2", color=wire_color).scale(0.75).next_to(r2, UP, 0.3)
+        c1_label = MathTex("C_1", color=wire_color).scale(0.75).next_to(c1, UP, 0.25)
+        c2_label = MathTex("C_2", color=wire_color).scale(0.75).next_to(c2, LEFT, 0.3)
+        circuit_law = (
+            MathTex(r"\tilde V=\tilde I Z")
+            .scale(1.2)
+            .move_to(RIGHT * fw(self, 0.29) + UP * fh(self, 0.37))
+        )
+        circuit_law[0][:2].set_color(YELLOW)
+        circuit_law[0][3:5].set_color(BLUE)
+        circuit_law[0][5].set_color(GREEN)
+        self.play(FadeOut(resistor_law), run_time=0.3)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(ohms_law[0][:2], circuit_law[0][:2]),
+                    ReplacementTransform(ohms_law[0][3], circuit_law[0][2]),
+                    ReplacementTransform(ohms_law[0][4:6], circuit_law[0][3:5]),
+                    ReplacementTransform(ohms_law[0][7], circuit_law[0][5]),
+                    FadeOut(ohms_law[0][2], ohms_law[0][6]),
+                    impedance.animate.scale(0.9).move_to(
+                        LEFT * fw(self, 0.28) + DOWN * fh(self, 0.32)
+                    ),
+                ),
+                FadeIn(
+                    circuit,
+                    input_label,
+                    output_label,
+                    r1_label,
+                    r2_label,
+                    c1_label,
+                    c2_label,
+                ),
+                lag_ratio=0.6,
+                run_time=1.6,
+            )
+        )
+        self.remove(ohms_law, *ohms_law, *circuit_law[0])
+        self.add(circuit_law)
+        self.wait(0.5)
+
+        self.next_section("Resistor impedances", skip_animations=skip_animations(False))
+        r1_impedance = (
+            MathTex(r"Z_{R_1}=R_1", color=GREEN).scale(0.65).next_to(r1, UP, 0.3)
+        )
+        r2_impedance = (
+            MathTex(r"Z_{R_2}=R_2", color=GREEN).scale(0.65).next_to(r2, UP, 0.3)
+        )
+        self.play(
+            LaggedStart(
+                *[
+                    AnimationGroup(
+                        TransformFromCopy(old[0], new[0][1:3], introducer=True),
+                        ReplacementTransform(old[0], new[0][4:]),
+                        TransformFromCopy(impedance[0][0], new[0][0], introducer=True),
+                        GrowFromCenter(new[0][3]),
+                    )
+                    for old, new in ((r1_label, r1_impedance), (r2_label, r2_impedance))
+                ],
+                lag_ratio=0.25,
+                run_time=1.2,
+            )
+        )
+        self.remove(
+            r1_label, *r1_label, r2_label, *r2_label, *r1_impedance[0], *r2_impedance[0]
+        )
+        self.add(r1_impedance, r2_impedance)
+        self.wait(0.4)
+
+        c1_impedance = (
+            MathTex(r"Z_{C_1}=\frac{1}{j\omega C_1}", color=GREEN)
+            .scale(0.7)
+            .next_to(c1, UP, 0.25)
+        )
+        c2_impedance = (
+            MathTex(r"Z_{C_2}=\frac{1}{j\omega C_2}", color=GREEN)
+            .scale(0.7)
+            .next_to(c2, LEFT, 0.3)
+        )
+        for index, (old, new) in enumerate(
+            ((c1_label, c1_impedance), (c2_label, c2_impedance)), start=1
+        ):
+            self.next_section(
+                f"Capacitor C{index} impedance", skip_animations=skip_animations(False)
+            )
+            arc = PI / 2 if index == 1 else 0
+            self.play(
+                TransformFromCopy(old[0], new[0][1:3]),
+                ReplacementTransform(old[0], new[0][7:9]),
+                TransformFromCopy(impedance[0][0], new[0][0], path_arc=arc),
+                TransformFromCopy(impedance[0][1], new[0][3], path_arc=arc),
+                TransformFromCopy(impedance[0][2:5], new[0][4:7], path_arc=arc),
+                TransformFromCopy(impedance[0][6], new[0][9], path_arc=arc),
+                run_time=1.1,
+            )
+            self.remove(old, *old, *new[0])
+            self.add(new)
+            self.wait(0.4)
+        self.play(FadeOut(impedance), run_time=0.5)
+
+        self.wait(0.5)
+
+        nb = Text("complex_numbers.py", font=FONT).move_to(
+            self.camera.frame.get_bottom()
+        )
+
+        self.play(self.camera.frame.animate.scale(1.1).shift(DOWN * 0.5), Write(nb))
+
+        self.wait(0.5)
+
+        self.play(self.camera.frame.animate.shift(UP * fh(self)))
 
 
 class CapacitorEquation(MovingCameraScene):
