@@ -1,10 +1,12 @@
 # complex_numbers_gx.py
+import json
 import pathlib
 import pickle
 import textwrap
 from collections import deque
 from copy import deepcopy
 from functools import partial
+from random import shuffle
 from types import SimpleNamespace
 
 import numpy as np
@@ -81,6 +83,14 @@ class CommentIntro(MovingCameraScene):
                 font_size=24,
                 line_spacing=0.2,
                 color="#D6EEF7",
+                t2c={
+                    "complex": GREEN,
+                    "Complex": GREEN,
+                    "number": GREEN,
+                    "Numbers": GREEN,
+                    "numbers": GREEN,
+                    "imaginary": GREEN,
+                },
             )
             content = VGroup(handle, quote).arrange(
                 DOWN, aligned_edge=LEFT, buff=fh(self, 0.018)
@@ -131,12 +141,614 @@ class CommentIntro(MovingCameraScene):
         self.play(
             LaggedStart(
                 *[
-                    PopOut(bubble, rate_func=ease_out_back, run_time=0.5)
+                    ShrinkToCenter(bubble, run_time=0.6, rate_func=ease_in_back)
                     for bubble in bubbles
                 ],
                 lag_ratio=0.3,
             )
         )
+
+        thumbnail_dir = pathlib.Path(__file__).with_name("static") / "other_videos"
+        videos = json.loads((thumbnail_dir / "metadata.json").read_text())
+        positions = [
+            (-0.32, 0.31),
+            (0, 0.31),
+            (0.32, 0.31),
+            (-0.16, -0.18),
+            (0.16, -0.18),
+        ]
+        video_groups = Group()
+        for video, (x, y) in zip(videos, positions, strict=True):
+            thumbnail = ImageMobject(thumbnail_dir / video["thumbnail_file"])
+            if video["width"] / video["height"] < 16 / 9:
+                # YouTube's SD thumbnail includes black bars above and below.
+                crop = (1 - video["width"] / video["height"] * 9 / 16) / 2
+                thumbnail.uvs = np.array(
+                    [[0, crop], [1, crop], [0, 1 - crop], [1, 1 - crop]]
+                )
+            thumbnail.scale_to_fit_width(fw(self, 0.274))
+            thumbnail.stretch_to_fit_height(thumbnail.width * 9 / 16)
+            thumbnail.move_to(RIGHT * fw(self, x) + UP * fh(self, y))
+            outline = SurroundingRectangle(
+                thumbnail, buff=0, color=GREEN, stroke_width=3
+            )
+            title = Paragraph(
+                *textwrap.wrap(video["title"], width=28),
+                alignment="center",
+                font=FONT,
+                font_size=18,
+                line_spacing=0.12,
+                color=WHITE,
+            )
+            if title.width > thumbnail.width:
+                title.scale_to_fit_width(thumbnail.width)
+            title.next_to(thumbnail, DOWN, buff=fh(self, 0.022))
+            author = Paragraph(
+                *textwrap.wrap(video["author"], width=32),
+                alignment="center",
+                font=FONT,
+                font_size=16,
+                line_spacing=0.15,
+                color=BLUE,
+            )
+            author.next_to(title, DOWN, buff=fh(self, 0.016))
+            video_groups.add(Group(thumbnail, outline, title, author))
+
+        self.next_section(
+            "Other complex number videos", skip_animations=skip_animations(False)
+        )
+        self.play(
+            LaggedStart(
+                *[FadeIn(video_group, run_time=0.6) for video_group in video_groups],
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        video_groups_list = list(video_groups)
+        shuffle(video_groups_list)
+
+        self.play(
+            LaggedStart(
+                *[
+                    ShrinkToCenter(video_group, run_time=0.6, rate_func=ease_in_back)
+                    for video_group in video_groups_list
+                ],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.35),
+            y_length=fh(self, 0.3),
+        ).next_to(ORIGIN, LEFT, LARGE_BUFF)
+        sine = ax.plot(
+            lambda x: np.sin(TAU * 3 * x),
+            color=BLUE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        )
+
+        self.play(Create(sine))
+
+        self.wait(0.5)
+
+        amp = (
+            Polygon(
+                [-1, 1, 0],
+                [-1, -1, 0],
+                [1, 0, 0],
+                color=GREEN,
+                stroke_width=6,
+            )
+            .round_corners(0.13)
+            .scale_to_fit_height(fh(self, 0.18))
+            .move_to(RIGHT * fw(self, 0.10) + UP * fh(self, 0.32))
+        )
+        filter_box = RoundedRectangle(
+            width=amp.height,
+            height=amp.height,
+            corner_radius=fh(self, 0.02),
+            stroke_width=6,
+        )
+        filter_waves = VGroup()
+        for offset, color in ((0.24, RED), (0, BLUE), (-0.24, RED)):
+            filter_waves.add(
+                ParametricFunction(
+                    lambda t, offset=offset: np.array(
+                        [
+                            (t - 0.5) * filter_box.width * 0.70,
+                            (offset + 0.10 * np.sin(TAU * t)) * filter_box.height,
+                            0,
+                        ]
+                    ),
+                    t_range=[0, 1, 0.01],
+                    color=color,
+                    stroke_width=4,
+                )
+            )
+        filt = (
+            VGroup(filter_box, filter_waves)
+            .move_to(RIGHT * fw(self, 0.30) + UP * fh(self, 0.32))
+            .set_z_index(1)
+        )
+        amp_to_filter = Line(
+            amp.get_right(), filt.get_left(), stroke_width=4
+        ).set_z_index(0)
+
+        dish_arc = (
+            Arc(
+                radius=fh(self, 0.14),
+                start_angle=3 * PI / 4,
+                angle=PI / 2,
+                color=WHITE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+            .rotate(PI / 12)
+            .move_to(RIGHT * fw(self, 0.22) + UP * fh(self, 0.065))
+        )
+        mount = dish_arc.point_from_proportion(0.5)
+        pedestal_top = mount + DOWN * fh(self, 0.075)
+        pedestal = Polygon(
+            pedestal_top + LEFT * fw(self, 0.012),
+            pedestal_top + RIGHT * fw(self, 0.012),
+            pedestal_top + DOWN * fh(self, 0.055) + RIGHT * fw(self, 0.04),
+            pedestal_top + DOWN * fh(self, 0.055) + LEFT * fw(self, 0.04),
+            color=WHITE,
+            stroke_width=DEFAULT_STROKE_WIDTH * 2,
+        ).round_corners(fh(self, 0.007))
+        dish = VGroup(
+            dish_arc,
+            Line(mount, pedestal_top, stroke_width=DEFAULT_STROKE_WIDTH * 2),
+            pedestal,
+        )
+        wave_ax = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 0.5],
+            tips=False,
+            x_length=fw(self, 0.20),
+            y_length=fh(self, 0.13),
+        ).next_to(dish_arc, RIGHT, SMALL_BUFF)
+        wave_ax.rotate(PI / 12, about_point=wave_ax.c2p(0, 0))
+        wave_phase = VT(0)
+        transmitted_wave = always_redraw(
+            lambda: wave_ax.plot(
+                lambda x: np.sin(TAU * (2.5 * x - ~wave_phase)),
+                x_range=[0, max(0.0001, min(~wave_phase / 2.5, 1)), 0.005],
+                color=BLUE,
+                stroke_width=DEFAULT_STROKE_WIDTH * 2,
+            )
+        )
+
+        iq_clip = VideoMobject(pathlib.Path(__file__).with_name("iq_video_clip.mp4"))
+        iq_clip.scale_to_fit_width(fw(self, 0.29)).move_to(
+            RIGHT * fw(self, 0.14) + DOWN * fh(self, 0.28)
+        )
+        iq_outline = SurroundingRectangle(iq_clip, buff=0, color=GREEN, stroke_width=3)
+
+        branch_start = sine.get_end() + RIGHT * MED_SMALL_BUFF
+        branches = VGroup()
+        for end in (
+            amp.get_left() + LEFT * MED_SMALL_BUFF,
+            dish_arc.get_left() + LEFT * MED_SMALL_BUFF,
+            iq_clip.get_left() + LEFT * MED_SMALL_BUFF,
+        ):
+            branch = TipableVMobject(
+                color=GREEN, stroke_width=3, tip_corner_radius=0.02
+            )
+            branch.start_new_path(branch_start)
+            branch.add_cubic_bezier_curve_to(
+                branch_start + RIGHT * fw(self, 0.07),
+                end + LEFT * fw(self, 0.07),
+                end,
+            )
+            branch.add_tip(tip_length=0.2, tip_width=0.2)
+            branches.add(branch)
+
+        self.next_section(
+            "Amplifier and filter", skip_animations=skip_animations(False)
+        )
+        self.play(
+            LaggedStart(
+                GrowArrow(branches[0]),
+                GrowFromCenter(amp),
+                Create(amp_to_filter),
+                GrowFromCenter(filt),
+                lag_ratio=0.3,
+                run_time=1.8,
+            )
+        )
+        self.wait(0.5)
+
+        self.next_section("Transmitting dish", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(GrowArrow(branches[1]), Create(dish), lag_ratio=0.3),
+            run_time=1.2,
+        )
+        wave_phase.add_updater(lambda mob, dt: mob.increment_value(dt))
+        self.add(wave_phase, transmitted_wave)
+        self.wait(1.4)
+
+        self.next_section("IQ video", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                GrowArrow(branches[2]),
+                Group(iq_clip, iq_outline)
+                .shift(RIGHT * fw(self))
+                .animate.shift(LEFT * fw(self)),
+                lag_ratio=0.3,
+            ),
+            run_time=1.2,
+        )
+
+        self.wait(iq_clip.duration - 3)
+
+        self.wait(0.5)
+
+        complex_numbers = (
+            Text("Complex Numbers", font=FONT)
+            .move_to(ORIGIN)
+            .shift(DOWN * fh(self) + UP * fh(self, 0.25))
+        )
+        z_eqn = (
+            MathTex(r"z = x + j y")
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+            .scale(1.5)
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate(run_time=2).shift(DOWN * fh(self)),
+                LaggedStart(
+                    *[PopIn(m) for m in [*complex_numbers, *z_eqn[0]]],
+                    lag_ratio=0.1,
+                ),
+                lag_ratio=0.6,
+            ),
+        )
+
+        self.remove(iq_clip)
+
+        self.wait(0.5)
+
+        xy_pair = MathTex(r"(x,y)").scale(1.5)
+        z_xy = DoubleArrow(LEFT, RIGHT)
+        z_like_group = (
+            Group(z_eqn.copy(), z_xy, xy_pair)
+            .arrange(RIGHT, MED_SMALL_BUFF)
+            .move_to(z_eqn)
+        )
+
+        self.play(
+            LaggedStart(
+                Transform(z_eqn[0], z_like_group[0][0]),
+                GrowArrow(z_xy),
+                LaggedStart(*[PopIn(m) for m in xy_pair], lag_ratio=0.1),
+                lag_ratio=0.4,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                z_eqn[0][2].animate.set_color(YELLOW),
+                xy_pair[0][1].animate.set_color(YELLOW),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                z_eqn[0][5].animate.set_color(BLUE),
+                xy_pair[0][3].animate.set_color(BLUE),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        sqrtn1 = (
+            MathTex(r"\sqrt{-1}")
+            .next_to(z_eqn[0][4], DOWN, LARGE_BUFF)
+            .shift(LEFT * 1)
+            .set_color(ORANGE)
+        )
+        j_arrow = Arrow(
+            z_eqn[0][4].get_bottom(),
+            sqrtn1.get_corner(UR),
+            buff=SMALL_BUFF,
+            path_arc=-PI / 3,
+            color=ORANGE,
+        )
+
+        self.play(
+            LaggedStart(
+                z_eqn[0][4].animate.set_color(ORANGE),
+                GrowArrow(j_arrow),
+                PopIn(sqrtn1),
+                lag_ratio=0.3,
+            )
+        )
+
+        self.wait(0.5)
+
+        q1 = (
+            Text("?", font=FONT, weight=BOLD)
+            .scale(1.2)
+            .rotate(20 * DEGREES)
+            .next_to(z_eqn, UP, MED_SMALL_BUFF)
+            .shift(LEFT)
+        )
+
+        q2 = (
+            Text("?", font=FONT, weight=BOLD)
+            .scale(1.2)
+            .rotate(-20 * DEGREES)
+            .next_to(sqrtn1, RIGHT, MED_SMALL_BUFF)
+            .shift(DOWN * 0.2)
+        )
+
+        self.play(PopIn(q1))
+
+        self.wait(0.5)
+
+        self.play(PopIn(q2))
+
+        self.wait(0.5)
+
+        circuit = Group(amp, amp_to_filter, filt).next_to(self.camera.frame, DOWN)
+
+        arrow_start = xy_pair.get_right() + RIGHT * 0.3
+        arrow_end = amp.get_left() + LEFT * 0.25 + UP * 0.1
+        arrow_mid = (arrow_start + arrow_end) / 2 + UP * 0.1
+        amp_arrow = TipableVMobject(color=GREEN, stroke_width=3, tip_corner_radius=0.02)
+        amp_arrow.start_new_path(arrow_start)
+        amp_arrow.add_cubic_bezier_curve_to(
+            arrow_start + RIGHT * 3.1 + DOWN * 0.8,
+            arrow_mid + RIGHT * 3.5 + UP * 0.15,
+            arrow_mid,
+        )
+        amp_arrow.add_cubic_bezier_curve_to(
+            arrow_mid + LEFT * 3.5 + DOWN * 0.15,
+            arrow_end + LEFT * 3.5,
+            arrow_end,
+        )
+        amp_arrow.add_tip(tip_length=0.2, tip_width=0.2)
+
+        q3 = (
+            Text("?", font=FONT, weight=BOLD)
+            .scale(1.2)
+            .rotate(10 * DEGREES)
+            .next_to(circuit, UP, MED_SMALL_BUFF)
+            .shift(LEFT * 1.5)
+        )
+
+        self.play(
+            self.camera.frame.animate.move_to(Group(z_eqn, xy_pair, circuit)),
+            GrowArrow(amp_arrow),
+        )
+
+        self.play(PopIn(q3))
+
+        self.wait(0.5)
+
+        self.play(
+            LaggedStart(
+                q1.animate(rate_func=there_and_back).scale(2).set_color(YELLOW),
+                q2.animate(rate_func=there_and_back).scale(2).set_color(YELLOW),
+                q3.animate(rate_func=there_and_back).scale(2).set_color(YELLOW),
+                lag_ratio=0.2,
+            )
+        )
+
+        self.next_section(
+            "Resources in the description", skip_animations=skip_animations(False)
+        )
+        questions = Group(
+            complex_numbers,
+            z_eqn,
+            z_xy,
+            xy_pair,
+            sqrtn1,
+            j_arrow,
+            q1,
+            q2,
+            circuit,
+            amp_arrow,
+            q3,
+        )
+        aspect = self.camera.frame.width / self.camera.frame.height
+        frame_height = max(questions.height / 0.82, questions.width / (aspect * 0.51))
+        frame_center = (
+            questions.get_center()
+            + RIGHT * frame_height * aspect * 0.23
+            + DOWN * frame_height * 0.025
+        )
+        self.play(
+            self.camera.frame.animate.scale_to_fit_height(frame_height).move_to(
+                frame_center
+            ),
+            run_time=1.2,
+        )
+
+        resource_center = frame_center + RIGHT * fw(self, 0.285)
+        notebook_panel = RoundedRectangle(
+            width=fw(self, 0.35),
+            height=fh(self, 0.245),
+            corner_radius=fh(self, 0.015),
+            fill_color="#244957",
+            fill_opacity=1,
+            color=BLUE,
+            stroke_width=3,
+        ).move_to(resource_center + UP * fh(self, 0.24))
+        notebook_title = Text("complex_numbers.py", font=FONT, color=WHITE)
+        notebook_title.scale_to_fit_height(fh(self, 0.032)).move_to(
+            notebook_panel.get_top() + DOWN * fh(self, 0.035)
+        )
+        notebook_axes = Axes(
+            x_range=[0, 1, 0.5],
+            y_range=[-1, 1, 1],
+            x_length=fw(self, 0.3),
+            y_length=fh(self, 0.13),
+            tips=False,
+            axis_config={"include_ticks": False, "stroke_opacity": 0.4},
+        ).move_to(notebook_panel.get_center() + DOWN * fh(self, 0.025))
+        notebook_plot = VGroup(
+            notebook_axes,
+            notebook_axes.plot(
+                lambda t: np.cos(TAU * 3 * t), color=ORANGE, stroke_width=4
+            ),
+            notebook_axes.plot(
+                lambda t: np.sin(TAU * 3 * t), color=BLUE, stroke_width=4
+            ),
+        )
+        notebook_label = Text("Python notebook", font=FONT, color=BLUE)
+        notebook_label.scale_to_fit_height(fh(self, 0.032)).next_to(
+            notebook_panel, DOWN, buff=fh(self, 0.018)
+        )
+        notebook_card = VGroup(
+            notebook_panel, notebook_title, notebook_plot, notebook_label
+        )
+
+        book_cover = RoundedRectangle(
+            width=fw(self, 0.075),
+            height=fh(self, 0.15),
+            corner_radius=fh(self, 0.008),
+            fill_color="#244957",
+            fill_opacity=1,
+            color=ORANGE,
+            stroke_width=3,
+        )
+        book_back = book_cover.copy().shift(
+            LEFT * fw(self, 0.009) + UP * fh(self, 0.012)
+        )
+        book_spine = Line(
+            book_cover.get_corner(UL) + RIGHT * fw(self, 0.01),
+            book_cover.get_corner(DL) + RIGHT * fw(self, 0.01),
+            color=ORANGE,
+            stroke_width=3,
+        )
+        book_symbol = MathTex("j", color=ORANGE).scale_to_fit_height(fh(self, 0.065))
+        book_symbol.move_to(book_cover).shift(RIGHT * fw(self, 0.004))
+        books_icon = VGroup(book_back, book_cover, book_spine, book_symbol)
+
+        article_page = RoundedRectangle(
+            width=fw(self, 0.075),
+            height=fh(self, 0.15),
+            corner_radius=fh(self, 0.006),
+            fill_color="#D6EEF7",
+            fill_opacity=1,
+            stroke_width=0,
+        )
+        article_back = (
+            article_page.copy()
+            .set_fill("#8FA3AB")
+            .shift(RIGHT * fw(self, 0.008) + UP * fh(self, 0.012))
+        )
+        article_lines = VGroup(
+            *[
+                Line(
+                    article_page.get_corner(UL) + [fw(self, 0.012), -fh(self, y), 0],
+                    article_page.get_corner(UL) + [fw(self, width), -fh(self, y), 0],
+                    color=BACKGROUND_COLOR,
+                    stroke_width=4 if index == 0 else 2,
+                )
+                for index, (y, width) in enumerate(
+                    [
+                        (0.025, 0.06),
+                        (0.05, 0.062),
+                        (0.067, 0.056),
+                        (0.084, 0.062),
+                        (0.101, 0.06),
+                        (0.118, 0.044),
+                    ]
+                )
+            ]
+        )
+        articles_icon = VGroup(article_back, article_page, article_lines)
+
+        video_front = ImageMobject(thumbnail_dir / "-j8PzkZ70Lg.jpg")
+        video_front.scale_to_fit_width(fw(self, 0.115))
+        video_back = ImageMobject(thumbnail_dir / "TLWE388JWGs.jpg")
+        video_back.scale_to_fit_width(video_front.width).shift(
+            RIGHT * fw(self, 0.008) + UP * fh(self, 0.02)
+        )
+        videos_icon = Group(
+            video_back,
+            SurroundingRectangle(video_back, buff=0, color=GREEN, stroke_width=2),
+            video_front,
+            SurroundingRectangle(video_front, buff=0, color=GREEN, stroke_width=2),
+        )
+
+        reading_cards = Group()
+        for icon, title, color, x in [
+            (books_icon, "Books", ORANGE, -0.12),
+            (articles_icon, "Articles", WHITE, 0),
+            (videos_icon, "Videos", GREEN, 0.12),
+        ]:
+            icon.move_to(resource_center + RIGHT * fw(self, x) + DOWN * fh(self, 0.1))
+            label = Text(title, font=FONT, color=color).scale_to_fit_height(
+                fh(self, 0.03)
+            )
+            label.move_to(resource_center + RIGHT * fw(self, x) + DOWN * fh(self, 0.22))
+            reading_cards.add(Group(icon, label))
+
+        description = Text("In the description", font=FONT, color=WHITE)
+        description.scale_to_fit_height(fh(self, 0.033)).move_to(
+            resource_center + DOWN * fh(self, 0.325)
+        )
+        description_arrow = SquigglyLine(
+            resource_center + DOWN * fh(self, 0.365),
+            resource_center + DOWN * fh(self, 0.46),
+            amplitude=fw(self, 0.006),
+            color=ORANGE,
+            stroke_width=5,
+            tip_corner_radius=0.02,
+        ).add_tip(tip_length=fh(self, 0.025), tip_width=fw(self, 0.018))
+
+        self.play(FadeIn(notebook_card, shift=UP * fh(self, 0.035)), run_time=0.8)
+        self.wait(0.4)
+        self.play(
+            LaggedStart(
+                *[FadeIn(card, shift=UP * fh(self, 0.035)) for card in reading_cards],
+                lag_ratio=0.3,
+            ),
+            run_time=1.5,
+        )
+        self.play(
+            LaggedStart(
+                PopIn(description), GrowArrow(description_arrow), lag_ratio=0.35
+            )
+        )
+        self.wait(2)
+
+        self.next_section("ECE103", skip_animations=skip_animations(False))
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self, 1.1)), run_time=1.2)
+        self.wait(0.25)
+
+        course = Text("ECE103", font=FONT).scale_to_fit_height(fh(self, 0.1))
+        course.move_to(self.camera.frame)
+        self.play(
+            LaggedStart(
+                *[PopIn(character, run_time=0.25) for character in course],
+                lag_ratio=0.2,
+            )
+        )
+
+        self.wait(0.5)
+
+        self.play(FadeOut(course))
+
+        self.wait(0.5)
 
 
 class LumpedComponents(MovingCameraScene):
@@ -1397,7 +2009,7 @@ class CapacitorEquationV2(MovingCameraScene):
             fill_color=BACKGROUND_COLOR,
             fill_opacity=1,
             **wire_style,
-        )
+        ).set_z_index(1)
         plus = (
             Text("+", font=FONT, color=RED)
             .scale(0.65)
@@ -2829,13 +3441,34 @@ class TwoPoints(MovingCameraScene):
             .rotate(PI / 2)
             .next_to(axes.y_axis, LEFT, fw(self, 0.055))
         )
+        voltage_spelled = (
+            Text("Voltage", font=FONT)
+            .rotate(PI / 2)
+            .scale(0.5)
+            .set_color(YELLOW)
+            .next_to(voltage_label, RIGHT, MED_SMALL_BUFF)
+        )
         current_label = (
             MathTex(r"I_C(t)", color=BLUE)
             .scale(0.7)
             .rotate(PI / 2)
             .next_to(current_axes.y_axis, LEFT, fw(self, 0.055))
         )
-        self.add(axes, current_axes, voltage_label, current_label)
+        current_spelled = (
+            Text("Current", font=FONT)
+            .scale(0.6)
+            .rotate(PI / 2)
+            .set_color(BLUE)
+            .next_to(current_label, RIGHT, MED_SMALL_BUFF)
+        )
+        self.add(
+            axes,
+            current_axes,
+            voltage_label,
+            current_label,
+            current_spelled,
+            voltage_spelled,
+        )
 
         def time_ticks():
             start = window_start()
@@ -4770,7 +5403,6 @@ class TwoPointsP2(MovingCameraScene):
         self.play(leading_phase @ 0, run_time=1.4, rate_func=ease_in_out_sine)
         self.remove(quarter_multiplier, leading_phase_value)
         leading_phase_value = always_redraw(negative_phase_label)
-        second_phase_value = always_redraw(second_phase_label)
         self.add(leading_phase_value)
         self.wait(0.5)
 
@@ -4793,26 +5425,12 @@ class TwoPointsP2(MovingCameraScene):
             MED_SMALL_BUFF + leading_point.height / 2,
             aligned_edge=RIGHT,
         )
-        second_coords = (
-            MathTex(r"-\frac{V_0}{2} - j\frac{V_0\sqrt{3}}{2}")
-            .scale(0.7)
-            .move_to(work_center)
-        )
-        second_coords[0][:5].set_color(YELLOW)
-        second_coords[0][7:].set_color(GREEN)
-        second_coords_end = second_coords.copy().next_to(
-            coordinate_pair(~x + PI / omega),
-            DOWN,
-            MED_SMALL_BUFF + second_point.height / 2,
-        )
-        second_coords_end.shift(LEFT * (second_coords_end.get_right()[0] + SMALL_BUFF))
         algebra_view = Group(
             circle_axes,
             complex_coords,
             identity_box_target,
             working_coords,
             first_coords_end,
-            second_coords_end,
         )
         self.play(
             self.camera.frame.animate.scale_to_fit_height(
@@ -5000,219 +5618,21 @@ class TwoPointsP2(MovingCameraScene):
             run_time=2,
             rate_func=ease_in_out_sine,
         )
+        self.next_section(
+            "The phase component of the derivative",
+            skip_animations=skip_animations(False),
+        )
+        leading_phase_arc.clear_updaters()
+        self.play(
+            leading_phase_arc.animate.set_stroke(color=GREEN, width=8, opacity=1),
+            run_time=0.6,
+        )
         self.wait(0.8)
 
-        self.next_section("Multiply by j again", skip_animations=skip_animations(False))
-        second_product = (
-            MathTex(r"j\left(-\frac{V_0\sqrt{3}}{2} + j\frac{V_0}{2}\right)")
-            .scale(0.7)
-            .move_to(work_center)
-        )
-        second_product[0][0].set_color(ORANGE)
-        second_product[0][2:10].set_color(YELLOW)
-        second_product[0][12:16].set_color(GREEN)
-        self.play(
-            LaggedStart(
-                ReplacementTransform(first_coords[0], second_product[0][2:16]),
-                AnimationGroup(
-                    GrowFromCenter(second_product[0][1]),
-                    GrowFromCenter(second_product[0][16]),
-                ),
-                TransformFromCopy(
-                    j_identity[0][0], second_product[0][0], introducer=True
-                ),
-                lag_ratio=0.2,
-                run_time=1.2,
-            )
-        )
-        self.remove(first_coords, *first_coords, *second_product[0])
-        self.add(second_product)
-        self.wait(0.5)
-
         self.next_section(
-            "Distribute the second j", skip_animations=skip_animations(False)
-        )
-        second_distributed = (
-            MathTex(r"-j\frac{V_0\sqrt{3}}{2} + j\cdot j\frac{V_0}{2}")
-            .scale(0.7)
-            .move_to(work_center)
-        )
-        second_distributed[0][0].set_color(GREEN)
-        second_distributed[0][1].set_color(ORANGE)
-        second_distributed[0][2:9].set_color(GREEN)
-        second_distributed[0][10].set_color(ORANGE)
-        second_distributed[0][13:].set_color(GREEN)
-        outer_j = second_product[0][0]
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    ReplacementTransform(
-                        second_product[0][2], second_distributed[0][0]
-                    ),
-                    ReplacementTransform(
-                        second_product[0][3:10], second_distributed[0][2:9]
-                    ),
-                    ReplacementTransform(
-                        second_product[0][10], second_distributed[0][9]
-                    ),
-                    ReplacementTransform(
-                        second_product[0][11:16], second_distributed[0][12:]
-                    ),
-                    FadeOut(second_product[0][1], second_product[0][16]),
-                ),
-                TransformFromCopy(
-                    outer_j,
-                    second_distributed[0][1],
-                    path_arc=-PI / 3,
-                    introducer=True,
-                ),
-                AnimationGroup(
-                    ReplacementTransform(
-                        outer_j,
-                        second_distributed[0][10],
-                        path_arc=-PI / 3,
-                    ),
-                    GrowFromCenter(second_distributed[0][11]),
-                ),
-                lag_ratio=0.3,
-                run_time=1.6,
-            )
-        )
-        self.remove(second_product, *second_product, outer_j, *second_distributed[0])
-        self.add(second_distributed)
-        self.wait(0.5)
-
-        self.next_section("Square the second j", skip_animations=skip_animations(False))
-        second_squared = (
-            MathTex(r"-j\frac{V_0\sqrt{3}}{2} + j^2\frac{V_0}{2}")
-            .scale(0.7)
-            .move_to(work_center)
-        )
-        second_squared[0][0].set_color(GREEN)
-        second_squared[0][2:9].set_color(GREEN)
-        second_squared[0][10:12].set_color(ORANGE)
-        second_squared[0][12:].set_color(GREEN)
-        self.play(
-            ReplacementTransform(second_distributed[0][:11], second_squared[0][:11]),
-            ReplacementTransform(
-                second_distributed[0][12], second_squared[0][11], path_arc=PI / 3
-            ),
-            ReplacementTransform(second_distributed[0][13:], second_squared[0][12:]),
-            FadeOut(second_distributed[0][11]),
-            run_time=0.8,
-        )
-        self.remove(second_distributed, *second_distributed, *second_squared[0])
-        self.add(second_squared)
-        self.wait(0.5)
-
-        self.next_section(
-            "The second j squared makes a negative real term",
+            "Differentiation becomes multiplication by j omega",
             skip_animations=skip_animations(False),
         )
-        second_negative = (
-            MathTex(r"-j\frac{V_0\sqrt{3}}{2} + (-1)\frac{V_0}{2}")
-            .scale(0.7)
-            .move_to(work_center)
-        )
-        second_negative[0][0].set_color(GREEN)
-        second_negative[0][2:9].set_color(GREEN)
-        second_negative[0][10:].set_color(YELLOW)
-        self.play(
-            ReplacementTransform(second_squared[0][:10], second_negative[0][:10]),
-            FadeOut(second_squared[0][10:12]),
-            TransformFromCopy(j_identity[0][3:], second_negative[0][11:13]),
-            GrowFromCenter(second_negative[0][10]),
-            GrowFromCenter(second_negative[0][13]),
-            ReplacementTransform(second_squared[0][12:], second_negative[0][14:]),
-            run_time=1,
-        )
-        self.remove(second_squared, *second_squared, *second_negative[0])
-        self.add(second_negative)
-        self.wait(0.5)
-        second_simplified = (
-            MathTex(r"-j\frac{V_0\sqrt{3}}{2} - \frac{V_0}{2}")
-            .scale(0.7)
-            .move_to(work_center)
-        )
-        second_simplified[0][0].set_color(GREEN)
-        second_simplified[0][2:9].set_color(GREEN)
-        second_simplified[0][9:].set_color(YELLOW)
-        self.play(
-            ReplacementTransform(second_negative[0][:9], second_simplified[0][:9]),
-            ReplacementTransform(second_negative[0][11], second_simplified[0][9]),
-            ReplacementTransform(second_negative[0][14:], second_simplified[0][10:]),
-            FadeOut(second_negative[0][9:11], second_negative[0][12:14]),
-            run_time=0.8,
-        )
-        self.remove(second_negative, *second_negative, *second_simplified[0])
-        self.add(second_simplified)
-        self.wait(0.5)
-
-        self.next_section(
-            "The coordinates after two multiplications",
-            skip_animations=skip_animations(False),
-        )
-        self.play(
-            ReplacementTransform(
-                second_simplified[0][9:], second_coords[0][:5], path_arc=-PI
-            ),
-            ReplacementTransform(
-                second_simplified[0][:9], second_coords[0][5:], path_arc=-PI
-            ),
-            run_time=1.2,
-        )
-        self.remove(second_simplified, *second_simplified, *second_coords[0])
-        self.add(second_coords)
-        self.wait(0.5)
-
-        self.next_section(
-            "A second quarter turn reaches 180 degrees",
-            skip_animations=skip_animations(False),
-        )
-        second_point_coords = second_coords_end.copy()
-        second_multiplier = MathTex(r"\times j").scale(0.5).set_z_index(5)
-        second_multiplier.add_updater(position_second_multiplier, call_updater=True)
-        self.add(
-            second_line,
-            second_point,
-            second_real_point,
-            second_imag_point,
-            second_phase_arc,
-            second_phase_value,
-            second_multiplier,
-        )
-        self.play(
-            second_phase @ 90,
-            TransformFromCopy(second_coords, second_point_coords, path_arc=PI / 6),
-            run_time=2,
-            rate_func=ease_in_out_sine,
-        )
-        self.wait(0.5)
-
-        total_shift = (
-            MathTex(r"90^\circ + 90^\circ = 180^\circ")
-            .scale(0.6)
-            .next_to(second_coords, DOWN, LARGE_BUFF)
-        )
-        self.play(
-            LaggedStart(
-                TransformFromCopy(
-                    leading_phase_value[0][1:], total_shift[0][:3], introducer=True
-                ),
-                TransformFromCopy(
-                    second_phase_value[0], total_shift[0][3:7], introducer=True
-                ),
-                GrowFromCenter(total_shift[0][7:]),
-                lag_ratio=0.2,
-                run_time=1.2,
-            )
-        )
-        self.remove(*total_shift[0])
-
-        self.add(total_shift)
-
-        self.wait(1)
-
         dvdt = MathTex(r"\frac{d V(t)}{dt}")
         dvdt[0][1:5].set_color(YELLOW)
         dvdt_arrow = Arrow(LEFT, RIGHT)
@@ -5225,11 +5645,11 @@ class TwoPointsP2(MovingCameraScene):
             .shift(UP * fh(self))
         )
         dvdt.save_state()
-        self.add(dvdt.set_x(self.camera.frame.get_x()))
+        dvdt.set_x(self.camera.frame.get_x())
 
         self.play(self.camera.frame.animate.shift(UP * fh(self)))
-
-        self.wait(0.5)
+        self.remove(*self.mobjects)
+        self.play(FadeIn(dvdt), run_time=0.5)
 
         self.play(
             LaggedStart(
@@ -5839,15 +6259,10 @@ class CapExample(MovingCameraScene):
             fill_opacity=1,
             **wire_style,
         )
-        plus = (
-            Text("+", font=FONT, color=RED)
-            .scale(0.65 * unit)
-            .move_to(center + unit * np.array([2.65, 0.6, 0]))
-        )
-        minus = (
-            Text("-", font=FONT, color=BLUE)
-            .scale(0.65 * unit)
-            .move_to(center + unit * np.array([2.65, -0.6, 0]))
+        input_signs = Text("+\n-", font=FONT).scale(0.85 * unit)
+        input_signs[0].set_color(RED).move_to(center + unit * np.array([2.65, 0.6, 0]))
+        input_signs[1].set_color(BLUE).move_to(
+            center + unit * np.array([2.65, -0.6, 0])
         )
         wires = VGroup(
             Line(input_port.get_right(), r1.p1, **wire_style),
@@ -5889,8 +6304,7 @@ class CapExample(MovingCameraScene):
             c1,
             c2,
             amp,
-            plus,
-            minus,
+            input_signs,
             nodes,
         )
         r1_label = MathTex("R_1", color=wire_color).scale(0.75).next_to(r1, UP, 0.3)
@@ -6004,7 +6418,155 @@ class CapExample(MovingCameraScene):
 
         self.wait(0.5)
 
+        self.next_section("Inductor impedance", skip_animations=skip_animations(False))
+        comparison_center = self.camera.frame.get_center() + UP * fh(self)
+        comparison_cap = (
+            Cap(include_ports=True)
+            .rotate(-PI / 2)
+            .scale(1.5)
+            .move_to(comparison_center + LEFT * fw(self, 0.2) + UP * fh(self, 0.1))
+        )
+        comparison_ind = (
+            Inductor(include_ports=True, **wire_style)
+            .rotate(-PI / 2)
+            .scale(1.5)
+            .move_to(comparison_center + RIGHT * fw(self, 0.2) + UP * fh(self, 0.1))
+        )
+        comparison_c_label = MathTex("C").next_to(comparison_cap, UP, MED_LARGE_BUFF)
+        comparison_l_label = MathTex("L").next_to(comparison_ind, UP, MED_LARGE_BUFF)
+        comparison_c_impedance = (
+            MathTex(r"Z_C=\frac{1}{j\omega C}", color=GREEN)
+            .scale(1.2)
+            .next_to(comparison_cap, DOWN, LARGE_BUFF)
+        )
+        comparison_l_impedance = (
+            MathTex(r"Z_L=j\omega L", color=GREEN)
+            .scale(1.2)
+            .next_to(comparison_ind, DOWN, LARGE_BUFF)
+            .match_y(comparison_c_impedance)
+        )
         self.play(self.camera.frame.animate.shift(UP * fh(self)))
+        self.play(
+            LaggedStart(
+                FadeIn(comparison_cap, comparison_c_label, comparison_c_impedance),
+                AnimationGroup(Create(comparison_ind), PopIn(comparison_l_label)),
+                lag_ratio=0.35,
+                run_time=1.4,
+            )
+        )
+        self.wait(0.5)
+        self.play(
+            LaggedStart(
+                AnimationGroup(
+                    PopIn(comparison_l_impedance[0][0]),
+                    TransformFromCopy(
+                        comparison_l_label[0][0],
+                        comparison_l_impedance[0][1],
+                        introducer=True,
+                    ),
+                    GrowFromCenter(comparison_l_impedance[0][2]),
+                ),
+                LaggedStart(
+                    PopIn(comparison_l_impedance[0][3]),
+                    PopIn(comparison_l_impedance[0][4]),
+                    TransformFromCopy(
+                        comparison_l_label[0][0],
+                        comparison_l_impedance[0][5],
+                        introducer=True,
+                    ),
+                    lag_ratio=0.2,
+                ),
+                lag_ratio=0.4,
+                run_time=1.6,
+            )
+        )
+        self.remove(*comparison_l_impedance[0])
+        self.add(comparison_l_impedance)
+        self.wait(0.8)
+
+        self.next_section(
+            "Add an inductor to the circuit", skip_animations=skip_animations(False)
+        )
+        old_input = input_port.get_center()
+        extended_input = input_port.copy().shift(LEFT * 3.2 * unit)
+        series_ind = (
+            Inductor(
+                length=1.25 * unit,
+                radius=0.2 * unit,
+                include_ports=True,
+                **wire_style,
+            )
+            .rotate(-PI / 2)
+            .move_to((old_input + extended_input.get_center()) / 2)
+        )
+        series_ind.shift(UP * (old_input[1] - series_ind.p1[1]))
+        inductor_wires = VGroup(
+            Line(extended_input.get_right(), series_ind.p1, **wire_style),
+            Line(series_ind.p2, wires[0].get_start(), **wire_style),
+        )
+        l1_impedance = (
+            MathTex(r"Z_{L_1}=j\omega L_1", color=GREEN)
+            .scale(0.7)
+            .next_to(series_ind, UP, 0.35)
+        )
+        extended_input_label = input_label.copy().next_to(
+            extended_input, DOWN, MED_LARGE_BUFF
+        )
+        circuit_view = Group(
+            circuit,
+            input_label,
+            output_label,
+            r1_impedance,
+            r2_impedance,
+            c1_impedance,
+            c2_impedance,
+            circuit_law,
+        )
+        self.remove(*circuit_view)
+        self.add(circuit_view)
+        input_port.become(extended_input)
+        input_label.become(extended_input_label)
+        extended_circuit = Group(
+            circuit_view,
+            series_ind,
+            l1_impedance,
+        )
+        extended_frame_height = 1.12 * max(
+            extended_circuit.height,
+            extended_circuit.width * self.camera.frame.height / self.camera.frame.width,
+        )
+        input_label.set_opacity(0)
+        output_label.set_opacity(0)
+        self.play(
+            FadeOut(
+                comparison_cap,
+                comparison_c_label,
+                comparison_c_impedance,
+                comparison_l_label,
+                nb,
+            ),
+            self.camera.frame.animate.scale_to_fit_height(
+                extended_frame_height
+            ).move_to(extended_circuit),
+            Transform(comparison_ind, series_ind),
+            ReplacementTransform(comparison_l_impedance[0][:2], l1_impedance[0][:2]),
+            ReplacementTransform(comparison_l_impedance[0][2:], l1_impedance[0][3:7]),
+            run_time=1.8,
+        )
+        self.play(
+            Create(inductor_wires),
+            input_label.animate.set_opacity(1),
+            output_label.animate.set_opacity(1),
+            GrowFromCenter(l1_impedance[0][2]),
+            GrowFromCenter(l1_impedance[0][7]),
+            run_time=0.7,
+        )
+        self.remove(comparison_l_impedance, *comparison_l_impedance, *l1_impedance[0])
+        self.add(l1_impedance)
+
+        self.wait(0.5)
+
+        self.play(FadeOut(*self.mobjects))
 
 
 class CapacitorEquation(MovingCameraScene):
@@ -6164,3 +6726,235 @@ class CapacitorEquation(MovingCameraScene):
         self.wait(2)
 
         # self.embed()
+
+
+class Wrapup(MovingCameraScene):
+    def construct(self):
+        self.camera.background_color = BACKGROUND_COLOR
+
+        cn = Text("Complex Numbers", font=FONT)
+
+        spring_label = Text(
+            "Box on a spring", font=FONT, font_size=34, color=ORANGE
+        ).rotate(-6 * DEGREES)
+        wall = VGroup(
+            Line([-1.6, -0.45, 0], [-1.6, 0.45, 0]),
+            *[
+                Line([-1.6, y, 0], [-1.78, y - 0.14, 0])
+                for y in np.linspace(-0.3, 0.45, 5)
+            ],
+        )
+        coil = ParametricFunction(
+            lambda t: [-1.4 + 1.8 * t, 0.14 * np.sin(12 * PI * t), 0],
+            t_range=[0, 1, 0.005],
+        )
+        box = RoundedRectangle(
+            width=0.8,
+            height=0.7,
+            corner_radius=0.06,
+            fill_opacity=0.15,
+        ).move_to([1, 0, 0])
+        spring_lead = Line([0.4, 0, 0], box.get_left())
+        spring_diagram = VGroup(
+            wall,
+            Line([-1.6, 0, 0], [-1.4, 0, 0]),
+            coil,
+            spring_lead,
+            box,
+            Line([-1.6, -0.4, 0], [1.6, -0.4, 0]),
+        ).set_stroke(width=3)
+        spring_diagram.scale_to_fit_width(fw(self, 0.22))
+        spring = (
+            VGroup(spring_diagram, spring_label)
+            .arrange(DOWN, buff=fh(self, 0.025))
+            .set_color(ORANGE)
+        )
+        control_label = Text(
+            "Control theory", font=FONT, font_size=34, color=BLUE
+        ).rotate(7 * DEGREES)
+        summer = Circle(radius=0.14).move_to([-1.2, 0, 0])
+        controller = RoundedRectangle(
+            width=0.6, height=0.5, corner_radius=0.06, fill_opacity=0.12
+        ).move_to([-0.4, 0, 0])
+        plant = controller.copy().move_to([0.55, 0, 0])
+        control_diagram = VGroup(
+            summer,
+            controller,
+            plant,
+            *[
+                Line(start, end, tip_corner_radius=0.02).add_tip(
+                    tip_length=0.1, tip_width=0.085
+                )
+                for start, end in [
+                    ([-1.9, 0, 0], summer.get_left()),
+                    (summer.get_right(), controller.get_left()),
+                    (controller.get_right(), plant.get_left()),
+                    (plant.get_right(), [1.55, 0, 0]),
+                    ([-1.2, -0.6, 0], summer.get_bottom()),
+                ]
+            ],
+            VMobject().set_points_as_corners(
+                [[1.2, 0, 0], [1.2, -0.6, 0], [-1.2, -0.6, 0]]
+            ),
+            Dot([1.2, 0, 0], radius=0.035),
+            Line([-1.25, 0, 0], [-1.15, 0, 0]),
+            Line([-1.2, -0.05, 0], [-1.2, 0.05, 0]),
+            Line([-1.45, -0.24, 0], [-1.33, -0.24, 0]),
+        ).set_stroke(width=3)
+        control_diagram.scale_to_fit_width(fw(self, 0.22))
+        control = (
+            VGroup(control_diagram, control_label)
+            .arrange(DOWN, buff=fh(self, 0.025))
+            .set_color(BLUE)
+        )
+
+        quantum_label = Text(
+            "Quantum mechanics", font=FONT, font_size=34, color=YELLOW
+        ).rotate(-4 * DEGREES)
+        qubit = VGroup(
+            Circle(radius=0.5, fill_opacity=0.05),
+            Ellipse(width=1, height=0.28).set_stroke(opacity=0.6),
+            Ellipse(width=0.28, height=1).set_stroke(opacity=0.4),
+            DashedLine(DOWN * 0.65, UP * 0.65, dash_length=0.05).set_stroke(
+                opacity=0.5
+            ),
+            Arrow(ORIGIN, [0.3, 0.4, 0], buff=0, tip_length=0.12, tip_width=0.1),
+            Dot(ORIGIN, radius=0.035),
+        ).set_stroke(width=3)
+        qubit.scale_to_fit_height(fh(self, 0.13))
+        quantum = (
+            VGroup(qubit, quantum_label)
+            .arrange(DOWN, buff=fh(self, 0.025))
+            .set_color(YELLOW)
+        )
+        waves = (
+            Paragraph(
+                "Electromagnetic",
+                "waves",
+                alignment="center",
+                font=FONT,
+                font_size=34,
+                color=GREEN,
+            )
+            .set_color(GREEN)
+            .rotate(6 * DEGREES)
+        )
+        transmission = (
+            Paragraph(
+                "Transmission",
+                "lines",
+                alignment="center",
+                font=FONT,
+                font_size=34,
+                color=PURPLE,
+            )
+            .set_color(PURPLE)
+            .rotate(-7 * DEGREES)
+        )
+        spring.move_to(LEFT * fw(self, 0.25) + UP * fh(self, 0.28))
+        control.move_to(RIGHT * fw(self, 0.25) + UP * fh(self, 0.28))
+        quantum.move_to(DOWN * fh(self, 0.34))
+        waves.move_to(LEFT * fw(self, 0.3) + DOWN * fh(self, 0.17))
+        transmission.move_to(RIGHT * fw(self, 0.3) + DOWN * fh(self, 0.17))
+
+        spring_time = VT(0)
+        box_center = box.get_center().copy()
+        coil_points = coil.points.copy()
+        coil_start = coil.get_start().copy()
+        coil_length = coil.get_end()[0] - coil_start[0]
+        lead_points = spring_lead.points.copy()
+
+        def oscillate_spring(mob):
+            offset = fw(self, 0.008) * np.sin(TAU * ~spring_time / 1.8)
+            box.move_to(box_center + RIGHT * offset)
+            points = coil_points.copy()
+            points[:, 0] += (points[:, 0] - coil_start[0]) / coil_length * offset
+            coil.set_points(points)
+            spring_lead.set_points(lead_points + RIGHT * offset)
+
+        topics = VGroup(spring, control, quantum, waves, transmission)
+        connections = VGroup(
+            *[
+                SquigglyLine(
+                    start,
+                    end,
+                    amplitude=fh(self, 0.025),
+                    wavelength=fh(self, 0.18),
+                    seed=index + 3,
+                    color=topic.get_color(),
+                    stroke_width=3,
+                    tip_corner_radius=0.02,
+                ).add_tip(
+                    tip_length=fh(self, 0.022),
+                    tip_width=fh(self, 0.018),
+                )
+                for index, (topic, start, end) in enumerate(
+                    [
+                        (
+                            spring,
+                            spring.get_bottom() + DOWN * fh(self, 0.025),
+                            cn.get_top()
+                            + LEFT * cn.width * 0.33
+                            + UP * fh(self, 0.035),
+                        ),
+                        (
+                            control,
+                            control.get_bottom() + DOWN * fh(self, 0.025),
+                            cn.get_top()
+                            + RIGHT * cn.width * 0.33
+                            + UP * fh(self, 0.035),
+                        ),
+                        (
+                            quantum,
+                            quantum.get_top() + UP * fh(self, 0.025),
+                            cn.get_bottom() + DOWN * fh(self, 0.035),
+                        ),
+                        (
+                            waves,
+                            waves.get_top() + UP * fh(self, 0.025),
+                            cn.get_left() + LEFT * fw(self, 0.018),
+                        ),
+                        (
+                            transmission,
+                            transmission.get_top() + UP * fh(self, 0.025),
+                            cn.get_right() + RIGHT * fw(self, 0.018),
+                        ),
+                    ]
+                )
+            ]
+        )
+
+        self.next_section("Complex numbers", skip_animations=skip_animations(False))
+        self.play(LaggedStart(*[PopIn(m) for m in cn], lag_ratio=0.1))
+        self.wait(0.5)
+
+        self.next_section("Other applications", skip_animations=skip_animations(False))
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(PopIn(topic), GrowArrow(connection), lag_ratio=0.35)
+                    for topic, connection in zip(topics[:3], connections[:3])
+                ],
+                lag_ratio=0.45,
+            ),
+            run_time=3,
+        )
+        spring_time.add_updater(lambda mob, dt: mob.increment_value(dt))
+        self.add(spring_time)
+        spring_diagram.add_updater(oscillate_spring)
+        self.wait(2)
+
+        self.next_section(
+            "Waves and transmission lines", skip_animations=skip_animations(False)
+        )
+        self.play(
+            LaggedStart(
+                *[
+                    LaggedStart(PopIn(topic), GrowArrow(connection), lag_ratio=0.35)
+                    for topic, connection in zip(topics[3:], connections[3:])
+                ],
+                lag_ratio=0.5,
+            ),
+            run_time=2.5,
+        )
+        self.wait(2)

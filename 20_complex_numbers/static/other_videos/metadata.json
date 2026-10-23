@@ -1,0 +1,67 @@
+[
+  {
+    "id": "T647CGsuOVU",
+    "title": "Imaginary Numbers Are Real [Part 1: Introduction]",
+    "author": "Welch Labs",
+    "author_url": "https://www.youtube.com/@WelchLabs",
+    "video_url": "https://www.youtube.com/watch?v=T647CGsuOVU",
+    "thumbnail_url": "https://i.ytimg.com/vi/T647CGsuOVU/sddefault.jpg",
+    "thumbnail_file": "T647CGsuOVU.jpg",
+    "width": 640,
+    "height": 480,
+    "metadata_url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DT647CGsuOVU&format=json",
+    "retrieved_at": "2026-10-22T18:53:37.326145+00:00"
+  },
+  {
+    "id": "-IJuqR6nz_Q",
+    "title": "Complex Numbers are Awesome",
+    "author": "Numberphile2",
+    "author_url": "https://www.youtube.com/@numberphile2",
+    "video_url": "https://www.youtube.com/watch?v=-IJuqR6nz_Q",
+    "thumbnail_url": "https://i.ytimg.com/vi/-IJuqR6nz_Q/maxresdefault.jpg",
+    "thumbnail_file": "-IJuqR6nz_Q.jpg",
+    "width": 1280,
+    "height": 720,
+    "metadata_url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D-IJuqR6nz_Q&format=json",
+    "retrieved_at": "2026-10-22T18:53:36.542461+00:00"
+  },
+  {
+    "id": "TLWE388JWGs",
+    "title": "How do Complex Numbers relate to Real Signals? (\"Best explanation EVER!\")",
+    "author": "Iain Explains Signals, Systems, and Digital Comms",
+    "author_url": "https://www.youtube.com/@iain_explains",
+    "video_url": "https://www.youtube.com/watch?v=TLWE388JWGs",
+    "thumbnail_url": "https://i.ytimg.com/vi/TLWE388JWGs/maxresdefault.jpg",
+    "thumbnail_file": "TLWE388JWGs.jpg",
+    "width": 1280,
+    "height": 720,
+    "metadata_url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DTLWE388JWGs&format=json",
+    "retrieved_at": "2026-10-22T18:53:36.557055+00:00"
+  },
+  {
+    "id": "-j8PzkZ70Lg",
+    "title": "The Physics of Euler's Formula | Laplace Transform Prelude",
+    "author": "3Blue1Brown",
+    "author_url": "https://www.youtube.com/@3blue1brown",
+    "video_url": "https://www.youtube.com/watch?v=-j8PzkZ70Lg",
+    "thumbnail_url": "https://i.ytimg.com/vi/-j8PzkZ70Lg/maxresdefault.jpg",
+    "thumbnail_file": "-j8PzkZ70Lg.jpg",
+    "width": 1280,
+    "height": 720,
+    "metadata_url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D-j8PzkZ70Lg&format=json",
+    "retrieved_at": "2026-10-22T18:53:36.533523+00:00"
+  },
+  {
+    "id": "gHUHZXjpwOE",
+    "title": "Introduction to Complex Numbers (1 of 2: The Backstory)",
+    "author": "Eddie Woo",
+    "author_url": "https://www.youtube.com/@misterwootube",
+    "video_url": "https://www.youtube.com/watch?v=gHUHZXjpwOE",
+    "thumbnail_url": "https://i.ytimg.com/vi/gHUHZXjpwOE/maxresdefault.jpg",
+    "thumbnail_file": "gHUHZXjpwOE.jpg",
+    "width": 1280,
+    "height": 720,
+    "metadata_url": "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DgHUHZXjpwOE&format=json",
+    "retrieved_at": "2026-10-22T18:53:36.533417+00:00"
+  }
+]
