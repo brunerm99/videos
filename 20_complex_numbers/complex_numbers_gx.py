@@ -26,6 +26,135 @@ def skip_animations(b):
     return b and (not SKIP_ANIMATIONS_OVERRIDE)
 
 
+def _description_resources(scene, center):
+    thumbnail_dir = pathlib.Path(__file__).with_name("static") / "other_videos"
+    notebook_panel = RoundedRectangle(
+        width=fw(scene, 0.35),
+        height=fh(scene, 0.245),
+        corner_radius=fh(scene, 0.015),
+        fill_color="#244957",
+        fill_opacity=1,
+        color=BLUE,
+        stroke_width=3,
+    ).move_to(center + UP * fh(scene, 0.24))
+    notebook_title = Text("complex_numbers.py", font=FONT, color=WHITE)
+    notebook_title.scale_to_fit_height(fh(scene, 0.032)).move_to(
+        notebook_panel.get_top() + DOWN * fh(scene, 0.035)
+    )
+    notebook_axes = Axes(
+        x_range=[0, 1, 0.5],
+        y_range=[-1, 1, 1],
+        x_length=fw(scene, 0.3),
+        y_length=fh(scene, 0.13),
+        tips=False,
+        axis_config={"include_ticks": False, "stroke_opacity": 0.4},
+    ).move_to(notebook_panel.get_center() + DOWN * fh(scene, 0.025))
+    notebook_plot = VGroup(
+        notebook_axes,
+        notebook_axes.plot(lambda t: np.cos(TAU * 3 * t), color=ORANGE, stroke_width=4),
+        notebook_axes.plot(lambda t: np.sin(TAU * 3 * t), color=BLUE, stroke_width=4),
+    )
+    notebook_label = Text("Python notebook", font=FONT, color=BLUE)
+    notebook_label.scale_to_fit_height(fh(scene, 0.032)).next_to(
+        notebook_panel, DOWN, buff=fh(scene, 0.018)
+    )
+    notebook_card = VGroup(
+        notebook_panel, notebook_title, notebook_plot, notebook_label
+    )
+
+    book_cover = RoundedRectangle(
+        width=fw(scene, 0.075),
+        height=fh(scene, 0.15),
+        corner_radius=fh(scene, 0.008),
+        fill_color="#244957",
+        fill_opacity=1,
+        color=ORANGE,
+        stroke_width=3,
+    )
+    book_back = book_cover.copy().shift(LEFT * fw(scene, 0.009) + UP * fh(scene, 0.012))
+    book_spine = Line(
+        book_cover.get_corner(UL) + RIGHT * fw(scene, 0.01),
+        book_cover.get_corner(DL) + RIGHT * fw(scene, 0.01),
+        color=ORANGE,
+        stroke_width=3,
+    )
+    book_symbol = MathTex("j", color=ORANGE).scale_to_fit_height(fh(scene, 0.065))
+    book_symbol.move_to(book_cover).shift(RIGHT * fw(scene, 0.004))
+    books_icon = VGroup(book_back, book_cover, book_spine, book_symbol)
+
+    article_page = RoundedRectangle(
+        width=fw(scene, 0.075),
+        height=fh(scene, 0.15),
+        corner_radius=fh(scene, 0.006),
+        fill_color="#D6EEF7",
+        fill_opacity=1,
+        stroke_width=0,
+    )
+    article_back = (
+        article_page.copy()
+        .set_fill("#8FA3AB")
+        .shift(RIGHT * fw(scene, 0.008) + UP * fh(scene, 0.012))
+    )
+    article_lines = VGroup(
+        *[
+            Line(
+                article_page.get_corner(UL) + [fw(scene, 0.012), -fh(scene, y), 0],
+                article_page.get_corner(UL) + [fw(scene, width), -fh(scene, y), 0],
+                color=BACKGROUND_COLOR,
+                stroke_width=4 if index == 0 else 2,
+            )
+            for index, (y, width) in enumerate(
+                [
+                    (0.025, 0.06),
+                    (0.05, 0.062),
+                    (0.067, 0.056),
+                    (0.084, 0.062),
+                    (0.101, 0.06),
+                    (0.118, 0.044),
+                ]
+            )
+        ]
+    )
+    articles_icon = VGroup(article_back, article_page, article_lines)
+
+    video_front = ImageMobject(thumbnail_dir / "-j8PzkZ70Lg.jpg")
+    video_front.scale_to_fit_width(fw(scene, 0.115))
+    video_back = ImageMobject(thumbnail_dir / "TLWE388JWGs.jpg")
+    video_back.scale_to_fit_width(video_front.width).shift(
+        RIGHT * fw(scene, 0.008) + UP * fh(scene, 0.02)
+    )
+    videos_icon = Group(
+        video_back,
+        SurroundingRectangle(video_back, buff=0, color=GREEN, stroke_width=2),
+        video_front,
+        SurroundingRectangle(video_front, buff=0, color=GREEN, stroke_width=2),
+    )
+
+    reading_cards = Group()
+    for icon, title, color, x in [
+        (books_icon, "Books", ORANGE, -0.12),
+        (articles_icon, "Articles", WHITE, 0),
+        (videos_icon, "Videos", GREEN, 0.12),
+    ]:
+        icon.move_to(center + RIGHT * fw(scene, x) + DOWN * fh(scene, 0.1))
+        label = Text(title, font=FONT, color=color).scale_to_fit_height(fh(scene, 0.03))
+        label.move_to(center + RIGHT * fw(scene, x) + DOWN * fh(scene, 0.22))
+        reading_cards.add(Group(icon, label))
+
+    description = Text("In the description", font=FONT, color=WHITE)
+    description.scale_to_fit_height(fh(scene, 0.033)).move_to(
+        center + DOWN * fh(scene, 0.325)
+    )
+    description_arrow = Line(
+        center + DOWN * fh(scene, 0.365),
+        center + DOWN * fh(scene, 0.46),
+        color=ORANGE,
+        stroke_width=5,
+        tip_corner_radius=0.02,
+    ).add_tip(tip_length=fh(scene, 0.025), tip_width=fw(scene, 0.018))
+    return notebook_card, reading_cards, description, description_arrow
+
+
 class CommentIntro(MovingCameraScene):
     def construct(self):
         self.camera.background_color = BACKGROUND_COLOR
@@ -581,139 +710,9 @@ class CommentIntro(MovingCameraScene):
         )
 
         resource_center = frame_center + RIGHT * fw(self, 0.285)
-        notebook_panel = RoundedRectangle(
-            width=fw(self, 0.35),
-            height=fh(self, 0.245),
-            corner_radius=fh(self, 0.015),
-            fill_color="#244957",
-            fill_opacity=1,
-            color=BLUE,
-            stroke_width=3,
-        ).move_to(resource_center + UP * fh(self, 0.24))
-        notebook_title = Text("complex_numbers.py", font=FONT, color=WHITE)
-        notebook_title.scale_to_fit_height(fh(self, 0.032)).move_to(
-            notebook_panel.get_top() + DOWN * fh(self, 0.035)
+        notebook_card, reading_cards, description, description_arrow = (
+            _description_resources(self, resource_center)
         )
-        notebook_axes = Axes(
-            x_range=[0, 1, 0.5],
-            y_range=[-1, 1, 1],
-            x_length=fw(self, 0.3),
-            y_length=fh(self, 0.13),
-            tips=False,
-            axis_config={"include_ticks": False, "stroke_opacity": 0.4},
-        ).move_to(notebook_panel.get_center() + DOWN * fh(self, 0.025))
-        notebook_plot = VGroup(
-            notebook_axes,
-            notebook_axes.plot(
-                lambda t: np.cos(TAU * 3 * t), color=ORANGE, stroke_width=4
-            ),
-            notebook_axes.plot(
-                lambda t: np.sin(TAU * 3 * t), color=BLUE, stroke_width=4
-            ),
-        )
-        notebook_label = Text("Python notebook", font=FONT, color=BLUE)
-        notebook_label.scale_to_fit_height(fh(self, 0.032)).next_to(
-            notebook_panel, DOWN, buff=fh(self, 0.018)
-        )
-        notebook_card = VGroup(
-            notebook_panel, notebook_title, notebook_plot, notebook_label
-        )
-
-        book_cover = RoundedRectangle(
-            width=fw(self, 0.075),
-            height=fh(self, 0.15),
-            corner_radius=fh(self, 0.008),
-            fill_color="#244957",
-            fill_opacity=1,
-            color=ORANGE,
-            stroke_width=3,
-        )
-        book_back = book_cover.copy().shift(
-            LEFT * fw(self, 0.009) + UP * fh(self, 0.012)
-        )
-        book_spine = Line(
-            book_cover.get_corner(UL) + RIGHT * fw(self, 0.01),
-            book_cover.get_corner(DL) + RIGHT * fw(self, 0.01),
-            color=ORANGE,
-            stroke_width=3,
-        )
-        book_symbol = MathTex("j", color=ORANGE).scale_to_fit_height(fh(self, 0.065))
-        book_symbol.move_to(book_cover).shift(RIGHT * fw(self, 0.004))
-        books_icon = VGroup(book_back, book_cover, book_spine, book_symbol)
-
-        article_page = RoundedRectangle(
-            width=fw(self, 0.075),
-            height=fh(self, 0.15),
-            corner_radius=fh(self, 0.006),
-            fill_color="#D6EEF7",
-            fill_opacity=1,
-            stroke_width=0,
-        )
-        article_back = (
-            article_page.copy()
-            .set_fill("#8FA3AB")
-            .shift(RIGHT * fw(self, 0.008) + UP * fh(self, 0.012))
-        )
-        article_lines = VGroup(
-            *[
-                Line(
-                    article_page.get_corner(UL) + [fw(self, 0.012), -fh(self, y), 0],
-                    article_page.get_corner(UL) + [fw(self, width), -fh(self, y), 0],
-                    color=BACKGROUND_COLOR,
-                    stroke_width=4 if index == 0 else 2,
-                )
-                for index, (y, width) in enumerate(
-                    [
-                        (0.025, 0.06),
-                        (0.05, 0.062),
-                        (0.067, 0.056),
-                        (0.084, 0.062),
-                        (0.101, 0.06),
-                        (0.118, 0.044),
-                    ]
-                )
-            ]
-        )
-        articles_icon = VGroup(article_back, article_page, article_lines)
-
-        video_front = ImageMobject(thumbnail_dir / "-j8PzkZ70Lg.jpg")
-        video_front.scale_to_fit_width(fw(self, 0.115))
-        video_back = ImageMobject(thumbnail_dir / "TLWE388JWGs.jpg")
-        video_back.scale_to_fit_width(video_front.width).shift(
-            RIGHT * fw(self, 0.008) + UP * fh(self, 0.02)
-        )
-        videos_icon = Group(
-            video_back,
-            SurroundingRectangle(video_back, buff=0, color=GREEN, stroke_width=2),
-            video_front,
-            SurroundingRectangle(video_front, buff=0, color=GREEN, stroke_width=2),
-        )
-
-        reading_cards = Group()
-        for icon, title, color, x in [
-            (books_icon, "Books", ORANGE, -0.12),
-            (articles_icon, "Articles", WHITE, 0),
-            (videos_icon, "Videos", GREEN, 0.12),
-        ]:
-            icon.move_to(resource_center + RIGHT * fw(self, x) + DOWN * fh(self, 0.1))
-            label = Text(title, font=FONT, color=color).scale_to_fit_height(
-                fh(self, 0.03)
-            )
-            label.move_to(resource_center + RIGHT * fw(self, x) + DOWN * fh(self, 0.22))
-            reading_cards.add(Group(icon, label))
-
-        description = Text("In the description", font=FONT, color=WHITE)
-        description.scale_to_fit_height(fh(self, 0.033)).move_to(
-            resource_center + DOWN * fh(self, 0.325)
-        )
-        description_arrow = SquigglyLine(
-            resource_center + DOWN * fh(self, 0.365),
-            resource_center + DOWN * fh(self, 0.46),
-            amplitude=fw(self, 0.006),
-            color=ORANGE,
-            stroke_width=5,
-            tip_corner_radius=0.02,
-        ).add_tip(tip_length=fh(self, 0.025), tip_width=fw(self, 0.018))
 
         self.play(FadeIn(notebook_card, shift=UP * fh(self, 0.035)), run_time=0.8)
         self.wait(0.4)
@@ -4160,18 +4159,18 @@ class TwoPoints(MovingCameraScene):
         v0_radius_line = Arrow(circle_axes.c2p(0, 0), circle_axes.c2p(0, 1), buff=0)
         v0_radius_label = MathTex("V_0").next_to(v0_radius_line, RIGHT, SMALL_BUFF)
 
-        final_phase = 2 * TAU + PI / 3
+        final_phase = TAU + PI / 3
         self.play(
-            LaggedStart(
-                x.animate(
-                    run_time=6 * final_phase / PI, rate_func=linear
-                ).increment_value(final_phase / omega),
+            AnimationGroup(
+                x.animate(run_time=11.25, rate_func=linear).increment_value(
+                    final_phase / omega
+                ),
                 Succession(
+                    Wait(5.9),
                     AnimationGroup(GrowArrow(v0_radius_line), FadeIn(v0_radius_label)),
                     Wait(2),
                     AnimationGroup(FadeOut(v0_radius_line), FadeOut(v0_radius_label)),
                 ),
-                lag_ratio=0.15,
             )
         )
 
@@ -6873,14 +6872,20 @@ class Wrapup(MovingCameraScene):
         coil_start = coil.get_start().copy()
         coil_length = coil.get_end()[0] - coil_start[0]
         lead_points = spring_lead.points.copy()
+        wall_start = wall[0].get_start().copy()
+        wall_height = wall[0].height
 
         def oscillate_spring(mob):
             offset = fw(self, 0.008) * np.sin(TAU * ~spring_time / 1.8)
-            box.move_to(box_center + RIGHT * offset)
+            scale = wall[0].height / wall_height
+            anchor = wall[0].get_start()
+            box.move_to(anchor + (box_center + RIGHT * offset - wall_start) * scale)
             points = coil_points.copy()
             points[:, 0] += (points[:, 0] - coil_start[0]) / coil_length * offset
-            coil.set_points(points)
-            spring_lead.set_points(lead_points + RIGHT * offset)
+            coil.set_points(anchor + (points - wall_start) * scale)
+            spring_lead.set_points(
+                anchor + (lead_points + RIGHT * offset - wall_start) * scale
+            )
 
         topics = VGroup(spring, control, quantum, waves, transmission)
         connections = VGroup(
@@ -6939,19 +6944,23 @@ class Wrapup(MovingCameraScene):
         self.wait(0.5)
 
         self.next_section("Other applications", skip_animations=skip_animations(False))
+        spring_time.add_updater(lambda mob, dt: mob.increment_value(dt))
+        self.add(spring_time)
+        spring_diagram.add_updater(oscillate_spring)
         self.play(
             LaggedStart(
                 *[
-                    LaggedStart(PopIn(topic), GrowArrow(connection), lag_ratio=0.35)
+                    LaggedStart(
+                        PopIn(topic, suspend_mobject_updating=False),
+                        GrowArrow(connection),
+                        lag_ratio=0.35,
+                    )
                     for topic, connection in zip(topics[:3], connections[:3])
                 ],
                 lag_ratio=0.45,
             ),
             run_time=3,
         )
-        spring_time.add_updater(lambda mob, dt: mob.increment_value(dt))
-        self.add(spring_time)
-        spring_diagram.add_updater(oscillate_spring)
         self.wait(2)
 
         self.next_section(
@@ -6967,4 +6976,50 @@ class Wrapup(MovingCameraScene):
             ),
             run_time=2.5,
         )
-        self.wait(2)
+
+        self.wait(0.5)
+
+        self.next_section(
+            "Resources in the description", skip_animations=skip_animations(False)
+        )
+        resource_center = self.camera.frame.get_center() + DOWN * fh(self)
+        notebook_card, reading_cards, description, _ = _description_resources(
+            self, resource_center
+        )
+        notebook_card.scale(1.25)
+        for card in reading_cards:
+            card.scale(1.6)
+        resources = Group(notebook_card, *reading_cards)
+        resources.arrange(RIGHT, buff=fw(self, 0.035), aligned_edge=DOWN)
+        resources.scale_to_fit_width(fw(self, 0.9)).move_to(
+            resource_center + UP * fh(self, 0.12)
+        )
+        description.scale_to_fit_height(fh(self, 0.06)).move_to(
+            resource_center + DOWN * fh(self, 0.17)
+        )
+        description_arrow = Line(
+            resource_center + DOWN * fh(self, 0.25),
+            resource_center + DOWN * fh(self, 0.43),
+            color=ORANGE,
+            stroke_width=5,
+            tip_corner_radius=0.02,
+        ).add_tip(tip_length=fh(self, 0.04), tip_width=fw(self, 0.025))
+        self.add(resources, description, description_arrow)
+
+        self.play(self.camera.frame.animate.shift(DOWN * fh(self)), run_time=1.5)
+
+        self.wait(0.5)
+
+        thanks = (
+            Text("Thanks for watching!", font=FONT)
+            .move_to(self.camera.frame)
+            .shift(DOWN * fh(self))
+        )
+
+        self.play(
+            LaggedStart(
+                self.camera.frame.animate.shift(DOWN * fh(self)),
+                LaggedStart(*[PopIn(m) for m in thanks], lag_ratio=0.1),
+                lag_ratio=0.6,
+            )
+        )
