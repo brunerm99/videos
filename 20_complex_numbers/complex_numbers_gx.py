@@ -1189,6 +1189,7 @@ def _capacitor_diagram(
 
     circuit = VGroup(source, cap, ground, wires, electrons)
     VGroup(plot, circuit).arrange(RIGHT, buff=fw(scene, 0.10)).move_to(ORIGIN)
+    voltage_label.next_to(axes, LEFT, MED_SMALL_BUFF)
     return plot, circuit
 
 
@@ -1374,7 +1375,8 @@ class Charging(MovingCameraScene):
         )
 
         self.next_section("Hold DC", skip_animations=skip_animations(False))
-        self.wait(1)
+        self.wait(6)
+
         self.play(
             FadeOut(
                 negcharge_line,
@@ -1384,7 +1386,8 @@ class Charging(MovingCameraScene):
             ),
             run_time=1,
         )
-        self.wait(2)
+
+        self.wait(8.5)
 
         self.next_section("Apply AC", skip_animations=skip_animations(False))
 
@@ -1402,7 +1405,7 @@ class Charging(MovingCameraScene):
         self.wait(2.8 - 1 - 0.5)
 
         self.next_section("Steady AC", skip_animations=skip_animations(False))
-        self.wait(plot_window)
+        self.wait(plot_window + 2.5)
 
         self.next_section("increase f", skip_animations=skip_animations(False))
 
@@ -1484,7 +1487,7 @@ class Charging(MovingCameraScene):
             )
         )
 
-        self.wait(0.5)
+        self.wait(8.25)
 
         self.play(
             LaggedStart(
@@ -2451,7 +2454,8 @@ class CapacitorEquationV2(MovingCameraScene):
             ],
             run_time=0.25,
         )
-        self.wait(5.75)
+
+        self.wait(4.5)
 
         mouse_x = VT(screen_center[0] + w * 0.55)
         mouse_y = VT(node2[1] - h * 0.08)
@@ -2809,7 +2813,6 @@ class CapacitorEquationV2(MovingCameraScene):
                 lag_ratio=1,
             ),
         )
-        self.wait(2)
 
         settled_start = 7
         view_start = VT(0)
@@ -2859,15 +2862,20 @@ class CapacitorEquationV2(MovingCameraScene):
             run_time=1.0,
             rate_func=ease_in_out_cubic,
         )
+
         self.wait(0.2)
+
         self.play(mouse_size @ 0.88, selection_opacity @ 1, run_time=0.12)
+
         self.play(
             mouse_x @ drag_end[0],
             selection_end @ probe_duration,
-            run_time=1.6,
+            run_time=0.85,
             rate_func=linear,
         )
+
         self.play(mouse_size @ 1, run_time=0.12)
+
         self.wait(0.35)
 
         tick_times = sorted(
@@ -2971,7 +2979,7 @@ class CapacitorEquationV2(MovingCameraScene):
             probe_axes.x_range
         )
         probe_axes.x_axis.unit_size = probe_axes.x_axis.get_unit_size()
-        self.wait(2)
+        self.wait(1.2)
 
         z = (
             MathTex(r"z = a + jb")
@@ -3222,12 +3230,14 @@ class Impedance(MovingCameraScene):
         self.wait(0.5)
 
         self.remove(res_relation)
+        frame_shift = DOWN * fh(self)
 
         self.play(
             xsin_dt[0][7:]
             .animate.scale_to_fit_width(fw(self, 0.2))
-            .move_to(self.camera.frame.copy().shift(DOWN * fh(self))),
-            self.camera.frame.animate.shift(DOWN * fh(self)),
+            .move_to(self.camera.frame)
+            .shift(frame_shift),
+            self.camera.frame.animate.shift(frame_shift),
         )
 
         self.wait(2)
