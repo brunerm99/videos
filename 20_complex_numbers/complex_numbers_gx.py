@@ -5857,48 +5857,6 @@ class CapExample(MovingCameraScene):
         self.next_section(
             "Distribute j omega C", skip_animations=skip_animations(False)
         )
-        distributed = MathTex(
-            r"\tilde I_C = j\omega C V_0\cos(\omega t) + j\cdot j\omega C V_0\sin(\omega t)"
-        ).scale(0.95)
-        distributed[0][:3].set_color(BLUE)
-        distributed[0][4].set_color(ORANGE)
-        distributed[0][5:16].set_color(GREEN)
-        distributed[0][17].set_color(ORANGE)
-        distributed[0][20:].set_color(GREEN)
-        factor = expanded[0][4:7]
-        self.play(
-            LaggedStart(
-                AnimationGroup(
-                    ReplacementTransform(expanded[0][:4], distributed[0][:4]),
-                    ReplacementTransform(expanded[0][8:17], distributed[0][7:16]),
-                    ReplacementTransform(expanded[0][17], distributed[0][16]),
-                    ReplacementTransform(expanded[0][18], distributed[0][19]),
-                    ReplacementTransform(expanded[0][19:28], distributed[0][22:]),
-                    FadeOut(expanded[0][7], expanded[0][28], voltage),
-                ),
-                TransformFromCopy(
-                    factor, distributed[0][4:7], path_arc=-PI / 3, introducer=True
-                ),
-                AnimationGroup(
-                    ReplacementTransform(
-                        factor[0], distributed[0][17], path_arc=-PI / 3
-                    ),
-                    ReplacementTransform(
-                        factor[1:], distributed[0][20:22], path_arc=-PI / 3
-                    ),
-                    GrowFromCenter(distributed[0][18]),
-                ),
-                lag_ratio=0.3,
-                run_time=1.6,
-            )
-        )
-        self.remove(expanded, *expanded, factor, *factor, *distributed[0])
-        self.add(distributed)
-        self.wait(0.5)
-
-        self.next_section(
-            "Combine the two j factors", skip_animations=skip_animations(False)
-        )
         squared = MathTex(
             r"\tilde I_C = j\omega C V_0\cos(\omega t) + j^2\omega C V_0\sin(\omega t)"
         ).scale(0.95)
@@ -5906,45 +5864,34 @@ class CapExample(MovingCameraScene):
         squared[0][5:16].set_color(GREEN)
         squared[0][17:19].set_color(ORANGE)
         squared[0][19:].set_color(GREEN)
+        factor = expanded[0][4:7]
         self.play(
-            ReplacementTransform(distributed[0][:18], squared[0][:18]),
-            ReplacementTransform(distributed[0][19], squared[0][18], path_arc=PI / 3),
-            ReplacementTransform(distributed[0][20:], squared[0][19:]),
-            FadeOut(distributed[0][18]),
-            run_time=0.8,
+            LaggedStart(
+                AnimationGroup(
+                    ReplacementTransform(expanded[0][:4], squared[0][:4]),
+                    ReplacementTransform(expanded[0][8:17], squared[0][7:16]),
+                    ReplacementTransform(expanded[0][17], squared[0][16]),
+                    ReplacementTransform(expanded[0][19:28], squared[0][21:]),
+                    FadeOut(expanded[0][7], expanded[0][28], voltage),
+                ),
+                TransformFromCopy(
+                    factor, squared[0][4:7], path_arc=-PI / 3, introducer=True
+                ),
+                AnimationGroup(
+                    ReplacementTransform(factor[0], squared[0][17], path_arc=-PI / 3),
+                    ReplacementTransform(
+                        expanded[0][18], squared[0][18], path_arc=PI / 3
+                    ),
+                    ReplacementTransform(
+                        factor[1:], squared[0][19:21], path_arc=-PI / 3
+                    ),
+                ),
+                lag_ratio=0.3,
+                run_time=1.6,
+            )
         )
-        self.remove(distributed, *distributed, *squared[0])
+        self.remove(expanded, *expanded, factor, *factor, *squared[0])
         self.add(squared)
-        self.wait(0.5)
-
-        self.next_section(
-            "j squared makes the sine term negative",
-            skip_animations=skip_animations(False),
-        )
-        j_identity = MathTex(r"j^2=-1").scale(0.8).next_to(squared, UP, MED_LARGE_BUFF)
-        j_identity[0][:2].set_color(ORANGE)
-        self.play(
-            TransformFromCopy(squared[0][17:19], j_identity[0][:2]),
-            GrowFromCenter(j_identity[0][2:]),
-            run_time=0.8,
-        )
-        self.remove(*j_identity[0])
-        self.add(j_identity)
-        negative = MathTex(
-            r"\tilde I_C = j\omega C V_0\cos(\omega t) - \omega C V_0\sin(\omega t)"
-        ).scale(0.95)
-        negative[0][:3].set_color(BLUE)
-        negative[0][5:16].set_color(GREEN)
-        negative[0][16:].set_color(BLUE)
-        self.play(
-            ReplacementTransform(squared[0][:16], negative[0][:16]),
-            ReplacementTransform(squared[0][19:], negative[0][17:]),
-            FadeOut(squared[0][16:19]),
-            TransformFromCopy(j_identity[0][3], negative[0][16]),
-            run_time=1,
-        )
-        self.remove(squared, *squared, *negative[0])
-        self.add(negative)
         self.wait(0.5)
 
         self.next_section(
@@ -5957,73 +5904,36 @@ class CapExample(MovingCameraScene):
         result[0][:3].set_color(BLUE)
         result[0][4:16].set_color(BLUE)
         result[0][18:].set_color(GREEN)
-        self.play(FadeOut(j_identity), run_time=0.3)
         self.play(
-            ReplacementTransform(negative[0][:4], result[0][:4]),
-            ReplacementTransform(negative[0][16:], result[0][4:16], path_arc=-PI / 2),
-            ReplacementTransform(negative[0][4:16], result[0][17:], path_arc=-PI / 2),
-            GrowFromCenter(result[0][16]),
-            run_time=1.3,
+            ReplacementTransform(squared[0][:4], result[0][:4]),
+            ReplacementTransform(squared[0][17:19], result[0][4], path_arc=-PI / 2),
+            ReplacementTransform(squared[0][19:], result[0][5:16], path_arc=-PI / 2),
+            ReplacementTransform(squared[0][4:16], result[0][17:], path_arc=-PI / 2),
+            ReplacementTransform(squared[0][16], result[0][16]),
+            run_time=1.5,
         )
-        self.remove(negative, *negative, *result[0])
+        self.remove(squared, *squared, *result[0])
         self.add(result)
         self.wait(0.5)
 
         self.next_section(
             "Check against the time derivative", skip_animations=skip_animations(False)
         )
-        time_substitution = MathTex(r"I_C(t)=C\frac{d V_0\cos(\omega t)}{dt}").move_to(
-            current
-        )
-        time_substitution[0][:5].set_color(BLUE)
-        time_substitution[0][8:17].set_color(YELLOW)
-        self.play(
-            ReplacementTransform(current[0][:8], time_substitution[0][:8]),
-            ReplacementTransform(current[0][13:], time_substitution[0][17:]),
-            FadeOut(current[0][8:13]),
-            TransformFromCopy(result[0][20:], time_substitution[0][8:17]),
-            run_time=1.1,
-        )
-        self.remove(current, *current, *time_substitution[0])
-        self.add(time_substitution)
-        self.wait(0.5)
         physical_current = MathTex(r"I_C(t)=-\omega C V_0\sin(\omega t)").move_to(
             current
         )
         physical_current[0][:5].set_color(BLUE)
         physical_current[0][6:].set_color(BLUE)
         self.play(
-            LaggedStart(
-                TransformFromCopy(
-                    time_substitution[0][14],
-                    physical_current[0][7],
-                    path_arc=PI / 3,
-                    introducer=True,
-                ),
-                AnimationGroup(
-                    ReplacementTransform(
-                        time_substitution[0][:6], physical_current[0][:6]
-                    ),
-                    ReplacementTransform(
-                        time_substitution[0][6], physical_current[0][8]
-                    ),
-                    ReplacementTransform(
-                        time_substitution[0][8:10], physical_current[0][9:11]
-                    ),
-                    ReplacementTransform(
-                        time_substitution[0][10:13], physical_current[0][11:14]
-                    ),
-                    ReplacementTransform(
-                        time_substitution[0][13:17], physical_current[0][14:]
-                    ),
-                    FadeOut(time_substitution[0][7], time_substitution[0][17:]),
-                    GrowFromCenter(physical_current[0][6]),
-                ),
-                lag_ratio=0.2,
-                run_time=1.2,
-            )
+            ReplacementTransform(current[0][:6], physical_current[0][:6]),
+            ReplacementTransform(current[0][6], physical_current[0][8]),
+            ReplacementTransform(current[0][7], physical_current[0][7]),
+            ReplacementTransform(current[0][8:13], physical_current[0][9:]),
+            FadeOut(current[0][13:]),
+            GrowFromCenter(physical_current[0][6]),
+            run_time=1.5,
         )
-        self.remove(time_substitution, *time_substitution, *physical_current[0])
+        self.remove(current, *current, *physical_current[0])
         self.add(physical_current)
         real_box = SurroundingRectangle(result[0][4:16], color=BLUE, buff=SMALL_BUFF)
         derivative_box = SurroundingRectangle(
@@ -6068,28 +5978,28 @@ class CapExample(MovingCameraScene):
         )
         imag_brace = Brace(result[0][18:], DOWN, color=GREEN, buff=MED_SMALL_BUFF)
         imag_label = (
-            MathTex(r"I_C\left(t-\frac{T}{4}\right)", color=GREEN)
+            MathTex(r"I_C(t-90^\circ)", color=GREEN)
             .scale(0.8)
             .next_to(imag_brace, DOWN, SMALL_BUFF)
-        )
-        period = (
-            MathTex(r"T=\frac{2\pi}{\omega}")
-            .scale(0.7)
-            .next_to(imag_label, DOWN, MED_LARGE_BUFF)
         )
         self.play(
             LaggedStart(
                 GrowFromCenter(imag_brace),
                 AnimationGroup(
                     TransformFromCopy(
-                        real_label[0][:4], imag_label[0][:4], introducer=True
+                        real_label[0][:4],
+                        imag_label[0][:4],
+                        introducer=True,
+                        rate_func=ease_in_cubic,
                     ),
                     TransformFromCopy(
-                        real_label[0][4], imag_label[0][8], introducer=True
+                        real_label[0][4],
+                        imag_label[0][-1],
+                        introducer=True,
+                        rate_func=ease_in_cubic,
                     ),
-                    GrowFromCenter(imag_label[0][4:8]),
+                    GrowFromCenter(imag_label[0][4:-1]),
                 ),
-                FadeIn(period),
                 lag_ratio=0.2,
                 run_time=1.4,
             )
@@ -6117,7 +6027,6 @@ class CapExample(MovingCameraScene):
                 real_caption,
                 imag_brace,
                 imag_label,
-                period,
             ),
             run_time=0.7,
         )
