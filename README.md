@@ -156,3 +156,9 @@ A radar image is made up of a ton of pixels. But what are the pixels made of?
 In this video we'll go into some of the crazy physics that help us understand what's going on at a deeper level. 
 
 ![thumbnail](./18_reflectivity_physics/videos/Thumbnail2.png)
+
+## [20 - What j actually does in a circuit](https://youtu.be/1rueho621Pw)
+
+Complex numbers are useful in so many fields including RF/electrical/radar engineering, so we'll be looking at it partly through that lens today.
+
+![thumbnail](./20_complex_numbers/videos/ThumbnailForEEs.png)
