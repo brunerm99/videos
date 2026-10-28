@@ -375,3 +375,71 @@ class ThumbnailCalculus(MovingCameraScene):
 
         self.add(cap, wires, derivative, phasor_form, arrow)
         self.wait(0.1)
+
+
+class NotebookThumbnail(MovingCameraScene):
+    def construct(self):
+        self.camera.background_opacity = 0
+        ink = BACKGROUND_COLOR
+
+        # Same tag as the other notebook cards on the resources page.
+        tag_height = fh(self, 0.12)
+        tag_top = fh(self, 0.45)
+        tag_left = -fw(self, 0.5) - 0.2
+        body_end = -fw(self, 0.5) + fw(self, 0.39)
+        tag = Polygon(
+            [tag_left, tag_top, 0],
+            [body_end, tag_top, 0],
+            [body_end + tag_height / 2, tag_top - tag_height / 2, 0],
+            [body_end, tag_top - tag_height, 0],
+            [tag_left, tag_top - tag_height, 0],
+            fill_color=ORANGE,
+            fill_opacity=1,
+            stroke_width=0,
+        )
+        tag_text = Text("Python Notebook", font=FONT, weight=BOLD, color=BLACK)
+        tag_text.scale_to_fit_width(fw(self, 0.38))
+        tag_text.move_to(tag).align_to(tag, LEFT).shift(RIGHT * (0.2 + fw(self, 0.015)))
+
+        center = RIGHT * fw(self, 0.05) + DOWN * fh(self, 0.1)
+        radius = fh(self, 0.32)
+        z_angle = PI / 6
+        jz_angle = z_angle + PI / 2
+
+        axes = VGroup(
+            Line(center + LEFT * radius * 1.25, center + RIGHT * radius * 1.25),
+            Line(center + DOWN * radius * 1.25, center + UP * radius * 1.25),
+        ).set_stroke(ink, 5, opacity=0.45)
+        circle = Circle(radius=radius, color=CIRCLE_COLOR, stroke_width=11).move_to(
+            center
+        )
+        z = phasor(center, z_angle, radius, I_COLOR, thickness=14)
+        jz = phasor(center, jz_angle, radius, RED, thickness=14)
+
+        corner = 0.55
+        right_angle = VMobject().set_points_as_corners(
+            [
+                polar(center, corner, z_angle),
+                polar(center, corner, z_angle) + polar(ORIGIN, corner, jz_angle),
+                polar(center, corner, jz_angle),
+            ]
+        )
+        right_angle.set_stroke(ink, 7).set_z_index(4)
+        origin = Dot(center, radius=0.12, color=ink).set_z_index(5)
+
+        turn = turn_arrow(center, radius * 1.2, z_angle, color=J_COLOR, width=12)
+
+        # A same-color stroke thickens the glyphs so they hold up at card size.
+        jz_label = MathTex("jz", color=RED).scale_to_fit_height(fh(self, 0.11))
+        jz_label.set_stroke(RED, 4).next_to(jz.get_end(), UL, buff=0.05)
+        z_label = MathTex("z", color=I_COLOR).match_height(jz_label[0][1])
+        z_label.set_stroke(I_COLOR, 4).move_to(
+            polar(center, radius * 1.2, z_angle - 0.1)
+        )
+        times_j = MathTex(r"\times\!j", color=J_COLOR).match_height(jz_label)
+        times_j.set_stroke(J_COLOR, 4)
+        times_j.move_to(polar(center, radius * 1.5, z_angle + PI / 4))
+
+        self.add(axes, circle, right_angle, z, jz, origin, turn)
+        self.add(z_label, jz_label, times_j, tag, tag_text)
+        self.wait(0.1)

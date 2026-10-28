@@ -6870,7 +6870,7 @@ class Wrapup(MovingCameraScene):
             ),
             run_time=3,
         )
-        self.wait(2)
+        self.wait(10)
 
         self.next_section(
             "Waves and transmission lines", skip_animations=skip_animations(False)
@@ -6886,7 +6886,7 @@ class Wrapup(MovingCameraScene):
             run_time=2.5,
         )
 
-        self.wait(0.5)
+        self.wait(0.5 + 6.75)
 
         self.next_section(
             "Resources in the description", skip_animations=skip_animations(False)

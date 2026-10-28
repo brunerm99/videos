@@ -1,0 +1,233 @@
+[
+  {
+    "title": "The Feynman Lectures, Vol. II, Chapter 22: AC Circuits",
+    "author": "Feynman, Leighton, Sands",
+    "type": "book",
+    "alias": "cn-feynman-ac-circuits",
+    "url": "https://www.feynmanlectures.caltech.edu/II_22.html",
+    "tiny_url": "https://tinyurl.com/cn-feynman-ac-circuits",
+    "returned_destination": "https://www.feynmanlectures.caltech.edu/II_22.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Simple AC Circuits",
+    "author": "OpenStax",
+    "type": "book",
+    "alias": "cn-simple-ac-circuits",
+    "url": "https://openstax.org/books/university-physics-volume-2/pages/15-2-simple-ac-circuits",
+    "tiny_url": "https://tinyurl.com/cn-simple-ac-circuits",
+    "returned_destination": "https://openstax.org/books/university-physics-volume-2/pages/15-2-simple-ac-circuits",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "The Physics of Euler’s Formula | Laplace Transform Prelude",
+    "author": "3Blue1Brown / Grant Sanderson",
+    "type": "video",
+    "alias": "cn-physics-euler",
+    "url": "https://www.youtube.com/watch?v=-j8PzkZ70Lg",
+    "tiny_url": "https://tinyurl.com/cn-physics-euler",
+    "returned_destination": "https://www.youtube.com/watch?v=-j8PzkZ70Lg",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "How do Complex Numbers relate to Real Signals?",
+    "author": "Iain Explains Signals, Systems, and Digital Comms",
+    "type": "video",
+    "alias": "cn-real-signals",
+    "url": "https://www.youtube.com/watch?v=TLWE388JWGs",
+    "tiny_url": "https://tinyurl.com/cn-real-signals",
+    "returned_destination": "https://www.youtube.com/watch?v=TLWE388JWGs",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "The Feynman Lectures, Vol. I, Chapter 23: Resonance",
+    "author": "Feynman, Leighton, Sands",
+    "type": "book",
+    "alias": "cn-feynman-resonance",
+    "url": "https://www.feynmanlectures.caltech.edu/I_23.html",
+    "tiny_url": "https://tinyurl.com/cn-feynman-resonance",
+    "returned_destination": "https://www.feynmanlectures.caltech.edu/I_23.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "The Physics of Waves, Chapter 1: Harmonic Oscillation",
+    "author": "Howard Georgi / MIT OpenCourseWare",
+    "type": "book",
+    "alias": "cn-harmonic-oscillation",
+    "url": "https://ocw.mit.edu/courses/8-03sc-physics-iii-vibrations-and-waves-fall-2016/8eb46d081c5ba4728cbbb369a03ba45e_MIT8_03SCF16_Text_Ch1.pdf",
+    "tiny_url": "https://tinyurl.com/cn-harmonic-oscillation",
+    "returned_destination": "https://ocw.mit.edu/courses/8-03sc-physics-iii-vibrations-and-waves-fall-2016/8eb46d081c5ba4728cbbb369a03ba45e_MIT8_03SCF16_Text_Ch1.pdf",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Impedance Measurement: Frequency Effects",
+    "author": "Analog Devices",
+    "type": "lab activity",
+    "alias": "cn-impedance-measurement",
+    "url": "https://wiki.analog.com/university/courses/alm1k/circuits1/alm-cir-10",
+    "tiny_url": "https://tinyurl.com/cn-impedance-measurement",
+    "returned_destination": "https://wiki.analog.com/university/courses/alm1k/circuits1/alm-cir-10",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "e^(iπ) in 3.14 minutes, using dynamics",
+    "author": "3Blue1Brown / Grant Sanderson",
+    "type": "video",
+    "alias": "cn-euler-dynamics",
+    "url": "https://www.youtube.com/watch?v=v0YEaeIClKY",
+    "tiny_url": "https://tinyurl.com/cn-euler-dynamics",
+    "returned_destination": "https://www.youtube.com/watch?v=v0YEaeIClKY",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Imaginary Numbers Are Real, Part 1: Introduction",
+    "author": "Welch Labs",
+    "type": "video",
+    "alias": "cn-imaginary-numbers",
+    "url": "https://www.youtube.com/watch?v=T647CGsuOVU",
+    "tiny_url": "https://tinyurl.com/cn-imaginary-numbers",
+    "returned_destination": "https://www.youtube.com/watch?v=T647CGsuOVU",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Introduction to Complex Numbers, Part 1: The Backstory",
+    "author": "Eddie Woo",
+    "type": "video",
+    "alias": "cn-complex-backstory",
+    "url": "https://www.youtube.com/watch?v=gHUHZXjpwOE",
+    "tiny_url": "https://tinyurl.com/cn-complex-backstory",
+    "returned_destination": "https://www.youtube.com/watch?v=gHUHZXjpwOE",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Complex Numbers are Awesome",
+    "author": "Numberphile2",
+    "type": "video",
+    "alias": "cn-complex-awesome",
+    "url": "https://www.youtube.com/watch?v=-IJuqR6nz_Q",
+    "tiny_url": "https://tinyurl.com/cn-complex-awesome",
+    "returned_destination": "https://www.youtube.com/watch?v=-IJuqR6nz_Q",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Signals, Systems and Inference, Chapter 2: Signals and Systems",
+    "author": "Oppenheim, Verghese",
+    "type": "course notes",
+    "alias": "cn-signals-systems",
+    "url": "https://ocw.mit.edu/courses/6-011-introduction-to-communication-control-and-signal-processing-spring-2010/4599f6cff8a3890477f4c4986db032a2_MIT6_011S10_chap02.pdf",
+    "tiny_url": "https://tinyurl.com/cn-signals-systems",
+    "returned_destination": "https://ocw.mit.edu/courses/6-011-introduction-to-communication-control-and-signal-processing-spring-2010/4599f6cff8a3890477f4c4986db032a2_MIT6_011S10_chap02.pdf",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Oscillations in an LC Circuit",
+    "author": "OpenStax",
+    "type": "book",
+    "alias": "cn-lc-oscillations",
+    "url": "https://openstax.org/books/university-physics-volume-2/pages/14-5-oscillations-in-an-lc-circuit",
+    "tiny_url": "https://tinyurl.com/cn-lc-oscillations",
+    "returned_destination": "https://openstax.org/books/university-physics-volume-2/pages/14-5-oscillations-in-an-lc-circuit",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Correcting Imperfections in IQ Modulators to Improve RF Signal Fidelity",
+    "author": "Analog Devices",
+    "type": "application note",
+    "alias": "cn-iq-modulators",
+    "url": "https://www.analog.com/en/resources/app-notes/an-1039.html",
+    "tiny_url": "https://tinyurl.com/cn-iq-modulators",
+    "returned_destination": "https://www.analog.com/en/resources/app-notes/an-1039.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Impedance Matching and Smith Chart Impedance",
+    "author": "Analog Devices",
+    "type": "article",
+    "alias": "cn-smith-chart",
+    "url": "https://www.analog.com/en/resources/technical-articles/impedance-matching-and-smith-chart-impedance-maxim-integrated.html",
+    "tiny_url": "https://tinyurl.com/cn-smith-chart",
+    "returned_destination": "https://www.analog.com/en/resources/technical-articles/impedance-matching-and-smith-chart-impedance-maxim-integrated.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Input Impedance of a Terminated Lossless Transmission Line",
+    "author": "Steven W. Ellingson",
+    "type": "book",
+    "alias": "cn-line-impedance",
+    "url": "https://eng.libretexts.org/Bookshelves/Electrical_Engineering/Electro-Optics/Book%3A_Electromagnetics_I_%28Ellingson%29/03%3A_Transmission_Lines/3.15%3A_Input_Impedance_of_a_Terminated_Lossless_Transmission_Line",
+    "tiny_url": "https://tinyurl.com/cn-line-impedance",
+    "returned_destination": "https://eng.libretexts.org/Bookshelves/Electrical_Engineering/Electro-Optics/Book%3A_Electromagnetics_I_%28Ellingson%29/03%3A_Transmission_Lines/3.15%3A_Input_Impedance_of_a_Terminated_Lossless_Transmission_Line",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "The Feynman Lectures, Vol. II, Chapter 24: Waveguides",
+    "author": "Feynman, Leighton, Sands",
+    "type": "book",
+    "alias": "cn-feynman-waveguides",
+    "url": "https://www.feynmanlectures.caltech.edu/II_24.html",
+    "tiny_url": "https://tinyurl.com/cn-feynman-waveguides",
+    "returned_destination": "https://www.feynmanlectures.caltech.edu/II_24.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Network Analyzer Measurement Parameters",
+    "author": "Keysight",
+    "type": "documentation",
+    "alias": "cn-network-analyzers",
+    "url": "https://helpfiles.keysight.com/csg/e5055a/S1_Settings/Measurement_Parameters.htm",
+    "tiny_url": "https://tinyurl.com/cn-network-analyzers",
+    "returned_destination": "https://helpfiles.keysight.com/csg/e5055a/S1_Settings/Measurement_Parameters.htm",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "The Fundamentals of Millimeter Wave Radar Sensors",
+    "author": "Texas Instruments",
+    "type": "white paper",
+    "alias": "cn-mmwave-radar",
+    "url": "https://www.ti.com/lit/SPYY005",
+    "tiny_url": "https://tinyurl.com/cn-mmwave-radar",
+    "returned_destination": "https://www.ti.com/lit/SPYY005",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "Doppler Shift and Pulse-Doppler Processing",
+    "author": "MathWorks",
+    "type": "documentation",
+    "alias": "cn-doppler-processing",
+    "url": "https://www.mathworks.com/help/phased/ug/doppler-shift-and-pulse-doppler-processing.html",
+    "tiny_url": "https://tinyurl.com/cn-doppler-processing",
+    "returned_destination": "https://www.mathworks.com/help/phased/ug/doppler-shift-and-pulse-doppler-processing.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  },
+  {
+    "title": "The Feynman Lectures, Vol. II, Chapter 20: Solutions of Maxwell’s Equations in Free Space",
+    "author": "Feynman, Leighton, Sands",
+    "type": "book",
+    "alias": "cn-maxwell-free-space",
+    "url": "https://www.feynmanlectures.caltech.edu/II_20.html",
+    "tiny_url": "https://tinyurl.com/cn-maxwell-free-space",
+    "returned_destination": "https://www.feynmanlectures.caltech.edu/II_20.html",
+    "redirect_status": 301,
+    "redirect_verified": true
+  }
+]
